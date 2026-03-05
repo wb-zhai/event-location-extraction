@@ -1,0 +1,259 @@
+{
+  "approach_1_combined": {
+    "events_list": [
+      {
+        "event_name": "magnitude 6.2 earthquake",
+        "event_type": "natural_disaster",
+        "location_name": "central Turkey",
+        "location_type": "country",
+        "severity": "high"
+      },
+      {
+        "event_name": "rescue operation",
+        "event_type": null,
+        "location_name": "Aleppo",
+        "location_type": "city",
+        "severity": "high"
+      },
+      {
+        "event_name": "violent protest",
+        "event_type": "social_unrest",
+        "location_name": "Istanbul",
+        "location_type": "city",
+        "severity": "high"
+      }
+    ],
+    "entities": {
+      "event": [
+        "rescue operation",
+        "earthquake",
+        "protest",
+        "clashes"
+      ],
+      "location": [
+        "Istanbul",
+        "central Turkey",
+        "Aleppo",
+        "Syria"
+      ],
+      "date": [
+        "Wednesday",
+        "early Tuesday morning"
+      ],
+      "organization": [
+        "government",
+        "local police"
+      ]
+    },
+    "news_section": "world",
+    "relation_extraction": {
+      "occurred_at": [
+        [
+          "earthquake",
+          "central Turkey"
+        ]
+      ],
+      "originated_from": [
+        [
+          "earthquake",
+          "central Turkey"
+        ]
+      ],
+      "impacted": [
+        [
+          "earthquake",
+          "central Turkey"
+        ]
+      ]
+    }
+  },
+  "approach_2_structured": {
+    "events": [
+      {
+        "event_name": "magnitude 6.2 earthquake",
+        "event_type": "natural_disaster",
+        "location": "central Turkey",
+        "date": "early Tuesday morning",
+        "severity": "high"
+      },
+      {
+        "event_name": "rescue operation",
+        "event_type": null,
+        "location": "Aleppo",
+        "date": null,
+        "severity": "high"
+      },
+      {
+        "event_name": "violent protest",
+        "event_type": "social_unrest",
+        "location": "Istanbul",
+        "date": "Wednesday",
+        "severity": "high"
+      }
+    ]
+  },
+  "approach_3_relations_only": {
+    "relation_extraction": {
+      "occurred_at": [
+        [
+          "protest",
+          "Istanbul"
+        ]
+      ],
+      "originated_from": [
+        [
+          "earthquake",
+          "central Turkey"
+        ]
+      ],
+      "impacted": [],
+      "spread_to": [
+        [
+          "earthquake",
+          "central Turkey"
+        ]
+      ],
+      "evacuated_to": [
+        [
+          "rescue operation",
+          "Aleppo"
+        ]
+      ]
+    }
+  },
+  "full_pipeline_normalized": {
+    "document": {
+      "id": "article-2026-multi-event",
+      "source_url": "https://example.com/multi-crisis",
+      "publication_date": "2026-03-05",
+      "text_length": 390
+    },
+    "entities": [
+      {
+        "id": "e1",
+        "text": "clashes",
+        "label": "EVENT",
+        "start": 343,
+        "end": 350
+      },
+      {
+        "id": "e2",
+        "text": "rescue operation",
+        "label": "EVENT",
+        "start": 142,
+        "end": 158
+      },
+      {
+        "id": "e3",
+        "text": "earthquake",
+        "label": "EVENT",
+        "start": 16,
+        "end": 26
+      },
+      {
+        "id": "e4",
+        "text": "protest",
+        "label": "EVENT",
+        "start": 260,
+        "end": 267
+      },
+      {
+        "id": "e5",
+        "text": "Aleppo",
+        "label": "LOCATION",
+        "start": 172,
+        "end": 178
+      },
+      {
+        "id": "e6",
+        "text": "Istanbul",
+        "label": "LOCATION",
+        "start": 279,
+        "end": 287
+      },
+      {
+        "id": "e7",
+        "text": "central Turkey",
+        "label": "LOCATION",
+        "start": 34,
+        "end": 48
+      },
+      {
+        "id": "e8",
+        "text": "Syria",
+        "label": "LOCATION",
+        "start": 125,
+        "end": 130
+      },
+      {
+        "id": "e9",
+        "text": "Wednesday",
+        "label": "DATE",
+        "start": 239,
+        "end": 248
+      },
+      {
+        "id": "e10",
+        "text": "early Tuesday morning",
+        "label": "DATE",
+        "start": 49,
+        "end": 70
+      },
+      {
+        "id": "e11",
+        "text": "government",
+        "label": "ORGANIZATION",
+        "start": 297,
+        "end": 307
+      },
+      {
+        "id": "e12",
+        "text": "local police",
+        "label": "ORGANIZATION",
+        "start": 377,
+        "end": 389
+      }
+    ],
+    "event_location_pairs": [
+      {
+        "event_id": "e3",
+        "location_id": "e7",
+        "relation_type": "occurred_at"
+      },
+      {
+        "event_id": "e3",
+        "location_id": "e7",
+        "relation_type": "originated_from"
+      },
+      {
+        "event_id": "e3",
+        "location_id": "e7",
+        "relation_type": "impacted"
+      }
+    ],
+    "event_records": [
+      {
+        "event_name": "magnitude 6.2 earthquake",
+        "event_type": "natural_disaster",
+        "location_name": "central Turkey",
+        "location_type": "country",
+        "severity": "high"
+      },
+      {
+        "event_name": "rescue operation",
+        "event_type": null,
+        "location_name": "Aleppo",
+        "location_type": "city",
+        "severity": "high"
+      },
+      {
+        "event_name": "violent protest",
+        "event_type": "social_unrest",
+        "location_name": "Istanbul",
+        "location_type": "city",
+        "severity": "high"
+      }
+    ],
+    "article_classification": "world"
+  }
+}
