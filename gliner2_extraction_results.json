@@ -1,256 +1,269 @@
 {
-  "approach_1_combined": {
-    "events_list": [
-      {
-        "event_name": "magnitude 6.2 earthquake",
-        "event_type": "natural_disaster",
-        "location_name": "central Turkey",
-        "location_type": "country",
-        "severity": "high"
-      },
-      {
-        "event_name": "rescue operation",
-        "event_type": null,
-        "location_name": "Aleppo",
-        "location_type": "city",
-        "severity": "high"
-      },
-      {
-        "event_name": "violent protest",
-        "event_type": "social_unrest",
-        "location_name": "Istanbul",
-        "location_type": "city",
-        "severity": "high"
-      }
-    ],
-    "entities": {
-      "event": [
-        "rescue operation",
-        "earthquake",
-        "protest",
-        "clashes"
-      ],
-      "location": [
-        "Istanbul",
-        "central Turkey",
-        "Aleppo",
-        "Syria"
-      ],
-      "date": [
-        "Wednesday",
-        "early Tuesday morning"
-      ],
-      "organization": [
-        "government",
-        "local police"
-      ]
-    },
-    "news_section": "world",
-    "relation_extraction": {
-      "occurred_at": [
-        [
-          "earthquake",
-          "central Turkey"
-        ]
-      ],
-      "originated_from": [
-        [
-          "earthquake",
-          "central Turkey"
-        ]
-      ],
-      "impacted": [
-        [
-          "earthquake",
-          "central Turkey"
-        ]
-      ]
-    }
-  },
   "approach_2_structured": {
     "events": [
       {
-        "event_name": "magnitude 6.2 earthquake",
-        "event_type": "natural_disaster",
-        "location": "central Turkey",
-        "date": "early Tuesday morning",
-        "severity": "high"
+        "event_description": null,
+        "event_category": null,
+        "exact_location": "Valoria",
+        "date": "past six months",
+        "severity": null
       },
       {
-        "event_name": "rescue operation",
-        "event_type": null,
-        "location": "Aleppo",
-        "date": null,
-        "severity": "high"
+        "event_description": null,
+        "event_category": null,
+        "exact_location": "eastern province of Valoria",
+        "date": "past six months",
+        "severity": null
       },
       {
-        "event_name": "violent protest",
-        "event_type": "social_unrest",
-        "location": "Istanbul",
-        "date": "Wednesday",
-        "severity": "high"
+        "event_description": null,
+        "event_category": "health",
+        "exact_location": "Valoria",
+        "date": "past six months",
+        "severity": null
       }
     ]
   },
-  "approach_3_relations_only": {
-    "relation_extraction": {
-      "occurred_at": [
-        [
-          "protest",
-          "Istanbul"
-        ]
-      ],
-      "originated_from": [
-        [
-          "earthquake",
-          "central Turkey"
-        ]
-      ],
-      "impacted": [],
-      "spread_to": [
-        [
-          "earthquake",
-          "central Turkey"
-        ]
-      ],
-      "evacuated_to": [
-        [
-          "rescue operation",
-          "Aleppo"
-        ]
-      ]
-    }
-  },
   "full_pipeline_normalized": {
     "document": {
-      "id": "article-2026-multi-event",
+      "id": "article-2026",
       "source_url": "https://example.com/multi-crisis",
       "publication_date": "2026-03-05",
-      "text_length": 390
+      "text_length": 1613
     },
     "entities": [
       {
         "id": "e1",
-        "text": "clashes",
+        "text": "weather shocks",
         "label": "EVENT",
-        "start": 343,
-        "end": 350
+        "start": 243,
+        "end": 257
       },
       {
         "id": "e2",
-        "text": "rescue operation",
+        "text": "forced displacement",
         "label": "EVENT",
-        "start": 142,
-        "end": 158
+        "start": 1057,
+        "end": 1076
       },
       {
         "id": "e3",
-        "text": "earthquake",
+        "text": "Infant mortality rates",
         "label": "EVENT",
-        "start": 16,
-        "end": 26
+        "start": 934,
+        "end": 956
       },
       {
         "id": "e4",
-        "text": "protest",
+        "text": "aid appeal",
         "label": "EVENT",
-        "start": 260,
-        "end": 267
+        "start": 1310,
+        "end": 1320
       },
       {
         "id": "e5",
-        "text": "Aleppo",
-        "label": "LOCATION",
-        "start": 172,
-        "end": 178
+        "text": "cattle death",
+        "label": "EVENT",
+        "start": 531,
+        "end": 543
       },
       {
         "id": "e6",
-        "text": "Istanbul",
-        "label": "LOCATION",
-        "start": 279,
-        "end": 287
+        "text": "food crisis",
+        "label": "EVENT",
+        "start": 660,
+        "end": 671
       },
       {
         "id": "e7",
-        "text": "central Turkey",
-        "label": "LOCATION",
-        "start": 34,
-        "end": 48
+        "text": "gastrointestinal diseases",
+        "label": "EVENT",
+        "start": 907,
+        "end": 932
       },
       {
         "id": "e8",
-        "text": "Syria",
-        "label": "LOCATION",
-        "start": 125,
-        "end": 130
+        "text": "mass hunger",
+        "label": "EVENT",
+        "start": 765,
+        "end": 776
       },
       {
         "id": "e9",
-        "text": "Wednesday",
-        "label": "DATE",
-        "start": 239,
-        "end": 248
+        "text": "stolen food aid",
+        "label": "EVENT",
+        "start": 1491,
+        "end": 1506
       },
       {
         "id": "e10",
-        "text": "early Tuesday morning",
-        "label": "DATE",
-        "start": 49,
-        "end": 70
+        "text": "food insecurity",
+        "label": "EVENT",
+        "start": 745,
+        "end": 760
       },
       {
         "id": "e11",
-        "text": "government",
-        "label": "ORGANIZATION",
-        "start": 297,
-        "end": 307
+        "text": "Oakhaven",
+        "label": "LOCATION",
+        "start": 422,
+        "end": 430
       },
       {
         "id": "e12",
-        "text": "local police",
+        "text": "Kingsbridge",
+        "label": "LOCATION",
+        "start": 816,
+        "end": 827
+      },
+      {
+        "id": "e13",
+        "text": "Valoria",
+        "label": "LOCATION",
+        "start": 78,
+        "end": 85
+      },
+      {
+        "id": "e14",
+        "text": "Aethelgard",
+        "label": "LOCATION",
+        "start": 1244,
+        "end": 1254
+      },
+      {
+        "id": "e15",
+        "text": "recent",
+        "label": "DATE",
+        "start": 1471,
+        "end": 1477
+      },
+      {
+        "id": "e16",
+        "text": "past quarter",
+        "label": "DATE",
+        "start": 989,
+        "end": 1001
+      },
+      {
+        "id": "e17",
+        "text": "past six months",
+        "label": "DATE",
+        "start": 95,
+        "end": 110
+      },
+      {
+        "id": "e18",
+        "text": "Local health organizations",
         "label": "ORGANIZATION",
-        "start": 377,
-        "end": 389
+        "start": 696,
+        "end": 722
+      },
+      {
+        "id": "e19",
+        "text": "International aid organizations",
+        "label": "ORGANIZATION",
+        "start": 1256,
+        "end": 1287
+      },
+      {
+        "id": "e20",
+        "text": "failed crops",
+        "label": "AGRICULTURAL PRODUCTION ISSUES",
+        "start": 459,
+        "end": 471
+      },
+      {
+        "id": "e21",
+        "text": "bad harvests",
+        "label": "AGRICULTURAL PRODUCTION ISSUES",
+        "start": 442,
+        "end": 454
+      },
+      {
+        "id": "e22",
+        "text": "agricultural production issues",
+        "label": "AGRICULTURAL PRODUCTION ISSUES",
+        "start": 356,
+        "end": 386
+      },
+      {
+        "id": "e23",
+        "text": "displaced individuals",
+        "label": "FORCED DISPLACEMENT",
+        "start": 1521,
+        "end": 1542
+      },
+      {
+        "id": "e24",
+        "text": "Civilians",
+        "label": "FORCED DISPLACEMENT",
+        "start": 1078,
+        "end": 1087
+      },
+      {
+        "id": "e25",
+        "text": "self reliance",
+        "label": "HUMANITARIAN AID",
+        "start": 1563,
+        "end": 1576
+      },
+      {
+        "id": "e26",
+        "text": "restricted humanitarian access",
+        "label": "HUMANITARIAN AID",
+        "start": 1436,
+        "end": 1466
+      },
+      {
+        "id": "e27",
+        "text": "lack of rains",
+        "label": "WEATHER SHOCKS",
+        "start": 174,
+        "end": 187
+      },
+      {
+        "id": "e28",
+        "text": "abnormally low rainfall",
+        "label": "WEATHER SHOCKS",
+        "start": 278,
+        "end": 301
+      },
+      {
+        "id": "e29",
+        "text": "prolonged dry spell",
+        "label": "WEATHER SHOCKS",
+        "start": 139,
+        "end": 158
       }
     ],
     "event_location_pairs": [
       {
-        "event_id": "e3",
-        "location_id": "e7",
-        "relation_type": "occurred_at"
+        "event_id": "e13",
+        "location_id": "e13",
+        "relation_type": "located_in"
       },
       {
-        "event_id": "e3",
-        "location_id": "e7",
+        "event_id": "e1",
+        "location_id": "e13",
         "relation_type": "originated_from"
       },
       {
-        "event_id": "e3",
-        "location_id": "e7",
-        "relation_type": "impacted"
+        "event_id": "e4",
+        "location_id": "e14",
+        "relation_type": "originated_from"
       }
     ],
     "event_records": [
       {
-        "event_name": "magnitude 6.2 earthquake",
-        "event_type": "natural_disaster",
-        "location_name": "central Turkey",
-        "location_type": "country",
+        "specific_event": "cattle death",
+        "event_category": "agriculture",
+        "exact_location": "Valoria",
         "severity": "high"
       },
       {
-        "event_name": "rescue operation",
-        "event_type": null,
-        "location_name": "Aleppo",
-        "location_type": "city",
-        "severity": "high"
-      },
-      {
-        "event_name": "violent protest",
-        "event_type": "social_unrest",
-        "location_name": "Istanbul",
-        "location_type": "city",
+        "specific_event": "stolen food aid",
+        "event_category": null,
+        "exact_location": "Aethelgard",
         "severity": "high"
       }
     ],

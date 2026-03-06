@@ -44,17 +44,29 @@ combined_schema = (
 
     # ── Named Entity Recognition ──
     .entities({
-        "event": (
-            "Any named event, incident, occurrence, or happening mentioned in the "
-            "news article. Extract ALL events such as earthquakes, elections, protests, "
-            "clashes, rescue operations, attacks, accidents, or sporting events."
-        ),
+       "event": (
+       "Any event, incident, process, or phenomenon mentioned in the news article — including both discrete occurrences and ongoing or long-term developments. Extract ALL events: sudden incidents (e.g. earthquakes, attacks, sport events, elections) as well as structural or gradual phenomena (e.g. climate change, rising temperatures, economic recession, demographic shifts). "
+            ),
         "location": (
             "Any geographic location, place, city, country, region, facility, venue, "
             "or address where an event occurs. Extract ALL locations."
         ),
         "date": "A temporal expression including specific dates or relative times.",
         "organization": "An organization, government body, agency, or institution.",
+        
+        # ── Risk Factor Clusters ──
+        "agricultural production issues": "A state of severe agricultural impairment where harvests are devastated by failed crops, bad harvests, and an overall harvest decline due to water distribution shortages and a lack of cultivation leaving farmers unable to sow; this disruption to farming is compounded by a massive toll on livestock where many livestock had died leading to widespread cattle death, as well as severe infrastructure damage and a lack of agricultural infrastructure causing a transport bottleneck and lack of roads.",
+        "conflicts and violence": "A widespread destructive pattern of mayhem and continued strife marked by years of warfare, prolonged fighting, and civil strife, where a conflict or internal strife escalates into clan warfare and a specific clan battle between rival clans; this environment features a rebel insurgency, militia groups, rival warlords, or a single dominant warlord, as well as gangs of bandits engaging in looting and pirates hijacking convoys; the violence is often exacerbated by foreign troops launching a major offensive or the offensive involving an air attack, a siege, or a blockade, alongside acts of terrorism by a terrorist, international terrorists, or jihadist groups unleashing a bombing campaign, all while a brutal government engages in violent suppression, repression, police torture, and other severe human rights abuses.",
+        "economic issues": "A severe economic crisis that has devastated the economy resulting in a collapsing economy characterized by slashed export, reduced imports, disrupted trade, and reduced national output, fueling increased external debt and a brain drain, while a steep rise in rising inflation causes a drastic price rise, specifically impacting the price of food through rising food prices, ultimately trapping the population in deep economic impoverishment and an inescapable cycle of poverty.",
+        "environmental issues": "An overarching ecological crisis driven by climate change, where an excess of carbon and greenhouse gases exacerbates environmental degradation and increases the frequency of a devastating natural disaster.",
+        "food crisis": "A profound systemic dysfunction triggering a severe food crisis and multiple hunger crises defined by rampant food insecurity, mass hunger, and acute hunger, which devolves into widespread apathy and massive starvation where a largely malnourished and dehydrated population suffers from life-threatening hunger and gastrointestinal diseases, ultimately driving up rates of infant mortality.",
+        "forced displacement": "A crisis of forced migration where vulnerable populations, primarily civilians uprooted from their homes, are forced to flee and become displaced individuals, asylum seekers, or refugees seeking shelter in makeshift camps.",
+        "humanitarian aid": "A dire humanitarian disaster causing global international alarm over the deteriorating humanitarian situation, prompting an urgent aid appeal and a call for donations for foreign aid and food assistance; however, efforts for international intervention are hindered by an international embargo, restricted humanitarian access, restricted relief flights, and incidents of withheld relief or stolen food aid, tragically resulting in situations where aid workers died, forcing the affected populace to survive entirely without international aid and rely strictly on self reliance.",
+        "land-related issues": "A complex crisis involving vital farmland characterized by aggressive land invasions, a hostile land grab, and systemic land seizures involving the horrific tactic of burning houses and pushing peasants off their properties, alongside failed attempts at land reform, rampant land degradation leading to poor soil quality, and extensive damage leaving vast forests destroyed.",
+        "pests and diseases": "A severe biological hazard where destructive swarms of locusts and other agricultural pests cause events like potato blight, while simultaneously triggering deadly epidemics, including a sudden cholera outbreak among humans, and devastating animal diseases such as rinderpest and the infamous cattle plague.",
+        "political instability": "A volatile environment characterized by a total collapse of government and an overarching lack of authority driven by deep-rooted corruption, severe mismanagement, and a continuous power struggle or push for secession, often resulting in a politically engineered coup d'etat where a corrupt government faces a violent overthrow and established regimes were toppled, leading to the rise of authoritarian or totalitarian dictators, a harsh military dictatorship, or a strict military junta governing as oppressive regimes frequently promoting anti-western policies.",
+        "weather shocks": "A sequence of unpredictable climatic hazards and weather extremes, ranging from destructive floods triggered by severe rains and a powerful cyclone, to critical issues with water availability stemming from a prolonged dry spell and a harsh drought caused by abnormally low rainfall, inadequate rainfall, scanty rainfall, failed rains, a general shortage of rains, and an overall lack of rains.",
+        "other": "An uncategorized catastrophe and immense tragedy that has wreaked havoc on society, often manifesting as a man-made disaster or a severe population crisis reminiscent of the historical slave trade, leading to an alarming level of continued deterioration exacerbated by a profound lack of alternatives."
     })
 
     # ── Relation Extraction ──
@@ -296,14 +308,27 @@ CANONICAL_OUTPUT_JSON_SCHEMA = {
 
 if __name__ == "__main__":
 
-    # Text containing multiple distinct events and locations
+    # Long text containing multiple distinct events, locations, and risk factors
     article = (
-        "A magnitude 6.2 earthquake struck central Turkey early Tuesday "
-        "morning, causing widespread damage. Meanwhile, in neighboring Syria, "
-        "a massive rescue operation commenced in Aleppo following the collapse "
-        "of several residential buildings. On Wednesday, a violent protest erupted "
-        "in Istanbul over the government's response time, leading to fierce clashes "
-        "between demonstrators and local police."
+        "A catastrophic sequence of events has unfolded across the eastern province of Valoria "
+        "over the past six months. Following an unprecedented prolonged dry spell and an overall "
+        "lack of rains, the region is now experiencing one of the most severe weather shocks in "
+        "its history. The abnormally low rainfall has devastated the local economy and triggered "
+        "severe agricultural production issues. Farmers in the rural outskirts of Oakhaven are "
+        "facing bad harvests and failed crops, while water distribution shortages have led to "
+        "widespread cattle death, severely impacting the livelihoods of thousands.\n\n"
+        "As a direct consequence of the disruption to farming, a profound food crisis has gripped "
+        "the nation. Local health organizations are reporting rampant food insecurity and mass hunger, "
+        "with hospitals in the capital city of Kingsbridge overwhelmed by a largely malnourished and "
+        "dehydrated population suffering from gastrointestinal diseases. Infant mortality rates have "
+        "sharply increased over the past quarter.\n\n"
+        "The escalating tragedy has spurred a massive wave of forced displacement. Civilians uprooted "
+        "from their homes by the life-threatening hunger are fleeing the rural collapse, seeking "
+        "shelter in makeshift camps along the border of neighboring Aethelgard. International aid "
+        "organizations have issued an urgent aid appeal, citing a deteriorating humanitarian situation. "
+        "However, efforts for international intervention remain hindered by restricted humanitarian "
+        "access and recent incidents of stolen food aid, leaving many displaced individuals to rely "
+        "entirely on self reliance in the face of this immense tragedy."
     )
 
     all_outputs = {}
