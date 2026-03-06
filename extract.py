@@ -44,11 +44,9 @@ combined_schema = (
 
     # ── Named Entity Recognition ──
     .entities({
-        "event": (
-            "Any named event, incident, occurrence, or happening mentioned in the "
-            "news article. Extract ALL events such as earthquakes, elections, protests, "
-            "clashes, rescue operations, attacks, accidents, or sporting events."
-        ),
+       "event": (
+       "Any event, incident, process, or phenomenon mentioned in the news article — including both discrete occurrences and ongoing or long-term developments. Extract ALL events: sudden incidents (e.g. earthquakes, attacks, sport events, elections) as well as structural or gradual phenomena (e.g. climate change, rising temperatures, economic recession, demographic shifts). "
+            ),
         "location": (
             "Any geographic location, place, city, country, region, facility, venue, "
             "or address where an event occurs. Extract ALL locations."
