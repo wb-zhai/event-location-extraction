@@ -1,0 +1,3588 @@
+[
+  {
+    "id": "article_000",
+    "entities": [
+      [
+        "roger ebert",
+        "event_or_risk"
+      ],
+      [
+        "death of beloved film critic roger ebert",
+        "event_or_risk"
+      ],
+      [
+        "recurrence of cancer",
+        "event_or_risk"
+      ],
+      [
+        "thyroid cancer",
+        "event_or_risk"
+      ],
+      [
+        "cancerous growth spotted in his salivary glands",
+        "event_or_risk"
+      ],
+      [
+        "thursday",
+        "date"
+      ],
+      [
+        "2002",
+        "date"
+      ],
+      [
+        "2003",
+        "date"
+      ],
+      [
+        "2006",
+        "date"
+      ],
+      [
+        "chicago sun-times",
+        "organization"
+      ],
+      [
+        "chicago",
+        "location"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_001",
+    "entities": [
+      [
+        "deadly attack",
+        "event_or_risk"
+      ],
+      [
+        "sept. 14th attack",
+        "event_or_risk"
+      ],
+      [
+        "serious security lapses",
+        "event_or_risk"
+      ],
+      [
+        "taliban fighters cut through a fence undetected",
+        "event_or_risk"
+      ],
+      [
+        "deaths of marine lt. col. chris raible",
+        "event_or_risk"
+      ],
+      [
+        "destroyed six harrier jets",
+        "event_or_risk"
+      ],
+      [
+        "four-hour attack",
+        "event_or_risk"
+      ],
+      [
+        "afghanistan",
+        "location"
+      ],
+      [
+        "helmand province",
+        "location"
+      ],
+      [
+        "camp bastion",
+        "location"
+      ],
+      [
+        "camp leatherneck",
+        "location"
+      ],
+      [
+        "kabul",
+        "location"
+      ],
+      [
+        "pennsylvania",
+        "location"
+      ],
+      [
+        "indiana",
+        "location"
+      ],
+      [
+        "capitol hill",
+        "location"
+      ],
+      [
+        "sept. 14",
+        "date"
+      ],
+      [
+        "feb 4, 2013",
+        "date"
+      ],
+      [
+        "september 14, 2012",
+        "date"
+      ],
+      [
+        "friday",
+        "date"
+      ],
+      [
+        "pentagon",
+        "organization"
+      ],
+      [
+        "congress",
+        "organization"
+      ],
+      [
+        "house armed services committee",
+        "organization"
+      ],
+      [
+        "taliban",
+        "organization"
+      ],
+      [
+        "npr",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "deadly attack",
+        "camp bastion"
+      ],
+      [
+        "sept. 14th attack",
+        "helmand province"
+      ],
+      [
+        "serious security lapses",
+        "camp bastion"
+      ],
+      [
+        "taliban fighters cut through a fence undetected",
+        "camp bastion"
+      ],
+      [
+        "destroyed six harrier jets",
+        "camp bastion"
+      ],
+      [
+        "four-hour attack",
+        "camp bastion"
+      ],
+      [
+        "deaths of marine lt. col. chris raible",
+        "camp bastion"
+      ]
+    ]
+  },
+  {
+    "id": "article_002",
+    "entities": [
+      [
+        "shooting",
+        "event_or_risk"
+      ],
+      [
+        "gunshot wound",
+        "event_or_risk"
+      ],
+      [
+        "shot in the hand",
+        "event_or_risk"
+      ],
+      [
+        "lawrence",
+        "location"
+      ],
+      [
+        "lawrence memorial hospital",
+        "location"
+      ],
+      [
+        "10th and michigan",
+        "location"
+      ],
+      [
+        "900 block of michigan",
+        "location"
+      ],
+      [
+        "kansas city",
+        "location"
+      ],
+      [
+        "wednesday night",
+        "date"
+      ],
+      [
+        "saturday, august 1, 1998",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "shooting",
+        "lawrence"
+      ],
+      [
+        "gunshot wound",
+        "lawrence"
+      ],
+      [
+        "shot in the hand",
+        "lawrence"
+      ]
+    ]
+  },
+  {
+    "id": "article_003",
+    "entities": [
+      [
+        "establishing a theater",
+        "event_or_risk"
+      ],
+      [
+        "hurricane sandy",
+        "event_or_risk"
+      ],
+      [
+        "flemington",
+        "location"
+      ],
+      [
+        "90-100 main st.",
+        "location"
+      ],
+      [
+        "90 main st.",
+        "location"
+      ],
+      [
+        "west amwell",
+        "location"
+      ],
+      [
+        "54 mount airy village road",
+        "location"
+      ],
+      [
+        "100 main st.",
+        "location"
+      ],
+      [
+        "ford's theater",
+        "location"
+      ],
+      [
+        "washington, d.c.",
+        "location"
+      ],
+      [
+        "court street",
+        "location"
+      ],
+      [
+        "hunterdon county",
+        "location"
+      ],
+      [
+        "strategic advisory group",
+        "organization"
+      ],
+      [
+        "downtown performing arts center",
+        "organization"
+      ],
+      [
+        "dpac",
+        "organization"
+      ],
+      [
+        "hunterdon county national bank",
+        "organization"
+      ],
+      [
+        "sept. 24",
+        "date"
+      ],
+      [
+        "the 1880s",
+        "date"
+      ],
+      [
+        "2001",
+        "date"
+      ],
+      [
+        "2004",
+        "date"
+      ],
+      [
+        "2009",
+        "date"
+      ],
+      [
+        "2012",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "establishing a theater",
+        "flemington"
+      ],
+      [
+        "hurricane sandy",
+        "flemington"
+      ]
+    ]
+  },
+  {
+    "id": "article_004",
+    "entities": [
+      [
+        "performance by the elders",
+        "event_or_risk"
+      ],
+      [
+        "benefit for community radio",
+        "event_or_risk"
+      ],
+      [
+        "nevada city",
+        "location"
+      ],
+      [
+        "miners foundry cultural center",
+        "location"
+      ],
+      [
+        "north america",
+        "location"
+      ],
+      [
+        "europe",
+        "location"
+      ],
+      [
+        "truckee/tahoe",
+        "location"
+      ],
+      [
+        "woodland",
+        "location"
+      ],
+      [
+        "sierra nevada foothills",
+        "location"
+      ],
+      [
+        "325 spring st.",
+        "location"
+      ],
+      [
+        "kvmr",
+        "organization"
+      ],
+      [
+        "paste magazine",
+        "organization"
+      ],
+      [
+        "music row magazine",
+        "organization"
+      ],
+      [
+        "chicago sun-times",
+        "organization"
+      ],
+      [
+        "kansas city star",
+        "organization"
+      ],
+      [
+        "april 11, 2013",
+        "date"
+      ],
+      [
+        "1998",
+        "date"
+      ],
+      [
+        "saturday",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "performance by the elders",
+        "miners foundry cultural center"
+      ],
+      [
+        "performance by the elders",
+        "nevada city"
+      ],
+      [
+        "benefit for community radio",
+        "nevada city"
+      ]
+    ]
+  },
+  {
+    "id": "article_005",
+    "entities": [
+      [
+        "eurasian watermilfoil",
+        "event_or_risk"
+      ],
+      [
+        "invasive eurasian milfoil",
+        "event_or_risk"
+      ],
+      [
+        "milfoil eradication program",
+        "event_or_risk"
+      ],
+      [
+        "lake sutherland",
+        "location"
+      ],
+      [
+        "port angeles",
+        "location"
+      ],
+      [
+        "clallam county courthouse",
+        "location"
+      ],
+      [
+        "223 e. fourth st.",
+        "location"
+      ],
+      [
+        "clallam county",
+        "location"
+      ],
+      [
+        "olympic discovery trail",
+        "location"
+      ],
+      [
+        "u.s. highway 101",
+        "location"
+      ],
+      [
+        "pierce road",
+        "location"
+      ],
+      [
+        "blyn",
+        "location"
+      ],
+      [
+        "jefferson county",
+        "location"
+      ],
+      [
+        "michigan school road",
+        "location"
+      ],
+      [
+        "july 8",
+        "date"
+      ],
+      [
+        "late 1990s",
+        "date"
+      ],
+      [
+        "2004",
+        "date"
+      ],
+      [
+        "2009",
+        "date"
+      ],
+      [
+        "2024",
+        "date"
+      ],
+      [
+        "june 03. 2014",
+        "date"
+      ],
+      [
+        "lake sutherland management district 2",
+        "organization"
+      ],
+      [
+        "jamestown s'klallam tribe",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "eurasian watermilfoil",
+        "lake sutherland"
+      ],
+      [
+        "invasive eurasian milfoil",
+        "lake sutherland"
+      ],
+      [
+        "milfoil eradication program",
+        "lake sutherland"
+      ]
+    ]
+  },
+  {
+    "id": "article_006",
+    "entities": [
+      [
+        "accidental overdose of prescription drugs and cocaine",
+        "event_or_risk"
+      ],
+      [
+        "death",
+        "event_or_risk"
+      ],
+      [
+        "interventions for young drug abusers",
+        "event_or_risk"
+      ],
+      [
+        "past addictions to crack cocaine, ecstasy and other drugs",
+        "event_or_risk"
+      ],
+      [
+        "new york",
+        "location"
+      ],
+      [
+        "manhattan",
+        "location"
+      ],
+      [
+        "monday",
+        "date"
+      ],
+      [
+        "aug. 28",
+        "date"
+      ],
+      [
+        "mtv",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "accidental overdose of prescription drugs and cocaine",
+        "manhattan"
+      ],
+      [
+        "death",
+        "manhattan"
+      ]
+    ]
+  },
+  {
+    "id": "article_007",
+    "entities": [
+      [
+        "live panto horse fall",
+        "event_or_risk"
+      ],
+      [
+        "horse was spooked and threw him on to the stage",
+        "event_or_risk"
+      ],
+      [
+        "minor back injury",
+        "event_or_risk"
+      ],
+      [
+        "fractured her skull",
+        "event_or_risk"
+      ],
+      [
+        "fell off a beanstalk",
+        "event_or_risk"
+      ],
+      [
+        "secc clyde auditorium",
+        "location"
+      ],
+      [
+        "glasgow",
+        "location"
+      ],
+      [
+        "western infirmary",
+        "location"
+      ],
+      [
+        "pavilion theatre",
+        "location"
+      ],
+      [
+        "2004",
+        "date"
+      ],
+      [
+        "secc",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "live panto horse fall",
+        "secc clyde auditorium"
+      ],
+      [
+        "horse was spooked and threw him on to the stage",
+        "secc clyde auditorium"
+      ],
+      [
+        "minor back injury",
+        "secc clyde auditorium"
+      ],
+      [
+        "fractured her skull",
+        "pavilion theatre"
+      ],
+      [
+        "fell off a beanstalk",
+        "pavilion theatre"
+      ]
+    ]
+  },
+  {
+    "id": "article_008",
+    "entities": [
+      [
+        "paragliding accident",
+        "event_or_risk"
+      ],
+      [
+        "parachute malfunctioned",
+        "event_or_risk"
+      ],
+      [
+        "death",
+        "event_or_risk"
+      ],
+      [
+        "coma",
+        "event_or_risk"
+      ],
+      [
+        "utah",
+        "location"
+      ],
+      [
+        "wednesday, april 23rd 2014",
+        "date"
+      ],
+      [
+        "over the weekend",
+        "date"
+      ],
+      [
+        "2016",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "paragliding accident",
+        "utah"
+      ],
+      [
+        "parachute malfunctioned",
+        "utah"
+      ]
+    ]
+  },
+  {
+    "id": "article_009",
+    "entities": [
+      [
+        "nazi propaganda",
+        "event_or_risk"
+      ],
+      [
+        "anti-semitism",
+        "event_or_risk"
+      ],
+      [
+        "negative attitudes about jews",
+        "event_or_risk"
+      ],
+      [
+        "germany",
+        "location"
+      ],
+      [
+        "zurich",
+        "location"
+      ],
+      [
+        "the 1930s",
+        "date"
+      ],
+      [
+        "june 15, 2015",
+        "date"
+      ],
+      [
+        "monday",
+        "date"
+      ],
+      [
+        "1996",
+        "date"
+      ],
+      [
+        "2006",
+        "date"
+      ],
+      [
+        "university of zurich",
+        "organization"
+      ],
+      [
+        "jta",
+        "organization"
+      ],
+      [
+        "associated press",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "nazi propaganda",
+        "germany"
+      ],
+      [
+        "anti-semitism",
+        "germany"
+      ],
+      [
+        "negative attitudes about jews",
+        "germany"
+      ]
+    ]
+  },
+  {
+    "id": "article_010",
+    "entities": [
+      [
+        "kitchen fire",
+        "event_or_risk"
+      ],
+      [
+        "boulder",
+        "location"
+      ],
+      [
+        "3300 block of case circle",
+        "location"
+      ],
+      [
+        "10/11/2012",
+        "date"
+      ],
+      [
+        "thursday",
+        "date"
+      ],
+      [
+        "boulder fire department",
+        "organization"
+      ],
+      [
+        "smoke damage",
+        "event_or_risk"
+      ],
+      [
+        "fire",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "kitchen fire",
+        "boulder"
+      ],
+      [
+        "kitchen fire",
+        "3300 block of case circle"
+      ],
+      [
+        "smoke damage",
+        "3300 block of case circle"
+      ]
+    ]
+  },
+  {
+    "id": "article_011",
+    "entities": [
+      [
+        "cartersville",
+        "location"
+      ],
+      [
+        "georgia",
+        "location"
+      ],
+      [
+        "cherokee county",
+        "location"
+      ],
+      [
+        "dade county",
+        "location"
+      ],
+      [
+        "gilmer county",
+        "location"
+      ],
+      [
+        "chattanooga",
+        "location"
+      ],
+      [
+        "cookeville",
+        "location"
+      ],
+      [
+        "tennessee",
+        "location"
+      ],
+      [
+        "knoxville",
+        "location"
+      ],
+      [
+        "atlanta",
+        "location"
+      ],
+      [
+        "virgin falls state natural area",
+        "location"
+      ],
+      [
+        "hamilton county",
+        "location"
+      ],
+      [
+        "trimming vegetation along the roadsides",
+        "event_or_risk"
+      ],
+      [
+        "text message investigation",
+        "event_or_risk"
+      ],
+      [
+        "bankruptcy",
+        "event_or_risk"
+      ],
+      [
+        "foreclosure",
+        "event_or_risk"
+      ],
+      [
+        "georgia department of transportation",
+        "organization"
+      ],
+      [
+        "putnam county sheriff's office",
+        "organization"
+      ],
+      [
+        "tennessee wildlife resources agency",
+        "organization"
+      ],
+      [
+        "tennessee parks and greenways foundation",
+        "organization"
+      ],
+      [
+        "u.s. fish and wildlife service",
+        "organization"
+      ],
+      [
+        "morris brown college",
+        "organization"
+      ],
+      [
+        "fulton county development authority",
+        "organization"
+      ],
+      [
+        "hamilton county schools",
+        "organization"
+      ],
+      [
+        "chapter 11 bankruptcy",
+        "event_or_risk"
+      ],
+      [
+        "$30 million in debt",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "trimming vegetation along the roadsides",
+        "cherokee county"
+      ],
+      [
+        "trimming vegetation along the roadsides",
+        "dade county"
+      ],
+      [
+        "trimming vegetation along the roadsides",
+        "gilmer county"
+      ],
+      [
+        "text message investigation",
+        "cookeville"
+      ],
+      [
+        "text message investigation",
+        "tennessee"
+      ],
+      [
+        "chapter 11 bankruptcy",
+        "atlanta"
+      ],
+      [
+        "foreclosure",
+        "atlanta"
+      ]
+    ]
+  },
+  {
+    "id": "article_012",
+    "entities": [
+      [
+        "e-tolling",
+        "event_or_risk"
+      ],
+      [
+        "gauteng",
+        "location"
+      ],
+      [
+        "cape town",
+        "location"
+      ],
+      [
+        "south africa",
+        "location"
+      ],
+      [
+        "johannesburg",
+        "location"
+      ],
+      [
+        "thursday",
+        "date"
+      ],
+      [
+        "friday",
+        "date"
+      ],
+      [
+        "saturday",
+        "date"
+      ],
+      [
+        "inter-ministerial committee",
+        "organization"
+      ],
+      [
+        "congress of sa trade unions",
+        "organization"
+      ],
+      [
+        "cosatu",
+        "organization"
+      ],
+      [
+        "gauteng freeway improvement project",
+        "event_or_risk"
+      ],
+      [
+        "campaign of opposition",
+        "event_or_risk"
+      ],
+      [
+        "massive opposition from motorists",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "e-tolling",
+        "gauteng"
+      ],
+      [
+        "gauteng freeway improvement project",
+        "gauteng"
+      ],
+      [
+        "massive opposition from motorists",
+        "gauteng"
+      ],
+      [
+        "campaign of opposition",
+        "south africa"
+      ]
+    ]
+  },
+  {
+    "id": "article_013",
+    "entities": [
+      [
+        "simply red",
+        "organization"
+      ],
+      [
+        "belfast",
+        "location"
+      ],
+      [
+        "northern ireland",
+        "location"
+      ],
+      [
+        "london",
+        "location"
+      ],
+      [
+        "u.k.",
+        "location"
+      ],
+      [
+        "london o2 arena",
+        "location"
+      ],
+      [
+        "december 8",
+        "date"
+      ],
+      [
+        "december",
+        "date"
+      ],
+      [
+        "april 24, 2010",
+        "date"
+      ],
+      [
+        "farewell pre-christmas tour",
+        "event_or_risk"
+      ],
+      [
+        "split",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "farewell pre-christmas tour",
+        "u.k."
+      ],
+      [
+        "farewell pre-christmas tour",
+        "belfast"
+      ],
+      [
+        "farewell pre-christmas tour",
+        "london o2 arena"
+      ]
+    ]
+  },
+  {
+    "id": "article_014",
+    "entities": [
+      [
+        "aiken",
+        "location"
+      ],
+      [
+        "cedar road",
+        "location"
+      ],
+      [
+        "richland avenue",
+        "location"
+      ],
+      [
+        "schroeder avenue",
+        "location"
+      ],
+      [
+        "aiken county",
+        "location"
+      ],
+      [
+        "burglary",
+        "event_or_risk"
+      ],
+      [
+        "drug charges",
+        "event_or_risk"
+      ],
+      [
+        "possession of a controlled substance",
+        "event_or_risk"
+      ],
+      [
+        "friday",
+        "date"
+      ],
+      [
+        "monday",
+        "date"
+      ],
+      [
+        "july 20",
+        "date"
+      ],
+      [
+        "september 19",
+        "date"
+      ],
+      [
+        "aiken department of public safety",
+        "organization"
+      ],
+      [
+        "aiken county sheriff's office",
+        "organization"
+      ],
+      [
+        "aiken county detention center",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "burglary",
+        "aiken"
+      ],
+      [
+        "burglary",
+        "schroeder avenue"
+      ],
+      [
+        "drug charges",
+        "aiken"
+      ]
+    ]
+  },
+  {
+    "id": "article_015",
+    "entities": [
+      [
+        "england",
+        "location"
+      ],
+      [
+        "orlando",
+        "location"
+      ],
+      [
+        "florida",
+        "location"
+      ],
+      [
+        "great britain",
+        "location"
+      ],
+      [
+        "cambridge university",
+        "location"
+      ],
+      [
+        "france",
+        "location"
+      ],
+      [
+        "tuesday, july 11, 2006",
+        "date"
+      ],
+      [
+        "1999",
+        "date"
+      ],
+      [
+        "abc",
+        "organization"
+      ],
+      [
+        "abc news",
+        "organization"
+      ],
+      [
+        "passport fraud",
+        "event_or_risk"
+      ],
+      [
+        "deception",
+        "event_or_risk"
+      ],
+      [
+        "criminal investigation",
+        "event_or_risk"
+      ],
+      [
+        "arrested",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "deception",
+        "england"
+      ],
+      [
+        "passport fraud",
+        "england"
+      ],
+      [
+        "criminal investigation",
+        "england"
+      ],
+      [
+        "arrested",
+        "england"
+      ]
+    ]
+  },
+  {
+    "id": "article_016",
+    "entities": [
+      [
+        "abbeville",
+        "location"
+      ],
+      [
+        "louisiana",
+        "location"
+      ],
+      [
+        "vermilion parish",
+        "location"
+      ],
+      [
+        "intracoastal city",
+        "location"
+      ],
+      [
+        "helicopter crash",
+        "event_or_risk"
+      ],
+      [
+        "friday",
+        "date"
+      ],
+      [
+        "vermilion parish sheriff's office",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "helicopter crash",
+        "intracoastal city"
+      ],
+      [
+        "helicopter crash",
+        "vermilion parish"
+      ],
+      [
+        "helicopter crash",
+        "louisiana"
+      ]
+    ]
+  },
+  {
+    "id": "article_017",
+    "entities": [
+      [
+        "14 february 2008",
+        "date"
+      ],
+      [
+        "1999",
+        "date"
+      ],
+      [
+        "2001",
+        "date"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_018",
+    "entities": [
+      [
+        "east animas road",
+        "location"
+      ],
+      [
+        "durango",
+        "location"
+      ],
+      [
+        "hesperus",
+        "location"
+      ],
+      [
+        "county road 250",
+        "location"
+      ],
+      [
+        "trimble lane",
+        "location"
+      ],
+      [
+        "colorado",
+        "location"
+      ],
+      [
+        "rollover accident",
+        "event_or_risk"
+      ],
+      [
+        "crash",
+        "event_or_risk"
+      ],
+      [
+        "single-car rollover",
+        "event_or_risk"
+      ],
+      [
+        "wednesday",
+        "date"
+      ],
+      [
+        "october 03, 2012",
+        "date"
+      ],
+      [
+        "durango fire & rescue authority",
+        "organization"
+      ],
+      [
+        "colorado state patrol",
+        "organization"
+      ],
+      [
+        "u.s. forest service",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "rollover accident",
+        "east animas road"
+      ],
+      [
+        "rollover accident",
+        "durango"
+      ],
+      [
+        "single-car rollover",
+        "east animas road"
+      ],
+      [
+        "crash",
+        "east animas road"
+      ]
+    ]
+  },
+  {
+    "id": "article_019",
+    "entities": [
+      [
+        "russia",
+        "location"
+      ],
+      [
+        "moscow",
+        "location"
+      ],
+      [
+        "berlin",
+        "location"
+      ],
+      [
+        "st. petersburg",
+        "location"
+      ],
+      [
+        "tatarstan",
+        "location"
+      ],
+      [
+        "london",
+        "location"
+      ],
+      [
+        "raids on foreign ngos",
+        "event_or_risk"
+      ],
+      [
+        "crackdown on dissent",
+        "event_or_risk"
+      ],
+      [
+        "unannounced audit",
+        "event_or_risk"
+      ],
+      [
+        "mass protests",
+        "event_or_risk"
+      ],
+      [
+        "march 27, 2013",
+        "date"
+      ],
+      [
+        "last year",
+        "date"
+      ],
+      [
+        "tuesday",
+        "date"
+      ],
+      [
+        "wednesday",
+        "date"
+      ],
+      [
+        "july",
+        "date"
+      ],
+      [
+        "human rights watch",
+        "organization"
+      ],
+      [
+        "amnesty international",
+        "organization"
+      ],
+      [
+        "transparency international",
+        "organization"
+      ],
+      [
+        "konrad adenauer foundation",
+        "organization"
+      ],
+      [
+        "friedrich ebert foundation",
+        "organization"
+      ],
+      [
+        "agora",
+        "organization"
+      ],
+      [
+        "memorial",
+        "organization"
+      ],
+      [
+        "united russia party",
+        "organization"
+      ],
+      [
+        "kremlin",
+        "organization"
+      ],
+      [
+        "eu",
+        "organization"
+      ],
+      [
+        "npr",
+        "organization"
+      ],
+      [
+        "bbc",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "raids on foreign ngos",
+        "russia"
+      ],
+      [
+        "raids on foreign ngos",
+        "moscow"
+      ],
+      [
+        "unannounced audit",
+        "moscow"
+      ],
+      [
+        "crackdown on dissent",
+        "russia"
+      ],
+      [
+        "mass protests",
+        "russia"
+      ],
+      [
+        "unannounced audit",
+        "tatarstan"
+      ],
+      [
+        "unannounced audit",
+        "st. petersburg"
+      ]
+    ]
+  },
+  {
+    "id": "article_020",
+    "entities": [
+      [
+        "u.s.",
+        "location"
+      ],
+      [
+        "oakland township",
+        "location"
+      ],
+      [
+        "diane sawyer",
+        "organization"
+      ],
+      [
+        "u.s. secretary of agriculture",
+        "organization"
+      ],
+      [
+        "tom vilsack",
+        "organization"
+      ],
+      [
+        "portraits of government officials being paid for by taxpayers",
+        "event_or_risk"
+      ],
+      [
+        "waste and corruption in our government",
+        "event_or_risk"
+      ],
+      [
+        "the last two years",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "portraits of government officials being paid for by taxpayers",
+        "u.s."
+      ],
+      [
+        "waste and corruption in our government",
+        "u.s."
+      ]
+    ]
+  },
+  {
+    "id": "article_021",
+    "entities": [
+      [
+        "australia",
+        "location"
+      ],
+      [
+        "new york city",
+        "location"
+      ],
+      [
+        "bahrain",
+        "location"
+      ],
+      [
+        "dubai",
+        "location"
+      ],
+      [
+        "duluth, ga.",
+        "location"
+      ],
+      [
+        "albuquerque",
+        "location"
+      ],
+      [
+        "michigan",
+        "location"
+      ],
+      [
+        "orlando",
+        "location"
+      ],
+      [
+        "britain",
+        "location"
+      ],
+      [
+        "venezuela",
+        "location"
+      ],
+      [
+        "france",
+        "location"
+      ],
+      [
+        "misdemeanor assault",
+        "event_or_risk"
+      ],
+      [
+        "snorting cocaine",
+        "event_or_risk"
+      ],
+      [
+        "child molestation case",
+        "event_or_risk"
+      ],
+      [
+        "nationwide search",
+        "event_or_risk"
+      ],
+      [
+        "kidnapped",
+        "event_or_risk"
+      ],
+      [
+        "stampede",
+        "event_or_risk"
+      ],
+      [
+        "trampled by shoppers",
+        "event_or_risk"
+      ],
+      [
+        "hurricane katrina",
+        "event_or_risk"
+      ],
+      [
+        "mass spending debt",
+        "event_or_risk"
+      ],
+      [
+        "june",
+        "date"
+      ],
+      [
+        "november",
+        "date"
+      ],
+      [
+        "thanksgiving",
+        "date"
+      ],
+      [
+        "fema",
+        "organization"
+      ],
+      [
+        "chanel",
+        "organization"
+      ],
+      [
+        "h&m",
+        "organization"
+      ],
+      [
+        "french vogue",
+        "organization"
+      ],
+      [
+        "fbi",
+        "organization"
+      ],
+      [
+        "wal-mart",
+        "organization"
+      ],
+      [
+        "christian broadcasting network",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "misdemeanor assault",
+        "new york city"
+      ],
+      [
+        "snorting cocaine",
+        "britain"
+      ],
+      [
+        "child molestation case",
+        "bahrain"
+      ],
+      [
+        "nationwide search",
+        "duluth, ga."
+      ],
+      [
+        "kidnapped",
+        "albuquerque"
+      ],
+      [
+        "trampled by shoppers",
+        "michigan"
+      ],
+      [
+        "stampede",
+        "michigan"
+      ],
+      [
+        "hurricane katrina",
+        "new york city"
+      ]
+    ]
+  },
+  {
+    "id": "article_022",
+    "entities": [
+      [
+        "aiken",
+        "location"
+      ],
+      [
+        "aiken training track",
+        "location"
+      ],
+      [
+        "saratoga",
+        "location"
+      ],
+      [
+        "fire",
+        "event_or_risk"
+      ],
+      [
+        "burned stables",
+        "event_or_risk"
+      ],
+      [
+        "saturday",
+        "date"
+      ],
+      [
+        "monday",
+        "date"
+      ],
+      [
+        "june 8",
+        "date"
+      ],
+      [
+        "the 1940s",
+        "date"
+      ],
+      [
+        "legacy stable",
+        "organization"
+      ],
+      [
+        "dogwood stable",
+        "organization"
+      ],
+      [
+        "greentree stable",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "fire",
+        "aiken training track"
+      ],
+      [
+        "burned stables",
+        "aiken training track"
+      ]
+    ]
+  },
+  {
+    "id": "article_023",
+    "entities": [
+      [
+        "clarendon",
+        "location"
+      ],
+      [
+        "creek road",
+        "location"
+      ],
+      [
+        "rutland regional medical center",
+        "location"
+      ],
+      [
+        "dartmouth-hitchcock medical center",
+        "location"
+      ],
+      [
+        "lebanon, n.h.",
+        "location"
+      ],
+      [
+        "rutland",
+        "location"
+      ],
+      [
+        "drunken-driving crash",
+        "event_or_risk"
+      ],
+      [
+        "head injuries",
+        "event_or_risk"
+      ],
+      [
+        "drunken driving",
+        "event_or_risk"
+      ],
+      [
+        "underage consumption of alcohol",
+        "event_or_risk"
+      ],
+      [
+        "tuesday morning",
+        "date"
+      ],
+      [
+        "march 18",
+        "date"
+      ],
+      [
+        "5 a.m.",
+        "date"
+      ],
+      [
+        "vermont state police",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "drunken-driving crash",
+        "clarendon"
+      ],
+      [
+        "drunken-driving crash",
+        "creek road"
+      ],
+      [
+        "head injuries",
+        "clarendon"
+      ]
+    ]
+  },
+  {
+    "id": "article_024",
+    "entities": [
+      [
+        "hagerstown, md.",
+        "location"
+      ],
+      [
+        "hagerstown",
+        "location"
+      ],
+      [
+        "maryland",
+        "location"
+      ],
+      [
+        "cumberland, maryland",
+        "location"
+      ],
+      [
+        "harpers ferry",
+        "location"
+      ],
+      [
+        "berkeley springs",
+        "location"
+      ],
+      [
+        "keyser",
+        "location"
+      ],
+      [
+        "romney",
+        "location"
+      ],
+      [
+        "martinsburg",
+        "location"
+      ],
+      [
+        "winchester, virginia",
+        "location"
+      ],
+      [
+        "cortland mansion",
+        "location"
+      ],
+      [
+        "may 7",
+        "date"
+      ],
+      [
+        "may 4-10",
+        "date"
+      ],
+      [
+        "2013",
+        "date"
+      ],
+      [
+        "horizon goodwill industries",
+        "organization"
+      ],
+      [
+        "national goodwill industries",
+        "organization"
+      ],
+      [
+        "walmart",
+        "organization"
+      ],
+      [
+        "harpers ferry national park",
+        "organization"
+      ],
+      [
+        "office of consumer advocacy",
+        "organization"
+      ],
+      [
+        "annual power of work awards dinner",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "annual power of work awards dinner",
+        "hagerstown, md."
+      ]
+    ]
+  },
+  {
+    "id": "article_025",
+    "entities": [
+      [
+        "thornbury",
+        "location"
+      ],
+      [
+        "armstrong hall",
+        "location"
+      ],
+      [
+        "st mary's church",
+        "location"
+      ],
+      [
+        "wiltshire",
+        "location"
+      ],
+      [
+        "thornbury eisteddfod",
+        "event_or_risk"
+      ],
+      [
+        "thornbury arts festival",
+        "event_or_risk"
+      ],
+      [
+        "25th anniversary of the eisteddfod",
+        "event_or_risk"
+      ],
+      [
+        "birthday concert",
+        "event_or_risk"
+      ],
+      [
+        "friday, may 16",
+        "date"
+      ],
+      [
+        "friday, may 9",
+        "date"
+      ],
+      [
+        "sunday, may 18",
+        "date"
+      ],
+      [
+        "1989",
+        "date"
+      ],
+      [
+        "may 6",
+        "date"
+      ],
+      [
+        "thornbury lions",
+        "organization"
+      ],
+      [
+        "royal mail choir",
+        "organization"
+      ],
+      [
+        "bbc",
+        "organization"
+      ],
+      [
+        "the magnificent ak47",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "thornbury eisteddfod",
+        "thornbury"
+      ],
+      [
+        "thornbury arts festival",
+        "thornbury"
+      ],
+      [
+        "birthday concert",
+        "armstrong hall"
+      ]
+    ]
+  },
+  {
+    "id": "article_026",
+    "entities": [
+      [
+        "overland park, kansas",
+        "location"
+      ],
+      [
+        "february 27, 2014",
+        "date"
+      ],
+      [
+        "2009",
+        "date"
+      ],
+      [
+        "toothy grins",
+        "organization"
+      ],
+      [
+        "amazon",
+        "organization"
+      ],
+      [
+        "youtube",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_027",
+    "entities": [
+      [
+        "kentucky",
+        "location"
+      ],
+      [
+        "sandy hook elementary school",
+        "location"
+      ],
+      [
+        "memphis, tennessee",
+        "location"
+      ],
+      [
+        "memphis",
+        "location"
+      ],
+      [
+        "bangladesh",
+        "location"
+      ],
+      [
+        "mass killings at sandy hook elementary school",
+        "event_or_risk"
+      ],
+      [
+        "civil rights",
+        "event_or_risk"
+      ],
+      [
+        "segregated kentucky",
+        "event_or_risk"
+      ],
+      [
+        "stocks fall",
+        "event_or_risk"
+      ],
+      [
+        "mixed numbers on the housing market",
+        "event_or_risk"
+      ],
+      [
+        "october 16, 2012",
+        "date"
+      ],
+      [
+        "1961",
+        "date"
+      ],
+      [
+        "national urban league",
+        "organization"
+      ],
+      [
+        "frontline",
+        "organization"
+      ],
+      [
+        "national civil rights museum",
+        "organization"
+      ],
+      [
+        "st. jude children's research hospital",
+        "organization"
+      ],
+      [
+        "grameen bank",
+        "organization"
+      ],
+      [
+        "federal reserve",
+        "organization"
+      ],
+      [
+        "vanguard",
+        "organization"
+      ],
+      [
+        "fema",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "mass killings at sandy hook elementary school",
+        "sandy hook elementary school"
+      ],
+      [
+        "segregated kentucky",
+        "kentucky"
+      ],
+      [
+        "civil rights",
+        "kentucky"
+      ],
+      [
+        "stocks fall",
+        "memphis, tennessee"
+      ]
+    ]
+  },
+  {
+    "id": "article_028",
+    "entities": [
+      [
+        "colorado",
+        "location"
+      ],
+      [
+        "front range",
+        "location"
+      ],
+      [
+        "fort collins",
+        "location"
+      ],
+      [
+        "denver",
+        "location"
+      ],
+      [
+        "larimer",
+        "location"
+      ],
+      [
+        "weld",
+        "location"
+      ],
+      [
+        "boulder",
+        "location"
+      ],
+      [
+        "adams",
+        "location"
+      ],
+      [
+        "postponed a vote on a bill proposing a study on possible health effects of oil and natural-gas development",
+        "event_or_risk"
+      ],
+      [
+        "health effects of oil and natural-gas development",
+        "event_or_risk"
+      ],
+      [
+        "march 25, 2014",
+        "date"
+      ],
+      [
+        "tuesday",
+        "date"
+      ],
+      [
+        "next tuesday",
+        "date"
+      ],
+      [
+        "fiscal 2017",
+        "date"
+      ],
+      [
+        "jan. 1, 2017",
+        "date"
+      ],
+      [
+        "house health, insurance and environment committee",
+        "organization"
+      ],
+      [
+        "colorado department of public health and environment",
+        "organization"
+      ],
+      [
+        "weld air and water",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "health effects of oil and natural-gas development",
+        "front range"
+      ],
+      [
+        "health effects of oil and natural-gas development",
+        "colorado"
+      ],
+      [
+        "postponed a vote on a bill proposing a study on possible health effects of oil and natural-gas development",
+        "colorado"
+      ]
+    ]
+  },
+  {
+    "id": "article_029",
+    "entities": [
+      [
+        "dunedin",
+        "location"
+      ],
+      [
+        "new zealand",
+        "location"
+      ],
+      [
+        "carey's bay",
+        "location"
+      ],
+      [
+        "port chalmers",
+        "location"
+      ],
+      [
+        "observation pt",
+        "location"
+      ],
+      [
+        "st joseph's cathedral",
+        "location"
+      ],
+      [
+        "funeral for celebrated artist ralph hotere",
+        "event_or_risk"
+      ],
+      [
+        "apartheid",
+        "event_or_risk"
+      ],
+      [
+        "racism",
+        "event_or_risk"
+      ],
+      [
+        "threats to the environment",
+        "event_or_risk"
+      ],
+      [
+        "loss through port development of his land",
+        "event_or_risk"
+      ],
+      [
+        "massive stroke",
+        "event_or_risk"
+      ],
+      [
+        "sunday",
+        "date"
+      ],
+      [
+        "2011",
+        "date"
+      ],
+      [
+        "the '60s and '70s",
+        "date"
+      ],
+      [
+        "order of new zealand",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "funeral for celebrated artist ralph hotere",
+        "dunedin"
+      ],
+      [
+        "loss through port development of his land",
+        "port chalmers"
+      ],
+      [
+        "loss through port development of his land",
+        "observation pt"
+      ],
+      [
+        "massive stroke",
+        "new zealand"
+      ],
+      [
+        "apartheid",
+        "new zealand"
+      ],
+      [
+        "racism",
+        "new zealand"
+      ]
+    ]
+  },
+  {
+    "id": "article_030",
+    "entities": [
+      [
+        "shooting",
+        "event_or_risk"
+      ],
+      [
+        "life-threatening injuries",
+        "event_or_risk"
+      ],
+      [
+        "kansas city",
+        "location"
+      ],
+      [
+        "mo.",
+        "location"
+      ],
+      [
+        "42nd street",
+        "location"
+      ],
+      [
+        "pittman road",
+        "location"
+      ],
+      [
+        "kc",
+        "location"
+      ],
+      [
+        "just after 5:30 p.m.",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "shooting",
+        "kansas city"
+      ],
+      [
+        "life-threatening injuries",
+        "kansas city"
+      ]
+    ]
+  },
+  {
+    "id": "article_031",
+    "entities": [
+      [
+        "oakland",
+        "location"
+      ],
+      [
+        "calif.",
+        "location"
+      ],
+      [
+        "beverly hills",
+        "location"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_032",
+    "entities": [
+      [
+        "richardson",
+        "location"
+      ],
+      [
+        "city of richardson",
+        "organization"
+      ],
+      [
+        "time warner cable",
+        "organization"
+      ],
+      [
+        "richardson public library",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_033",
+    "entities": [
+      [
+        "thousand oaks",
+        "location"
+      ],
+      [
+        "beverly hills",
+        "location"
+      ],
+      [
+        "the lakes",
+        "location"
+      ],
+      [
+        "1945",
+        "date"
+      ],
+      [
+        "nate 'n al",
+        "organization"
+      ],
+      [
+        "california pizza kitchen",
+        "organization"
+      ],
+      [
+        "p.f. chang's",
+        "organization"
+      ],
+      [
+        "claim jumper",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_034",
+    "entities": [
+      [
+        "timberline knolls",
+        "location"
+      ],
+      [
+        "rehab",
+        "event_or_risk"
+      ],
+      [
+        "eating disorder",
+        "event_or_risk"
+      ],
+      [
+        "friday march 7, 2014",
+        "date"
+      ],
+      [
+        "march 6",
+        "date"
+      ],
+      [
+        "january",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "rehab",
+        "timberline knolls"
+      ],
+      [
+        "eating disorder",
+        "timberline knolls"
+      ]
+    ]
+  },
+  {
+    "id": "article_035",
+    "entities": [
+      [
+        "southern ky",
+        "location"
+      ],
+      [
+        "jamestown",
+        "location"
+      ],
+      [
+        "russell county",
+        "location"
+      ],
+      [
+        "somerset",
+        "location"
+      ],
+      [
+        "lake cumberland",
+        "location"
+      ],
+      [
+        "world war i monument destroyed by airborne truck",
+        "event_or_risk"
+      ],
+      [
+        "drunk driving",
+        "event_or_risk"
+      ],
+      [
+        "1937",
+        "date"
+      ],
+      [
+        "feb 25, 2008",
+        "date"
+      ],
+      [
+        "tuesday night",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "world war i monument destroyed by airborne truck",
+        "jamestown"
+      ],
+      [
+        "drunk driving",
+        "jamestown"
+      ]
+    ]
+  },
+  {
+    "id": "article_036",
+    "entities": [
+      [
+        "mendocino county",
+        "location"
+      ],
+      [
+        "air quality management district",
+        "organization"
+      ],
+      [
+        "mendocino county board of supervisors",
+        "organization"
+      ],
+      [
+        "california air pollution control officers association",
+        "organization"
+      ],
+      [
+        "mendocino county executive office",
+        "organization"
+      ],
+      [
+        "university of wisconsin",
+        "location"
+      ],
+      [
+        "milwaukee school of engineering",
+        "location"
+      ],
+      [
+        "milwaukee technical college",
+        "location"
+      ],
+      [
+        "advanced manufacturing & development, inc.",
+        "organization"
+      ],
+      [
+        "masonite corporation",
+        "organization"
+      ],
+      [
+        "2008",
+        "date"
+      ],
+      [
+        "february",
+        "date"
+      ],
+      [
+        "air pollution",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "air pollution",
+        "mendocino county"
+      ]
+    ]
+  },
+  {
+    "id": "article_037",
+    "entities": [
+      [
+        "missouri",
+        "location"
+      ],
+      [
+        "missouri department of revenue",
+        "organization"
+      ],
+      [
+        "november 26th, 2013",
+        "date"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_038",
+    "entities": [
+      [
+        "marblehead",
+        "location"
+      ],
+      [
+        "london",
+        "location"
+      ],
+      [
+        "singapore",
+        "location"
+      ],
+      [
+        "boston",
+        "location"
+      ]
+    ],
+    "event_location_pairs": []
+  },
+  {
+    "id": "article_039",
+    "entities": [
+      [
+        "ghana",
+        "location"
+      ],
+      [
+        "accra",
+        "location"
+      ],
+      [
+        "london",
+        "location"
+      ],
+      [
+        "mahogany lodge",
+        "location"
+      ],
+      [
+        "mr. world 2014 finals",
+        "event_or_risk"
+      ],
+      [
+        "mr. world male pageant",
+        "event_or_risk"
+      ],
+      [
+        "exclusive events ghana limited",
+        "organization"
+      ],
+      [
+        "mr. world organization",
+        "organization"
+      ],
+      [
+        "miss world organization",
+        "organization"
+      ],
+      [
+        "june 2014",
+        "date"
+      ],
+      [
+        "april 26",
+        "date"
+      ],
+      [
+        "may 7 2014",
+        "date"
+      ],
+      [
+        "june 15",
+        "date"
+      ],
+      [
+        "2014-04-04",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "mr. world 2014 finals",
+        "london"
+      ],
+      [
+        "mr. world male pageant",
+        "ghana"
+      ],
+      [
+        "mr. world male pageant",
+        "accra"
+      ]
+    ]
+  },
+  {
+    "id": "article_040",
+    "entities": [
+      [
+        "colorado",
+        "location"
+      ],
+      [
+        "montezuma county",
+        "location"
+      ],
+      [
+        "southwestern colorado",
+        "location"
+      ],
+      [
+        "colorado state patrol",
+        "organization"
+      ],
+      [
+        "beat auto theft through law enforcement",
+        "organization"
+      ],
+      [
+        "auto thefts",
+        "event_or_risk"
+      ],
+      [
+        "property search investigation",
+        "event_or_risk"
+      ],
+      [
+        "dec. 12",
+        "date"
+      ],
+      [
+        "jan. 8",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "property search investigation",
+        "montezuma county"
+      ],
+      [
+        "auto thefts",
+        "montezuma county"
+      ]
+    ]
+  },
+  {
+    "id": "article_041",
+    "entities": [
+      [
+        "china",
+        "location"
+      ],
+      [
+        "south china sea",
+        "location"
+      ],
+      [
+        "hainan island",
+        "location"
+      ],
+      [
+        "beijing",
+        "location"
+      ],
+      [
+        "washington",
+        "location"
+      ],
+      [
+        "international airspace",
+        "location"
+      ],
+      [
+        "april 2, 2001",
+        "date"
+      ],
+      [
+        "saturday night",
+        "date"
+      ],
+      [
+        "sunday morning",
+        "date"
+      ],
+      [
+        "collision",
+        "event_or_risk"
+      ],
+      [
+        "emergency landing",
+        "event_or_risk"
+      ],
+      [
+        "surveillance mission",
+        "event_or_risk"
+      ],
+      [
+        "chinese government",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "collision",
+        "south china sea"
+      ],
+      [
+        "emergency landing",
+        "hainan island"
+      ],
+      [
+        "surveillance mission",
+        "south china sea"
+      ]
+    ]
+  },
+  {
+    "id": "article_042",
+    "entities": [
+      [
+        "camp pendleton",
+        "location"
+      ],
+      [
+        "afghanistan",
+        "location"
+      ],
+      [
+        "san clemente",
+        "location"
+      ],
+      [
+        "helmand province",
+        "location"
+      ],
+      [
+        "marine corps",
+        "organization"
+      ],
+      [
+        "navy cross",
+        "event_or_risk"
+      ],
+      [
+        "roadside bomb",
+        "event_or_risk"
+      ],
+      [
+        "killed",
+        "event_or_risk"
+      ],
+      [
+        "war",
+        "event_or_risk"
+      ],
+      [
+        "2009",
+        "date"
+      ],
+      [
+        "2012",
+        "date"
+      ],
+      [
+        "world war ii",
+        "event_or_risk"
+      ],
+      [
+        "vietnam",
+        "location"
+      ],
+      [
+        "1st battalion, 5th marine regiment",
+        "organization"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "roadside bomb",
+        "helmand province"
+      ],
+      [
+        "killed",
+        "helmand province"
+      ],
+      [
+        "war",
+        "afghanistan"
+      ]
+    ]
+  },
+  {
+    "id": "article_043",
+    "entities": [
+      [
+        "oxford",
+        "location"
+      ],
+      [
+        "westgate shopping centre",
+        "location"
+      ],
+      [
+        "covered market",
+        "location"
+      ],
+      [
+        "high street",
+        "location"
+      ],
+      [
+        "boxing day",
+        "date"
+      ],
+      [
+        "christmas",
+        "date"
+      ],
+      [
+        "mid-november",
+        "date"
+      ],
+      [
+        "new year",
+        "date"
+      ],
+      [
+        "boxing day 2011",
+        "date"
+      ],
+      [
+        "thursday",
+        "date"
+      ],
+      [
+        "business boom",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "business boom",
+        "oxford"
+      ],
+      [
+        "business boom",
+        "westgate shopping centre"
+      ]
+    ]
+  },
+  {
+    "id": "article_044",
+    "entities": [
+      [
+        "israel",
+        "location"
+      ],
+      [
+        "bnei brak",
+        "location"
+      ],
+      [
+        "tel aviv",
+        "location"
+      ],
+      [
+        "knesset",
+        "organization"
+      ],
+      [
+        "yesh atid",
+        "organization"
+      ],
+      [
+        "movement for quality government",
+        "organization"
+      ],
+      [
+        "high court",
+        "organization"
+      ],
+      [
+        "mar 12, 2014",
+        "date"
+      ],
+      [
+        "march 12, 2014",
+        "date"
+      ],
+      [
+        "1948",
+        "date"
+      ],
+      [
+        "military conscription",
+        "event_or_risk"
+      ],
+      [
+        "civil rebellion",
+        "event_or_risk"
+      ],
+      [
+        "violent protests",
+        "event_or_risk"
+      ],
+      [
+        "controversial law to conscript ultra-orthodox jews",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "controversial law to conscript ultra-orthodox jews",
+        "israel"
+      ],
+      [
+        "military conscription",
+        "israel"
+      ],
+      [
+        "civil rebellion",
+        "israel"
+      ],
+      [
+        "violent protests",
+        "israel"
+      ]
+    ]
+  },
+  {
+    "id": "article_045",
+    "entities": [
+      [
+        "maryland",
+        "location"
+      ],
+      [
+        "annapolis",
+        "location"
+      ],
+      [
+        "carroll",
+        "location"
+      ],
+      [
+        "harford",
+        "location"
+      ],
+      [
+        "cecil",
+        "location"
+      ],
+      [
+        "prince george's county",
+        "location"
+      ],
+      [
+        "frederick",
+        "location"
+      ],
+      [
+        "howard",
+        "location"
+      ],
+      [
+        "anne arundel",
+        "location"
+      ],
+      [
+        "baltimore city",
+        "location"
+      ],
+      [
+        "baltimore county",
+        "location"
+      ],
+      [
+        "montgomery",
+        "location"
+      ],
+      [
+        "talbot",
+        "location"
+      ],
+      [
+        "columbus, ohio",
+        "location"
+      ],
+      [
+        "maryland general assembly",
+        "organization"
+      ],
+      [
+        "june 1",
+        "date"
+      ],
+      [
+        "jan. 1",
+        "date"
+      ],
+      [
+        "july",
+        "date"
+      ],
+      [
+        "new income tax bill",
+        "event_or_risk"
+      ],
+      [
+        "doomsday cuts",
+        "event_or_risk"
+      ],
+      [
+        "special session",
+        "event_or_risk"
+      ],
+      [
+        "tax rates on high earners",
+        "event_or_risk"
+      ],
+      [
+        "expanded gambling",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "new income tax bill",
+        "maryland"
+      ],
+      [
+        "doomsday cuts",
+        "maryland"
+      ],
+      [
+        "special session",
+        "maryland"
+      ],
+      [
+        "tax rates on high earners",
+        "maryland"
+      ],
+      [
+        "expanded gambling",
+        "prince george's county"
+      ]
+    ]
+  },
+  {
+    "id": "article_046",
+    "entities": [
+      [
+        "auckland",
+        "location"
+      ],
+      [
+        "new zealand",
+        "location"
+      ],
+      [
+        "united states",
+        "location"
+      ],
+      [
+        "australia",
+        "location"
+      ],
+      [
+        "brunei",
+        "location"
+      ],
+      [
+        "canada",
+        "location"
+      ],
+      [
+        "chile",
+        "location"
+      ],
+      [
+        "malaysia",
+        "location"
+      ],
+      [
+        "mexico",
+        "location"
+      ],
+      [
+        "peru",
+        "location"
+      ],
+      [
+        "singapore",
+        "location"
+      ],
+      [
+        "vietnam",
+        "location"
+      ],
+      [
+        "trans pacific partnership",
+        "event_or_risk"
+      ],
+      [
+        "trade talks",
+        "event_or_risk"
+      ],
+      [
+        "free trade agreement",
+        "event_or_risk"
+      ],
+      [
+        "u.s. dairy export council",
+        "organization"
+      ],
+      [
+        "national milk producers federation",
+        "organization"
+      ],
+      [
+        "fonterra",
+        "organization"
+      ],
+      [
+        "march",
+        "date"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "trade talks",
+        "auckland"
+      ],
+      [
+        "free trade agreement",
+        "new zealand"
+      ],
+      [
+        "trans pacific partnership",
+        "new zealand"
+      ]
+    ]
+  },
+  {
+    "id": "article_047",
+    "entities": [
+      [
+        "roswell",
+        "location"
+      ],
+      [
+        "atlanta",
+        "location"
+      ],
+      [
+        "bank of america",
+        "organization"
+      ],
+      [
+        "fbi",
+        "organization"
+      ],
+      [
+        "the athens banner-herald",
+        "organization"
+      ],
+      [
+        "friday",
+        "date"
+      ],
+      [
+        "saturday, october 25, 2003",
+        "date"
+      ],
+      [
+        "robbery",
+        "event_or_risk"
+      ],
+      [
+        "bank employee slain",
+        "event_or_risk"
+      ],
+      [
+        "shooting",
+        "event_or_risk"
+      ],
+      [
+        "bank robbers shot and killed a bank employee",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "robbery",
+        "roswell"
+      ],
+      [
+        "bank employee slain",
+        "roswell"
+      ],
+      [
+        "shooting",
+        "roswell"
+      ]
+    ]
+  },
+  {
+    "id": "article_048",
+    "entities": [
+      [
+        "alaska",
+        "location"
+      ],
+      [
+        "california",
+        "location"
+      ],
+      [
+        "north america",
+        "location"
+      ],
+      [
+        "airbus americas",
+        "organization"
+      ],
+      [
+        "airbus group, inc.",
+        "organization"
+      ],
+      [
+        "federal aviation administration",
+        "organization"
+      ],
+      [
+        "legend airlines",
+        "organization"
+      ],
+      [
+        "federal express company",
+        "organization"
+      ],
+      [
+        "u.s. air force academy",
+        "organization"
+      ],
+      [
+        "thunderbirds",
+        "organization"
+      ],
+      [
+        "u.s. department of defense",
+        "organization"
+      ],
+      [
+        "1 march 2014",
+        "date"
+      ],
+      [
+        "8 january 2014",
+        "date"
+      ],
+      [
+        "2010",
+        "date"
+      ],
+      [
+        "2001",
+        "date"
+      ],
+      [
+        "aircraft accident",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "aircraft accident",
+        "alaska"
+      ]
+    ]
+  },
+  {
+    "id": "article_049",
+    "entities": [
+      [
+        "croatia",
+        "location"
+      ],
+      [
+        "zagreb",
+        "location"
+      ],
+      [
+        "serbia and montenegro",
+        "location"
+      ],
+      [
+        "bosnia and herzegovina",
+        "location"
+      ],
+      [
+        "western europe",
+        "location"
+      ],
+      [
+        "north america",
+        "location"
+      ],
+      [
+        "australia",
+        "location"
+      ],
+      [
+        "western balkans",
+        "location"
+      ],
+      [
+        "brussels",
+        "location"
+      ],
+      [
+        "icrc",
+        "organization"
+      ],
+      [
+        "croatian red cross",
+        "organization"
+      ],
+      [
+        "1991",
+        "date"
+      ],
+      [
+        "1995",
+        "date"
+      ],
+      [
+        "03-06-2005",
+        "date"
+      ],
+      [
+        "missing persons",
+        "event_or_risk"
+      ],
+      [
+        "conflicts",
+        "event_or_risk"
+      ],
+      [
+        "armed conflicts",
+        "event_or_risk"
+      ],
+      [
+        "exhumations",
+        "event_or_risk"
+      ],
+      [
+        "forced displacement",
+        "event_or_risk"
+      ],
+      [
+        "disappearance",
+        "event_or_risk"
+      ]
+    ],
+    "event_location_pairs": [
+      [
+        "conflicts",
+        "croatia"
+      ],
+      [
+        "armed conflicts",
+        "croatia"
+      ],
+      [
+        "missing persons",
+        "croatia"
+      ],
+      [
+        "exhumations",
+        "croatia"
+      ]
+    ]
+  }
+]
