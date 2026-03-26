@@ -1,26 +1,27 @@
 # /// script
 # dependencies = [
-#   "gliner2", "urllib3", "requests"
+#   "gliner2", "urllib3", "requests", "pysbd"
 # ]
 # ///
 
 """
-GLiNER2 Event-Location Extraction with Risk Factors
-====================================================
+GLiNER2 Event-Location Extraction with Risk Factors — v3
+=========================================================
 Extracts event/risk-factor entities and geographic locations from news text,
-then links them via sentence co-occurrence.
+then links them via sentence co-occurrence with waterfall anchoring.
 
-Strategy:
-  - NER extraction with `include_spans=True` gives reliable entity spans
-    with character offsets and confidence scores.
-  - GLiNER2's relation extraction and structured JSON are too sparse for
-    multi-event texts, so we build event-location links by finding which
-    events and locations share the same sentence.
+Improvements over v2:
+  A) Overlap deduplication: prefer specific risk-factor labels over generic
+     "event" when both match the same span.
+  B) Robust sentence splitting via pysbd (handles abbreviations, decimals).
+  C) Waterfall anchoring: events without a same-sentence location inherit
+     the most recently mentioned location (news-article pattern).
+  D) Per-label confidence thresholds to reduce noise.
 """
 
-import re
 import json
 import uuid
+import pysbd
 from gliner2 import GLiNER2
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -30,7 +31,7 @@ from gliner2 import GLiNER2
 extractor = GLiNER2.from_pretrained("fastino/gliner2-large-v1")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# RISK-FACTOR ENTITY SCHEMA
+# RISK-FACTOR ENTITY DEFINITIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
 RISK_FACTOR_ENTITIES = {
@@ -83,8 +84,30 @@ RISK_FACTOR_ENTITIES = {
     ),
 }
 
+# Labels that are "event-like" for linking purposes
+_EVENT_LABELS = {"event"} | set(RISK_FACTOR_ENTITIES.keys())
+
 # ─────────────────────────────────────────────────────────────────────────────
-# NER SCHEMA (entities only — this is what GLiNER2 does best)
+# D) PER-LABEL CONFIDENCE THRESHOLDS
+# ─────────────────────────────────────────────────────────────────────────────
+# Locations need high confidence (prevent false geo-tags).
+# Risk factors can be slightly more lenient.
+# Generic "event" needs a higher bar to avoid vague noun phrases.
+
+LABEL_THRESHOLDS = {
+    "location":     0.80,
+    "event":        0.50,
+    "date":         0.50,
+    "organization": 0.60,
+    # Risk factors — moderate threshold
+    **{k: 0.40 for k in RISK_FACTOR_ENTITIES},
+}
+
+# Global floor: anything below this is never kept
+GLOBAL_THRESHOLD = 0.30
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NER SCHEMA
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _build_ner_schema():
@@ -97,29 +120,29 @@ def _build_ner_schema():
     entity_types.update(RISK_FACTOR_ENTITIES)
     return extractor.create_schema().entities(entity_types)
 
-
 NER_SCHEMA = _build_ner_schema()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SENTENCE BOUNDARY DETECTION
+# B) ROBUST SENTENCE SPLITTING (pysbd)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SENTENCE_RE = re.compile(r'(?<=[.!?])\s+|\n\n+')
+_segmenter = pysbd.Segmenter(language="en", clean=False)
 
 def _sentence_spans(text):
-    """Return list of (start, end) character ranges for each sentence."""
+    """Return (start, end) character ranges for each sentence using pysbd."""
+    segments = _segmenter.segment(text)
     spans = []
-    prev = 0
-    for m in _SENTENCE_RE.finditer(text):
-        spans.append((prev, m.start()))
-        prev = m.end()
-    if prev < len(text):
-        spans.append((prev, len(text)))
+    pos = 0
+    for seg in segments:
+        idx = text.find(seg, pos)
+        if idx == -1:
+            idx = pos
+        spans.append((idx, idx + len(seg)))
+        pos = idx + len(seg)
     return spans
 
 
 def _sentence_index_for(char_start, sentence_spans):
-    """Return the index of the sentence containing char_start."""
     for i, (s, e) in enumerate(sentence_spans):
         if s <= char_start < e:
             return i
@@ -129,104 +152,144 @@ def _sentence_index_for(char_start, sentence_spans):
 # CORE EXTRACTION
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Labels that count as "event-like" for linking purposes
-_EVENT_LABELS = {"event"} | set(RISK_FACTOR_ENTITIES.keys())
-
-
-def extract_entities(text, threshold=0.3):
-    """Run NER with spans and confidence, return raw result dict."""
+def extract_entities(text):
+    """Run NER with spans and confidence. Uses GLOBAL_THRESHOLD for the model
+    call, then applies per-label filtering afterwards."""
     return extractor.extract(
         text, NER_SCHEMA,
-        threshold=threshold,
+        threshold=GLOBAL_THRESHOLD,
         include_spans=True,
         include_confidence=True,
     )
 
 
-def build_event_location_pairs(raw_entities, text):
-    """
-    Link events/risk-factors to locations by sentence co-occurrence.
+# ─────────────────────────────────────────────────────────────────────────────
+# A) OVERLAP DEDUPLICATION
+# ─────────────────────────────────────────────────────────────────────────────
 
-    For every sentence that contains at least one event-like entity AND
-    at least one location entity, emit a pair.
+def _spans_overlap(a, b):
+    """True if two span dicts share any characters."""
+    return max(a["start"], b["start"]) < min(a["end"], b["end"])
+
+
+def flatten_entities(raw_entities):
+    """Deduplicate spans: if a specific risk-factor and generic 'event' cover
+    the same text, keep only the risk-factor. Then apply per-label thresholds."""
+    all_spans = []
+    for label, span_list in raw_entities.get("entities", {}).items():
+        for span in span_list:
+            all_spans.append({**span, "label": label})
+
+    # Sort by start position, then prefer specific labels over "event"
+    all_spans.sort(key=lambda s: (s["start"], s["label"] == "event"))
+
+    filtered = []
+    for span in all_spans:
+        # Apply per-label threshold
+        threshold = LABEL_THRESHOLDS.get(span["label"], GLOBAL_THRESHOLD)
+        if span["confidence"] < threshold:
+            continue
+
+        # Check overlap with already-accepted spans
+        merged = False
+        for existing in filtered:
+            if _spans_overlap(span, existing):
+                # Overlap found: prefer specific risk-factor over generic "event"
+                if span["label"] != "event" and existing["label"] == "event":
+                    existing["label"] = span["label"]
+                    existing["confidence"] = span["confidence"]
+                merged = True
+                break
+        if not merged:
+            filtered.append(span)
+
+    for e in filtered:
+        e["confidence"] = round(e["confidence"], 4)
+    return sorted(filtered, key=lambda e: e["start"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C) WATERFALL ANCHORING
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_event_location_pairs(entities, text):
+    """Link events/risk-factors to locations using waterfall anchoring.
+
+    Strategy (in order of priority):
+      1. If the event's sentence contains location(s), link to those.
+      2. Otherwise, inherit the most recently mentioned location
+         ("waterfall" / "state machine" pattern common in news writing).
     """
     sentences = _sentence_spans(text)
 
     # Bucket entities by sentence
-    events_by_sentence = {}   # sent_idx -> list of span dicts
+    events_by_sentence = {}   # si -> [entity]
     locations_by_sentence = {}
 
-    for label, spans in raw_entities.get("entities", {}).items():
-        is_event = label in _EVENT_LABELS
-        is_location = label == "location"
-        if not (is_event or is_location):
+    for ent in entities:
+        si = _sentence_index_for(ent["start"], sentences)
+        if si < 0:
             continue
-        for span in spans:
-            si = _sentence_index_for(span["start"], sentences)
-            if si < 0:
-                continue
-            entry = {**span, "label": label}
-            if is_event:
-                events_by_sentence.setdefault(si, []).append(entry)
-            else:
-                locations_by_sentence.setdefault(si, []).append(entry)
+        if ent["label"] == "location":
+            locations_by_sentence.setdefault(si, []).append(ent)
+        elif ent["label"] in _EVENT_LABELS:
+            events_by_sentence.setdefault(si, []).append(ent)
 
+    # Walk sentences in order, maintaining the "active location" state
+    active_location = None
     pairs = []
     seen = set()
-    for si in sorted(events_by_sentence):
-        locs = locations_by_sentence.get(si, [])
-        if not locs:
-            # Fall back: check neighboring sentences (si-1, si+1)
-            for neighbor in (si - 1, si + 1):
-                locs = locations_by_sentence.get(neighbor, [])
-                if locs:
-                    break
-        for ev in events_by_sentence[si]:
-            for loc in locs:
+
+    for si in range(len(sentences)):
+        # Update active location if this sentence introduces one
+        locs_here = locations_by_sentence.get(si, [])
+        if locs_here:
+            # Pick the highest-confidence location as the new anchor
+            active_location = max(locs_here, key=lambda l: l["confidence"])
+
+        events_here = events_by_sentence.get(si)
+        if not events_here:
+            continue
+
+        # Determine which locations to link to
+        if locs_here:
+            # Same-sentence locations: link to all of them
+            link_targets = locs_here
+        elif active_location:
+            # Waterfall: inherit the last-mentioned location
+            link_targets = [active_location]
+        else:
+            continue
+
+        for ev in events_here:
+            for loc in link_targets:
                 key = (ev["text"].lower(), loc["text"].lower(), ev["label"])
                 if key in seen:
                     continue
                 seen.add(key)
-                pairs.append({
+                pair = {
                     "event_text": ev["text"],
                     "event_label": ev["label"],
-                    "event_confidence": round(ev["confidence"], 4),
+                    "event_confidence": ev["confidence"],
                     "location_text": loc["text"],
-                    "location_confidence": round(loc["confidence"], 4),
+                    "location_confidence": loc["confidence"],
                     "event_start": ev["start"],
                     "event_end": ev["end"],
                     "location_start": loc["start"],
                     "location_end": loc["end"],
-                })
+                }
+                if loc not in locs_here:
+                    pair["cross_sentence"] = True
+                pairs.append(pair)
+
     return pairs
 
-
-def flatten_entities(raw_entities):
-    """Deduplicate and flatten the per-label entity lists into a single list."""
-    seen = set()
-    flat = []
-    for label, spans in raw_entities.get("entities", {}).items():
-        for span in spans:
-            key = (span["text"].lower(), label)
-            if key in seen:
-                continue
-            seen.add(key)
-            flat.append({
-                "text": span["text"],
-                "label": label,
-                "confidence": round(span["confidence"], 4),
-                "start": span["start"],
-                "end": span["end"],
-            })
-    flat.sort(key=lambda e: e["start"])
-    return flat
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CHUNKED EXTRACTION FOR LONG ARTICLES
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _chunk_text(text, max_chars=1500, overlap=200):
-    """Split text at sentence boundaries into overlapping chunks."""
     chunks = []
     start = 0
     while start < len(text):
@@ -242,14 +305,14 @@ def _chunk_text(text, max_chars=1500, overlap=200):
     return chunks
 
 
-def extract_from_article(text, threshold=0.3, document_id=None,
+def extract_from_article(text, document_id=None,
                          source_url=None, publication_date=None):
-    """Full pipeline: chunk -> NER -> merge -> link by co-occurrence."""
+    """Full pipeline: chunk -> NER -> merge -> deduplicate -> waterfall link."""
     chunks = _chunk_text(text)
     merged = {}  # label -> {text_lower: span_dict}
 
     for chunk_str, offset in chunks:
-        raw = extract_entities(chunk_str, threshold=threshold)
+        raw = extract_entities(chunk_str)
         for label, spans in raw.get("entities", {}).items():
             if label not in merged:
                 merged[label] = {}
@@ -260,14 +323,14 @@ def extract_from_article(text, threshold=0.3, document_id=None,
                     "start": span["start"] + offset,
                     "end": span["end"] + offset,
                 }
+                # Keep the highest-confidence occurrence
                 if key not in merged[label] or adjusted["confidence"] > merged[label][key]["confidence"]:
                     merged[label][key] = adjusted
 
-    # Rebuild into the same shape extract_entities returns
     merged_raw = {"entities": {label: list(spans.values()) for label, spans in merged.items()}}
 
     entities = flatten_entities(merged_raw)
-    pairs = build_event_location_pairs(merged_raw, text)
+    pairs = build_event_location_pairs(entities, text)
 
     return {
         "document": {
@@ -308,26 +371,27 @@ if __name__ == "__main__":
         "entirely on self reliance in the face of this immense tragedy."
     )
 
-    print("=" * 60)
-    print("NER EXTRACTION (with spans + confidence)")
-    print("=" * 60)
-    raw = extract_entities(article, threshold=0.3)
+    print("=" * 70)
+    print("NER EXTRACTION (deduplicated, per-label thresholds)")
+    print("=" * 70)
+    raw = extract_entities(article)
     entities = flatten_entities(raw)
-    pairs = build_event_location_pairs(raw, article)
+    pairs = build_event_location_pairs(entities, article)
 
-    print(f"\nFound {len(entities)} entities:")
+    print(f"\nFound {len(entities)} entities (after dedup + threshold filtering):")
     for e in entities:
         print(f"  [{e['label']:>35}]  {e['text']:<40}  conf={e['confidence']:.3f}  ({e['start']}-{e['end']})")
 
     print(f"\nFound {len(pairs)} event-location pairs:")
     for p in pairs:
-        print(f"  {p['event_text']:<40} -> {p['location_text']:<15}  (label={p['event_label']})")
+        xsent = "  [cross-sentence]" if p.get("cross_sentence") else ""
+        print(f"  {p['event_text']:<40} -> {p['location_text']:<15}  (label={p['event_label']}){xsent}")
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print("FULL PIPELINE (chunked + merged)")
-    print("=" * 60)
+    print("=" * 70)
     result = extract_from_article(
-        article, threshold=0.3,
+        article,
         document_id="article-2026-multi-crisis",
         source_url="https://example.com/multi-crisis",
         publication_date="2026-03-05",
