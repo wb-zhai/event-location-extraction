@@ -1,0 +1,112 @@
+[
+  {
+    "repo_id": "mlx-community/Qwen3-Coder-Next-4bit",
+    "name": "Qwen3-Coder-Next-80B-A3B",
+    "params": 3,
+    "quant": "4bit",
+    "total_params": 80,
+    "architecture": "MoE (512 experts, 10 active)",
+    "family": "Qwen",
+    "released": "2026-02-03",
+    "notes": "Qwen3 coding-focused MoE: 80B total, 3B active per token. 256K context. Strong agentic coding performance."
+  },
+  {
+    "repo_id": "mlx-community/Step-3.5-Flash-4bit",
+    "name": "Step-3.5-Flash-196B-A11B",
+    "params": 11,
+    "quant": "4bit",
+    "total_params": 196,
+    "architecture": "MoE (288 routed + 1 shared expert)",
+    "family": "StepFun",
+    "released": "2026-02-02",
+    "notes": "StepFun MoE: 196B total, 11B active. 256K context. 100-350 tok/s throughput. Apache 2.0 license."
+  },
+  {
+    "repo_id": "mlx-community/MiniMax-M2.5-4bit",
+    "name": "MiniMax-M2.5-230B-A10B",
+    "params": 10,
+    "quant": "4bit",
+    "total_params": 230,
+    "architecture": "MoE (256 experts, 8 active) + Lightning Attention",
+    "family": "MiniMax",
+    "released": "2026-02-13",
+    "notes": "MiniMax M2.5: 230B total, 10B active. 200K context. Top-2 routing, RoPE, SiLU activation."
+  },
+  {
+    "repo_id": "mlx-community/Nanbeige4.1-3B-8bit",
+    "name": "Nanbeige4.1-3B",
+    "params": 3,
+    "quant": "8bit",
+    "total_params": 3,
+    "architecture": "Dense (Llama-based)",
+    "family": "Nanbeige",
+    "released": "2026-02-11",
+    "notes": "Chinese LLM from Nanbeige. 3.9B params, bilingual EN/ZH. Apache 2.0 license."
+  },
+  {
+    "repo_id": "mlx-community/Jan-v3-4B-base-instruct-4bit",
+    "name": "Jan-v3-4B",
+    "params": 4,
+    "quant": "4bit",
+    "total_params": 4,
+    "architecture": "Dense (Qwen3-based fine-tune)",
+    "family": "Jan",
+    "released": "2026-01-27",
+    "notes": "Jan v3 code-focused fine-tune of Qwen3. 4B params. Apache 2.0 license."
+  },
+  {
+    "repo_id": "mlx-community/Ministral-3-14B-Instruct-2512-mxfp4",
+    "name": "Ministral-3-14B",
+    "params": 14,
+    "quant": "4bit",
+    "total_params": 14,
+    "architecture": "Dense (Mistral3)",
+    "family": "Mistral",
+    "released": "2026-02-14",
+    "notes": "Mistral's Ministral 3 14B: 13.5B LM + 0.4B vision encoder. 262K context. Multimodal. Apache 2.0."
+  },
+  {
+    "repo_id": "mlx-community/JoyAI-LLM-Flash-4bit-DWQ",
+    "name": "JoyAI-Flash-48B-A3B",
+    "params": 3,
+    "quant": "4bit",
+    "total_params": 48,
+    "architecture": "MoE (custom)",
+    "family": "JoyAI (JD.com)",
+    "released": "2026-02-15",
+    "notes": "JD.com MoE: 48B total, 3B active. 128K context. Muon optimizer, 20T tokens pretraining."
+  },
+  {
+    "repo_id": "mlx-community/Qwen3.5-122B-A10B-4bit",
+    "name": "Qwen3.5-122B-A10B",
+    "params": 10,
+    "quant": "4bit",
+    "total_params": 122,
+    "architecture": "MoE (Qwen3.5)",
+    "family": "Qwen",
+    "released": "2026-02-24",
+    "notes": "Qwen3.5 MoE variant: 122B total, 10B active. Different from benchmarked dense Qwen3.5 models."
+  },
+  {
+    "repo_id": "mlx-community/Falcon-H1R-7B-4bit",
+    "name": "Falcon-H1R-7B",
+    "params": 7,
+    "quant": "4bit",
+    "total_params": 7,
+    "architecture": "Hybrid SSM-Transformer (Falcon H1)",
+    "family": "Falcon (TII)",
+    "released": "2026-01-05",
+    "notes": "TII Falcon H1R: hybrid SSM-transformer, 7B params. Multilingual (22 languages). Novel architecture."
+  },
+  {
+    "repo_id": "mlx-community/tiny-aya-global-8bit-mlx",
+    "name": "Tiny-Aya-Global-3.35B",
+    "params": 3.35,
+    "quant": "8bit",
+    "total_params": 3.35,
+    "architecture": "Dense (Cohere2)",
+    "family": "Cohere",
+    "released": "2026-02-18",
+    "notes": "Cohere Labs Tiny Aya: 3.35B params, supports 70+ languages. CC-BY-NC-4.0 license."
+  }
+]

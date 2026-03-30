@@ -1,0 +1,6398 @@
+[
+  {
+    "id": "GBR7310",
+    "text": "PeacefulProtest event reported by The Argus. Location: Westminster, London, England, United Kingdom. URL: https://www.theargus.co.uk/news/national/24206396.laurence-fox-tells-nike-leave-flag-alone-protest-rally/?ref=rss",
+    "source_url": "https://www.theargus.co.uk/news/national/24206396.laurence-fox-tells-nike-leave-flag-alone-protest-rally/?ref=rss",
+    "source_site": "The Argus",
+    "event_date": "2024-03-23 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Westminster, London, England, United Kingdom",
+        "location"
+      ],
+      [
+        "United Kingdom",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Students",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Westminster, London, England, United Kingdom"
+      ]
+    ]
+  },
+  {
+    "id": "SAF22444",
+    "text": "PeacefulProtest event reported by Herald (South Africa). Location: Bitou Local Municipality, Western Cape, South Africa. URL: https://www.heraldlive.co.za/news/2024-11-26-we-need-more-time-spaza-shop-owners-plead/",
+    "source_url": "https://www.heraldlive.co.za/news/2024-11-26-we-need-more-time-spaza-shop-owners-plead/",
+    "source_site": "Herald (South Africa)",
+    "event_date": "2024-11-26 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Bitou Local Municipality, Western Cape, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Bitou Local Municipality, Western Cape, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "DRC33265",
+    "text": "ArmedClash event reported by La Prunelle. Location: Rutshuru, North Kivu, Democratic Republic of Congo. URL: https://laprunellerdc.cd/rutshuru-petite-accalmie-apres-des-accrochages-entre-un-groupe-des-wazalendo-et-les-rebelles-du-m23-a-kinyandonyi/",
+    "source_url": "https://laprunellerdc.cd/rutshuru-petite-accalmie-apres-des-accrochages-entre-un-groupe-des-wazalendo-et-les-rebelles-du-m23-a-kinyandonyi/",
+    "source_site": "La Prunelle",
+    "event_date": "2024-07-23 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Rutshuru, North Kivu, Democratic Republic of Congo",
+        "location"
+      ],
+      [
+        "Democratic Republic of Congo",
+        "location"
+      ],
+      [
+        "EPLC: Awakening of Patriots for the Liberation of Congo",
+        "actor"
+      ],
+      [
+        "M23: March 23 Movement",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Rutshuru, North Kivu, Democratic Republic of Congo"
+      ]
+    ]
+  },
+  {
+    "id": "MLT297",
+    "text": "PeacefulProtest event reported by Times of Malta. Location: Sliema, Malta. URL: https://timesofmalta.com/articles/view/road-renamed-honor-robert-arrigo-draws-ire-unaware-residents.1080567",
+    "source_url": "https://timesofmalta.com/articles/view/road-renamed-honor-robert-arrigo-draws-ire-unaware-residents.1080567",
+    "source_site": "Times of Malta",
+    "event_date": "2024-01-27 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Sliema, Malta",
+        "location"
+      ],
+      [
+        "Malta",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Sliema, Malta"
+      ]
+    ]
+  },
+  {
+    "id": "IND148938",
+    "text": "PeacefulProtest event reported by Indian Express. Location: Kolkata, India. URL: https://indianexpress.com/article/cities/kolkata/west-bengal-protest-protest-against-fascist-rule-tmc-leaders-attend-protest-ayodhya-ram-temple-inauguration-9122743/",
+    "source_url": "https://indianexpress.com/article/cities/kolkata/west-bengal-protest-protest-against-fascist-rule-tmc-leaders-attend-protest-ayodhya-ram-temple-inauguration-9122743/",
+    "source_site": "Indian Express",
+    "event_date": "2024-01-22 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Kolkata, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "CPI Liberation: Communist Party of India - Liberation",
+        "actor"
+      ],
+      [
+        "CPI: Communist Party of India",
+        "actor"
+      ],
+      [
+        "Government of India",
+        "actor"
+      ],
+      [
+        "LF: Left Front",
+        "actor"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "TMC: Trinamool Congress Party",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Kolkata, India"
+      ]
+    ]
+  },
+  {
+    "id": "USA64774",
+    "text": "PeacefulProtest event reported by WTEN Channel 10. Location: City of Albany, New York, United States. URL: https://www.news10.com/news/advocates-renew-push-for-ny-medical-aid-in-dying-legislation/?utm_campaign=socialflow&utm_source=t.co&utm_medium=referral",
+    "source_url": "https://www.news10.com/news/advocates-renew-push-for-ny-medical-aid-in-dying-legislation/?utm_campaign=socialflow&utm_source=t.co&utm_medium=referral",
+    "source_site": "WTEN Channel 10",
+    "event_date": "2024-01-18 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "City of Albany, New York, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "DEM: Democratic Party",
+        "actor"
+      ],
+      [
+        "Government of the United States",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "City of Albany, New York, United States"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34427",
+    "text": "Attack event reported by Daily Trust (Nigeria). Location: Bokkos, Plateau State, Nigeria. URL: https://dailytrust.com/another-herder-killed-in-plateau/",
+    "source_url": "https://dailytrust.com/another-herder-killed-in-plateau/",
+    "source_site": "Daily Trust (Nigeria)",
+    "event_date": "2024-01-04 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Bokkos, Plateau State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Bokkos, Plateau State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "USA73466",
+    "text": "PeacefulProtest event reported by Idaho News 6. Location: Boise, Idaho, United States. URL: https://www.kivitv.com/downtown-boise/supporters-for-both-israel-and-palestine-gather-in-boise-on-one-year-anniversary-of-october-7th-attacks",
+    "source_url": "https://www.kivitv.com/downtown-boise/supporters-for-both-israel-and-palestine-gather-in-boise-on-one-year-anniversary-of-october-7th-attacks",
+    "source_site": "Idaho News 6",
+    "event_date": "2024-10-07 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Boise, Idaho, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Boise, Idaho, United States"
+      ]
+    ]
+  },
+  {
+    "id": "IND154890",
+    "text": "ProtestWithIntervention event reported by Daily Excelsior. Location: New Delhi, Delhi, India. URL: https://www.dailyexcelsior.com/cong-holds-protests-across-country-over-income-tax-notices-bjp-says-it-shows-arrogance-of-oppn-party/",
+    "source_url": "https://www.dailyexcelsior.com/cong-holds-protests-across-country-over-income-tax-notices-bjp-says-it-shows-arrogance-of-oppn-party/",
+    "source_site": "Daily Excelsior",
+    "event_date": "2024-03-30 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "New Delhi, Delhi, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "IYC: Indian Youth Congress",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "New Delhi, Delhi, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND152467",
+    "text": "PeacefulProtest event reported by Sentinel (India). Location: Guwahati, Assam, India. URL: https://www.sentinelassam.com/cities/guwahati-city/assam-pradesh-congress-committee-demonstrates-in-front-of-dispur-sbi",
+    "source_url": "https://www.sentinelassam.com/cities/guwahati-city/assam-pradesh-congress-committee-demonstrates-in-front-of-dispur-sbi",
+    "source_site": "Sentinel (India)",
+    "event_date": "2024-03-07 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Guwahati, Assam, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "INC: Indian National Congress",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Guwahati, Assam, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND162665",
+    "text": "DisruptedWeaponsUse event reported by Northeast Now. Location: Imphal East, Manipur, India. URL: https://nenow.in/north-east-news/65-suspects-detained-and-warlike-weapons-seized-in-manipur.html",
+    "source_url": "https://nenow.in/north-east-news/65-suspects-detained-and-warlike-weapons-seized-in-manipur.html",
+    "source_site": "Northeast Now",
+    "event_date": "2024-07-20 00:00:00",
+    "gold_entities": [
+      [
+        "DisruptedWeaponsUse",
+        "event_or_risk"
+      ],
+      [
+        "Imphal East, Manipur, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "DisruptedWeaponsUse",
+        "Imphal East, Manipur, India"
+      ]
+    ]
+  },
+  {
+    "id": "SAF20879",
+    "text": "ViolentDemonstration event reported by Daily Sun (South Africa). Location: Soweto, Gauteng, South Africa. URL: https://www.snl24.com/dailysun/news/angry-bramfischerville-phase-2-in-soweto-residents-want-councillor-to-resign-because-of-no-service-delivery-20240316",
+    "source_url": "https://www.snl24.com/dailysun/news/angry-bramfischerville-phase-2-in-soweto-residents-want-councillor-to-resign-because-of-no-service-delivery-20240316",
+    "source_site": "Daily Sun (South Africa)",
+    "event_date": "2024-03-14 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Soweto, Gauteng, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Soweto, Gauteng, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "IND151225",
+    "text": "ViolentDemonstration event reported by Orissa TV. Location: Gop, Odisha, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=72871e82-c77a-4bf2-a4f7-4d6adf11dfc4&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BBW-VD71-F12F-F3T9-00000-00&pdcontentcomponentid=459767&pdteaserkey=sr189&pditab=allpods&ecomp=twmyk&earg=sr189&prid=64497a18-9ec0-44fe-a79b-11e861afae67",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=72871e82-c77a-4bf2-a4f7-4d6adf11dfc4&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BBW-VD71-F12F-F3T9-00000-00&pdcontentcomponentid=459767&pdteaserkey=sr189&pditab=allpods&ecomp=twmyk&earg=sr189&prid=64497a18-9ec0-44fe-a79b-11e861afae67",
+    "source_site": "Orissa TV",
+    "event_date": "2024-02-17 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Gop, Odisha, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Gop, Odisha, India"
+      ]
+    ]
+  },
+  {
+    "id": "BGD28565",
+    "text": "MobViolence event reported by United News of Bangladesh. Location: Tanore, Tanore Upazila, Rajshahi District, Bangladesh. URL: Nexis",
+    "source_url": "Nexis",
+    "source_site": "United News of Bangladesh",
+    "event_date": "2024-08-26 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Tanore, Tanore Upazila, Rajshahi District, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Tanore, Tanore Upazila, Rajshahi District, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "SSD10086",
+    "text": "ArmedClash event reported by Eye Radio (South Sudan). Location: Nasir, South Sudan. URL: https://www.eyeradio.org/two-civilians-killed-in-nasir-county-sspdf-denies-involvement/",
+    "source_url": "https://www.eyeradio.org/two-civilians-killed-in-nasir-county-sspdf-denies-involvement/",
+    "source_site": "Eye Radio (South Sudan)",
+    "event_date": "2024-08-17 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Nasir, South Sudan",
+        "location"
+      ],
+      [
+        "South Sudan",
+        "location"
+      ],
+      [
+        "Military Forces of South Sudan",
+        "actor"
+      ],
+      [
+        "Unidentified Communal Militia",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Nasir, South Sudan"
+      ]
+    ]
+  },
+  {
+    "id": "IND165756",
+    "text": "DisruptedWeaponsUse event reported by Times of India. Location: Tirumakudalu Narasipura taluk, Mysuru, Karnataka, India. URL: https://timesofindia.indiatimes.com/city/mysuru/explosives-recovered-from-tea-shop-in-mysuru-district/articleshow/112751737.cms",
+    "source_url": "https://timesofindia.indiatimes.com/city/mysuru/explosives-recovered-from-tea-shop-in-mysuru-district/articleshow/112751737.cms",
+    "source_site": "Times of India",
+    "event_date": "2024-08-22 00:00:00",
+    "gold_entities": [
+      [
+        "DisruptedWeaponsUse",
+        "event_or_risk"
+      ],
+      [
+        "Tirumakudalu Narasipura taluk, Mysuru, Karnataka, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "DisruptedWeaponsUse",
+        "Tirumakudalu Narasipura taluk, Mysuru, Karnataka, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34846",
+    "text": "AbductionOrForcedDisappearance event reported by Daily Champion. Location: Yorro, Taraba State, Nigeria. URL: https://championnews.com.ng/troops-destroy-bandits-hideout-rescue-four-kidnap-victims-in-taraba/",
+    "source_url": "https://championnews.com.ng/troops-destroy-bandits-hideout-rescue-four-kidnap-victims-in-taraba/",
+    "source_site": "Daily Champion",
+    "event_date": "2024-01-18 00:00:00",
+    "gold_entities": [
+      [
+        "AbductionOrForcedDisappearance",
+        "event_or_risk"
+      ],
+      [
+        "Yorro, Taraba State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Unidentified Armed Group",
+        "actor"
+      ],
+      [
+        "Civilians",
+        "actor"
+      ],
+      [
+        "Pupule Communal Group",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AbductionOrForcedDisappearance",
+        "Yorro, Taraba State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "GRC4884",
+    "text": "OtherStrategicDevelopment event reported by Ekathimerini. Location: Gavdos Municipality, Region of Crete, Greece. URL: https://www.ekathimerini.com/news/1229683/crete-42-migrants-rescued-after-boat-breaks-down/",
+    "source_url": "https://www.ekathimerini.com/news/1229683/crete-42-migrants-rescued-after-boat-breaks-down/",
+    "source_site": "Ekathimerini",
+    "event_date": "2024-01-20 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Gavdos Municipality, Region of Crete, Greece",
+        "location"
+      ],
+      [
+        "Greece",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Gavdos Municipality, Region of Crete, Greece"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35406",
+    "text": "ArmedClash event reported by Daily Post (Nigeria). Location: Owerri, Imo State, Nigeria. URL: https://dailypost.ng/2024/03/01/student-killed-others-injured-as-rival-cults-clash-in-futo/",
+    "source_url": "https://dailypost.ng/2024/03/01/student-killed-others-injured-as-rival-cults-clash-in-futo/",
+    "source_site": "Daily Post (Nigeria)",
+    "event_date": "2024-03-01 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Owerri, Imo State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Unidentified Cult Militia",
+        "actor"
+      ],
+      [
+        "Unidentified Cult Militia",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Owerri, Imo State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35604",
+    "text": "LootingOrPropertyDestruction event reported by Daily Post (Nigeria). Location: Delta State, Nigeria. URL: https://dailypost.ng/2024/03/17/delta-community-set-ablaze-after-killing-of-soldiers/",
+    "source_url": "https://dailypost.ng/2024/03/17/delta-community-set-ablaze-after-killing-of-soldiers/",
+    "source_site": "Daily Post (Nigeria)",
+    "event_date": "2024-03-17 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Delta State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Delta State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "NIG38255",
+    "text": "ProtestWithIntervention event reported by Daily Post (Nigeria). Location: Effurun, Uvwie, Delta State, Nigeria. URL: https://dailypost.ng/2024/08/02/hoodlums-attack-assault-women-protesting-peacefully-in-delta/",
+    "source_url": "https://dailypost.ng/2024/08/02/hoodlums-attack-assault-women-protesting-peacefully-in-delta/",
+    "source_site": "Daily Post (Nigeria)",
+    "event_date": "2024-08-02 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Effurun, Uvwie, Delta State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Women",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Effurun, Uvwie, Delta State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "IND152980",
+    "text": "LootingOrPropertyDestruction event reported by Imphal Free Press. Location: Tengnoupal, Manipur, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=6329bac6-4b10-4923-bc98-2b9bcba0426a&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BHX-JCM1-F12F-F2D6-00000-00&pdcontentcomponentid=377647&pdteaserkey=sr197&pditab=allpods&ecomp=twmyk&earg=sr197&prid=e6437b21-cfae-45b6-9759-64370c16cf98",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=6329bac6-4b10-4923-bc98-2b9bcba0426a&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BHX-JCM1-F12F-F2D6-00000-00&pdcontentcomponentid=377647&pdteaserkey=sr197&pditab=allpods&ecomp=twmyk&earg=sr197&prid=e6437b21-cfae-45b6-9759-64370c16cf98",
+    "source_site": "Imphal Free Press",
+    "event_date": "2024-03-10 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Tengnoupal, Manipur, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Tengnoupal, Manipur, India"
+      ]
+    ]
+  },
+  {
+    "id": "PHL16420",
+    "text": "Attack event reported by Manila Bulletin. Location: Pasay, Philippines. URL: https://mb.com.ph/2024/1/16/1-dead-1-hurt-at-a-birthday-party-shooting-in-pasay-city",
+    "source_url": "https://mb.com.ph/2024/1/16/1-dead-1-hurt-at-a-birthday-party-shooting-in-pasay-city",
+    "source_site": "Manila Bulletin",
+    "event_date": "2024-01-15 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Pasay, Philippines",
+        "location"
+      ],
+      [
+        "Philippines",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Pasay, Philippines"
+      ]
+    ]
+  },
+  {
+    "id": "USA66965",
+    "text": "PeacefulProtest event reported by Metropolis Planet. Location: Metropolis, Massac County, Illinois, United States. URL: https://www.metropolisplanet.com/news/council-tables-appointments-to-library-board/article_b1e304b1-a76a-53a5-9790-bc3f4fb0317c.html",
+    "source_url": "https://www.metropolisplanet.com/news/council-tables-appointments-to-library-board/article_b1e304b1-a76a-53a5-9790-bc3f4fb0317c.html",
+    "source_site": "Metropolis Planet",
+    "event_date": "2024-03-25 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Metropolis, Massac County, Illinois, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Metropolis, Massac County, Illinois, United States"
+      ]
+    ]
+  },
+  {
+    "id": "USA66217",
+    "text": "PeacefulProtest event reported by WUSA9. Location: Washington, District of Columbia, United States. URL: https://www.wusa9.com/article/news/local/dc/driver-pulled-from-car-revving-engine-group-crowd-gathering-ahead-state-of-the-union/65-0a73b5e6-2bd7-4bf9-96d3-5235e642eeaa",
+    "source_url": "https://www.wusa9.com/article/news/local/dc/driver-pulled-from-car-revving-engine-group-crowd-gathering-ahead-state-of-the-union/65-0a73b5e6-2bd7-4bf9-96d3-5235e642eeaa",
+    "source_site": "WUSA9",
+    "event_date": "2024-03-07 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Washington, District of Columbia, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "JVP: Jewish Voice for Peace",
+        "actor"
+      ],
+      [
+        "Jewish Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Washington, District of Columbia, United States"
+      ]
+    ]
+  },
+  {
+    "id": "PAK139868",
+    "text": "PeacefulProtest event reported by Dawn (Pakistan). Location: Sanghar, Sindh, Pakistan. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=2043f047-7fdd-4a29-8d1f-f173dee8a32f&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BC3-6RF1-F00C-606M-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr1&pditab=allpods&ecomp=twmyk&earg=sr1&prid=e35ff7ca-f02a-4e6e-bb36-46614f412b6f",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=2043f047-7fdd-4a29-8d1f-f173dee8a32f&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BC3-6RF1-F00C-606M-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr1&pditab=allpods&ecomp=twmyk&earg=sr1&prid=e35ff7ca-f02a-4e6e-bb36-46614f412b6f",
+    "source_site": "Dawn (Pakistan)",
+    "event_date": "2024-02-17 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Sanghar, Sindh, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ],
+      [
+        "PTI: Pakistan Tehreek-i-Insaf",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Sanghar, Sindh, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "SSD9664",
+    "text": "Attack event reported by Eye Radio (South Sudan). Location: Jur River, Western Bahr el Ghazal State, South Sudan. URL: https://www.eyeradio.org/four-killed-as-armed-men-attack-jur-river-county/",
+    "source_url": "https://www.eyeradio.org/four-killed-as-armed-men-attack-jur-river-county/",
+    "source_site": "Eye Radio (South Sudan)",
+    "event_date": "2024-01-18 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Jur River, Western Bahr el Ghazal State, South Sudan",
+        "location"
+      ],
+      [
+        "South Sudan",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Jur River, Western Bahr el Ghazal State, South Sudan"
+      ]
+    ]
+  },
+  {
+    "id": "ISR39196",
+    "text": "ShellingOrArtilleryOrMissileAttack event reported by Haaretz. Location: Avivim, Israel. URL: https://www.haaretz.com/israel-news/2024-02-21/ty-article-live/qatar-says-medicine-delivered-to-hostages-u-s-vetoes-un-resolution-demanding-cease-fire/0000018d-c9ac-d09f-a3df-e9bcee6d0000",
+    "source_url": "https://www.haaretz.com/israel-news/2024-02-21/ty-article-live/qatar-says-medicine-delivered-to-hostages-u-s-vetoes-un-resolution-demanding-cease-fire/0000018d-c9ac-d09f-a3df-e9bcee6d0000",
+    "source_site": "Haaretz",
+    "event_date": "2024-02-21 00:00:00",
+    "gold_entities": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "event_or_risk"
+      ],
+      [
+        "Avivim, Israel",
+        "location"
+      ],
+      [
+        "Israel",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "Avivim, Israel"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26932",
+    "text": "PeacefulProtest event reported by New Age (Bangladesh). Location: Lalmonirhat, Bangladesh. URL: https://www.newagebd.net/article/227914/road-blocked-as-5-journalists-assaulted-in-lalmonirhat",
+    "source_url": "https://www.newagebd.net/article/227914/road-blocked-as-5-journalists-assaulted-in-lalmonirhat",
+    "source_site": "New Age (Bangladesh)",
+    "event_date": "2024-03-14 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Lalmonirhat, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ],
+      [
+        "Journalists",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Lalmonirhat, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "PAK139181",
+    "text": "Arrest event reported by Dawn (Pakistan). Location: Rawalpindi District, Punjab, Pakistan. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=39b130a7-a566-4a89-9a1e-079140f6b6b1&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B71-4721-F00C-60HK-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr150&pditab=allpods&ecomp=twmyk&earg=sr150&prid=323a180d-0744-41dc-968e-ef568e66c300",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=39b130a7-a566-4a89-9a1e-079140f6b6b1&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B71-4721-F00C-60HK-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr150&pditab=allpods&ecomp=twmyk&earg=sr150&prid=323a180d-0744-41dc-968e-ef568e66c300",
+    "source_site": "Dawn (Pakistan)",
+    "event_date": "2024-01-28 00:00:00",
+    "gold_entities": [
+      [
+        "Arrest",
+        "event_or_risk"
+      ],
+      [
+        "Rawalpindi District, Punjab, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Arrest",
+        "Rawalpindi District, Punjab, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "UKR159487",
+    "text": "AirOrDroneStrike event reported by Institute for the Study of War. Location: Myrhorod Raion, Poltava Oblast, Ukraine. URL: https://www.understandingwar.org/backgrounder/russian-offensive-campaign-assessment-may-6-2024",
+    "source_url": "https://www.understandingwar.org/backgrounder/russian-offensive-campaign-assessment-may-6-2024",
+    "source_site": "Institute for the Study of War",
+    "event_date": "2024-05-06 00:00:00",
+    "gold_entities": [
+      [
+        "AirOrDroneStrike",
+        "event_or_risk"
+      ],
+      [
+        "Myrhorod Raion, Poltava Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AirOrDroneStrike",
+        "Myrhorod Raion, Poltava Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "SAF20410",
+    "text": "MobViolence event reported by Herald (South Africa). Location: Gqeberha, South Africa. URL: https://www.heraldlive.co.za/news/2024-01-10-elderly-man-accused-of-raping-five-year-old-girl-in-gqeberha/",
+    "source_url": "https://www.heraldlive.co.za/news/2024-01-10-elderly-man-accused-of-raping-five-year-old-girl-in-gqeberha/",
+    "source_site": "Herald (South Africa)",
+    "event_date": "2024-01-07 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Gqeberha, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Gqeberha, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35126",
+    "text": "AbductionOrForcedDisappearance event reported by Daily Post (Nigeria). Location: Udi, Enugu State, Nigeria. URL: https://dailypost.ng/2024/02/19/kidnappers-abduct-corpse-family-members-demand-n50m-ransom/",
+    "source_url": "https://dailypost.ng/2024/02/19/kidnappers-abduct-corpse-family-members-demand-n50m-ransom/",
+    "source_site": "Daily Post (Nigeria)",
+    "event_date": "2024-02-18 00:00:00",
+    "gold_entities": [
+      [
+        "AbductionOrForcedDisappearance",
+        "event_or_risk"
+      ],
+      [
+        "Udi, Enugu State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Unidentified Armed Group",
+        "actor"
+      ],
+      [
+        "Civilians",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AbductionOrForcedDisappearance",
+        "Udi, Enugu State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "IND149744",
+    "text": "PeacefulProtest event reported by Imphal Free Press. Location: Imphal, Manipur, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=17141d90-1394-4f53-bc66-c86d5f9a2f27&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B8P-TP21-F12F-F3NV-00000-00&pdcontentcomponentid=377647&pdteaserkey=sr63&pditab=allpods&ecomp=twmyk&earg=sr63&prid=4f4af70b-f6b0-4073-828e-b0194ca09f4a",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=17141d90-1394-4f53-bc66-c86d5f9a2f27&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B8P-TP21-F12F-F3NV-00000-00&pdcontentcomponentid=377647&pdteaserkey=sr63&pditab=allpods&ecomp=twmyk&earg=sr63&prid=4f4af70b-f6b0-4073-828e-b0194ca09f4a",
+    "source_site": "Imphal Free Press",
+    "event_date": "2024-02-06 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Imphal, Manipur, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Students",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Imphal, Manipur, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34775",
+    "text": "ArmedClash event reported by Blueprint. Location: Batsari, Katsina State, Nigeria. URL: https://blueprint.ng/terrorism-war-dominant-security-operatives-kill-30-bandits-rescue-40-abductees/",
+    "source_url": "https://blueprint.ng/terrorism-war-dominant-security-operatives-kill-30-bandits-rescue-40-abductees/",
+    "source_site": "Blueprint",
+    "event_date": "2024-01-28 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Batsari, Katsina State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Military Forces of Nigeria",
+        "actor"
+      ],
+      [
+        "Katsina Communal Militia",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Batsari, Katsina State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "IND147925",
+    "text": "PeacefulProtest event reported by Daily Excelsior. Location: Ramban, Jammu and Kashmir, India. URL: https://www.dailyexcelsior.com/desecration-of-religious-place-triggers-protest/",
+    "source_url": "https://www.dailyexcelsior.com/desecration-of-religious-place-triggers-protest/",
+    "source_site": "Daily Excelsior",
+    "event_date": "2024-01-06 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Ramban, Jammu and Kashmir, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Hindu Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Ramban, Jammu and Kashmir, India"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26594",
+    "text": "MobViolence event reported by Prothom Alo. Location: Sarail Upazila, Brahmanbaria District, Bangladesh. URL: https://www.prothomalo.com/bangladesh/district/tqezkt3a4x",
+    "source_url": "https://www.prothomalo.com/bangladesh/district/tqezkt3a4x",
+    "source_site": "Prothom Alo",
+    "event_date": "2024-01-17 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Sarail Upazila, Brahmanbaria District, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Sarail Upazila, Brahmanbaria District, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "PSE46428",
+    "text": "ArmedClash event reported by Xinhua. Location: Beit Furik, West Bank, Palestine. URL: https://english.news.cn/20240207/603dc910c4a84c5d96d28290125a529e/c.html",
+    "source_url": "https://english.news.cn/20240207/603dc910c4a84c5d96d28290125a529e/c.html",
+    "source_site": "Xinhua",
+    "event_date": "2024-02-06 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Beit Furik, West Bank, Palestine",
+        "location"
+      ],
+      [
+        "Palestine",
+        "location"
+      ],
+      [
+        "Al Aqsa Martyrs Brigade",
+        "actor"
+      ],
+      [
+        "Military Forces of Israel",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Beit Furik, West Bank, Palestine"
+      ]
+    ]
+  },
+  {
+    "id": "IND169257",
+    "text": "Attack event reported by Indian Express. Location: Jagaddal, West Bengal, India. URL: Nexis",
+    "source_url": "Nexis",
+    "source_site": "Indian Express",
+    "event_date": "2024-10-04 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Jagaddal, West Bengal, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Jagaddal, West Bengal, India"
+      ]
+    ]
+  },
+  {
+    "id": "PAK144365",
+    "text": "Attack event reported by Dawn (Pakistan). Location: Khar Bajaur Tehsil, Bajaur District, Pakistan. URL: https://epaper.dawn.com/DetailImage.php?StoryImage=19_08_2024_009_001",
+    "source_url": "https://epaper.dawn.com/DetailImage.php?StoryImage=19_08_2024_009_001",
+    "source_site": "Dawn (Pakistan)",
+    "event_date": "2024-08-18 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Khar Bajaur Tehsil, Bajaur District, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Khar Bajaur Tehsil, Bajaur District, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "AFG67592",
+    "text": "Attack event reported by Hasht-e Subh. Location: Kabul, Afghanistan. URL: https://8am.media/eng/taliban-fire-on-car-at-checkpoint-killing-five-in-kabul/",
+    "source_url": "https://8am.media/eng/taliban-fire-on-car-at-checkpoint-killing-five-in-kabul/",
+    "source_site": "Hasht-e Subh",
+    "event_date": "2024-02-12 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Kabul, Afghanistan",
+        "location"
+      ],
+      [
+        "Afghanistan",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Kabul, Afghanistan"
+      ]
+    ]
+  },
+  {
+    "id": "CAN7039",
+    "text": "PeacefulProtest event reported by CBC. Location: London, Ontario, Canada. URL: https://www.cbc.ca/news/canada/london/drivers-furious-by-long-delays-as-western-university-closes-access-to-campus-indefinitely-1.7317284",
+    "source_url": "https://www.cbc.ca/news/canada/london/drivers-furious-by-long-delays-as-western-university-closes-access-to-campus-indefinitely-1.7317284",
+    "source_site": "CBC",
+    "event_date": "2024-09-09 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "London, Ontario, Canada",
+        "location"
+      ],
+      [
+        "Canada",
+        "location"
+      ],
+      [
+        "CUPE: Canadian Union of Public Employees",
+        "actor"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "London, Ontario, Canada"
+      ]
+    ]
+  },
+  {
+    "id": "GRC5069",
+    "text": "ViolentDemonstration event reported by Ekathimerini. Location: Regional Unit of Central Athens, Greece. URL: https://www.ekathimerini.com/news/1231189/clashes-break-out-after-student-rally-in-central-athens/",
+    "source_url": "https://www.ekathimerini.com/news/1231189/clashes-break-out-after-student-rally-in-central-athens/",
+    "source_site": "Ekathimerini",
+    "event_date": "2024-02-08 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Regional Unit of Central Athens, Greece",
+        "location"
+      ],
+      [
+        "Greece",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Regional Unit of Central Athens, Greece"
+      ]
+    ]
+  },
+  {
+    "id": "PHL16477",
+    "text": "ArmedClash event reported by Philippine Star. Location: Lipa, Batangas, Philippines. URL: https://www.philstar.com/nation/2024/02/09/2332043/batangas-village-watchman-slain",
+    "source_url": "https://www.philstar.com/nation/2024/02/09/2332043/batangas-village-watchman-slain",
+    "source_site": "Philippine Star",
+    "event_date": "2024-02-07 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Lipa, Batangas, Philippines",
+        "location"
+      ],
+      [
+        "Philippines",
+        "location"
+      ],
+      [
+        "Unidentified Armed Group",
+        "actor"
+      ],
+      [
+        "Police Forces of the Philippines - Barangay Tanod",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Lipa, Batangas, Philippines"
+      ]
+    ]
+  },
+  {
+    "id": "IND154576",
+    "text": "OtherStrategicDevelopment event reported by Imphal Times. Location: Imphal, Manipur, India. URL: https://www.imphaltimes.com/news/model-code-of-conduct-activated-in-manipur/",
+    "source_url": "https://www.imphaltimes.com/news/model-code-of-conduct-activated-in-manipur/",
+    "source_site": "Imphal Times",
+    "event_date": "2024-03-17 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Imphal, Manipur, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Imphal, Manipur, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34722",
+    "text": "AbductionOrForcedDisappearance event reported by Nigeria Punch. Location: Umu Opara, Umuahia South, Abia State, Nigeria. URL: https://punchng.com/gunmen-kidnap-abia-varsity-deputy-vice-chancellor/",
+    "source_url": "https://punchng.com/gunmen-kidnap-abia-varsity-deputy-vice-chancellor/",
+    "source_site": "Nigeria Punch",
+    "event_date": "2024-01-26 00:00:00",
+    "gold_entities": [
+      [
+        "AbductionOrForcedDisappearance",
+        "event_or_risk"
+      ],
+      [
+        "Umu Opara, Umuahia South, Abia State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Unidentified Armed Group",
+        "actor"
+      ],
+      [
+        "Civilians",
+        "actor"
+      ],
+      [
+        "Teachers",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AbductionOrForcedDisappearance",
+        "Umu Opara, Umuahia South, Abia State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "BGD29133",
+    "text": "PeacefulProtest event reported by Financial Express (Bangladesh). Location: Shahbag, Dhaka, Bangladesh. URL: Nexis",
+    "source_url": "Nexis",
+    "source_site": "Financial Express (Bangladesh)",
+    "event_date": "2024-10-19 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Shahbag, Dhaka, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Shahbag, Dhaka, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35189",
+    "text": "Attack event reported by Guardian (Nigeria). Location: Ilorin, Ilorin East, Kwara State, Nigeria. URL: https://guardian.ng/news/panic-gripped-the-baruba-okelele-area-of-ilorin-east-local-council-of-kwara-state-yesterday-following-the-killing-of-two-persons-by-suspected-cultists-the-guardian-learnt-that-the-attackers-storm/#:~:text=CP%20Olaiya-,Panic%20gripped%20the%20Baruba%2FOkelele%20area%20of%20Ilorin%20East%20Local,people%20to%20scamper%20to%20safety.",
+    "source_url": "https://guardian.ng/news/panic-gripped-the-baruba-okelele-area-of-ilorin-east-local-council-of-kwara-state-yesterday-following-the-killing-of-two-persons-by-suspected-cultists-the-guardian-learnt-that-the-attackers-storm/#:~:text=CP%20Olaiya-,Panic%20gripped%20the%20Baruba%2FOkelele%20area%20of%20Ilorin%20East%20Local,people%20to%20scamper%20to%20safety.",
+    "source_site": "Guardian (Nigeria)",
+    "event_date": "2024-02-23 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Ilorin, Ilorin East, Kwara State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Ilorin, Ilorin East, Kwara State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13856",
+    "text": "LootingOrPropertyDestruction event reported by People Daily. Location: Trans-Nzoia County, Kenya. URL: https://www.pd.co.ke/news/former-magistrate-tycoon-in-a-sh30m-land-dispute-225003/",
+    "source_url": "https://www.pd.co.ke/news/former-magistrate-tycoon-in-a-sh30m-land-dispute-225003/",
+    "source_site": "People Daily",
+    "event_date": "2024-03-06 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Trans-Nzoia County, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Trans-Nzoia County, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "MZM3663",
+    "text": "OtherStrategicDevelopment event reported by Cabo Ligado. Location: Ulo, Moc\u00edmboa da Praia, Cabo Delgado Province, Mozambique. URL: Mozobs",
+    "source_url": "Mozobs",
+    "source_site": "Cabo Ligado",
+    "event_date": "2024-01-01 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Ulo, Moc\u00edmboa da Praia, Cabo Delgado Province, Mozambique",
+        "location"
+      ],
+      [
+        "Mozambique",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Ulo, Moc\u00edmboa da Praia, Cabo Delgado Province, Mozambique"
+      ]
+    ]
+  },
+  {
+    "id": "UKR148329",
+    "text": "ArmedClash event reported by Institute for the Study of War. Location: Vesele, Donetsk Oblast, Ukraine. URL: https://www.understandingwar.org/backgrounder/russian-offensive-campaign-assessment-february-13-2024",
+    "source_url": "https://www.understandingwar.org/backgrounder/russian-offensive-campaign-assessment-february-13-2024",
+    "source_site": "Institute for the Study of War",
+    "event_date": "2024-02-12 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Vesele, Donetsk Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ],
+      [
+        "Military Forces of Russia",
+        "actor"
+      ],
+      [
+        "Military Forces of Ukraine",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Vesele, Donetsk Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "IND158188",
+    "text": "PeacefulProtest event reported by Sentinel (India). Location: Assam, India. URL: https://www.sentinelassam.com/cities/guwahati-city/assam-khetri-aasu-protests-against-price-rise-in-state",
+    "source_url": "https://www.sentinelassam.com/cities/guwahati-city/assam-khetri-aasu-protests-against-price-rise-in-state",
+    "source_site": "Sentinel (India)",
+    "event_date": "2024-06-19 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Assam, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        " Union\", ",
+        "actor"
+      ],
+      [
+        ", ",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Assam, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND152920",
+    "text": "PeacefulProtest event reported by Chandigarh Tribune. Location: Delhi, India. URL: https://www.tribuneindia.com/news/india/delhi-police-cop-suspended-for-kicking-namazis-in-inderlok-area-tense-598543",
+    "source_url": "https://www.tribuneindia.com/news/india/delhi-police-cop-suspended-for-kicking-namazis-in-inderlok-area-tense-598543",
+    "source_site": "Chandigarh Tribune",
+    "event_date": "2024-03-08 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Delhi, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Muslim Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Delhi, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34807",
+    "text": "MobViolence event reported by Nigeria Punch. Location: Katsina State, Nigeria. URL: https://punchng.com/alleged-blasphemy-katsina-residents-burn-neighbours-house-car/",
+    "source_url": "https://punchng.com/alleged-blasphemy-katsina-residents-burn-neighbours-house-car/",
+    "source_site": "Nigeria Punch",
+    "event_date": "2024-01-30 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Katsina State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Katsina State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "USA66890",
+    "text": "ProtestWithIntervention event reported by Fox News. Location: Washington, District of Columbia, United States. URL: https://www.foxnews.com/politics/pro-palestinian-protest-breaks-out-inside-senate-office-building-interrupts-interview-cease-fire-chants?intcmp=tw_fnc",
+    "source_url": "https://www.foxnews.com/politics/pro-palestinian-protest-breaks-out-inside-senate-office-building-interrupts-interview-cease-fire-chants?intcmp=tw_fnc",
+    "source_site": "Fox News",
+    "event_date": "2024-03-21 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Washington, District of Columbia, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Christian Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Washington, District of Columbia, United States"
+      ]
+    ]
+  },
+  {
+    "id": "IND154365",
+    "text": "Attack event reported by The Hindu. Location: Mayiladuthurai, Tamil Nadu, India. URL: https://www.thehindu.com/news/cities/Tiruchirapalli/26-year-old-man-murdered-in-mayiladuthurai-relatives-stage-protest/article67976708.ece",
+    "source_url": "https://www.thehindu.com/news/cities/Tiruchirapalli/26-year-old-man-murdered-in-mayiladuthurai-relatives-stage-protest/article67976708.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-03-20 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Mayiladuthurai, Tamil Nadu, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Mayiladuthurai, Tamil Nadu, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35039",
+    "text": "LootingOrPropertyDestruction event reported by Sahara Reporters. Location: Ese Odo, Ondo State, Nigeria. URL: https://saharareporters.com/2024/02/12/niger-delta-leader-ajube-accused-invading-office-tompolos-security-firm-ondo-destroying",
+    "source_url": "https://saharareporters.com/2024/02/12/niger-delta-leader-ajube-accused-invading-office-tompolos-security-firm-ondo-destroying",
+    "source_site": "Sahara Reporters",
+    "event_date": "2024-02-09 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Ese Odo, Ondo State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Ese Odo, Ondo State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "UGA8974",
+    "text": "SexualViolence event reported by URN (Uganda). Location: Kakira, Jinja, Uganda. URL: https://www.ugandaradionetwork.net/story/guard-arrested-for-defiling-four-year-old-girl-",
+    "source_url": "https://www.ugandaradionetwork.net/story/guard-arrested-for-defiling-four-year-old-girl-",
+    "source_site": "URN (Uganda)",
+    "event_date": "2024-03-12 00:00:00",
+    "gold_entities": [
+      [
+        "SexualViolence",
+        "event_or_risk"
+      ],
+      [
+        "Kakira, Jinja, Uganda",
+        "location"
+      ],
+      [
+        "Uganda",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "SexualViolence",
+        "Kakira, Jinja, Uganda"
+      ]
+    ]
+  },
+  {
+    "id": "IND148813",
+    "text": "PeacefulProtest event reported by New Indian Express. Location: Bhubaneswar (M.Corp.), Odisha, India. URL: https://www.newindianexpress.com/states/odisha/2024/Jan/14/bjp-alleges-torture-of-corporator-by-police-stages-road-blockade-2650909.html",
+    "source_url": "https://www.newindianexpress.com/states/odisha/2024/Jan/14/bjp-alleges-torture-of-corporator-by-police-stages-road-blockade-2650909.html",
+    "source_site": "New Indian Express",
+    "event_date": "2024-01-13 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Bhubaneswar (M.Corp.), Odisha, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "BJP: Bharatiya Janata Party",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Bhubaneswar (M.Corp.), Odisha, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND156863",
+    "text": "Attack event reported by New Indian Express. Location: Tirunelveli, India. URL: https://www.newindianexpress.com/states/tamil-nadu/2024/May/18/three-more-arrested-for-attacking-activist-in-tirunelveli",
+    "source_url": "https://www.newindianexpress.com/states/tamil-nadu/2024/May/18/three-more-arrested-for-attacking-activist-in-tirunelveli",
+    "source_site": "New Indian Express",
+    "event_date": "2024-05-04 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Tirunelveli, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Tirunelveli, India"
+      ]
+    ]
+  },
+  {
+    "id": "UKR191792",
+    "text": "ShellingOrArtilleryOrMissileAttack event reported by Ukrinform. Location: Zelenivka, Ukraine. URL: https://www.ukrinform.net/rubric-ato/3921678-russians-launch-massive-attack-on-zelenivka-in-kherson-region.html",
+    "source_url": "https://www.ukrinform.net/rubric-ato/3921678-russians-launch-massive-attack-on-zelenivka-in-kherson-region.html",
+    "source_site": "Ukrinform",
+    "event_date": "2024-10-30 00:00:00",
+    "gold_entities": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "event_or_risk"
+      ],
+      [
+        "Zelenivka, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "Zelenivka, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "IND154544",
+    "text": "PeacefulProtest event reported by Free Press Journal (India). Location: Rajkot, Gujarat, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=4f5d884d-f946-4187-b5b7-57bef4db7854&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BN6-X561-JB5M-W0KS-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr184&pditab=allpods&ecomp=hwmyk&earg=sr184&prid=5791cea7-13f5-4b21-8a12-4dcf3a041f85",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=4f5d884d-f946-4187-b5b7-57bef4db7854&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BN6-X561-JB5M-W0KS-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr184&pditab=allpods&ecomp=hwmyk&earg=sr184&prid=5791cea7-13f5-4b21-8a12-4dcf3a041f85",
+    "source_site": "Free Press Journal (India)",
+    "event_date": "2024-03-27 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Rajkot, Gujarat, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "General Caste Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Rajput Caste Group",
+        "actor"
+      ],
+      [
+        "SRKS: Shri Rajput Karni Sena",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Rajkot, Gujarat, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND148787",
+    "text": "PeacefulProtest event reported by Free Press Journal (India). Location: Ranchi, Jharkhand, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=1c41208b-c321-4b41-9709-e5fcf9e7940f&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B4P-SBG1-JDKC-R32N-00000-00&pdcontentcomponentid=282802&pdteaserkey=sr10&pditab=allpods&ecomp=twmyk&earg=sr10&prid=cdde44c3-91ee-4db8-b72c-019b5a5f8b40",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=1c41208b-c321-4b41-9709-e5fcf9e7940f&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B4P-SBG1-JDKC-R32N-00000-00&pdcontentcomponentid=282802&pdteaserkey=sr10&pditab=allpods&ecomp=twmyk&earg=sr10&prid=cdde44c3-91ee-4db8-b72c-019b5a5f8b40",
+    "source_site": "Free Press Journal (India)",
+    "event_date": "2024-01-19 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Ranchi, Jharkhand, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Tribal Group",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Ranchi, Jharkhand, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND149400",
+    "text": "PeacefulProtest event reported by The Hindu. Location: Tiruchirappalli, Tamil Nadu, India. URL: https://www.thehindu.com/news/cities/Tiruchirapalli/farmers-demand-withdrawal-of-law-on-land-consolidation-increase-in-procurement-price-for-paddy-and-sugarcane/article67789105.ece",
+    "source_url": "https://www.thehindu.com/news/cities/Tiruchirapalli/farmers-demand-withdrawal-of-law-on-land-consolidation-increase-in-procurement-price-for-paddy-and-sugarcane/article67789105.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-01-29 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Tiruchirappalli, Tamil Nadu, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Farmers",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "SKM: United Farmers Front",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Tiruchirappalli, Tamil Nadu, India"
+      ]
+    ]
+  },
+  {
+    "id": "PAK142942",
+    "text": "ArmedClash event reported by Balochistan Post. Location: Balochistan, Pakistan. URL: https://thebalochistanpost.com/2024/06/%d8%b2%d8%a7%d9%85%d8%b1%d8%a7%d9%86-%d9%85%db%8c%da%ba-%d9%be%d8%a7%da%a9%d8%b3%d8%aa%d8%a7%d9%86%db%8c-%d9%81%d9%88%d8%ac-%d9%be%d8%b1-%d8%b3%d9%86%d8%a7%d8%a6%d9%be%d8%b1-%d8%ad%d9%85%d9%84%d9%88/",
+    "source_url": "https://thebalochistanpost.com/2024/06/%d8%b2%d8%a7%d9%85%d8%b1%d8%a7%d9%86-%d9%85%db%8c%da%ba-%d9%be%d8%a7%da%a9%d8%b3%d8%aa%d8%a7%d9%86%db%8c-%d9%81%d9%88%d8%ac-%d9%be%d8%b1-%d8%b3%d9%86%d8%a7%d8%a6%d9%be%d8%b1-%d8%ad%d9%85%d9%84%d9%88/",
+    "source_site": "Balochistan Post",
+    "event_date": "2024-06-23 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Balochistan, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ],
+      [
+        "BLA: Baloch Liberation Army",
+        "actor"
+      ],
+      [
+        "Military Forces of Pakistan",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Balochistan, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "IND148924",
+    "text": "PeacefulProtest event reported by Amar Ujala. Location: Aligarh, Uttar Pradesh, India. URL: https://www.amarujala.com/uttar-pradesh/aligarh/inspector-misbehaves-and-scuffles-with-bjym-leader-2024-01-21?pageId=1",
+    "source_url": "https://www.amarujala.com/uttar-pradesh/aligarh/inspector-misbehaves-and-scuffles-with-bjym-leader-2024-01-21?pageId=1",
+    "source_site": "Amar Ujala",
+    "event_date": "2024-01-20 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Aligarh, Uttar Pradesh, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "BJP: Bharatiya Janata Party",
+        "actor"
+      ],
+      [
+        "BJYM: Bharatiya Janata Yuva Morcha",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Aligarh, Uttar Pradesh, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG38735",
+    "text": "AbductionOrForcedDisappearance event reported by Daily Post (Nigeria). Location: Fugar, Etsako Central, Edo State, Nigeria. URL: https://dailypost.ng/2024/10/03/gunmen-abduct-couple-one-other-in-edo/",
+    "source_url": "https://dailypost.ng/2024/10/03/gunmen-abduct-couple-one-other-in-edo/",
+    "source_site": "Daily Post (Nigeria)",
+    "event_date": "2024-09-29 00:00:00",
+    "gold_entities": [
+      [
+        "AbductionOrForcedDisappearance",
+        "event_or_risk"
+      ],
+      [
+        "Fugar, Etsako Central, Edo State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Unidentified Armed Group",
+        "actor"
+      ],
+      [
+        "Civilians",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AbductionOrForcedDisappearance",
+        "Fugar, Etsako Central, Edo State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "MZM3785",
+    "text": "Attack event reported by Lusa. Location: Mazeze, Chi\u00fare, Cabo Delgado Province, Mozambique. URL: https://clubofmozambique.com/news/mozambique-insurgents-attack-villages-burn-infrastructure-churches-253922/",
+    "source_url": "https://clubofmozambique.com/news/mozambique-insurgents-attack-villages-burn-infrastructure-churches-253922/",
+    "source_site": "Lusa",
+    "event_date": "2024-02-12 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Mazeze, Chi\u00fare, Cabo Delgado Province, Mozambique",
+        "location"
+      ],
+      [
+        "Mozambique",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Mazeze, Chi\u00fare, Cabo Delgado Province, Mozambique"
+      ]
+    ]
+  },
+  {
+    "id": "IND149631",
+    "text": "ArmedClash event reported by Sangai Express. Location: Sagolmang, Imphal East, Manipur, India. URL: https://www.thesangaiexpress.com//Encyc/2024/1/28/OSR-CorrespondentIMP-MOIRANG-Jan-28-A-heavy-gunfight-broke-out-at-Leimaram-under-Nambol-police-station-to.html",
+    "source_url": "https://www.thesangaiexpress.com//Encyc/2024/1/28/OSR-CorrespondentIMP-MOIRANG-Jan-28-A-heavy-gunfight-broke-out-at-Leimaram-under-Nambol-police-station-to.html",
+    "source_site": "Sangai Express",
+    "event_date": "2024-01-28 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Sagolmang, Imphal East, Manipur, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Kuki Tribal Militia",
+        "actor"
+      ],
+      [
+        "Meitei Ethnic Militia",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Sagolmang, Imphal East, Manipur, India"
+      ]
+    ]
+  },
+  {
+    "id": "KHM2402",
+    "text": "PeacefulProtest event reported by Radio Free Asia. Location: Kaoh Nheaek District, Mondulkiri, Cambodia. URL: https://www.rfa.org/khmer/news/environment/more-than-100-indigenous-people-in-mondulkiri-province-perform-a-sacrifice-ceremony-for-demons-to-protect-community-forests-02232024001851.html",
+    "source_url": "https://www.rfa.org/khmer/news/environment/more-than-100-indigenous-people-in-mondulkiri-province-perform-a-sacrifice-ceremony-for-demons-to-protect-community-forests-02232024001851.html",
+    "source_site": "Radio Free Asia",
+    "event_date": "2024-02-22 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Kaoh Nheaek District, Mondulkiri, Cambodia",
+        "location"
+      ],
+      [
+        "Cambodia",
+        "location"
+      ],
+      [
+        "Bunong Ethnic Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Kaoh Nheaek District, Mondulkiri, Cambodia"
+      ]
+    ]
+  },
+  {
+    "id": "USA66844",
+    "text": "ProtestWithIntervention event reported by Union Leader. Location: Merrimack, New Hampshire, United States. URL: https://www.unionleader.com/news/crime/merrimack-police-arrest-eight-pro-palestiian-protesters-blocking-the-entrance-and-exit-to-an-israeli/article_0ac91750-e88c-11ee-a30a-ebe5fa9680e1.html?block_id=1120512",
+    "source_url": "https://www.unionleader.com/news/crime/merrimack-police-arrest-eight-pro-palestiian-protesters-blocking-the-entrance-and-exit-to-an-israeli/article_0ac91750-e88c-11ee-a30a-ebe5fa9680e1.html?block_id=1120512",
+    "source_site": "Union Leader",
+    "event_date": "2024-03-22 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Merrimack, New Hampshire, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Merrimack, New Hampshire, United States"
+      ]
+    ]
+  },
+  {
+    "id": "IND150597",
+    "text": "PeacefulProtest event reported by The Hindu. Location: Wallajah, Ranipet, Tamil Nadu, India. URL: https://www.thehindu.com/news/national/tamil-nadu/advocates-boycott-court-in-walajah-against-proposed-taluk-level-courts/article67829094.ece",
+    "source_url": "https://www.thehindu.com/news/national/tamil-nadu/advocates-boycott-court-in-walajah-against-proposed-taluk-level-courts/article67829094.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-02-09 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Wallajah, Ranipet, Tamil Nadu, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Lawyers",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Wallajah, Ranipet, Tamil Nadu, India"
+      ]
+    ]
+  },
+  {
+    "id": "LBY11413",
+    "text": "RemoteExplosiveOrLandmineOrIED event reported by Libya Observer. Location: Tripoli, Libya. URL: https://libyaobserver.ly/inbrief/citizen-injured-landmine-explosion-tripoli",
+    "source_url": "https://libyaobserver.ly/inbrief/citizen-injured-landmine-explosion-tripoli",
+    "source_site": "Libya Observer",
+    "event_date": "2024-01-07 00:00:00",
+    "gold_entities": [
+      [
+        "RemoteExplosiveOrLandmineOrIED",
+        "event_or_risk"
+      ],
+      [
+        "Tripoli, Libya",
+        "location"
+      ],
+      [
+        "Libya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "RemoteExplosiveOrLandmineOrIED",
+        "Tripoli, Libya"
+      ]
+    ]
+  },
+  {
+    "id": "PAK139681",
+    "text": "PeacefulProtest event reported by Dawn (Pakistan). Location: Sukkur, Sindh, Pakistan. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=151766b6-9e7e-4857-9960-d3fe106db0a1&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B9K-DWF1-JCH9-G3NW-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr92&pditab=allpods&ecomp=twmyk&earg=sr92&prid=90e67d7f-25cb-4725-a93b-5c2511cfacc6",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=151766b6-9e7e-4857-9960-d3fe106db0a1&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B9K-DWF1-JCH9-G3NW-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr92&pditab=allpods&ecomp=twmyk&earg=sr92&prid=90e67d7f-25cb-4725-a93b-5c2511cfacc6",
+    "source_site": "Dawn (Pakistan)",
+    "event_date": "2024-02-10 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Sukkur, Sindh, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ],
+      [
+        "JUI-F: Jamiat Ulema-e-Islam-Fazl",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Sukkur, Sindh, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "MZM3758",
+    "text": "OtherStrategicDevelopment event reported by Al Naba. Location: Meluco, Mozambique. URL: MOZOBS",
+    "source_url": "MOZOBS",
+    "source_site": "Al Naba",
+    "event_date": "2024-02-08 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Meluco, Mozambique",
+        "location"
+      ],
+      [
+        "Mozambique",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Meluco, Mozambique"
+      ]
+    ]
+  },
+  {
+    "id": "USA64530",
+    "text": "PeacefulProtest event reported by Indiana Daily Student. Location: Bloomington, Indiana, United States. URL: https://www.idsnews.com/article/2024/01/iu-grad-workers-seek-wage-increase-union-recognition",
+    "source_url": "https://www.idsnews.com/article/2024/01/iu-grad-workers-seek-wage-increase-union-recognition",
+    "source_site": "Indiana Daily Student",
+    "event_date": "2024-01-16 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Bloomington, Indiana, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Students",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Bloomington, Indiana, United States"
+      ]
+    ]
+  },
+  {
+    "id": "KEN14037",
+    "text": "LootingOrPropertyDestruction event reported by Citizen (Kenya). Location: Baringo North, Baringo, Kenya. URL: https://www.citizen.digital/news/trapped-in-banditry-baringo-students-have-no-home-to-go-to-plead-to-remain-in-boarding-schools-n339501",
+    "source_url": "https://www.citizen.digital/news/trapped-in-banditry-baringo-students-have-no-home-to-go-to-plead-to-remain-in-boarding-schools-n339501",
+    "source_site": "Citizen (Kenya)",
+    "event_date": "2024-03-29 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Baringo North, Baringo, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Baringo North, Baringo, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "IND149641",
+    "text": "MobViolence event reported by Assam Tribune. Location: Guwahati, Assam, India. URL: https://assamtribune.com/guwahati/veer-lachit-sena-members-nabbed-for-engaging-in-clashes-with-kamakhya-temple-authorities-1517323?infinitescroll=1",
+    "source_url": "https://assamtribune.com/guwahati/veer-lachit-sena-members-nabbed-for-engaging-in-clashes-with-kamakhya-temple-authorities-1517323?infinitescroll=1",
+    "source_site": "Assam Tribune",
+    "event_date": "2024-01-26 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Guwahati, Assam, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Guwahati, Assam, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND154479",
+    "text": "MobViolence event reported by Shillong Times. Location: Shillong, Meghalaya, India. URL: https://theshillongtimes.com/2024/03/26/scuffle-at-nehu-on-holi-leaves-two-injured/",
+    "source_url": "https://theshillongtimes.com/2024/03/26/scuffle-at-nehu-on-holi-leaves-two-injured/",
+    "source_site": "Shillong Times",
+    "event_date": "2024-03-25 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Shillong, Meghalaya, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Shillong, Meghalaya, India"
+      ]
+    ]
+  },
+  {
+    "id": "USA69681",
+    "text": "ProtestWithIntervention event reported by KFI AM640. Location: Los Angeles, California, United States. URL: https://kfiam640.iheart.com/featured/la-local-news/content/2024-05-13-usc-campus-closes-due-to-pro-palestine-protest-outside-shrine/?Keyid=socialflow&Sc=editorial&Pname=local_social",
+    "source_url": "https://kfiam640.iheart.com/featured/la-local-news/content/2024-05-13-usc-campus-closes-due-to-pro-palestine-protest-outside-shrine/?Keyid=socialflow&Sc=editorial&Pname=local_social",
+    "source_site": "KFI AM640",
+    "event_date": "2024-05-12 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Los Angeles, California, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "PSL: Party for Socialism and Liberation",
+        "actor"
+      ],
+      [
+        "PYM: Palestinian Youth Movement",
+        "actor"
+      ],
+      [
+        "Palestinian Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Students",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Los Angeles, California, United States"
+      ]
+    ]
+  },
+  {
+    "id": "IND153880",
+    "text": "PeacefulProtest event reported by The Hindu. Location: Kozhikode, Kerala, India. URL: https://www.thehindu.com/news/cities/kozhikode/distributors-strike-at-kozhikode-mch-ends/article67965373.ece",
+    "source_url": "https://www.thehindu.com/news/cities/kozhikode/distributors-strike-at-kozhikode-mch-ends/article67965373.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-03-18 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Kozhikode, Kerala, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Government of India",
+        "actor"
+      ],
+      [
+        "INC: Indian National Congress",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "UDF: United Democratic Front",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Kozhikode, Kerala, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND153702",
+    "text": "PeacefulProtest event reported by Free Press Journal (India). Location: Gwalior, Madhya Pradesh, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=a5d997b6-5c0a-433a-ada4-e48b8dc03178&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BMR-TX11-JB5M-W0FP-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr131&pditab=allpods&ecomp=hwmyk&earg=sr131&prid=8e885d48-3fb0-4af6-a100-2de7ec32ec79",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=a5d997b6-5c0a-433a-ada4-e48b8dc03178&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BMR-TX11-JB5M-W0FP-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr131&pditab=allpods&ecomp=hwmyk&earg=sr131&prid=8e885d48-3fb0-4af6-a100-2de7ec32ec79",
+    "source_site": "Free Press Journal (India)",
+    "event_date": "2024-03-22 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Gwalior, Madhya Pradesh, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "AAP: Aam Aadmi Party",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Gwalior, Madhya Pradesh, India"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26607",
+    "text": "Attack event reported by Daily Star (Bangladesh). Location: Jhenaidah, Jhenaidah Sadar Upazila, Bangladesh. URL: https://www.thedailystar.net/election-2024/news/news/post-polls-violence-continues-3515506",
+    "source_url": "https://www.thedailystar.net/election-2024/news/news/post-polls-violence-continues-3515506",
+    "source_site": "Daily Star (Bangladesh)",
+    "event_date": "2024-01-09 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Jhenaidah, Jhenaidah Sadar Upazila, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Jhenaidah, Jhenaidah Sadar Upazila, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "IND152474",
+    "text": "ViolentDemonstration event reported by Morung Express. Location: Tuensang, India. URL: https://morungexpress.com/cws-intensifies-protest-over-non-fulfilment-of-demands",
+    "source_url": "https://morungexpress.com/cws-intensifies-protest-over-non-fulfilment-of-demands",
+    "source_site": "Morung Express",
+    "event_date": "2024-03-05 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Tuensang, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Tuensang, India"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26600",
+    "text": "PeacefulProtest event reported by Dhaka Tribune. Location: Gazipur District, Dhaka Division, Bangladesh. URL: https://www.dhakatribune.com/bangladesh/nation/337431/gazipur-factory-workers-protest-for-new-wage",
+    "source_url": "https://www.dhakatribune.com/bangladesh/nation/337431/gazipur-factory-workers-protest-for-new-wage",
+    "source_site": "Dhaka Tribune",
+    "event_date": "2024-01-22 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Gazipur District, Dhaka Division, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Gazipur District, Dhaka Division, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26527",
+    "text": "ViolentDemonstration event reported by New Nation (Bangladesh). Location: Ishwardi, Bangladesh. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=0428327a-d028-4725-884d-f3d5fa616ec2&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B2B-XP01-JDKC-R0NT-00000-00&pdcontentcomponentid=377664&pdteaserkey=sr137&pditab=allpods&ecomp=twmyk&earg=sr137&prid=fe2e5d81-8fbb-491f-a7b1-76cc9e657dfd",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=0428327a-d028-4725-884d-f3d5fa616ec2&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B2B-XP01-JDKC-R0NT-00000-00&pdcontentcomponentid=377664&pdteaserkey=sr137&pditab=allpods&ecomp=twmyk&earg=sr137&prid=fe2e5d81-8fbb-491f-a7b1-76cc9e657dfd",
+    "source_site": "New Nation (Bangladesh)",
+    "event_date": "2024-01-07 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Ishwardi, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Ishwardi, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "USA65864",
+    "text": "PeacefulProtest event reported by WBRE. Location: Orwigsburg, Schuylkill County, Pennsylvania, United States. URL: https://www.pahomepage.com/news/mothers-of-murdered-teens-protest-outside-court/",
+    "source_url": "https://www.pahomepage.com/news/mothers-of-murdered-teens-protest-outside-court/",
+    "source_site": "WBRE",
+    "event_date": "2024-02-23 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Orwigsburg, Schuylkill County, Pennsylvania, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Orwigsburg, Schuylkill County, Pennsylvania, United States"
+      ]
+    ]
+  },
+  {
+    "id": "IND150284",
+    "text": "Arrest event reported by Free Press Journal (India). Location: Madhya Pradesh, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=744bfd49-06a9-4602-8fc1-d85d19a12aef&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BB1-V581-JB5M-W0SV-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr615&pditab=allpods&ecomp=twmyk&earg=sr615&prid=02819298-9529-4b80-a479-d07cbffe9039",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=744bfd49-06a9-4602-8fc1-d85d19a12aef&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BB1-V581-JB5M-W0SV-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr615&pditab=allpods&ecomp=twmyk&earg=sr615&prid=02819298-9529-4b80-a479-d07cbffe9039",
+    "source_site": "Free Press Journal (India)",
+    "event_date": "2024-02-12 00:00:00",
+    "gold_entities": [
+      [
+        "Arrest",
+        "event_or_risk"
+      ],
+      [
+        "Madhya Pradesh, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Arrest",
+        "Madhya Pradesh, India"
+      ]
+    ]
+  },
+  {
+    "id": "USA64837",
+    "text": "ProtestWithIntervention event reported by CBS News. Location: Manhattan, New York, United States. URL: https://www.cbsnews.com/newyork/news/israel-hamas-war-rally-east-side-new-york-city/",
+    "source_url": "https://www.cbsnews.com/newyork/news/israel-hamas-war-rally-east-side-new-york-city/",
+    "source_site": "CBS News",
+    "event_date": "2024-01-26 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Manhattan, New York, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Jewish Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Manhattan, New York, United States"
+      ]
+    ]
+  },
+  {
+    "id": "AUS2699",
+    "text": "ProtestWithIntervention event reported by Q News. Location: Melbourne, Victoria, Australia. URL: https://qnews.com.au/violence-at-melbourne-anti-trans-rally/",
+    "source_url": "https://qnews.com.au/violence-at-melbourne-anti-trans-rally/",
+    "source_site": "Q News",
+    "event_date": "2024-03-23 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Melbourne, Victoria, Australia",
+        "location"
+      ],
+      [
+        "Australia",
+        "location"
+      ],
+      [
+        "LGBTQ+",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Melbourne, Victoria, Australia"
+      ]
+    ]
+  },
+  {
+    "id": "IND153409",
+    "text": "PeacefulProtest event reported by The Hindu. Location: Coimbatore, India. URL: https://www.thehindu.com/news/cities/Coimbatore/activists-in-coimbatore-seek-personhood-status-for-animals/article67932968.ece",
+    "source_url": "https://www.thehindu.com/news/cities/Coimbatore/activists-in-coimbatore-seek-personhood-status-for-animals/article67932968.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-03-09 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Coimbatore, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Coimbatore, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34622",
+    "text": "ArmedClash event reported by Sahara Reporters. Location: Bokkos, Plateau State, Nigeria. URL: https://saharareporters.com/2024/01/18/another-attack-bandits-troubled-plateau-community-repelled",
+    "source_url": "https://saharareporters.com/2024/01/18/another-attack-bandits-troubled-plateau-community-repelled",
+    "source_site": "Sahara Reporters",
+    "event_date": "2024-01-18 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Bokkos, Plateau State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Fulani Ethnic Militia",
+        "actor"
+      ],
+      [
+        "Pastoralists",
+        "actor"
+      ],
+      [
+        "Bokkos Communal Militia",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Bokkos, Plateau State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "JAM2344",
+    "text": "Attack event reported by Loop News Jamaica. Location: Kingston, Jamaica. URL: https://jamaica.loopnews.com/content/teen-slapped-multiple-charges-after-reported-murder-attempt",
+    "source_url": "https://jamaica.loopnews.com/content/teen-slapped-multiple-charges-after-reported-murder-attempt",
+    "source_site": "Loop News Jamaica",
+    "event_date": "2024-02-04 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Kingston, Jamaica",
+        "location"
+      ],
+      [
+        "Jamaica",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Kingston, Jamaica"
+      ]
+    ]
+  },
+  {
+    "id": "IND174608",
+    "text": "PeacefulProtest event reported by The Hindu. Location: Vizianagaram, India. URL: https://www.thehindu.com/news/national/andhra-pradesh/amit-shahs-remarks-on-ambedkar-north-andhra-ambedkarites-association-stage-protest/article69015305.ece",
+    "source_url": "https://www.thehindu.com/news/national/andhra-pradesh/amit-shahs-remarks-on-ambedkar-north-andhra-ambedkarites-association-stage-protest/article69015305.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-12-22 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Vizianagaram, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Dalit Caste Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Vizianagaram, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34626",
+    "text": "ViolentDemonstration event reported by Daily Post (Nigeria). Location: Lafia, Nasarawa State, Nigeria. URL: https://dailypost.ng/2024/01/19/nasarawa-woman-shot-while-protesting-naked-against-sules-supreme-court-victory/",
+    "source_url": "https://dailypost.ng/2024/01/19/nasarawa-woman-shot-while-protesting-naked-against-sules-supreme-court-victory/",
+    "source_site": "Daily Post (Nigeria)",
+    "event_date": "2024-01-19 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Lafia, Nasarawa State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Lafia, Nasarawa State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "NIG38576",
+    "text": "Attack event reported by Daily Trust (Nigeria). Location: Tafa, Niger State, Nigeria. URL: https://dailytrust.com/breaking-abducted-lady-regains-freedom-after-exposing-kidnappers-at-military-checkpoint/",
+    "source_url": "https://dailytrust.com/breaking-abducted-lady-regains-freedom-after-exposing-kidnappers-at-military-checkpoint/",
+    "source_site": "Daily Trust (Nigeria)",
+    "event_date": "2024-08-28 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Tafa, Niger State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Tafa, Niger State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "MZM3757",
+    "text": "OtherStrategicDevelopment event reported by Al Naba. Location: Macomia, Cabo Delgado Province, Mozambique. URL: https://advance.lexis.com/document/documentslider/?pdmfid=1519360&crid=4517c896-dc5d-4ee8-8fff-97e246b29b3e&pddocid=urn%3AcontentItem%3A6B9C-JCP1-DYRV-300B-00000-00&pddocumentnumber=6&pdactivecontenttype=urn%3Ahlct%3A16&pdsortkey=relevance%2CDescending&pdworkfolderid=&pdssubdataitemid=&pdupdateid=&pdalertresultid=&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B9C-JCP1-DYRV-300B-00000-00&pdcontentcomponentid=10962&pdcontentversion=&pdtrackchangesavailable=&action=linkdocslider&pddocumentsliderclickvalue=next&ecomp=k2x8k&prid=692bbc33-736e-45ed-9597-37a41fa48e53",
+    "source_url": "https://advance.lexis.com/document/documentslider/?pdmfid=1519360&crid=4517c896-dc5d-4ee8-8fff-97e246b29b3e&pddocid=urn%3AcontentItem%3A6B9C-JCP1-DYRV-300B-00000-00&pddocumentnumber=6&pdactivecontenttype=urn%3Ahlct%3A16&pdsortkey=relevance%2CDescending&pdworkfolderid=&pdssubdataitemid=&pdupdateid=&pdalertresultid=&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B9C-JCP1-DYRV-300B-00000-00&pdcontentcomponentid=10962&pdcontentversion=&pdtrackchangesavailable=&action=linkdocslider&pddocumentsliderclickvalue=next&ecomp=k2x8k&prid=692bbc33-736e-45ed-9597-37a41fa48e53",
+    "source_site": "Al Naba",
+    "event_date": "2024-02-02 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Macomia, Cabo Delgado Province, Mozambique",
+        "location"
+      ],
+      [
+        "Mozambique",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Macomia, Cabo Delgado Province, Mozambique"
+      ]
+    ]
+  },
+  {
+    "id": "SAF20886",
+    "text": "Arrest event reported by Citizen (South Africa). Location: North West, South Africa. URL: https://www.citizen.co.za/news/south-africa/crime/bodies-zama-zamas-robertville/",
+    "source_url": "https://www.citizen.co.za/news/south-africa/crime/bodies-zama-zamas-robertville/",
+    "source_site": "Citizen (South Africa)",
+    "event_date": "2024-02-15 00:00:00",
+    "gold_entities": [
+      [
+        "Arrest",
+        "event_or_risk"
+      ],
+      [
+        "North West, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Arrest",
+        "North West, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26602",
+    "text": "PeacefulProtest event reported by New Age (Bangladesh). Location: Jhalokathi, Bangladesh. URL: https://www.newagebd.net/article/223851/bnp-black-flag-processions-face-obstacles-at-places",
+    "source_url": "https://www.newagebd.net/article/223851/bnp-black-flag-processions-face-obstacles-at-places",
+    "source_site": "New Age (Bangladesh)",
+    "event_date": "2024-01-26 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Jhalokathi, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ],
+      [
+        "BNP: Bangladesh Nationalist Party",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Jhalokathi, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "IND156318",
+    "text": "PeacefulProtest event reported by Navhind Times. Location: Bicholim, North Goa, Goa, India. URL: https://www.navhindtimes.in/2024/04/20/goanews/another-lineman-loses-life-electricity-dept-under-fire/",
+    "source_url": "https://www.navhindtimes.in/2024/04/20/goanews/another-lineman-loses-life-electricity-dept-under-fire/",
+    "source_site": "Navhind Times",
+    "event_date": "2024-04-19 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Bicholim, North Goa, Goa, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Bicholim, North Goa, Goa, India"
+      ]
+    ]
+  },
+  {
+    "id": "SUD25599",
+    "text": "ArmedClash event reported by IOM. Location: Ghubaysh, West Kurdufan State, Sudan. URL: https://us4.campaign-archive.com/?u=08ea1fcd06d54dbae76c0aead&id=b59432e51b",
+    "source_url": "https://us4.campaign-archive.com/?u=08ea1fcd06d54dbae76c0aead&id=b59432e51b",
+    "source_site": "IOM",
+    "event_date": "2024-01-17 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Ghubaysh, West Kurdufan State, Sudan",
+        "location"
+      ],
+      [
+        "Sudan",
+        "location"
+      ],
+      [
+        "Al Jukhaisat Ethnic Militia",
+        "actor"
+      ],
+      [
+        "Buraas Ethnic Militia",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Ghubaysh, West Kurdufan State, Sudan"
+      ]
+    ]
+  },
+  {
+    "id": "IDN16461",
+    "text": "OtherStrategicDevelopment event reported by Human Rights Monitor. Location: Enarotali, Paniai, Central Papua, Indonesia. URL: https://humanrightsmonitor.org/case/police-arrest-russian-tourist-taking-photos-in-enarotali/",
+    "source_url": "https://humanrightsmonitor.org/case/police-arrest-russian-tourist-taking-photos-in-enarotali/",
+    "source_site": "Human Rights Monitor",
+    "event_date": "2024-03-11 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Enarotali, Paniai, Central Papua, Indonesia",
+        "location"
+      ],
+      [
+        "Indonesia",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Enarotali, Paniai, Central Papua, Indonesia"
+      ]
+    ]
+  },
+  {
+    "id": "USA65201",
+    "text": "LootingOrPropertyDestruction event reported by News 2 (Nashville). Location: Hendersonville, Tennessee, United States. URL: https://www.wkrn.com/news/local-news/hendersonville-church-vandalized-leaders-call-for-forgiveness/?utm_source=t.co&utm_medium=referral&utm_campaign=socialflow",
+    "source_url": "https://www.wkrn.com/news/local-news/hendersonville-church-vandalized-leaders-call-for-forgiveness/?utm_source=t.co&utm_medium=referral&utm_campaign=socialflow",
+    "source_site": "News 2 (Nashville)",
+    "event_date": "2024-02-02 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Hendersonville, Tennessee, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Hendersonville, Tennessee, United States"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34601",
+    "text": "Attack event reported by Vanguard (Nigeria). Location: Katsina-Ala, Benue State, Nigeria. URL: https://www.vanguardngr.com/2024/01/9-killed-in-benue-rival-militia-gang-war/",
+    "source_url": "https://www.vanguardngr.com/2024/01/9-killed-in-benue-rival-militia-gang-war/",
+    "source_site": "Vanguard (Nigeria)",
+    "event_date": "2024-01-17 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Katsina-Ala, Benue State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Katsina-Ala, Benue State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "SYR134089",
+    "text": "ShellingOrArtilleryOrMissileAttack event reported by Times of Israel. Location: Golan Regional Council, North District, Syria. URL: https://www.timesofisrael.com/liveblog_entry/hezbollah-claims-to-target-idf-base-in-northern-israel-with-barrage-of-50-rockets/",
+    "source_url": "https://www.timesofisrael.com/liveblog_entry/hezbollah-claims-to-target-idf-base-in-northern-israel-with-barrage-of-50-rockets/",
+    "source_site": "Times of Israel",
+    "event_date": "2024-03-26 00:00:00",
+    "gold_entities": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "event_or_risk"
+      ],
+      [
+        "Golan Regional Council, North District, Syria",
+        "location"
+      ],
+      [
+        "Syria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "Golan Regional Council, North District, Syria"
+      ]
+    ]
+  },
+  {
+    "id": "IND153014",
+    "text": "Attack event reported by Times of India. Location: Bengaluru, Karnataka, India. URL: https://timesofindia.indiatimes.com/city/bengaluru/6-nabbed-for-attack-on-rti-activist-in-bengaluru/articleshow/108376145.cms",
+    "source_url": "https://timesofindia.indiatimes.com/city/bengaluru/6-nabbed-for-attack-on-rti-activist-in-bengaluru/articleshow/108376145.cms",
+    "source_site": "Times of India",
+    "event_date": "2024-02-29 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Bengaluru, Karnataka, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Bengaluru, Karnataka, India"
+      ]
+    ]
+  },
+  {
+    "id": "ISR39156",
+    "text": "PeacefulProtest event reported by Haaretz. Location: Tel Aviv, Israel. URL: https://www.haaretz.com/israel-news/2024-02-14/ty-article-live/idf-publishes-footage-of-hamas-leader-sinwar-in-gaza-tunnel-from-beginning-of-war/0000018d-a582-d9a5-afdd-b7cf8e490000",
+    "source_url": "https://www.haaretz.com/israel-news/2024-02-14/ty-article-live/idf-publishes-footage-of-hamas-leader-sinwar-in-gaza-tunnel-from-beginning-of-war/0000018d-a582-d9a5-afdd-b7cf8e490000",
+    "source_site": "Haaretz",
+    "event_date": "2024-02-14 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Tel Aviv, Israel",
+        "location"
+      ],
+      [
+        "Israel",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Tel Aviv, Israel"
+      ]
+    ]
+  },
+  {
+    "id": "IND154615",
+    "text": "DisruptedWeaponsUse event reported by Asian News International. Location: Koraput, Odisha, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=183529c0-a2ae-476e-9195-9838ce004d57&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BMR-N6F1-JDJN-6005-00000-00&pdcontentcomponentid=344861&pdteaserkey=sr1534&pditab=allpods&ecomp=hwmyk&earg=sr1534&prid=2ae7cd01-981c-4c7c-ba62-029cd15b48ce",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=183529c0-a2ae-476e-9195-9838ce004d57&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BMR-N6F1-JDJN-6005-00000-00&pdcontentcomponentid=344861&pdteaserkey=sr1534&pditab=allpods&ecomp=hwmyk&earg=sr1534&prid=2ae7cd01-981c-4c7c-ba62-029cd15b48ce",
+    "source_site": "Asian News International",
+    "event_date": "2024-03-24 00:00:00",
+    "gold_entities": [
+      [
+        "DisruptedWeaponsUse",
+        "event_or_risk"
+      ],
+      [
+        "Koraput, Odisha, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "DisruptedWeaponsUse",
+        "Koraput, Odisha, India"
+      ]
+    ]
+  },
+  {
+    "id": "USA66134",
+    "text": "Attack event reported by ABC13 (Asheville). Location: Hendersonville, Henderson County, North Carolina, United States. URL: https://wlos.com/news/local/hendersonville-shooting-autistic-man-terminated-sheriffs-deputy-investigation-support-group-arms-around-asd-henderson-county-asheville-sbi-brittany-place-apartments",
+    "source_url": "https://wlos.com/news/local/hendersonville-shooting-autistic-man-terminated-sheriffs-deputy-investigation-support-group-arms-around-asd-henderson-county-asheville-sbi-brittany-place-apartments",
+    "source_site": "ABC13 (Asheville)",
+    "event_date": "2024-02-23 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Hendersonville, Henderson County, North Carolina, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Hendersonville, Henderson County, North Carolina, United States"
+      ]
+    ]
+  },
+  {
+    "id": "IND146731",
+    "text": "ViolentDemonstration event reported by Telegraph (India). Location: Jalpaiguri, West Bengal, India. URL: https://www.telegraphindia.com/west-bengal/jalpaiguri-ration-dealer-held-captive-by-workers-of-closed-tea-garden/cid/1991575",
+    "source_url": "https://www.telegraphindia.com/west-bengal/jalpaiguri-ration-dealer-held-captive-by-workers-of-closed-tea-garden/cid/1991575",
+    "source_site": "Telegraph (India)",
+    "event_date": "2024-01-04 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Jalpaiguri, West Bengal, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Jalpaiguri, West Bengal, India"
+      ]
+    ]
+  },
+  {
+    "id": "UKR149322",
+    "text": "AirOrDroneStrike event reported by Centre for Information Resilience. Location: Pishchane, Kharkiv Oblast, Ukraine. URL: https://eyesonrussia.org/event/event_16444_1706220000000",
+    "source_url": "https://eyesonrussia.org/event/event_16444_1706220000000",
+    "source_site": "Centre for Information Resilience",
+    "event_date": "2024-01-26 00:00:00",
+    "gold_entities": [
+      [
+        "AirOrDroneStrike",
+        "event_or_risk"
+      ],
+      [
+        "Pishchane, Kharkiv Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AirOrDroneStrike",
+        "Pishchane, Kharkiv Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "AUS2472",
+    "text": "ProtestWithIntervention event reported by Australian Broadcasting Corporation News. Location: Melbourne, Victoria, Australia. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=5d6afbed-d883-4fd2-a54d-0a6f342452e6&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B5B-16J1-JBN5-F00R-00000-00&pdcontentcomponentid=300224&pdteaserkey=sr6&pditab=allpods&ecomp=twmyk&earg=sr6&prid=4bb3b6cf-493d-4b59-a495-c77aaa87d191",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=5d6afbed-d883-4fd2-a54d-0a6f342452e6&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B5B-16J1-JBN5-F00R-00000-00&pdcontentcomponentid=300224&pdteaserkey=sr6&pditab=allpods&ecomp=twmyk&earg=sr6&prid=4bb3b6cf-493d-4b59-a495-c77aaa87d191",
+    "source_site": "Australian Broadcasting Corporation News",
+    "event_date": "2024-01-22 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Melbourne, Victoria, Australia",
+        "location"
+      ],
+      [
+        "Australia",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Melbourne, Victoria, Australia"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13873",
+    "text": "MobViolence event reported by Star (Kenya). Location: Bahati ward, Nakuru, Kenya. URL: https://www.the-star.co.ke/news/realtime/2024-03-10-bahati-residents-warned-against-lynching-suspected-criminals/",
+    "source_url": "https://www.the-star.co.ke/news/realtime/2024-03-10-bahati-residents-warned-against-lynching-suspected-criminals/",
+    "source_site": "Star (Kenya)",
+    "event_date": "2024-03-10 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Bahati ward, Nakuru, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Bahati ward, Nakuru, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "IND153380",
+    "text": "PeacefulProtest event reported by Times of India. Location: Panaji, North Goa, Goa, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=663d3a38-4fc4-4177-8464-80096d01b3e9&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BGW-FP01-JB3N-T1XY-00000-00&pdcontentcomponentid=362639&pdteaserkey=sr592&pditab=allpods&ecomp=twmyk&earg=sr592&prid=a62c4c36-06cd-423b-ad07-3da3f2e796c4",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=663d3a38-4fc4-4177-8464-80096d01b3e9&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BGW-FP01-JB3N-T1XY-00000-00&pdcontentcomponentid=362639&pdteaserkey=sr592&pditab=allpods&ecomp=twmyk&earg=sr592&prid=a62c4c36-06cd-423b-ad07-3da3f2e796c4",
+    "source_site": "Times of India",
+    "event_date": "2024-03-06 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Panaji, North Goa, Goa, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Tribal Group",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Panaji, North Goa, Goa, India"
+      ]
+    ]
+  },
+  {
+    "id": "LTU395",
+    "text": "PeacefulProtest event reported by Klaipedia. Location: Vilnius, Lithuania. URL: https://klaipeda.diena.lt/naujienos/vilnius/miesto-pulsas/zemdirbiai-tesia-protesto-akcija-prie-vyriausybes-rumu-susirinko-apie-200-zmoniu-1158149",
+    "source_url": "https://klaipeda.diena.lt/naujienos/vilnius/miesto-pulsas/zemdirbiai-tesia-protesto-akcija-prie-vyriausybes-rumu-susirinko-apie-200-zmoniu-1158149",
+    "source_site": "Klaipedia",
+    "event_date": "2024-01-25 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Vilnius, Lithuania",
+        "location"
+      ],
+      [
+        "Lithuania",
+        "location"
+      ],
+      [
+        "Farmers",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Vilnius, Lithuania"
+      ]
+    ]
+  },
+  {
+    "id": "UKR152543",
+    "text": "AirOrDroneStrike event reported by Ukrinform. Location: Sumy, Sumy Oblast, Ukraine. URL: https://www.ukrinform.net/rubric-ato/3840210-shelling-of-radio-engineering-facilities-in-sumy-region-body-of-deceased-engineer-found.html",
+    "source_url": "https://www.ukrinform.net/rubric-ato/3840210-shelling-of-radio-engineering-facilities-in-sumy-region-body-of-deceased-engineer-found.html",
+    "source_site": "Ukrinform",
+    "event_date": "2024-03-14 00:00:00",
+    "gold_entities": [
+      [
+        "AirOrDroneStrike",
+        "event_or_risk"
+      ],
+      [
+        "Sumy, Sumy Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AirOrDroneStrike",
+        "Sumy, Sumy Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "MMR58798",
+    "text": "AirOrDroneStrike event reported by Irrawaddy. Location: Hsi Hseng Township, Shan State, Myanmar. URL: https://www.irrawaddy.com/news/burma/civilian-dash-turns-to-bloodbath-as-myanmar-junta-bombards-shan-town.html",
+    "source_url": "https://www.irrawaddy.com/news/burma/civilian-dash-turns-to-bloodbath-as-myanmar-junta-bombards-shan-town.html",
+    "source_site": "Irrawaddy",
+    "event_date": "2024-02-19 00:00:00",
+    "gold_entities": [
+      [
+        "AirOrDroneStrike",
+        "event_or_risk"
+      ],
+      [
+        "Hsi Hseng Township, Shan State, Myanmar",
+        "location"
+      ],
+      [
+        "Myanmar",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AirOrDroneStrike",
+        "Hsi Hseng Township, Shan State, Myanmar"
+      ]
+    ]
+  },
+  {
+    "id": "IND153595",
+    "text": "ProtestWithIntervention event reported by Pioneer (India). Location: Bhopal, Madhya Pradesh, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=b5f8d42d-db60-4df1-8d7a-5c145526fe5b&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BJ5-KSS1-F12F-F091-00000-00&pdcontentcomponentid=332051&pdteaserkey=sr219&pditab=allpods&ecomp=gwmyk&earg=sr219&prid=b1f0ac80-866d-498d-8341-84d2dd800587",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=b5f8d42d-db60-4df1-8d7a-5c145526fe5b&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BJ5-KSS1-F12F-F091-00000-00&pdcontentcomponentid=332051&pdteaserkey=sr219&pditab=allpods&ecomp=gwmyk&earg=sr219&prid=b1f0ac80-866d-498d-8341-84d2dd800587",
+    "source_site": "Pioneer (India)",
+    "event_date": "2024-03-13 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Bhopal, Madhya Pradesh, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Bhopal, Madhya Pradesh, India"
+      ]
+    ]
+  },
+  {
+    "id": "UKR148515",
+    "text": "ShellingOrArtilleryOrMissileAttack event reported by Ukrinform. Location: Nikopol, Dnipropetrovsk Oblast, Ukraine. URL: https://www.ukrinform.net/rubric-ato/3827031-man-injured-as-russians-shell-nikopol-with-artillery.html",
+    "source_url": "https://www.ukrinform.net/rubric-ato/3827031-man-injured-as-russians-shell-nikopol-with-artillery.html",
+    "source_site": "Ukrinform",
+    "event_date": "2024-02-14 00:00:00",
+    "gold_entities": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "event_or_risk"
+      ],
+      [
+        "Nikopol, Dnipropetrovsk Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "Nikopol, Dnipropetrovsk Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13650",
+    "text": "MobViolence event reported by Kenyans.co. Location: Mombasa County, Kenya. URL: https://www.kenyans.co.ke/news/97421-2-men-burnt-death-robbing-mourners-mombasa-funeral",
+    "source_url": "https://www.kenyans.co.ke/news/97421-2-men-burnt-death-robbing-mourners-mombasa-funeral",
+    "source_site": "Kenyans.co",
+    "event_date": "2024-02-09 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Mombasa County, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Mombasa County, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "UKR144425",
+    "text": "ArmedClash event reported by Centre for Information Resilience. Location: Terny, Donetsk Oblast, Ukraine. URL: https://eyesonrussia.org/event/event_16360_1705528800000",
+    "source_url": "https://eyesonrussia.org/event/event_16360_1705528800000",
+    "source_site": "Centre for Information Resilience",
+    "event_date": "2024-01-18 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Terny, Donetsk Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ],
+      [
+        "Military Forces of Russia",
+        "actor"
+      ],
+      [
+        "Military Forces of Ukraine",
+        "actor"
+      ],
+      [
+        "Military Forces of Ukraine - Air Force",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Terny, Donetsk Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "SAF20357",
+    "text": "ViolentDemonstration event reported by News24 (South Africa). Location: Verulam, eThekwini Metropolitan Municipality, KwaZulu-Natal, South Africa. URL: https://www.news24.com/news24/southafrica/news/watch-kzn-water-woes-frustrated-residents-burn-tyres-vow-more-protest-action-20240103",
+    "source_url": "https://www.news24.com/news24/southafrica/news/watch-kzn-water-woes-frustrated-residents-burn-tyres-vow-more-protest-action-20240103",
+    "source_site": "News24 (South Africa)",
+    "event_date": "2024-01-03 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Verulam, eThekwini Metropolitan Municipality, KwaZulu-Natal, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Verulam, eThekwini Metropolitan Municipality, KwaZulu-Natal, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "TTQ2683",
+    "text": "ViolentDemonstration event reported by Newsday Trinidad and Tobago. Location: Couva, Trinidad and Tobago. URL: https://newsday.co.tt/2024/03/01/fiery-protest-over-access-to-couva-playing-field/",
+    "source_url": "https://newsday.co.tt/2024/03/01/fiery-protest-over-access-to-couva-playing-field/",
+    "source_site": "Newsday Trinidad and Tobago",
+    "event_date": "2024-03-01 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Couva, Trinidad and Tobago",
+        "location"
+      ],
+      [
+        "Trinidad and Tobago",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Couva, Trinidad and Tobago"
+      ]
+    ]
+  },
+  {
+    "id": "SAF20735",
+    "text": "PeacefulProtest event reported by Cape Argus. Location: Western Cape, South Africa. URL: https://www.iol.co.za/capeargus/news/kalmeyer-found-guilty-for-the-horrific-murders-of-3-year-old-and-18-month-old-siblings-2e6c122f-8562-43e2-8efa-3ada9ec38bad",
+    "source_url": "https://www.iol.co.za/capeargus/news/kalmeyer-found-guilty-for-the-horrific-murders-of-3-year-old-and-18-month-old-siblings-2e6c122f-8562-43e2-8efa-3ada9ec38bad",
+    "source_site": "Cape Argus",
+    "event_date": "2024-02-28 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Western Cape, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Western Cape, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "IND164128",
+    "text": "ProtestWithIntervention event reported by Indian Express. Location: Thane, Maharashtra, India. URL: Nexis",
+    "source_url": "Nexis",
+    "source_site": "Indian Express",
+    "event_date": "2024-08-10 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Thane, Maharashtra, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "BSS: Balasahebanchi Shiv Sena",
+        "actor"
+      ],
+      [
+        "MNS: Maharashtra Navnirman Sena",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Thane, Maharashtra, India"
+      ]
+    ]
+  },
+  {
+    "id": "PAK146522",
+    "text": "MobViolence event reported by Dawn (Pakistan). Location: Quetta City Tehsil, Balochistan, Pakistan. URL: https://epaper.dawn.com/DetailImage.php?StoryImage=09_11_2024_003_004",
+    "source_url": "https://epaper.dawn.com/DetailImage.php?StoryImage=09_11_2024_003_004",
+    "source_site": "Dawn (Pakistan)",
+    "event_date": "2024-11-08 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Quetta City Tehsil, Balochistan, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Quetta City Tehsil, Balochistan, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "IND171785",
+    "text": "DisruptedWeaponsUse event reported by State Times (India). Location: Samba, Jammu and Kashmir, India. URL: https://statetimes.in/two-rusty-mortar-shells-found-in-samba/",
+    "source_url": "https://statetimes.in/two-rusty-mortar-shells-found-in-samba/",
+    "source_site": "State Times (India)",
+    "event_date": "2024-11-13 00:00:00",
+    "gold_entities": [
+      [
+        "DisruptedWeaponsUse",
+        "event_or_risk"
+      ],
+      [
+        "Samba, Jammu and Kashmir, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "DisruptedWeaponsUse",
+        "Samba, Jammu and Kashmir, India"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13378",
+    "text": "OtherStrategicDevelopment event reported by Star (Kenya). Location: Meru, Meru County, Kenya. URL: https://www.the-star.co.ke/news/realtime/2024-01-06-dci-detectives-allegedly-seal-off-kawira-mwangazas-meru-residence/",
+    "source_url": "https://www.the-star.co.ke/news/realtime/2024-01-06-dci-detectives-allegedly-seal-off-kawira-mwangazas-meru-residence/",
+    "source_site": "Star (Kenya)",
+    "event_date": "2024-01-06 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Meru, Meru County, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Meru, Meru County, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "CAN5960",
+    "text": "PeacefulProtest event reported by Global News (Canada). Location: Vernon, British Columbia, Canada. URL: https://globalnews.ca/news/10375806/bc-seniors-protest-poverty-causing-conditions/",
+    "source_url": "https://globalnews.ca/news/10375806/bc-seniors-protest-poverty-causing-conditions/",
+    "source_site": "Global News (Canada)",
+    "event_date": "2024-03-21 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Vernon, British Columbia, Canada",
+        "location"
+      ],
+      [
+        "Canada",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Vernon, British Columbia, Canada"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26515",
+    "text": "MobViolence event reported by United News of Bangladesh. Location: Dhaka Division, Bangladesh. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=f0be8ada-8578-4d0b-a999-5ae8b16a468d&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B29-FC31-JCH9-G40J-00000-00&pdcontentcomponentid=400851&pdteaserkey=sr80&pditab=allpods&ecomp=twmyk&earg=sr80&prid=4f313bb8-a44f-4dba-8c52-63bf14f3f741",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=f0be8ada-8578-4d0b-a999-5ae8b16a468d&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B29-FC31-JCH9-G40J-00000-00&pdcontentcomponentid=400851&pdteaserkey=sr80&pditab=allpods&ecomp=twmyk&earg=sr80&prid=4f313bb8-a44f-4dba-8c52-63bf14f3f741",
+    "source_site": "United News of Bangladesh",
+    "event_date": "2024-01-07 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Dhaka Division, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Dhaka Division, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "MYS1105",
+    "text": "MobViolence event reported by Star (Malaysia). Location: Kuching, Sarawak, Malaysia. URL: https://www.thestar.com.my/news/nation/2024/04/02/firebomb-attack-on-kuching-kk-mart-outlet-very-039un-sarawakian039-says-state-deputy-minister",
+    "source_url": "https://www.thestar.com.my/news/nation/2024/04/02/firebomb-attack-on-kuching-kk-mart-outlet-very-039un-sarawakian039-says-state-deputy-minister",
+    "source_site": "Star (Malaysia)",
+    "event_date": "2024-03-31 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Kuching, Sarawak, Malaysia",
+        "location"
+      ],
+      [
+        "Malaysia",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Kuching, Sarawak, Malaysia"
+      ]
+    ]
+  },
+  {
+    "id": "IND152136",
+    "text": "ViolentDemonstration event reported by The Hindu. Location: Thanjavur, Tamil Nadu, India. URL: https://www.thehindu.com/news/cities/Tiruchirapalli/farmers-arrested-for-blocking-cholan-express-at-thanjavur-station/article67857318.ece",
+    "source_url": "https://www.thehindu.com/news/cities/Tiruchirapalli/farmers-arrested-for-blocking-cholan-express-at-thanjavur-station/article67857318.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-02-17 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Thanjavur, Tamil Nadu, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Thanjavur, Tamil Nadu, India"
+      ]
+    ]
+  },
+  {
+    "id": "CAO8608",
+    "text": "ExcessiveForceAgainstProtestors event reported by Mimi Mefo. Location: Yaound\u00e9, Centre, Cameroon. URL: https://mimimefoinfos.com/christians-of-true-church-of-god-released-after-days-in-detention/",
+    "source_url": "https://mimimefoinfos.com/christians-of-true-church-of-god-released-after-days-in-detention/",
+    "source_site": "Mimi Mefo",
+    "event_date": "2024-03-16 00:00:00",
+    "gold_entities": [
+      [
+        "ExcessiveForceAgainstProtestors",
+        "event_or_risk"
+      ],
+      [
+        "Yaound\u00e9, Centre, Cameroon",
+        "location"
+      ],
+      [
+        "Cameroon",
+        "location"
+      ],
+      [
+        "Christian Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ExcessiveForceAgainstProtestors",
+        "Yaound\u00e9, Centre, Cameroon"
+      ]
+    ]
+  },
+  {
+    "id": "SSD9829",
+    "text": "ArmedClash event reported by Radio Tamazuj. Location: Nyirol, Jonglei, South Sudan. URL: https://radiotamazuj.org/en/news/article/1-herdsman-and-2-attackers-killed-in-nyirol-cattle-raid",
+    "source_url": "https://radiotamazuj.org/en/news/article/1-herdsman-and-2-attackers-killed-in-nyirol-cattle-raid",
+    "source_site": "Radio Tamazuj",
+    "event_date": "2024-04-10 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Nyirol, Jonglei, South Sudan",
+        "location"
+      ],
+      [
+        "South Sudan",
+        "location"
+      ],
+      [
+        "Murle Ethnic Militia",
+        "actor"
+      ],
+      [
+        "Pastoralists",
+        "actor"
+      ],
+      [
+        "Lou Clan Militia",
+        "actor"
+      ],
+      [
+        "Nuer Ethnic Militia",
+        "actor"
+      ],
+      [
+        "Pastoralists",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Nyirol, Jonglei, South Sudan"
+      ]
+    ]
+  },
+  {
+    "id": "SAF20597",
+    "text": "ViolentDemonstration event reported by Diamond Fields Advertiser. Location: Griekwastad, Northern Cape, South Africa. URL: https://www.dfa.co.za/news/protesters-shut-down-section-of-n8-1cff6e06-6baa-4653-a903-ff59f881a33d/",
+    "source_url": "https://www.dfa.co.za/news/protesters-shut-down-section-of-n8-1cff6e06-6baa-4653-a903-ff59f881a33d/",
+    "source_site": "Diamond Fields Advertiser",
+    "event_date": "2024-02-12 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Griekwastad, Northern Cape, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Griekwastad, Northern Cape, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "PAK139691",
+    "text": "PeacefulProtest event reported by Dawn (Pakistan). Location: Taxila, Rawalpindi District, Pakistan. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=0699ce60-4234-43e1-8172-42977456e0d7&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BB0-JGF1-F00C-64N5-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr216&pditab=allpods&ecomp=twmyk&earg=sr216&prid=1d5e2aeb-6277-4394-8e0b-232715465214",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=0699ce60-4234-43e1-8172-42977456e0d7&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BB0-JGF1-F00C-64N5-00000-00&pdcontentcomponentid=410347&pdteaserkey=sr216&pditab=allpods&ecomp=twmyk&earg=sr216&prid=1d5e2aeb-6277-4394-8e0b-232715465214",
+    "source_site": "Dawn (Pakistan)",
+    "event_date": "2024-02-12 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Taxila, Rawalpindi District, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ],
+      [
+        "PTI: Pakistan Tehreek-i-Insaf",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Taxila, Rawalpindi District, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "JAM2420",
+    "text": "Attack event reported by Jamaica Gleaner. Location: Kingston, Jamaica. URL: https://jamaica-gleaner.com/article/news/20240324/25-y-o-charged-murder-man-found-tied-shot-hannah-street-kingston",
+    "source_url": "https://jamaica-gleaner.com/article/news/20240324/25-y-o-charged-murder-man-found-tied-shot-hannah-street-kingston",
+    "source_site": "Jamaica Gleaner",
+    "event_date": "2024-03-16 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Kingston, Jamaica",
+        "location"
+      ],
+      [
+        "Jamaica",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Kingston, Jamaica"
+      ]
+    ]
+  },
+  {
+    "id": "USA66017",
+    "text": "PeacefulProtest event reported by Fox Providence. Location: Cumberland, Rhode Island, United States. URL: https://www.wpri.com/news/local-news/blackstone-valley/ri-leaders-speak-out-after-white-supremacist-demonstration-in-cumberland/",
+    "source_url": "https://www.wpri.com/news/local-news/blackstone-valley/ri-leaders-speak-out-after-white-supremacist-demonstration-in-cumberland/",
+    "source_site": "Fox Providence",
+    "event_date": "2024-02-24 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Cumberland, Rhode Island, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "NSC: Nationalist Social Club",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Cumberland, Rhode Island, United States"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35364",
+    "text": "LootingOrPropertyDestruction event reported by Sun (Nigeria). Location: Brass, Bayelsa State, Nigeria. URL: https://sunnewsonline.com/again-navy-destroys-3-illegal-refining-sites-in-bayelsa/",
+    "source_url": "https://sunnewsonline.com/again-navy-destroys-3-illegal-refining-sites-in-bayelsa/",
+    "source_site": "Sun (Nigeria)",
+    "event_date": "2024-03-05 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Brass, Bayelsa State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Brass, Bayelsa State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "IND150132",
+    "text": "PeacefulProtest event reported by New Indian Express. Location: Chennai, India. URL: https://www.newindianexpress.com/cities/chennai/2024/Jan/23/conservancy-staff-strike-work-seeking-wage-hike-in-chennai",
+    "source_url": "https://www.newindianexpress.com/cities/chennai/2024/Jan/23/conservancy-staff-strike-work-seeking-wage-hike-in-chennai",
+    "source_site": "New Indian Express",
+    "event_date": "2024-01-23 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Chennai, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Chennai, India"
+      ]
+    ]
+  },
+  {
+    "id": "UKR169808",
+    "text": "ShellingOrArtilleryOrMissileAttack event reported by Centre for Information Resilience. Location: Shakhove, Donetsk Oblast, Ukraine. URL: https://eyesonrussia.org/event/UW43850",
+    "source_url": "https://eyesonrussia.org/event/UW43850",
+    "source_site": "Centre for Information Resilience",
+    "event_date": "2024-03-08 00:00:00",
+    "gold_entities": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "event_or_risk"
+      ],
+      [
+        "Shakhove, Donetsk Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "Shakhove, Donetsk Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "IND159568",
+    "text": "ViolentDemonstration event reported by Northeast Today. Location: Sipahijala, Tripura, India. URL: https://www.northeasttoday.in/2024/05/27/tripura-attempted-murder-case-filed-against-eight-for-attack-on-police-stations-officer-in-charge/",
+    "source_url": "https://www.northeasttoday.in/2024/05/27/tripura-attempted-murder-case-filed-against-eight-for-attack-on-police-stations-officer-in-charge/",
+    "source_site": "Northeast Today",
+    "event_date": "2024-05-26 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Sipahijala, Tripura, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Sipahijala, Tripura, India"
+      ]
+    ]
+  },
+  {
+    "id": "PNG837",
+    "text": "MobViolence event reported by Post Courier. Location: Central, Papua New Guinea. URL: https://www.postcourier.com.pg/police-attacked-over-marijuana-trade/",
+    "source_url": "https://www.postcourier.com.pg/police-attacked-over-marijuana-trade/",
+    "source_site": "Post Courier",
+    "event_date": "2024-03-31 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Central, Papua New Guinea",
+        "location"
+      ],
+      [
+        "Papua New Guinea",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Central, Papua New Guinea"
+      ]
+    ]
+  },
+  {
+    "id": "MMR85630",
+    "text": "ArmedClash event reported by Myanmar Now. Location: Hpapun Township, Kayin State, Myanmar. URL: https://myanmar-now.org/en/news/knla-and-allies-destroy-junta-army-base-in-karen-state/",
+    "source_url": "https://myanmar-now.org/en/news/knla-and-allies-destroy-junta-army-base-in-karen-state/",
+    "source_site": "Myanmar Now",
+    "event_date": "2024-12-11 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Hpapun Township, Kayin State, Myanmar",
+        "location"
+      ],
+      [
+        "Myanmar",
+        "location"
+      ],
+      [
+        "s Liberation Army\", ",
+        "actor"
+      ],
+      [
+        ", ",
+        "actor"
+      ],
+      [
+        ", ",
+        "actor"
+      ],
+      [
+        ", \"PDF: People",
+        "actor"
+      ],
+      [
+        "Military Forces of Myanmar",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Hpapun Township, Kayin State, Myanmar"
+      ]
+    ]
+  },
+  {
+    "id": "PAK140824",
+    "text": "PeacefulProtest event reported by Pakistan Press International. Location: Larkana, Pakistan. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=5c24771d-6c0a-4c43-b7c9-a3b040009ccd&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BP6-G031-F0B2-K0VF-00000-00&pdcontentcomponentid=317759&pdteaserkey=sr508&pditab=allpods&ecomp=hwmyk&earg=sr508&prid=d05eb4ee-1e49-4395-9969-f301ad423cb3",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=5c24771d-6c0a-4c43-b7c9-a3b040009ccd&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BP6-G031-F0B2-K0VF-00000-00&pdcontentcomponentid=317759&pdteaserkey=sr508&pditab=allpods&ecomp=hwmyk&earg=sr508&prid=d05eb4ee-1e49-4395-9969-f301ad423cb3",
+    "source_site": "Pakistan Press International",
+    "event_date": "2024-03-31 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Larkana, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Larkana, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "IND153143",
+    "text": "OtherStrategicDevelopment event reported by Greater Kashmir. Location: Leh, Ladakh, India. URL: https://www.greaterkashmir.com/ladakh/renowned-environmental-activist-sonam-wangchuks-fast-enters-15th-day/",
+    "source_url": "https://www.greaterkashmir.com/ladakh/renowned-environmental-activist-sonam-wangchuks-fast-enters-15th-day/",
+    "source_site": "Greater Kashmir",
+    "event_date": "2024-03-06 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Leh, Ladakh, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Leh, Ladakh, India"
+      ]
+    ]
+  },
+  {
+    "id": "USA64984",
+    "text": "LootingOrPropertyDestruction event reported by WUSA9. Location: Arlington County, Virginia, United States. URL: https://www.wusa9.com/article/news/local/virginia/2-men-charged-stealing-down-pride-flags-multiple-times/65-fb0d1cc5-06cd-492d-b568-816bc9ce2d0b",
+    "source_url": "https://www.wusa9.com/article/news/local/virginia/2-men-charged-stealing-down-pride-flags-multiple-times/65-fb0d1cc5-06cd-492d-b568-816bc9ce2d0b",
+    "source_site": "WUSA9",
+    "event_date": "2024-01-26 00:00:00",
+    "gold_entities": [
+      [
+        "LootingOrPropertyDestruction",
+        "event_or_risk"
+      ],
+      [
+        "Arlington County, Virginia, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "LootingOrPropertyDestruction",
+        "Arlington County, Virginia, United States"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35705",
+    "text": "AbductionOrForcedDisappearance event reported by Vanguard (Nigeria). Location: Ikara, Kaduna State, Nigeria. URL: https://www.vanguardngr.com/2024/03/police-rescue-kidnap-victim-in-kaduna/",
+    "source_url": "https://www.vanguardngr.com/2024/03/police-rescue-kidnap-victim-in-kaduna/",
+    "source_site": "Vanguard (Nigeria)",
+    "event_date": "2024-03-24 00:00:00",
+    "gold_entities": [
+      [
+        "AbductionOrForcedDisappearance",
+        "event_or_risk"
+      ],
+      [
+        "Ikara, Kaduna State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Kaduna Communal Militia",
+        "actor"
+      ],
+      [
+        "Civilians",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AbductionOrForcedDisappearance",
+        "Ikara, Kaduna State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13618",
+    "text": "PeacefulProtest event reported by Star (Kenya). Location: Nairobi, Kenya. URL: https://www.the-star.co.ke/news/realtime/2024-02-07-implement-delayed-african-court-rulings-ogiek-and-endorois-tell-state/",
+    "source_url": "https://www.the-star.co.ke/news/realtime/2024-02-07-implement-delayed-african-court-rulings-ogiek-and-endorois-tell-state/",
+    "source_site": "Star (Kenya)",
+    "event_date": "2024-02-06 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Nairobi, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ],
+      [
+        "Endorois Ethnic Group",
+        "actor"
+      ],
+      [
+        "Ogiek Ethnic Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Nairobi, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "KEN16525",
+    "text": "PeacefulProtest event reported by Citizen (Kenya). Location: Kirinyaga County, Kenya. URL: https://www.citizen.digital/news/kirinyaga-residents-threaten-to-bar-miraa-vehicles-from-mwea-embu-highway-over-rampant-accidents-n353975",
+    "source_url": "https://www.citizen.digital/news/kirinyaga-residents-threaten-to-bar-miraa-vehicles-from-mwea-embu-highway-over-rampant-accidents-n353975",
+    "source_site": "Citizen (Kenya)",
+    "event_date": "2024-11-27 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Kirinyaga County, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Kirinyaga County, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34790",
+    "text": "OtherStrategicDevelopment event reported by Guardian (Nigeria). Location: Owerri West, Imo State, Nigeria. URL: https://guardian.ng/news/police-raid-kidnappers-den-in-imo-recover-four-corpses-2/",
+    "source_url": "https://guardian.ng/news/police-raid-kidnappers-den-in-imo-recover-four-corpses-2/",
+    "source_site": "Guardian (Nigeria)",
+    "event_date": "2024-01-30 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Owerri West, Imo State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Owerri West, Imo State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "IND151074",
+    "text": "AbductionOrForcedDisappearance event reported by Northeast Now. Location: Imphal, Imphal West, Manipur, India. URL: https://nenow.in/north-east-news/amsu-president-kidnapped-at-manipur-university-gate.html",
+    "source_url": "https://nenow.in/north-east-news/amsu-president-kidnapped-at-manipur-university-gate.html",
+    "source_site": "Northeast Now",
+    "event_date": "2024-02-20 00:00:00",
+    "gold_entities": [
+      [
+        "AbductionOrForcedDisappearance",
+        "event_or_risk"
+      ],
+      [
+        "Imphal, Imphal West, Manipur, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "UNLF-P: United National Liberation Front-Pambei",
+        "actor"
+      ],
+      [
+        "Civilians",
+        "actor"
+      ],
+      [
+        "Meitei Ethnic Group",
+        "actor"
+      ],
+      [
+        "Students",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AbductionOrForcedDisappearance",
+        "Imphal, Imphal West, Manipur, India"
+      ]
+    ]
+  },
+  {
+    "id": "MZM3694",
+    "text": "Attack event reported by Lusa. Location: Cabo Delgado Province, Mozambique. URL: https://clubofmozambique.com/news/mozambique-fresh-rebel-attacks-bid-to-counter-government-propaganda-analyst-251976/",
+    "source_url": "https://clubofmozambique.com/news/mozambique-fresh-rebel-attacks-bid-to-counter-government-propaganda-analyst-251976/",
+    "source_site": "Lusa",
+    "event_date": "2024-01-07 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Cabo Delgado Province, Mozambique",
+        "location"
+      ],
+      [
+        "Mozambique",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Cabo Delgado Province, Mozambique"
+      ]
+    ]
+  },
+  {
+    "id": "USA65892",
+    "text": "PeacefulProtest event reported by Ventura County Star. Location: San Buenaventura (Ventura), Ventura County, California, United States. URL: https://www.vcstar.com/story/news/local/2024/02/22/group-seeks-hate-crime-charge-in-to-protestor-paul-kesslers-death/72700635007/",
+    "source_url": "https://www.vcstar.com/story/news/local/2024/02/22/group-seeks-hate-crime-charge-in-to-protestor-paul-kesslers-death/72700635007/",
+    "source_site": "Ventura County Star",
+    "event_date": "2024-02-22 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "San Buenaventura (Ventura), Ventura County, California, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "Jewish Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Teachers",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "San Buenaventura (Ventura), Ventura County, California, United States"
+      ]
+    ]
+  },
+  {
+    "id": "USA67940",
+    "text": "PeacefulProtest event reported by NBC Local 33. Location: Baton Rouge, Louisiana, United States. URL: https://www.brproud.com/news/local-news/baton-rouge/louisiana-group-that-helps-girls-with-incarcerated-parents-gather-at-capitol-push-for-legislation/?utm_source=t.co&utm_campaign=socialflow&utm_medium=referral",
+    "source_url": "https://www.brproud.com/news/local-news/baton-rouge/louisiana-group-that-helps-girls-with-incarcerated-parents-gather-at-capitol-push-for-legislation/?utm_source=t.co&utm_campaign=socialflow&utm_medium=referral",
+    "source_site": "NBC Local 33",
+    "event_date": "2024-04-24 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Baton Rouge, Louisiana, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "African American Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Women",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Baton Rouge, Louisiana, United States"
+      ]
+    ]
+  },
+  {
+    "id": "GBR7078",
+    "text": "PeacefulProtest event reported by The National. Location: City of Edinburgh, Scotland, United Kingdom. URL: https://www.thenational.scot/news/24073840.protesters-block-entrance-baillie-gifford-israel-investments/",
+    "source_url": "https://www.thenational.scot/news/24073840.protesters-block-entrance-baillie-gifford-israel-investments/",
+    "source_site": "The National",
+    "event_date": "2024-01-25 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "City of Edinburgh, Scotland, United Kingdom",
+        "location"
+      ],
+      [
+        "United Kingdom",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "PSC: Palestine Solidarity Campaign",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "City of Edinburgh, Scotland, United Kingdom"
+      ]
+    ]
+  },
+  {
+    "id": "IND152162",
+    "text": "MobViolence event reported by Chandigarh Tribune. Location: New Delhi, Delhi, India. URL: https://www.tribuneindia.com/news/delhi/abvp-left-backed-groups-clash-at-jnu-vice-chancellor-warns-of-strict-action-596111",
+    "source_url": "https://www.tribuneindia.com/news/delhi/abvp-left-backed-groups-clash-at-jnu-vice-chancellor-warns-of-strict-action-596111",
+    "source_site": "Chandigarh Tribune",
+    "event_date": "2024-02-29 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "New Delhi, Delhi, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "New Delhi, Delhi, India"
+      ]
+    ]
+  },
+  {
+    "id": "UKR146941",
+    "text": "ShellingOrArtilleryOrMissileAttack event reported by Centre for Information Resilience. Location: Kharkiv, Kharkiv Oblast, Ukraine. URL: https://eyesonrussia.org/event/event_16179_1704837600000",
+    "source_url": "https://eyesonrussia.org/event/event_16179_1704837600000",
+    "source_site": "Centre for Information Resilience",
+    "event_date": "2024-01-10 00:00:00",
+    "gold_entities": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "event_or_risk"
+      ],
+      [
+        "Kharkiv, Kharkiv Oblast, Ukraine",
+        "location"
+      ],
+      [
+        "Ukraine",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ShellingOrArtilleryOrMissileAttack",
+        "Kharkiv, Kharkiv Oblast, Ukraine"
+      ]
+    ]
+  },
+  {
+    "id": "PHL16565",
+    "text": "PeacefulProtest event reported by Manila Times. Location: Manila, Philippines. URL: https://www.manilatimes.net/2024/03/02/news/national/gabriela-ushers-in-womens-month-with-protest-rally/1934906",
+    "source_url": "https://www.manilatimes.net/2024/03/02/news/national/gabriela-ushers-in-womens-month-with-protest-rally/1934906",
+    "source_site": "Manila Times",
+    "event_date": "2024-03-01 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Manila, Philippines",
+        "location"
+      ],
+      [
+        "Philippines",
+        "location"
+      ],
+      [
+        "GABRIELA: General Assembly Binding Women for Reforms, Integrity, Equality, Leadership, and Action",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Women",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Manila, Philippines"
+      ]
+    ]
+  },
+  {
+    "id": "GBR7917",
+    "text": "PeacefulProtest event reported by The National. Location: Glasgow, Scotland, United Kingdom. URL: https://www.thenational.scot/news/24680419.pictures-pro-palestine-group-marches-bbc-glasgow/?ref=rss",
+    "source_url": "https://www.thenational.scot/news/24680419.pictures-pro-palestine-group-marches-bbc-glasgow/?ref=rss",
+    "source_site": "The National",
+    "event_date": "2024-10-26 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Glasgow, Scotland, United Kingdom",
+        "location"
+      ],
+      [
+        "United Kingdom",
+        "location"
+      ],
+      [
+        "PSC: Palestine Solidarity Campaign",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Glasgow, Scotland, United Kingdom"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35681",
+    "text": "Attack event reported by Nigeria Punch. Location: Rafi, Niger State, Nigeria. URL: https://punchng.com/two-monarchs-28-others-killed-in-niger-seven-in-benue/?utm_source=top-story&utm_medium=web",
+    "source_url": "https://punchng.com/two-monarchs-28-others-killed-in-niger-seven-in-benue/?utm_source=top-story&utm_medium=web",
+    "source_site": "Nigeria Punch",
+    "event_date": "2024-03-21 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Rafi, Niger State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Rafi, Niger State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "PAK139016",
+    "text": "ArmedClash event reported by Sangar Publication. Location: Panjgur District, Balochistan, Pakistan. URL: https://dailysangar.online/?p=43659",
+    "source_url": "https://dailysangar.online/?p=43659",
+    "source_site": "Sangar Publication",
+    "event_date": "2024-01-31 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Panjgur District, Balochistan, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ],
+      [
+        "Baloch Separatists",
+        "actor"
+      ],
+      [
+        "Military Forces of Pakistan",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Panjgur District, Balochistan, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "AUS2675",
+    "text": "PeacefulProtest event reported by Q News. Location: Orange, Orange City Council, New South Wales, Australia. URL: https://qnews.com.au/nsws-colour-city-orange-just-hosted-its-first-ever-pride/",
+    "source_url": "https://qnews.com.au/nsws-colour-city-orange-just-hosted-its-first-ever-pride/",
+    "source_site": "Q News",
+    "event_date": "2024-03-23 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Orange, Orange City Council, New South Wales, Australia",
+        "location"
+      ],
+      [
+        "Australia",
+        "location"
+      ],
+      [
+        "LGBTQ+",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Orange, Orange City Council, New South Wales, Australia"
+      ]
+    ]
+  },
+  {
+    "id": "IND154205",
+    "text": "MobViolence event reported by New Indian Express. Location: Yadgir, Karnataka, India. URL: https://www.newindianexpress.com/states/karnataka/2024/Mar/22/karnataka-youth-complains-of-assault-minor-girl-alleges-kidnap",
+    "source_url": "https://www.newindianexpress.com/states/karnataka/2024/Mar/22/karnataka-youth-complains-of-assault-minor-girl-alleges-kidnap",
+    "source_site": "New Indian Express",
+    "event_date": "2024-03-18 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Yadgir, Karnataka, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Yadgir, Karnataka, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND148670",
+    "text": "Attack event reported by Pioneer (India). Location: Bijapur, Chhattisgarh, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=6928f923-0029-4758-a691-d49e50c0fefd&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B41-85K1-F12F-F4VG-00000-00&pdcontentcomponentid=332051&pdteaserkey=sr371&pditab=allpods&ecomp=twmyk&earg=sr371&prid=fec07e14-a0bb-49ac-a9a0-f811309a49ae",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=6928f923-0029-4758-a691-d49e50c0fefd&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6B41-85K1-F12F-F4VG-00000-00&pdcontentcomponentid=332051&pdteaserkey=sr371&pditab=allpods&ecomp=twmyk&earg=sr371&prid=fec07e14-a0bb-49ac-a9a0-f811309a49ae",
+    "source_site": "Pioneer (India)",
+    "event_date": "2024-01-15 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Bijapur, Chhattisgarh, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Bijapur, Chhattisgarh, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND150977",
+    "text": "MobViolence event reported by Sentinel (India). Location: Assam, India. URL: https://www.sentinelassam.com/north-east-india-news/assam-news/van-smuggling-cattle-torched-in-morigaon-assam",
+    "source_url": "https://www.sentinelassam.com/north-east-india-news/assam-news/van-smuggling-cattle-torched-in-morigaon-assam",
+    "source_site": "Sentinel (India)",
+    "event_date": "2024-02-11 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Assam, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Assam, India"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13451",
+    "text": "PeacefulProtest event reported by Kenya Standard. Location: Malindi, Kilifi County, Kenya. URL: https://www.standardmedia.co.ke/politics/article/2001488528/opposition-supporters-celebrate-railas-79-birthday-with-clear-cake-messages-to-ruto",
+    "source_url": "https://www.standardmedia.co.ke/politics/article/2001488528/opposition-supporters-celebrate-railas-79-birthday-with-clear-cake-messages-to-ruto",
+    "source_site": "Kenya Standard",
+    "event_date": "2024-01-07 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Malindi, Kilifi County, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ],
+      [
+        "Azimio la Umoja One Kenya Coalition Party",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Malindi, Kilifi County, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "IND152965",
+    "text": "ProtestWithIntervention event reported by Times of India. Location: Chandigarh, India. URL: https://timesofindia.indiatimes.com/city/chandigarh/20-protesters-booked-for-gathering-and-protesting-outside-cm-house-in-chandigarh/articleshow/108313350.cms",
+    "source_url": "https://timesofindia.indiatimes.com/city/chandigarh/20-protesters-booked-for-gathering-and-protesting-outside-cm-house-in-chandigarh/articleshow/108313350.cms",
+    "source_site": "Times of India",
+    "event_date": "2024-03-06 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Chandigarh, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Chandigarh, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND152557",
+    "text": "PeacefulProtest event reported by The Hindu. Location: Kochi, Ernakulam, Kerala, India. URL: https://www.thehindu.com/news/national/kerala/in-late-night-drama-in-kothamangalam-police-arrest-congress-legislator-and-dcc-president/article67915661.ece",
+    "source_url": "https://www.thehindu.com/news/national/kerala/in-late-night-drama-in-kothamangalam-police-arrest-congress-legislator-and-dcc-president/article67915661.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-03-05 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Kochi, Ernakulam, Kerala, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "INC: Indian National Congress",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Kochi, Ernakulam, Kerala, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35788",
+    "text": "AbductionOrForcedDisappearance event reported by Daily Trust (Nigeria). Location: Katari, Kachia, Kaduna State, Nigeria. URL: https://dailytrust.com/bandits-kill-7-abduct-13-family-members-in-kaduna-fct/",
+    "source_url": "https://dailytrust.com/bandits-kill-7-abduct-13-family-members-in-kaduna-fct/",
+    "source_site": "Daily Trust (Nigeria)",
+    "event_date": "2024-04-03 00:00:00",
+    "gold_entities": [
+      [
+        "AbductionOrForcedDisappearance",
+        "event_or_risk"
+      ],
+      [
+        "Katari, Kachia, Kaduna State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Kaduna Communal Militia",
+        "actor"
+      ],
+      [
+        "Civilians",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "AbductionOrForcedDisappearance",
+        "Katari, Kachia, Kaduna State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "BGD26957",
+    "text": "PeacefulProtest event reported by United News of Bangladesh. Location: Cumilla, Bangladesh. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=085baf50-0df4-4738-975f-7ead8e82de06&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BK2-7901-JCH9-G33X-00000-00&pdcontentcomponentid=400851&pdteaserkey=sr1&pditab=allpods&ecomp=gwmyk&earg=sr1&prid=b485dba0-afe9-436d-b78f-770a0be516e7",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=085baf50-0df4-4738-975f-7ead8e82de06&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BK2-7901-JCH9-G33X-00000-00&pdcontentcomponentid=400851&pdteaserkey=sr1&pditab=allpods&ecomp=gwmyk&earg=sr1&prid=b485dba0-afe9-436d-b78f-770a0be516e7",
+    "source_site": "United News of Bangladesh",
+    "event_date": "2024-03-16 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Cumilla, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Cumilla, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "SUD25990",
+    "text": "Attack event reported by Radio Tamazuj. Location: Abyei, Sudan. URL: https://radiotamazuj.org/en/news/article/troika-condemns-abyei-violence-mourns-killed-aid-workers",
+    "source_url": "https://radiotamazuj.org/en/news/article/troika-condemns-abyei-violence-mourns-killed-aid-workers",
+    "source_site": "Radio Tamazuj",
+    "event_date": "2024-02-04 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Abyei, Sudan",
+        "location"
+      ],
+      [
+        "Sudan",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Abyei, Sudan"
+      ]
+    ]
+  },
+  {
+    "id": "IND152130",
+    "text": "ProtestWithIntervention event reported by Outlook (India). Location: West Bengal, India. URL: https://www.outlookindia.com/national/west-bengal-teaching-job-aspirants-protest-in-salt-lake-detained",
+    "source_url": "https://www.outlookindia.com/national/west-bengal-teaching-job-aspirants-protest-in-salt-lake-detained",
+    "source_site": "Outlook (India)",
+    "event_date": "2024-02-27 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "West Bengal, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Teachers",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "West Bengal, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND161261",
+    "text": "PeacefulProtest event reported by Asian News International. Location: Mumbai, Maharashtra, India. URL: Nexis",
+    "source_url": "Nexis",
+    "source_site": "Asian News International",
+    "event_date": "2024-07-02 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Mumbai, Maharashtra, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "BJP: Bharatiya Janata Party",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Mumbai, Maharashtra, India"
+      ]
+    ]
+  },
+  {
+    "id": "BGD29508",
+    "text": "PeacefulProtest event reported by United News of Bangladesh. Location: Gazipur District, Bangladesh. URL: Nexis",
+    "source_url": "Nexis",
+    "source_site": "United News of Bangladesh",
+    "event_date": "2024-11-28 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Gazipur District, Bangladesh",
+        "location"
+      ],
+      [
+        "Bangladesh",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Gazipur District, Bangladesh"
+      ]
+    ]
+  },
+  {
+    "id": "PAK139680",
+    "text": "PeacefulProtest event reported by Pakistan Press International. Location: Sujawal, Pakistan. URL: https://advance.lexis.com/search/?pdmfid=1515660&crid=cb573414-67ae-5a7a-abb1-877e4699cd98&pdsearchterms=Pakistan+AND+violence+OR+attack+OR+ambush!+OR+battl!+OR+clash!+OR+conflict+OR+raid!+OR+riot!+OR+demonstrat!+OR+protest!+OR+unrest+OR+kill!+OR+shoot!+OR+bomb!+OR+explosi!+OR+wound!+OR+injur!+OR+casualt!+OR+displace!+OR+march!+OR+demo!+OR+mob+OR+procession+OR+dharna+OR+lathi+OR+vigilant!+OR+lynch!+OR+rape!+OR+raping+OR+extrajudicial+OR+strik!+AND+NOT+Bangladesh+OR+Sri+Lanka+OR+cricket+OR+%E2%80%9Cstock+exchange%E2%80%9D&pdstartin=hlct%3A1%3A1&pdcaseshlctselectedbyuser=false&pdtypeofsearch=searchboxclick&pdsearchtype=SearchBox&pdtimeline=17%2F01%2F2022to18%2F01%2F2022%7Cdatebetween&pdoriginatingpage=BisNexisPowerSearch&pdqttype=or&pdpsf=&pdquerytemplateid=&indexsearch=false&ecomp=5dbhkkk&earg=pdpsf&prid=7bc602f6-5d19-7837-92b8-4bbcb768e29f",
+    "source_url": "https://advance.lexis.com/search/?pdmfid=1515660&crid=cb573414-67ae-5a7a-abb1-877e4699cd98&pdsearchterms=Pakistan+AND+violence+OR+attack+OR+ambush!+OR+battl!+OR+clash!+OR+conflict+OR+raid!+OR+riot!+OR+demonstrat!+OR+protest!+OR+unrest+OR+kill!+OR+shoot!+OR+bomb!+OR+explosi!+OR+wound!+OR+injur!+OR+casualt!+OR+displace!+OR+march!+OR+demo!+OR+mob+OR+procession+OR+dharna+OR+lathi+OR+vigilant!+OR+lynch!+OR+rape!+OR+raping+OR+extrajudicial+OR+strik!+AND+NOT+Bangladesh+OR+Sri+Lanka+OR+cricket+OR+%E2%80%9Cstock+exchange%E2%80%9D&pdstartin=hlct%3A1%3A1&pdcaseshlctselectedbyuser=false&pdtypeofsearch=searchboxclick&pdsearchtype=SearchBox&pdtimeline=17%2F01%2F2022to18%2F01%2F2022%7Cdatebetween&pdoriginatingpage=BisNexisPowerSearch&pdqttype=or&pdpsf=&pdquerytemplateid=&indexsearch=false&ecomp=5dbhkkk&earg=pdpsf&prid=7bc602f6-5d19-7837-92b8-4bbcb768e29f",
+    "source_site": "Pakistan Press International",
+    "event_date": "2024-02-09 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Sujawal, Pakistan",
+        "location"
+      ],
+      [
+        "Pakistan",
+        "location"
+      ],
+      [
+        "PTI: Pakistan Tehreek-i-Insaf",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Sujawal, Pakistan"
+      ]
+    ]
+  },
+  {
+    "id": "IND149334",
+    "text": "MobViolence event reported by Hindustan Times. Location: Nadia, West Bengal, India. URL: https://www.hindustantimes.com/cities/kolkata-news/cops-tied-to-tree-heckled-by-mob-in-west-bengal-village-eight-arrested-101706789827671.html",
+    "source_url": "https://www.hindustantimes.com/cities/kolkata-news/cops-tied-to-tree-heckled-by-mob-in-west-bengal-village-eight-arrested-101706789827671.html",
+    "source_site": "Hindustan Times",
+    "event_date": "2024-02-01 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Nadia, West Bengal, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Nadia, West Bengal, India"
+      ]
+    ]
+  },
+  {
+    "id": "MYS1053",
+    "text": "PeacefulProtest event reported by Malaysiakini. Location: Selangor, Malaysia. URL: https://www.malaysiakini.com/news/693862",
+    "source_url": "https://www.malaysiakini.com/news/693862",
+    "source_site": "Malaysiakini",
+    "event_date": "2024-01-21 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Selangor, Malaysia",
+        "location"
+      ],
+      [
+        "Malaysia",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Selangor, Malaysia"
+      ]
+    ]
+  },
+  {
+    "id": "MZM4668",
+    "text": "ViolentDemonstration event reported by AFP. Location: Maputo, Mozambique. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=b058480c-ed52-47a7-91ad-fddd7a412708&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6DVJ-XR43-RSGT-7289-00000-00&pdcontentcomponentid=10903&pdteaserkey=sr3&pditab=allpods&ecomp=hc-yk&earg=sr3&prid=0db9a64b-a37e-4fa8-a3a4-d585ecdd19b6",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=b058480c-ed52-47a7-91ad-fddd7a412708&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6DVJ-XR43-RSGT-7289-00000-00&pdcontentcomponentid=10903&pdteaserkey=sr3&pditab=allpods&ecomp=hc-yk&earg=sr3&prid=0db9a64b-a37e-4fa8-a3a4-d585ecdd19b6",
+    "source_site": "AFP",
+    "event_date": "2025-01-09 00:00:00",
+    "gold_entities": [
+      [
+        "ViolentDemonstration",
+        "event_or_risk"
+      ],
+      [
+        "Maputo, Mozambique",
+        "location"
+      ],
+      [
+        "Mozambique",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ViolentDemonstration",
+        "Maputo, Mozambique"
+      ]
+    ]
+  },
+  {
+    "id": "HTI5921",
+    "text": "Arrest event reported by Trinidad and Tobago Guardian. Location: Cap-Haitien, Haiti. URL: https://www.guardian.co.tt/news/us-coast-guard-rescues-33-migrants-from-sinking-vessel-off-haiti-6.2.1908316.87ead86668",
+    "source_url": "https://www.guardian.co.tt/news/us-coast-guard-rescues-33-migrants-from-sinking-vessel-off-haiti-6.2.1908316.87ead86668",
+    "source_site": "Trinidad and Tobago Guardian",
+    "event_date": "2024-01-22 00:00:00",
+    "gold_entities": [
+      [
+        "Arrest",
+        "event_or_risk"
+      ],
+      [
+        "Cap-Haitien, Haiti",
+        "location"
+      ],
+      [
+        "Haiti",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Arrest",
+        "Cap-Haitien, Haiti"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13907",
+    "text": "OtherStrategicDevelopment event reported by Kenyans.co. Location: Mtito Andei, Makueni, Kenya. URL: https://www.kenyans.co.ke/news/98466-cs-kindiki-issues-counties-2-week-ultimatum-resolve-mtito-andei-dispute",
+    "source_url": "https://www.kenyans.co.ke/news/98466-cs-kindiki-issues-counties-2-week-ultimatum-resolve-mtito-andei-dispute",
+    "source_site": "Kenyans.co",
+    "event_date": "2024-03-11 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Mtito Andei, Makueni, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Mtito Andei, Makueni, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "UGA9137",
+    "text": "PeacefulProtest event reported by Daily Monitor (Uganda). Location: Kampala, Uganda. URL: https://www.monitor.co.ug/uganda/news/national/wetland-eviction-victims-storm-nema-offices-4695568",
+    "source_url": "https://www.monitor.co.ug/uganda/news/national/wetland-eviction-victims-storm-nema-offices-4695568",
+    "source_site": "Daily Monitor (Uganda)",
+    "event_date": "2024-07-18 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Kampala, Uganda",
+        "location"
+      ],
+      [
+        "Uganda",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Kampala, Uganda"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35292",
+    "text": "PeacefulProtest event reported by Nigeria Punch. Location: Markurdi, Benue State, Nigeria. URL: https://punchng.com/economic-hardship-benue-workers-protest-high-cost-of-living/",
+    "source_url": "https://punchng.com/economic-hardship-benue-workers-protest-high-cost-of-living/",
+    "source_site": "Nigeria Punch",
+    "event_date": "2024-02-27 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Markurdi, Benue State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "NLC: Nigeria Labour Congress",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Markurdi, Benue State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "IND156779",
+    "text": "PeacefulProtest event reported by India Today. Location: Assam, India. URL: https://www.indiatodayne.in/assam/video/assam-deadly-road-causes-fatal-accidents-locals-demand-footbridge-994974-2024-04-30",
+    "source_url": "https://www.indiatodayne.in/assam/video/assam-deadly-road-causes-fatal-accidents-locals-demand-footbridge-994974-2024-04-30",
+    "source_site": "India Today",
+    "event_date": "2024-04-30 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Assam, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Assam, India"
+      ]
+    ]
+  },
+  {
+    "id": "SAF20792",
+    "text": "ProtestWithIntervention event reported by SABC News. Location: Bloemfontein, Mangaung Metropolitan Municipality, South Africa. URL: https://www.sabcnews.com/sabcnews/protest-invasion-bloemfontein-intensifies/",
+    "source_url": "https://www.sabcnews.com/sabcnews/protest-invasion-bloemfontein-intensifies/",
+    "source_site": "SABC News",
+    "event_date": "2024-03-05 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Bloemfontein, Mangaung Metropolitan Municipality, South Africa",
+        "location"
+      ],
+      [
+        "South Africa",
+        "location"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Bloemfontein, Mangaung Metropolitan Municipality, South Africa"
+      ]
+    ]
+  },
+  {
+    "id": "IND147389",
+    "text": "PeacefulProtest event reported by Amar Ujala. Location: Dehradun, Uttarakhand, India. URL: https://www.amarujala.com/dehradun/uttarakhand-roadways-and-public-transport-stop-against-hit-and-run-law-public-worried-2024-01-01?pageId=1",
+    "source_url": "https://www.amarujala.com/dehradun/uttarakhand-roadways-and-public-transport-stop-against-hit-and-run-law-public-worried-2024-01-01?pageId=1",
+    "source_site": "Amar Ujala",
+    "event_date": "2024-01-01 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Dehradun, Uttarakhand, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "AIMTC: All India Motor Transport Congress",
+        "actor"
+      ],
+      [
+        "Labor Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Dehradun, Uttarakhand, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34409",
+    "text": "Attack event reported by Nigeria Punch. Location: Jos, Jos North, Plateau State, Nigeria. URL: https://punchng.com/gunmen-kill-one-kidnap-two-in-plateau-community/",
+    "source_url": "https://punchng.com/gunmen-kill-one-kidnap-two-in-plateau-community/",
+    "source_site": "Nigeria Punch",
+    "event_date": "2024-01-02 00:00:00",
+    "gold_entities": [
+      [
+        "Attack",
+        "event_or_risk"
+      ],
+      [
+        "Jos, Jos North, Plateau State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "Attack",
+        "Jos, Jos North, Plateau State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "KEN14021",
+    "text": "MobViolence event reported by Daily Nation (Kenya). Location: Bondo, Siaya County, Kenya. URL: https://nation.africa/kenya/news/politics/rowdy-youths-deface-uda-office--4571528",
+    "source_url": "https://nation.africa/kenya/news/politics/rowdy-youths-deface-uda-office--4571528",
+    "source_site": "Daily Nation (Kenya)",
+    "event_date": "2024-03-27 00:00:00",
+    "gold_entities": [
+      [
+        "MobViolence",
+        "event_or_risk"
+      ],
+      [
+        "Bondo, Siaya County, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "MobViolence",
+        "Bondo, Siaya County, Kenya"
+      ]
+    ]
+  },
+  {
+    "id": "IND152178",
+    "text": "PeacefulProtest event reported by New Indian Express. Location: Bhubaneswar Municipal Corporation, Odisha, India. URL: https://www.newindianexpress.com/states/odisha/2024/Feb/26/odisha-abvp-congress-seek-ministers-resignation-over-paper-leak-holds-protest",
+    "source_url": "https://www.newindianexpress.com/states/odisha/2024/Feb/26/odisha-abvp-congress-seek-ministers-resignation-over-paper-leak-holds-protest",
+    "source_site": "New Indian Express",
+    "event_date": "2024-02-25 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Bhubaneswar Municipal Corporation, Odisha, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "ABVP: Akhil Bharatiya Vidyarthi Parishad",
+        "actor"
+      ],
+      [
+        "Hindu Group",
+        "actor"
+      ],
+      [
+        "IYC: Indian Youth Congress",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Students",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Bhubaneswar Municipal Corporation, Odisha, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND153613",
+    "text": "OtherStrategicDevelopment event reported by Free Press Journal (India). Location: Jamnagar, Gujarat, India. URL: https://advance.lexis.com/document/?pdmfid=1519360&crid=94c0e110-ace6-40cb-94a2-fe571ed494d0&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BHB-FGW1-JB5M-W1V8-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr384&pditab=allpods&ecomp=gwmyk&earg=sr384&prid=ff704ff6-a3d5-43af-9ac4-4adc6db556b2",
+    "source_url": "https://advance.lexis.com/document/?pdmfid=1519360&crid=94c0e110-ace6-40cb-94a2-fe571ed494d0&pddocfullpath=%2Fshared%2Fdocument%2Fnews%2Furn%3AcontentItem%3A6BHB-FGW1-JB5M-W1V8-00000-00&pdcontentcomponentid=404871&pdteaserkey=sr384&pditab=allpods&ecomp=gwmyk&earg=sr384&prid=ff704ff6-a3d5-43af-9ac4-4adc6db556b2",
+    "source_site": "Free Press Journal (India)",
+    "event_date": "2024-03-08 00:00:00",
+    "gold_entities": [
+      [
+        "OtherStrategicDevelopment",
+        "event_or_risk"
+      ],
+      [
+        "Jamnagar, Gujarat, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "OtherStrategicDevelopment",
+        "Jamnagar, Gujarat, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND148307",
+    "text": "DisruptedWeaponsUse event reported by Sangai Express. Location: Kakching tehsil, Kakching, Manipur, India. URL: https://www.thesangaiexpress.com//Encyc/2024/1/8/IMPHAL-Jan-8-A-combined-team-of-Kakching-district-commando-and-BSF-personnel-recovered-and-seized-arms-and-a.html",
+    "source_url": "https://www.thesangaiexpress.com//Encyc/2024/1/8/IMPHAL-Jan-8-A-combined-team-of-Kakching-district-commando-and-BSF-personnel-recovered-and-seized-arms-and-a.html",
+    "source_site": "Sangai Express",
+    "event_date": "2024-01-08 00:00:00",
+    "gold_entities": [
+      [
+        "DisruptedWeaponsUse",
+        "event_or_risk"
+      ],
+      [
+        "Kakching tehsil, Kakching, Manipur, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "DisruptedWeaponsUse",
+        "Kakching tehsil, Kakching, Manipur, India"
+      ]
+    ]
+  },
+  {
+    "id": "NIG34723",
+    "text": "ArmedClash event reported by Vanguard (Nigeria). Location: Bwari, Federal Capital Territory, Nigeria. URL: https://www.vanguardngr.com/2024/01/police-neutralise-wanted-bwari-abuja-kingpin-gang-members/",
+    "source_url": "https://www.vanguardngr.com/2024/01/police-neutralise-wanted-bwari-abuja-kingpin-gang-members/",
+    "source_site": "Vanguard (Nigeria)",
+    "event_date": "2024-01-26 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Bwari, Federal Capital Territory, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Police Forces of Nigeria",
+        "actor"
+      ],
+      [
+        "Unidentified Armed Group",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Bwari, Federal Capital Territory, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "NIG35434",
+    "text": "ArmedClash event reported by Sun (Nigeria). Location: Ibeshe, Lagos State, Nigeria. URL: https://sunnewsonline.com/many-feared-killed-in-lagos-communal-clash/",
+    "source_url": "https://sunnewsonline.com/many-feared-killed-in-lagos-communal-clash/",
+    "source_site": "Sun (Nigeria)",
+    "event_date": "2024-03-05 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Ibeshe, Lagos State, Nigeria",
+        "location"
+      ],
+      [
+        "Nigeria",
+        "location"
+      ],
+      [
+        "Riverside Communal Militia",
+        "actor"
+      ],
+      [
+        "Seaside Communal Militia",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Ibeshe, Lagos State, Nigeria"
+      ]
+    ]
+  },
+  {
+    "id": "AFG67672",
+    "text": "ArmedClash event reported by Hasht-e Subh. Location: Dand wa Patan, Paktia Province, Afghanistan. URL: https://8am.media/ps/skirmish-on-the-line-a-taliban-and-a-pakistani-soldier-were-killed/",
+    "source_url": "https://8am.media/ps/skirmish-on-the-line-a-taliban-and-a-pakistani-soldier-were-killed/",
+    "source_site": "Hasht-e Subh",
+    "event_date": "2024-03-18 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Dand wa Patan, Paktia Province, Afghanistan",
+        "location"
+      ],
+      [
+        "Afghanistan",
+        "location"
+      ],
+      [
+        "Military Forces of Afghanistan",
+        "actor"
+      ],
+      [
+        "Military Forces of Pakistan",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Dand wa Patan, Paktia Province, Afghanistan"
+      ]
+    ]
+  },
+  {
+    "id": "CAO8559",
+    "text": "ArmedClash event reported by International Crisis Group. Location: Kolofata, Mayo-Sava, Far-North, Cameroon. URL: https://www.crisisgroup.org/crisiswatch/february-trends-and-march-alerts-2024#cameroon",
+    "source_url": "https://www.crisisgroup.org/crisiswatch/february-trends-and-march-alerts-2024#cameroon",
+    "source_site": "International Crisis Group",
+    "event_date": "2024-02-18 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Kolofata, Mayo-Sava, Far-North, Cameroon",
+        "location"
+      ],
+      [
+        "Cameroon",
+        "location"
+      ],
+      [
+        "Islamic State West Africa Province - and/or Boko Haram - Jamaatu Ahli is-Sunnah lid-Dawati wal-Jihad",
+        "actor"
+      ],
+      [
+        "Military Forces of Cameroon",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Kolofata, Mayo-Sava, Far-North, Cameroon"
+      ]
+    ]
+  },
+  {
+    "id": "ISR38847",
+    "text": "ArmedClash event reported by Haaretz. Location: Metula, Israel. URL: https://www.haaretz.com/israel-news/2024-01-17/ty-article-live/kibbutz-beeri-announces-the-deaths-of-israeli-hostages-itay-svirsky-and-yossi-sharabi/0000018d-156d-d260-aded-b7edc14d0000",
+    "source_url": "https://www.haaretz.com/israel-news/2024-01-17/ty-article-live/kibbutz-beeri-announces-the-deaths-of-israeli-hostages-itay-svirsky-and-yossi-sharabi/0000018d-156d-d260-aded-b7edc14d0000",
+    "source_site": "Haaretz",
+    "event_date": "2024-01-17 00:00:00",
+    "gold_entities": [
+      [
+        "ArmedClash",
+        "event_or_risk"
+      ],
+      [
+        "Metula, Israel",
+        "location"
+      ],
+      [
+        "Israel",
+        "location"
+      ],
+      [
+        "Hezbollah",
+        "actor"
+      ],
+      [
+        "Military Forces of Israel",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ArmedClash",
+        "Metula, Israel"
+      ]
+    ]
+  },
+  {
+    "id": "IND152553",
+    "text": "ProtestWithIntervention event reported by The Hindu. Location: Kanayannur, Kerala, India. URL: https://www.thehindu.com/news/national/kerala/police-fire-water-canons-on-ksu-activists/article67920534.ece",
+    "source_url": "https://www.thehindu.com/news/national/kerala/police-fire-water-canons-on-ksu-activists/article67920534.ece",
+    "source_site": "The Hindu",
+    "event_date": "2024-03-06 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Kanayannur, Kerala, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "KSU: Kerala Students Union",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Students",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Kanayannur, Kerala, India"
+      ]
+    ]
+  },
+  {
+    "id": "IND148776",
+    "text": "PeacefulProtest event reported by Daily Excelsior. Location: Jammu, Jammu and Kashmir, India. URL: https://www.dailyexcelsior.com/msjk-stages-anti-pak-protest-3/",
+    "source_url": "https://www.dailyexcelsior.com/msjk-stages-anti-pak-protest-3/",
+    "source_site": "Daily Excelsior",
+    "event_date": "2024-01-15 00:00:00",
+    "gold_entities": [
+      [
+        "PeacefulProtest",
+        "event_or_risk"
+      ],
+      [
+        "Jammu, Jammu and Kashmir, India",
+        "location"
+      ],
+      [
+        "India",
+        "location"
+      ],
+      [
+        "MSJK: Mission Statehood Jammu and Kashmir",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "PeacefulProtest",
+        "Jammu, Jammu and Kashmir, India"
+      ]
+    ]
+  },
+  {
+    "id": "USA65018",
+    "text": "ProtestWithIntervention event reported by ABC7 (Washington D.C.). Location: Washington, District of Columbia, United States. URL: https://wjla.com/news/local/washington-dc-road-closures-protests-arrests-first-amendment-ceasefire-interstate-396-c-d-streets-northwest-constitution-avenue-middle-east-shut-it-down-traffic-delays",
+    "source_url": "https://wjla.com/news/local/washington-dc-road-closures-protests-arrests-first-amendment-ceasefire-interstate-396-c-d-streets-northwest-constitution-avenue-middle-east-shut-it-down-traffic-delays",
+    "source_site": "ABC7 (Washington D.C.)",
+    "event_date": "2024-02-01 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Washington, District of Columbia, United States",
+        "location"
+      ],
+      [
+        "United States",
+        "location"
+      ],
+      [
+        "African American Group",
+        "actor"
+      ],
+      [
+        "Dissenters",
+        "actor"
+      ],
+      [
+        "PSL: Party for Socialism and Liberation",
+        "actor"
+      ],
+      [
+        "PYM: Palestinian Youth Movement",
+        "actor"
+      ],
+      [
+        "Palestinian Group",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Washington, District of Columbia, United States"
+      ]
+    ]
+  },
+  {
+    "id": "KEN13670",
+    "text": "ProtestWithIntervention event reported by Daily Nation (Kenya). Location: Kabarnet, Baringo Central, Baringo, Kenya. URL: https://nation.africa/kenya/videos/police-lob-teargas-at-teachers-residents-protesting-bandit-attacks-in-baringo-4525004",
+    "source_url": "https://nation.africa/kenya/videos/police-lob-teargas-at-teachers-residents-protesting-bandit-attacks-in-baringo-4525004",
+    "source_site": "Daily Nation (Kenya)",
+    "event_date": "2024-02-14 00:00:00",
+    "gold_entities": [
+      [
+        "ProtestWithIntervention",
+        "event_or_risk"
+      ],
+      [
+        "Kabarnet, Baringo Central, Baringo, Kenya",
+        "location"
+      ],
+      [
+        "Kenya",
+        "location"
+      ],
+      [
+        "KNUT: Kenya National Union of Teachers",
+        "actor"
+      ],
+      [
+        "KUPPET: Kenya Union of Post Primary Education Teachers",
+        "actor"
+      ],
+      [
+        "Kenya Kwanza Alliance",
+        "actor"
+      ],
+      [
+        "Protestors",
+        "actor"
+      ],
+      [
+        "Taxi Drivers",
+        "actor"
+      ],
+      [
+        "Teachers",
+        "actor"
+      ],
+      [
+        "UDA: United Democratic Alliance",
+        "actor"
+      ]
+    ],
+    "gold_pairs": [
+      [
+        "ProtestWithIntervention",
+        "Kabarnet, Baringo Central, Baringo, Kenya"
+      ]
+    ]
+  }
+]

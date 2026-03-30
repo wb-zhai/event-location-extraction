@@ -1,0 +1,166 @@
+[
+  {
+    "repo_id": "mlx-community/Qwen3.5-9B-MLX-4bit",
+    "name": "Qwen 3.5 9B",
+    "params": 9,
+    "quant": "4bit",
+    "family": "qwen3.5",
+    "released": "2026-03",
+    "notes": "Top benchmarks for its size (MMLU-Pro 82.5). Native structured output/JSON, strong instruction following (IFEval ~92%). Released March 2, 2026. Dense model, 262K context."
+  },
+  {
+    "repo_id": "mlx-community/Qwen3.5-4B-MLX-4bit",
+    "name": "Qwen 3.5 4B",
+    "params": 4,
+    "quant": "4bit",
+    "family": "qwen3.5",
+    "released": "2026-03",
+    "notes": "Lightweight Qwen3.5 variant. Good structured output. Released March 2, 2026. Dense model, 262K context."
+  },
+  {
+    "repo_id": "mlx-community/Qwen3.5-27B-4bit",
+    "name": "Qwen 3.5 27B",
+    "params": 27,
+    "quant": "4bit",
+    "family": "qwen3.5",
+    "released": "2026-02",
+    "notes": "Strong dense model from Qwen3.5 medium series. Released February 24, 2026. 262K context, excellent instruction following."
+  },
+  {
+    "repo_id": "mlx-community/Qwen3.5-35B-A3B-4bit",
+    "name": "Qwen 3.5 35B-A3B (MoE)",
+    "params": 35,
+    "active_params": 3,
+    "quant": "4bit",
+    "family": "qwen3.5",
+    "released": "2026-02",
+    "notes": "MoE model: 35B total but only 3B active per token - very fast inference. Released February 24, 2026. 262K context."
+  },
+  {
+    "repo_id": "mlx-community/gemma-3-12b-it-4bit",
+    "name": "Gemma 3 12B Instruct",
+    "params": 12,
+    "quant": "4bit",
+    "family": "gemma3",
+    "released": "2025-03",
+    "notes": "Google's Gemma 3. Built-in function calling and structured output support. Reliable JSON generation. 128K context. Released March 2025."
+  },
+  {
+    "repo_id": "mlx-community/gemma-3-27b-it-qat-4bit",
+    "name": "Gemma 3 27B Instruct (QAT)",
+    "params": 27,
+    "quant": "4bit-qat",
+    "family": "gemma3",
+    "released": "2025-04",
+    "notes": "Quantization-Aware Trained - preserves quality much better than post-training quantization. Outperforms Llama3-405B on LMArena. Excellent structured output. 128K context."
+  },
+  {
+    "repo_id": "mlx-community/gemma-3-4b-it-4bit",
+    "name": "Gemma 3 4B Instruct",
+    "params": 4,
+    "quant": "4bit",
+    "family": "gemma3",
+    "released": "2025-03",
+    "notes": "Compact Gemma 3 competitive with Gemma2-27B. Good structured output. 128K context. Released March 2025."
+  },
+  {
+    "repo_id": "mlx-community/Phi-4-mini-instruct-4bit",
+    "name": "Phi-4 Mini Instruct",
+    "params": 3.8,
+    "quant": "4bit",
+    "family": "phi4",
+    "released": "2025-02",
+    "notes": "Microsoft's 3.8B model. Strong reasoning for size. 200K vocab, 128K context. Released February 2025."
+  },
+  {
+    "repo_id": "mlx-community/phi-4-4bit",
+    "name": "Phi-4 14B",
+    "params": 14,
+    "quant": "4bit",
+    "family": "phi4",
+    "released": "2025-01",
+    "notes": "Microsoft's 14B reasoning model. Excels at complex reasoning, math. Released January 2025."
+  },
+  {
+    "repo_id": "mlx-community/Phi-4-reasoning-plus-4bit",
+    "name": "Phi-4 Reasoning Plus",
+    "params": 14,
+    "quant": "4bit",
+    "family": "phi4",
+    "released": "2025-05",
+    "notes": "Enhanced reasoning variant with outcome-based RL. 14B params. Strong for complex extraction tasks."
+  },
+  {
+    "repo_id": "mlx-community/Mistral-Small-3.1-24B-Instruct-2503-4bit",
+    "name": "Mistral Small 3.1 24B",
+    "params": 24,
+    "quant": "4bit",
+    "family": "mistral",
+    "released": "2025-03",
+    "notes": "24B latency-optimized model. Parity with LLaMA 3.3 70B at 3x faster. Multimodal (vision+text). Released March 2025."
+  },
+  {
+    "repo_id": "mlx-community/Llama-4-Scout-17B-16E-Instruct-4bit",
+    "name": "Llama 4 Scout 17B-16E Instruct",
+    "params": 109,
+    "active_params": 17,
+    "quant": "4bit",
+    "family": "llama4",
+    "released": "2025-04",
+    "notes": "Meta's Llama 4 MoE: 109B total, 17B active per token with 16 experts. 10M context window. Released April 2025. Large total size but efficient MoE inference."
+  },
+  {
+    "repo_id": "mlx-community/Qwen3-8B-4bit",
+    "name": "Qwen 3 8B",
+    "params": 8,
+    "quant": "4bit",
+    "family": "qwen3",
+    "released": "2025-04",
+    "notes": "Strong 8B model with thinking/non-thinking modes. Good structured output. Released April 2025."
+  },
+  {
+    "repo_id": "mlx-community/Qwen3-14B-4bit",
+    "name": "Qwen 3 14B",
+    "params": 14,
+    "quant": "4bit",
+    "family": "qwen3",
+    "released": "2025-04",
+    "notes": "Excellent instruction following (IFEval strict ~88%). Strong JSON/structured output. Released April 2025."
+  },
+  {
+    "repo_id": "mlx-community/Qwen3-32B-4bit",
+    "name": "Qwen 3 32B",
+    "params": 32,
+    "quant": "4bit",
+    "family": "qwen3",
+    "released": "2025-04",
+    "notes": "Largest dense Qwen3. Outperforms DeepSeek-R1 on 17/23 benchmarks. Excellent for information extraction. Released April 2025."
+  },
+  {
+    "repo_id": "mlx-community/DeepSeek-R1-Distill-Qwen-14B",
+    "name": "DeepSeek-R1 Distill Qwen 14B",
+    "params": 14,
+    "quant": "bf16",
+    "family": "deepseek-r1",
+    "released": "2025-01",
+    "notes": "Reasoning-focused distillation of DeepSeek-R1 into Qwen-14B. Strong chain-of-thought. Released January 2025. Note: bf16 (not quantized)."
+  },
+  {
+    "repo_id": "mlx-community/DeepSeek-R1-Distill-Qwen-32B-4bit",
+    "name": "DeepSeek-R1 Distill Qwen 32B",
+    "params": 32,
+    "quant": "4bit",
+    "family": "deepseek-r1",
+    "released": "2025-01",
+    "notes": "Largest practical DeepSeek-R1 distillation. Strong reasoning. Released January 2025."
+  },
+  {
+    "repo_id": "mlx-community/DeepSeek-R1-Distill-Qwen-7B-4bit",
+    "name": "DeepSeek-R1 Distill Qwen 7B",
+    "params": 7,
+    "quant": "4bit",
+    "family": "deepseek-r1",
+    "released": "2025-01",
+    "notes": "Compact reasoning model. Good for chain-of-thought extraction. Released January 2025."
+  }
+]

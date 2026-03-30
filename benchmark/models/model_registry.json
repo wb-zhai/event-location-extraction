@@ -1,0 +1,199 @@
+{
+  "_metadata": {
+    "description": "Qwen3.5 MLX-quantized models available on HuggingFace, under 40B parameters, suitable for Apple Silicon",
+    "last_updated": "2026-03-28",
+    "framework": "mlx-lm",
+    "framework_version": "0.31.1",
+    "install_command": "pip install mlx-lm",
+    "usage": {
+      "python_load": "from mlx_lm import load, generate; model, tokenizer = load('REPO_ID')",
+      "python_generate": "response = generate(model, tokenizer, prompt='Hello', max_tokens=512)",
+      "cli_generate": "mlx_lm.generate --model REPO_ID --prompt 'Hello'",
+      "cli_server": "mlx_lm.server --model REPO_ID --port 8080"
+    },
+    "notes": {
+      "structured_output": "Qwen3.5 models support structured output / JSON mode via system prompts and chat templates. Use 'Respond in JSON format' in system prompt or set response_format={'type':'json_object'} when using via API server.",
+      "vision": "Qwen3.5 is a vision-language model family (image-text-to-text). All sizes support multimodal input.",
+      "moe_models": "Models tagged 'A3B' or 'A10B' are Mixture-of-Experts. The number after 'A' indicates active parameters per token. E.g., 35B-A3B has 35B total params but only 3B active per token, making it very efficient."
+    }
+  },
+  "qwen3_5_official_sizes": [
+    "0.8B",
+    "2B",
+    "4B",
+    "9B",
+    "27B",
+    "35B-A3B (MoE, 3B active)",
+    "122B-A10B (MoE, 10B active)",
+    "397B-A17B (MoE, 17B active)"
+  ],
+  "models": [
+    {
+      "repo_id": "mlx-community/Qwen3.5-0.8B-MLX-4bit",
+      "base_model": "Qwen/Qwen3.5-0.8B",
+      "params_billions": 0.8,
+      "quantization": "4-bit",
+      "approx_size_gb": 0.5,
+      "downloads": 16920,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "testing, prototyping, edge devices"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-0.8B-8bit",
+      "base_model": "Qwen/Qwen3.5-0.8B",
+      "params_billions": 0.8,
+      "quantization": "8-bit",
+      "approx_size_gb": 0.9,
+      "downloads": 31300,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "testing, prototyping"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-2B-4bit",
+      "base_model": "Qwen/Qwen3.5-2B",
+      "params_billions": 2,
+      "quantization": "4-bit",
+      "approx_size_gb": 1.3,
+      "downloads": 12506,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "lightweight tasks"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-2B-6bit",
+      "base_model": "Qwen/Qwen3.5-2B",
+      "params_billions": 2,
+      "quantization": "6-bit",
+      "approx_size_gb": 1.7,
+      "downloads": 60808,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "lightweight tasks, better quality than 4-bit"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-2B-MLX-8bit",
+      "base_model": "Qwen/Qwen3.5-2B",
+      "params_billions": 2,
+      "quantization": "8-bit",
+      "approx_size_gb": 2.2,
+      "downloads": 6929,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "lightweight tasks, best quality at 2B"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-4B-MLX-4bit",
+      "base_model": "Qwen/Qwen3.5-4B",
+      "params_billions": 4,
+      "quantization": "4-bit",
+      "approx_size_gb": 2.5,
+      "downloads": 34171,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "good balance of speed and quality"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-4B-MLX-8bit",
+      "base_model": "Qwen/Qwen3.5-4B",
+      "params_billions": 4,
+      "quantization": "8-bit",
+      "approx_size_gb": 4.5,
+      "downloads": 3331,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "good balance of speed and quality, higher fidelity"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-9B-MLX-4bit",
+      "base_model": "Qwen/Qwen3.5-9B",
+      "params_billions": 9,
+      "quantization": "4-bit",
+      "approx_size_gb": 5.5,
+      "downloads": 115419,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "strong general-purpose, best value for Apple Silicon"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-9B-MLX-8bit",
+      "base_model": "Qwen/Qwen3.5-9B",
+      "params_billions": 9,
+      "quantization": "8-bit",
+      "approx_size_gb": 10.0,
+      "downloads": 6847,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "high quality, needs 16GB+ RAM"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-27B-4bit",
+      "base_model": "Qwen/Qwen3.5-27B",
+      "params_billions": 27,
+      "quantization": "4-bit",
+      "approx_size_gb": 15.5,
+      "downloads": 49460,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "top quality dense model, needs 24GB+ RAM (M2/M3/M4 Pro/Max)"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-27B-8bit",
+      "base_model": "Qwen/Qwen3.5-27B",
+      "params_billions": 27,
+      "quantization": "8-bit",
+      "approx_size_gb": 29.0,
+      "downloads": 7759,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "highest quality dense, needs 36GB+ RAM (M2/M3/M4 Max/Ultra)"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-35B-A3B-4bit",
+      "base_model": "Qwen/Qwen3.5-35B-A3B",
+      "params_billions": 35,
+      "active_params_billions": 3,
+      "architecture": "MoE",
+      "quantization": "4-bit",
+      "approx_size_gb": 20.0,
+      "downloads": 50937,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "MoE efficiency - only 3B active params, great quality/speed ratio"
+    },
+    {
+      "repo_id": "mlx-community/Qwen3.5-35B-A3B-8bit",
+      "base_model": "Qwen/Qwen3.5-35B-A3B",
+      "params_billions": 35,
+      "active_params_billions": 3,
+      "architecture": "MoE",
+      "quantization": "8-bit",
+      "approx_size_gb": 37.0,
+      "downloads": 25355,
+      "license": "apache-2.0",
+      "supports_structured_output": true,
+      "supports_vision": true,
+      "recommended_for": "MoE high fidelity, needs 48GB+ RAM"
+    }
+  ],
+  "recommended_picks": {
+    "tiny_fast": "mlx-community/Qwen3.5-0.8B-MLX-4bit",
+    "small_balanced": "mlx-community/Qwen3.5-4B-MLX-4bit",
+    "medium_best_value": "mlx-community/Qwen3.5-9B-MLX-4bit",
+    "large_high_quality": "mlx-community/Qwen3.5-27B-4bit",
+    "moe_efficient": "mlx-community/Qwen3.5-35B-A3B-4bit"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "model": "Mistral-Small-3.1-24B",
+  "articles_evaluated": 0,
+  "errors": 30,
+  "total_inference_time_s": 0.0,
+  "avg_inference_time_s": 0,
+  "entity_metrics": {
+    "TP": 0,
+    "FP": 0,
+    "FN": 0,
+    "Precision": 0.0,
+    "Recall": 0.0,
+    "F1": 0.0,
+    "F0.5": 0.0,
+    "F2": 0.0,
+    "Jaccard": 0.0
+  },
+  "pair_metrics": {
+    "TP": 0,
+    "FP": 0,
+    "FN": 0,
+    "Precision": 0.0,
+    "Recall": 0.0,
+    "F1": 0.0,
+    "F0.5": 0.0,
+    "F2": 0.0,
+    "Jaccard": 0.0
+  },
+  "per_article": []
+}

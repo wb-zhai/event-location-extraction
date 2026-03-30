@@ -1,0 +1,401 @@
+{
+  "_metadata": {
+    "description": "New LLM models released in 2026 (Jan-Mar) with confirmed MLX-quantized versions on HuggingFace",
+    "generated": "2026-03-28",
+    "excludes": "Qwen 3.5 (0.8B/2B/4B/9B/27B/35B-A3B), Gemma 3, Phi-4 Mini/14B, Mistral Small 3.1, Qwen 3, DeepSeek-R1, Llama 4 Scout"
+  },
+  "models": [
+    {
+      "name": "GLM-5",
+      "family": "GLM",
+      "base_model": "zai-org/GLM-5",
+      "params": "754B (MoE)",
+      "architecture": "glm_moe_dsa",
+      "released": "2026-02-11",
+      "mlx_repos": {
+        "4bit": "mlx-community/GLM-5-4bit",
+        "4bit-gs32": "mlx-community/GLM-5-4bit-gs32",
+        "8bit-mxfp8": "mlx-community/GLM-5-8bit-MXFP8",
+        "mxfp4-q8": "mlx-community/GLM-5-MXFP4-Q8",
+        "bf16": "mlx-community/GLM-5"
+      },
+      "notes": "Very large MoE model from Zhipu AI. May not fit on most Apple Silicon devices."
+    },
+    {
+      "name": "GLM-4.7-Flash",
+      "family": "GLM",
+      "base_model": "zai-org/GLM-4.7-Flash",
+      "params": "31B (MoE lite)",
+      "architecture": "glm4_moe_lite",
+      "released": "2026-01-19",
+      "mlx_repos": {
+        "4bit-mxfp4": "mlx-community/GLM-4.7-Flash-4bit-mxfp4",
+        "8bit-mxfp8": "mlx-community/GLM-4.7-Flash-8bit-mxfp8"
+      },
+      "notes": "Lightweight MoE model from Zhipu AI. Practical for local use."
+    },
+    {
+      "name": "Mistral-Small-4-119B-2603",
+      "family": "Mistral",
+      "base_model": "mistralai/Mistral-Small-4-119B-2603",
+      "params": "119B (MoE, FP8 weights)",
+      "architecture": "mistral3",
+      "released": "2026-01-23",
+      "mlx_repos": {
+        "4bit": "mlx-community/Mistral-Small-4-119B-2603-4bit",
+        "5bit": "mlx-community/Mistral-Small-4-119B-2603-5bit",
+        "6bit": "mlx-community/Mistral-Small-4-119B-2603-6bit",
+        "8bit": "mlx-community/Mistral-Small-4-119B-2603-8bit",
+        "bf16": "mlx-community/Mistral-Small-4-119B-2603-bf16"
+      },
+      "notes": "New Mistral Small 4 release with 119B params. Very large, needs high-RAM device."
+    },
+    {
+      "name": "Leanstral-2603",
+      "family": "Mistral",
+      "base_model": "mistralai/Leanstral-2603",
+      "params": "unknown (mistral3/mistral4 arch)",
+      "architecture": "mistral3",
+      "released": "2026-03-11",
+      "mlx_repos": {
+        "8bit": "mlx-community/Leanstral-2603-8bit"
+      },
+      "notes": "Mistral model fine-tuned for Lean4 formal math proofs."
+    },
+    {
+      "name": "NVIDIA-Nemotron-3-Nano-4B",
+      "family": "Nemotron",
+      "base_model": "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
+      "params": "~4B (hybrid SSM-transformer)",
+      "architecture": "nemotron_h",
+      "released": "2026-03-07",
+      "mlx_repos": {
+        "4bit": "mlx-community/NVIDIA-Nemotron-3-Nano-4B-4bit",
+        "6bit": "mlx-community/NVIDIA-Nemotron-3-Nano-4B-6bit",
+        "8bit": "mlx-community/NVIDIA-Nemotron-3-Nano-4B-8bit",
+        "bf16": "mlx-community/NVIDIA-Nemotron-3-Nano-4B-BF16"
+      },
+      "notes": "Small hybrid SSM-transformer from NVIDIA. Very efficient for local use."
+    },
+    {
+      "name": "Nemotron-Cascade-2-30B-A3B",
+      "family": "Nemotron",
+      "base_model": "nvidia/Nemotron-Cascade-2-30B-A3B",
+      "params": "31.6B total, ~3B active (MoE)",
+      "architecture": "nemotron_h",
+      "released": "2026-03-18",
+      "mlx_repos": {
+        "4bit": "mlx-community/Nemotron-Cascade-2-30B-A3B-4bit",
+        "5bit": "mlx-community/Nemotron-Cascade-2-30B-A3B-5bit",
+        "6bit": "mlx-community/Nemotron-Cascade-2-30B-A3B-6bit",
+        "8bit": "mlx-community/Nemotron-Cascade-2-30B-A3B-8bit"
+      },
+      "notes": "MoE reasoning model from NVIDIA with only 3B active params. Very efficient."
+    },
+    {
+      "name": "NVIDIA-Nemotron-3-Super-120B-A12B",
+      "family": "Nemotron",
+      "base_model": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
+      "params": "123.6B total, ~12B active (MoE)",
+      "architecture": "nemotron",
+      "released": "2026-03-10",
+      "mlx_repos": {
+        "note": "No mlx-community repo yet; FF-01/Nemotron-3-Super-120B-A12B-MLX-6bit exists as 3rd party"
+      },
+      "notes": "Large MoE model. MLX version available from third party only. Very large."
+    },
+    {
+      "name": "MiniMax-M2.5",
+      "family": "MiniMax",
+      "base_model": "MiniMax/MiniMax-M2.5 (gated/private)",
+      "params": "unknown (large MoE)",
+      "architecture": "minimax_m2",
+      "released": "2026-02-13",
+      "mlx_repos": {
+        "3bit": "mlx-community/MiniMax-M2.5-3bit",
+        "4bit": "mlx-community/MiniMax-M2.5-4bit",
+        "5bit": "mlx-community/MiniMax-M2.5-5bit",
+        "6bit": "mlx-community/MiniMax-M2.5-6bit",
+        "8bit": "mlx-community/MiniMax-M2.5-8bit",
+        "8bit-gs32": "mlx-community/MiniMax-M2.5-8bit-gs32"
+      },
+      "notes": "MiniMax M2.5 large MoE model. Base repo is gated."
+    },
+    {
+      "name": "Step-3.5-Flash",
+      "family": "Step",
+      "base_model": "stepfun-ai/Step-3.5-Flash",
+      "params": "199.4B",
+      "architecture": "unknown",
+      "released": "2026-02-01",
+      "mlx_repos": {
+        "4bit": "mlx-community/Step-3.5-Flash-4bit",
+        "6bit": "mlx-community/Step-3.5-Flash-6bit",
+        "8bit": "mlx-community/Step-3.5-Flash-8bit",
+        "bf16": "mlx-community/Step-3.5-Flash-bf16"
+      },
+      "notes": "Large model from StepFun. Likely too large for most local setups at 199B."
+    },
+    {
+      "name": "LFM2-24B-A2B",
+      "family": "LFM (Liquid)",
+      "base_model": "LiquidAI/LFM2-24B-A2B",
+      "params": "23.8B total, ~2B active (MoE)",
+      "architecture": "liquid",
+      "released": "2026-02-24",
+      "mlx_repos": {
+        "4bit": "mlx-community/LFM2-24B-A2B-4bit"
+      },
+      "notes": "Liquid Foundation Model v2 with only 2B active params. Very efficient MoE."
+    },
+    {
+      "name": "LFM2.5-1.2B-Thinking",
+      "family": "LFM (Liquid)",
+      "base_model": "LiquidAI/LFM2.5-1.2B-Thinking",
+      "params": "1.2B",
+      "architecture": "liquid",
+      "released": "2026-01-20",
+      "mlx_repos": {
+        "6bit": "mlx-community/LFM2.5-1.2B-Thinking-6bit"
+      },
+      "notes": "Small reasoning model from Liquid AI. Very compact."
+    },
+    {
+      "name": "Kimi-K2.5",
+      "family": "Kimi",
+      "base_model": "moonshotai/Kimi-K2.5",
+      "params": "1058.6B (large MoE)",
+      "architecture": "kimi",
+      "released": "2026-01-01",
+      "mlx_repos": {
+        "3bit": "mlx-community/Kimi-K2.5-3bit"
+      },
+      "notes": "Massive 1T MoE model from Moonshot AI. Extremely large, unlikely to run locally."
+    },
+    {
+      "name": "Phi-4-reasoning-vision-15B",
+      "family": "Phi",
+      "base_model": "microsoft/Phi-4-reasoning-vision-15B",
+      "params": "15.1B",
+      "architecture": "phi4",
+      "released": "2026-01-23",
+      "mlx_repos": {
+        "4bit": "mlx-community/Phi-4-reasoning-vision-15B-4bit"
+      },
+      "notes": "Microsoft Phi-4 with reasoning and vision capabilities. Multimodal, 15B params. Text extraction use case viable."
+    },
+    {
+      "name": "Nanbeige4.1-3B",
+      "family": "Nanbeige",
+      "base_model": "Nanbeige/Nanbeige4.1-3B",
+      "params": "3.9B",
+      "architecture": "nanbeige",
+      "released": "2026-02-10",
+      "mlx_repos": {
+        "4bit": "mlx-community/Nanbeige4.1-3B-4bit",
+        "6bit": "mlx-community/Nanbeige4.1-3B-6bit",
+        "8bit": "mlx-community/Nanbeige4.1-3B-8bit",
+        "bf16": "mlx-community/Nanbeige4.1-3B-bf16"
+      },
+      "notes": "Small Chinese LLM. 3.9B params, good for efficiency benchmarks."
+    },
+    {
+      "name": "RakutenAI-3.0",
+      "family": "RakutenAI",
+      "base_model": "Rakuten/RakutenAI-3.0",
+      "params": "671B (large MoE, DeepSeek-v3 arch)",
+      "architecture": "deepseek_v3",
+      "released": "2026-03-16",
+      "mlx_repos": {
+        "4bit": "mlx-community/RakutenAI-3.0-MLX-4bit"
+      },
+      "notes": "DeepSeek-v3 architecture based model from Rakuten. 671B total, very large."
+    },
+    {
+      "name": "Qwen3.5-122B-A10B",
+      "family": "Qwen",
+      "base_model": "Qwen/Qwen3.5-122B-A10B",
+      "params": "125.1B total, ~10B active (MoE)",
+      "architecture": "qwen3.5",
+      "released": "2026-02-24",
+      "mlx_repos": {
+        "4bit": "mlx-community/Qwen3.5-122B-A10B-4bit",
+        "5bit": "mlx-community/Qwen3.5-122B-A10B-5bit",
+        "6bit": "mlx-community/Qwen3.5-122B-A10B-6bit",
+        "8bit": "mlx-community/Qwen3.5-122B-A10B-8bit",
+        "bf16": "mlx-community/Qwen3.5-122B-A10B-bf16"
+      },
+      "notes": "Qwen3.5 MoE variant with 10B active params. Different from benchmarked dense Qwen3.5 models."
+    },
+    {
+      "name": "Qwen3.5-397B-A17B",
+      "family": "Qwen",
+      "base_model": "Qwen/Qwen3.5-397B-A17B (assumed)",
+      "params": "~397B total, ~17B active (MoE)",
+      "architecture": "qwen3.5",
+      "released": "2026-02-16",
+      "mlx_repos": {
+        "4bit": "mlx-community/Qwen3.5-397B-A17B-4bit",
+        "5bit": "mlx-community/Qwen3.5-397B-A17B-5bit",
+        "6bit": "mlx-community/Qwen3.5-397B-A17B-6bit",
+        "8bit": "mlx-community/Qwen3.5-397B-A17B-8bit",
+        "nvfp4": "mlx-community/Qwen3.5-397B-A17B-nvfp4"
+      },
+      "notes": "Large Qwen3.5 MoE. Very large total params, 17B active. Needs very high RAM."
+    },
+    {
+      "name": "Qwen3-Coder-Next",
+      "family": "Qwen",
+      "base_model": "Qwen/Qwen3-Coder-Next",
+      "params": "79.7B",
+      "architecture": "qwen3",
+      "released": "2026-01-30",
+      "mlx_repos": {
+        "4bit": "mlx-community/Qwen3-Coder-Next-4bit",
+        "5bit": "mlx-community/Qwen3-Coder-Next-5bit",
+        "6bit": "mlx-community/Qwen3-Coder-Next-6bit",
+        "8bit": "mlx-community/Qwen3-Coder-Next-8bit",
+        "bf16": "mlx-community/Qwen3-Coder-Next-bf16"
+      },
+      "notes": "Qwen3 coding-focused model. 80B params, large but specialized for code."
+    },
+    {
+      "name": "LongCat-Next",
+      "family": "LongCat",
+      "base_model": "meituan-longcat/LongCat-Next",
+      "params": "74.3B",
+      "architecture": "longcat_next",
+      "released": "2026-03-25",
+      "mlx_repos": {
+        "4bit": "mlx-community/LongCat-Next-4bit"
+      },
+      "notes": "Multimodal model from Meituan. 74B params, custom architecture."
+    },
+    {
+      "name": "MiroThinker-1.7-mini",
+      "family": "MiroThinker",
+      "base_model": "miromind-ai/MiroThinker-1.7-mini",
+      "params": "30.5B",
+      "architecture": "mirothinker",
+      "released": "2026-03-09",
+      "mlx_repos": {
+        "4bit": "mlx-community/MiroThinker-1.7-mini-mlx-4Bit"
+      },
+      "notes": "Reasoning model from MiroMind AI. 30B params."
+    },
+    {
+      "name": "Falcon-H1-Tiny-R-0.6B",
+      "family": "Falcon",
+      "base_model": "tiiuae/Falcon-H1-Tiny-R-0.6B (assumed)",
+      "params": "0.6B",
+      "architecture": "falcon_h1",
+      "released": "2026-01-28",
+      "mlx_repos": {
+        "4bit": "mlx-community/Falcon-H1-Tiny-R-0.6B-4bit",
+        "5bit": "mlx-community/Falcon-H1-Tiny-R-0.6B-5bit",
+        "6bit": "mlx-community/Falcon-H1-Tiny-R-0.6B-6bit",
+        "8bit": "mlx-community/Falcon-H1-Tiny-R-0.6B-8bit",
+        "bf16": "mlx-community/Falcon-H1-Tiny-R-0.6B-bf16"
+      },
+      "notes": "Very small reasoning model from TII. Only 0.6B params."
+    },
+    {
+      "name": "JOSIE-1.1-4B-Instruct",
+      "family": "JOSIE",
+      "base_model": "Goekdeniz-Guelmez/JOSIE-1.1-4B-Instruct",
+      "params": "4.0B",
+      "architecture": "qwen3 (fine-tune)",
+      "released": "2026-03-08",
+      "mlx_repos": {
+        "4bit": "mlx-community/JOSIE-1.1-4B-Instruct-4bit",
+        "6bit": "mlx-community/JOSIE-1.1-4B-Instruct-6bit",
+        "8bit": "mlx-community/JOSIE-1.1-4B-Instruct-8bit",
+        "mxfp4": "mlx-community/JOSIE-1.1-4B-Instruct-mxfp4",
+        "bf16": "mlx-community/JOSIE-1.1-4B-Instruct-bfloat16"
+      },
+      "notes": "Fine-tune of Qwen3-4B with custom system prompt. Community model."
+    }
+  ],
+  "recommended_for_benchmarking": {
+    "description": "Models most likely useful for text-based NLP benchmarking on Apple Silicon, prioritized by feasibility and novelty",
+    "tier1_practical_new_architectures": [
+      {
+        "model": "NVIDIA-Nemotron-3-Nano-4B",
+        "why": "New hybrid SSM-transformer architecture, 4B params, very practical size",
+        "mlx_4bit": "mlx-community/NVIDIA-Nemotron-3-Nano-4B-4bit"
+      },
+      {
+        "model": "Nemotron-Cascade-2-30B-A3B",
+        "why": "MoE with only 3B active params, novel cascade reasoning approach",
+        "mlx_4bit": "mlx-community/Nemotron-Cascade-2-30B-A3B-4bit"
+      },
+      {
+        "model": "GLM-4.7-Flash",
+        "why": "31B MoE from Zhipu AI, new architecture, practical size at 4bit",
+        "mlx_4bit": "mlx-community/GLM-4.7-Flash-4bit-mxfp4"
+      },
+      {
+        "model": "LFM2-24B-A2B",
+        "why": "Liquid Foundation Model, novel architecture, only 2B active params",
+        "mlx_4bit": "mlx-community/LFM2-24B-A2B-4bit"
+      },
+      {
+        "model": "LFM2.5-1.2B-Thinking",
+        "why": "Tiny 1.2B reasoning model from Liquid AI",
+        "mlx_6bit": "mlx-community/LFM2.5-1.2B-Thinking-6bit"
+      },
+      {
+        "model": "Phi-4-reasoning-vision-15B",
+        "why": "New 2026 Phi-4 variant with reasoning, 15B, different from benchmarked Phi-4 Mini/14B",
+        "mlx_4bit": "mlx-community/Phi-4-reasoning-vision-15B-4bit"
+      }
+    ],
+    "tier2_interesting_but_large": [
+      {
+        "model": "Qwen3.5-122B-A10B",
+        "why": "MoE variant of Qwen3.5, different from dense models already benchmarked. 10B active.",
+        "mlx_4bit": "mlx-community/Qwen3.5-122B-A10B-4bit"
+      },
+      {
+        "model": "MiniMax-M2.5",
+        "why": "New MiniMax model. Size unknown but MLX quants exist.",
+        "mlx_4bit": "mlx-community/MiniMax-M2.5-4bit"
+      },
+      {
+        "model": "Nanbeige4.1-3B",
+        "why": "Small 3.9B Chinese model, fast inference, new family",
+        "mlx_4bit": "mlx-community/Nanbeige4.1-3B-4bit"
+      },
+      {
+        "model": "MiroThinker-1.7-mini",
+        "why": "30B reasoning model, new family",
+        "mlx_4bit": "mlx-community/MiroThinker-1.7-mini-mlx-4Bit"
+      },
+      {
+        "model": "Mistral-Small-4-119B-2603",
+        "why": "New Mistral model from 2026 but 119B is very large",
+        "mlx_4bit": "mlx-community/Mistral-Small-4-119B-2603-4bit"
+      }
+    ],
+    "tier3_niche_or_finetunes": [
+      {
+        "model": "Falcon-H1-Tiny-R-0.6B",
+        "why": "Ultra-small reasoning model, interesting for efficiency comparison",
+        "mlx_4bit": "mlx-community/Falcon-H1-Tiny-R-0.6B-4bit"
+      },
+      {
+        "model": "JOSIE-1.1-4B-Instruct",
+        "why": "Community fine-tune of Qwen3-4B, may not add much over base Qwen3",
+        "mlx_4bit": "mlx-community/JOSIE-1.1-4B-Instruct-4bit"
+      }
+    ]
+  },
+  "not_found_in_2026": {
+    "gemma_3n_or_4": "Gemma 3n was released in 2025 (June). No Gemma 4 found.",
+    "llama_new_2026": "No new Llama models released in 2026 (Llama 4 Scout was 2025).",
+    "cohere_command_a": "No Cohere Command-A MLX versions found.",
+    "yi_2": "No Yi-2 models found in mlx-community for 2026.",
+    "smollm2_successors": "No SmolLM2 successors found in 2026.",
+    "deepseek_r2": "No DeepSeek-R2 found in 2026."
+  }
+}
