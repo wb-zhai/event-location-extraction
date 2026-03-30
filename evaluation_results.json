@@ -70,9 +70,9 @@
     }
   },
   "timings_seconds": {
-    "v2": 63.19,
-    "v4": 62.77,
-    "v5_no_coref": 65.5
+    "v2": 58.45,
+    "v4": 58.57,
+    "v5_no_coref": 60.84
   },
   "dataset": {
     "articles": 50,
