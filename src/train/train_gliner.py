@@ -10,6 +10,12 @@ if __name__ == "__main__":
         description="Train GLiNER2 on a custom NER dataset"
     )
     arg_parser.add_argument(
+        "--model_name",
+        type=str,
+        default="fastino/gliner2-base-v1",
+        help="Pretrained model name or path (default: fastino/gliner2-base-v1)",
+    )
+    arg_parser.add_argument(
         "--train_file",
         type=str,
         required=True,
@@ -97,7 +103,7 @@ if __name__ == "__main__":
         bf16_enabled = True
 
     # Configure training
-    model = GLiNER2.from_pretrained("fastino/gliner2-base-v1")
+    model = GLiNER2.from_pretrained(args.model_name)
     config = TrainingConfig(
         output_dir=args.output_dir,
         experiment_name=args.experiment_name,
