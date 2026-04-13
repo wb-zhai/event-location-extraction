@@ -127,7 +127,7 @@ if __name__ == "__main__":
     trainer = GLiNER2Trainer(model, config)
     results = trainer.train(train_data=args.train_file, eval_data=args.val_file)
 
-    print(f"Training completed!")
+    print("Training completed!")
     print(f"Best validation loss: {results['best_metric']:.4f}")
     print(f"Total steps: {results['total_steps']}")
     print(f"Training time: {results['total_time_seconds']/60:.1f} minutes")
