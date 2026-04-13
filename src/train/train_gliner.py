@@ -1,7 +1,6 @@
 import argparse
 
 from gliner2 import GLiNER2
-from gliner2.training.data import InputExample, TrainingDataset
 from gliner2.training.trainer import GLiNER2Trainer, TrainingConfig
 
 if __name__ == "__main__":
