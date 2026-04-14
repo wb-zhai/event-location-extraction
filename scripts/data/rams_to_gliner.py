@@ -26,7 +26,11 @@ def parse_ent_spans(spans, sentence):
 
         # span_type as format like evt011arg02target, evt011arg04place
         # we want to extract the span_type_cleaned as target, place, etc.
-        span_type_cleaned = span_type.split("arg")[-1][2:]
+        span_type_cleaned = span_type.split("arg", maxsplit=1)[-1][2:]
+
+        if not span_type_cleaned:
+            raise ValueError(f"Could not parse span type from: {span_type}")
+
 
         spans_dict[span_type_cleaned] = " ".join(sentence[span_start : span_end + 1])
     return spans_dict
