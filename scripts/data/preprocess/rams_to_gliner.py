@@ -31,8 +31,12 @@ def parse_ent_spans(spans, sentence):
         if not span_type_cleaned:
             raise ValueError(f"Could not parse span type from: {span_type}")
 
+        if span_type_cleaned not in spans_dict:
+            spans_dict[span_type_cleaned] = []
 
-        spans_dict[span_type_cleaned] = " ".join(sentence[span_start : span_end + 1])
+        spans_dict[span_type_cleaned].append(
+            " ".join(sentence[span_start : span_end + 1])
+        )
     return spans_dict
 
 
@@ -89,11 +93,17 @@ if __name__ == "__main__":
             trigger_type, trigger_text = parse_trigger(data["evt_triggers"], tokens)
 
             # we now construct the output sample in GLINER format
-            entities = spans
-            relations = [
-                {trigger_type: {"event": trigger_text, "argument": span}}
-                for span in spans.values()
-            ]
+            entities = {trigger_type: [trigger_text]}
+            # relations = [
+            #     {trigger_type: {"event": trigger_text, "argument": span}}
+            #     for entity_type, span in spans.items()
+            # ]
+            relations = []
+            for entity_type, span_list in spans.items():
+                for span in span_list:
+                    relations.append(
+                        {entity_type: {"event": trigger_text, "argument": span}}
+                    )
 
             new_sample = {
                 "input": text,
