@@ -1,6 +1,10 @@
 # Custom
 
 dataset/*
+experiments/*
+
+# VS Code
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

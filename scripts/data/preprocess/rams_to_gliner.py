@@ -40,7 +40,7 @@ def parse_ent_spans(spans, sentence):
     return spans_dict
 
 
-def parse_trigger(triggers, sentence):
+def parse_trigger(triggers, sentence, macro_event_types=False):
     if len(triggers) > 1:
         raise ValueError(f"Multiple triggers found: {triggers}")
 
@@ -52,6 +52,10 @@ def parse_trigger(triggers, sentence):
     trigger_type = trigger[2][0][0]
     # clean a bit
     trigger_type = trigger_type.replace(".n/a", "")
+
+    if macro_event_types:
+        # Extract macro event type (e.g., "conflict" from "conflict.attack.selfdirectedbattle")
+        trigger_type = trigger_type.split(".")[0]
 
     return trigger_type, " ".join(sentence[trigger_start : trigger_end + 1])
 
@@ -70,6 +74,11 @@ if __name__ == "__main__":
         type=str,
         help="Path to the output GLINER dataset file (JSONL format)",
     )
+    arg_parser.add_argument(
+        "--macro_event_types",
+        action="store_true",
+        help="Whether to use macro event types (e.g., conflict) instead of fine-grained ones (e.g., conflict.attack.selfdirectedbattle). Default: False",
+    )
     args = arg_parser.parse_args()
 
     output_path = Path(args.output_file)
@@ -77,9 +86,9 @@ if __name__ == "__main__":
 
     processed_samples = 0
 
-    with open(args.input_file, "r", encoding="utf-8") as infile, open(
-        args.output_file, "w", encoding="utf-8"
-    ) as outfile:
+    converted_samples = {}
+
+    with open(args.input_file, "r", encoding="utf-8") as infile:
         for line in tqdm(infile, desc="Processing samples"):
             data = json.loads(line)
 
@@ -90,7 +99,9 @@ if __name__ == "__main__":
             sample_id = data["doc_key"]
 
             spans = parse_ent_spans(data["ent_spans"], tokens)
-            trigger_type, trigger_text = parse_trigger(data["evt_triggers"], tokens)
+            trigger_type, trigger_text = parse_trigger(
+                data["evt_triggers"], tokens, args.macro_event_types
+            )
 
             # we now construct the output sample in GLINER format
             entities = {trigger_type: [trigger_text]}
@@ -102,7 +113,7 @@ if __name__ == "__main__":
             for entity_type, span_list in spans.items():
                 for span in span_list:
                     relations.append(
-                        {entity_type: {"event": trigger_text, "argument": span}}
+                        {entity_type: {"head": trigger_text, "tail": span}}
                     )
 
             new_sample = {
@@ -117,8 +128,59 @@ if __name__ == "__main__":
                     "sentences": data["sentences"],
                 },
             }
-            outfile.write(json.dumps(new_sample) + "\n")
+            if text not in converted_samples:
+                converted_samples[text] = []
+            converted_samples[text].append(new_sample)
             processed_samples += 1
+
+    # now we check for duplicate documents
+    print(
+        f"Found {len(converted_samples)} unique documents out of {processed_samples} samples"
+    )
+    # and we merge the samples with the same text into a single sample with multiple entities and relations
+    for text, samples in converted_samples.items():
+        if len(samples) > 1:
+            merged_entities = {}
+            merged_relations = []
+            for sample in samples:
+                for entity_type, entity_list in sample["output"]["entities"].items():
+                    if entity_type not in merged_entities:
+                        merged_entities[entity_type] = []
+                    merged_entities[entity_type].extend(entity_list)
+                merged_relations.extend(sample["output"]["relations"])
+            
+            # remove duplicates in entities and relations
+            merged_entities = {k: list(set(v)) for k, v in merged_entities.items()}
+            # check if there are duplicate relations (same head, tail, and type)
+            unique_relations = []
+            seen_relations = set()
+            for relation in merged_relations:
+                for relation_type, relation_info in relation.items():
+                    head = relation_info["head"]
+                    tail = relation_info["tail"]
+                    relation_key = (relation_type, head, tail)
+                    if relation_key not in seen_relations:
+                        seen_relations.add(relation_key)
+                        unique_relations.append(relation)
+            merged_relations = unique_relations
+            converted_samples[text] = {
+                "input": text,
+                "output": {
+                    "entities": merged_entities,
+                    "relations": merged_relations,
+                },
+                "metadata": [sample["metadata"] for sample in samples],
+            }
+        else:
+            samples[0]["metadata"] = [samples[0]["metadata"]]
+
+    with open(args.output_file, "w", encoding="utf-8") as outfile:
+        for new_samples in converted_samples.values():
+            if isinstance(new_samples, list):
+                for new_sample in new_samples:
+                    outfile.write(json.dumps(new_sample) + "\n")
+            else:
+                outfile.write(json.dumps(new_samples) + "\n")
 
     print(
         f"Processed {processed_samples} samples. Output written to {args.output_file}"

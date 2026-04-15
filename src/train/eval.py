@@ -1,7 +1,15 @@
+import logging
 from typing import Any
 
 from gliner2 import GLiNER2
 from gliner2.training.data import TrainDataInput, TrainingDataset
+from gliner2.training.trainer import ExtractorDataset
+
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 
 class EventArgumentExtractionEvaluatorGliNER2:
@@ -56,7 +64,9 @@ class EventArgumentExtractionEvaluatorGliNER2:
 
         if isinstance(doc, dict):
             for role, relations in doc.items():
-                relations_list = relations if isinstance(relations, list) else [relations]
+                relations_list = (
+                    relations if isinstance(relations, list) else [relations]
+                )
                 for relation in relations_list:
                     if relation is not None:
                         yield role, relation
@@ -86,7 +96,7 @@ class EventArgumentExtractionEvaluatorGliNER2:
 
         return start, end
 
-    def __call__(self, model: GLiNER2, data: TrainingDataset) -> dict[str, Any]:
+    def __call__(self, model: GLiNER2, data: ExtractorDataset) -> dict[str, Any]:
         metrics = {}
 
         schema = (
@@ -95,8 +105,9 @@ class EventArgumentExtractionEvaluatorGliNER2:
             .relations(self.argument_types)
         )
 
-        texts = [sample.text for sample in data]
-
+        texts = [sample[0] for sample in data]
+        
+        logging.info(f"Running model inference on {len(texts)} samples for evaluation...")
         results = model.batch_extract(
             texts,
             schema,
@@ -105,14 +116,17 @@ class EventArgumentExtractionEvaluatorGliNER2:
             include_confidence=True,
             include_spans=True,
         )
+        logging.info(f"Model inference completed for {len(texts)} samples.")
 
         event_preds = [sample["entities"] for sample in results]
         argument_preds = [sample["relation_extraction"] for sample in results]
 
-        event_golds = [sample.entities for sample in data]
-        argument_golds = [sample.relations for sample in data]
+        event_golds = [sample[1].get("entities", {}) for sample in data]
+        argument_golds = [sample[1].get("relations", []) for sample in data]
 
+        logger.info("Evaluating event extraction...")
         event_metrics = self.eval_events(texts, event_preds, event_golds)
+        logger.info("Evaluating argument extraction...")
         argument_metrics = self.eval_arguments(texts, argument_preds, argument_golds)
 
         # Event extraction metrics
@@ -133,6 +147,40 @@ class EventArgumentExtractionEvaluatorGliNER2:
         metrics["arg_c_recall"] = argument_metrics["arg_c_recall"]
         metrics["arg_c_f1"] = argument_metrics["arg_c_f1"]
 
+        # overall F1 scores
+        metrics["overall_event_arg_f1"] = (
+            event_metrics["f1"]
+            + argument_metrics["arg_i_f1"]
+            + argument_metrics["arg_c_f1"]
+        ) / 3
+
+        f1_rows = [
+            ("Event Span F1", metrics["event_span_f1"]),
+            ("Event Type F1", metrics["event_f1"]),
+            ("Arg-I F1", metrics["arg_i_f1"]),
+            ("Arg-C F1", metrics["arg_c_f1"]),
+            ("Overall F1", metrics["overall_event_arg_f1"]),
+        ]
+        metric_col_width = max(len(name) for name, _ in f1_rows)
+        score_col_width = len("F1 Score")
+
+        separator = f"+{'-' * (metric_col_width + 2)}+{'-' * (score_col_width + 2)}+"
+        header = (
+            f"| {'Metric'.ljust(metric_col_width)} | {'F1 Score'.ljust(score_col_width)} |"
+        )
+        body = "\n".join(
+            f"| {name.ljust(metric_col_width)} | {score:.4f} |" for name, score in f1_rows
+        )
+
+        logger.info(
+            "\n%s\n%s\n%s\n%s\n%s",
+            separator,
+            header,
+            separator,
+            body,
+            separator,
+        )
+
         return metrics
 
     def eval_events(self, texts, preds, golds):
@@ -145,10 +193,10 @@ class EventArgumentExtractionEvaluatorGliNER2:
 
         Args:
             texts: List of input texts.
-            preds: List of predicted events, where each event is represented as a dictionary with the event type as key, 
+            preds: List of predicted events, where each event is represented as a dictionary with the event type as key,
                 and the value is a list of predicted event mentions (spans) in the format {"start": int, "end": int, "text": str, "confidence": float}.
             golds: List of gold events, where each event is represented as a dictionary with the type as key, and the value is a list of gold event mentions (spans) strings, e.g. {"EventType": ["event mention 1", "event mention 2"]}.
-        
+
         Returns:
             A dictionary containing the evaluation metrics for event extraction, including span-level and type-level precision, recall, and F1 score.
         """

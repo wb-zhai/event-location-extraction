@@ -1,7 +1,19 @@
 import argparse
+import json
+import logging
 
 from gliner2 import GLiNER2
+from gliner2.training.data import TrainingDataset
 from gliner2.training.trainer import GLiNER2Trainer, TrainingConfig
+
+from src.data.utils import collect_schema
+from src.train.eval import EventArgumentExtractionEvaluatorGliNER2
+
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
 
@@ -27,6 +39,11 @@ if __name__ == "__main__":
         help="Path to the validation dataset file (JSONL format)",
     )
     arg_parser.add_argument(
+        "--schema_file",
+        type=str,
+        help="Path to the schema file (JSON format)",
+    )
+    arg_parser.add_argument(
         "--output_dir",
         type=str,
         help="Directory to save the trained model and checkpoints",
@@ -47,6 +64,23 @@ if __name__ == "__main__":
         type=int,
         default=16,
         help="Batch size for training (default: 16)",
+    )
+    arg_parser.add_argument(
+        "--eval_batch_size",
+        type=int,
+        help="Batch size for evaluation (default: same as --batch_size)",
+    )
+    arg_parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=1,
+        help="Number of steps to accumulate gradients before updating model parameters (default: 1)",
+    )
+    arg_parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=4,
+        help="Number of worker processes for data loading (default: 4)",
     )
     arg_parser.add_argument(
         "--encoder_lr",
@@ -101,6 +135,26 @@ if __name__ == "__main__":
     elif args.precision == "bf16":
         bf16_enabled = True
 
+    train_dataset = TrainingDataset.load(args.train_file)
+    val_dataset = TrainingDataset.load(args.val_file)
+
+    if args.schema_file:
+        logger.info(f"Loading schema from {args.schema_file}")
+        with open(args.schema_file, "r") as f:
+            schema = json.load(f)
+        event_types = list(schema["macro_trigger_types"].keys())
+        argument_types = list(schema["roles"].keys())
+    else:
+        logger.info("Collecting schema from training and validation datasets")
+        event_types, argument_types = collect_schema([train_dataset, val_dataset])
+
+    evaluator = EventArgumentExtractionEvaluatorGliNER2(
+        event_types=event_types,
+        argument_types=argument_types,
+        batch_size=args.eval_batch_size or args.batch_size,
+        num_workers=args.num_workers,
+    )
+
     # Configure training
     model = GLiNER2.from_pretrained(args.model_name)
     config = TrainingConfig(
@@ -108,13 +162,17 @@ if __name__ == "__main__":
         experiment_name=args.experiment_name,
         num_epochs=args.epochs,
         batch_size=args.batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        num_workers=args.num_workers,
         encoder_lr=args.encoder_lr,
         task_lr=args.task_lr,
         warmup_ratio=args.warmup_ratio,
         scheduler_type=args.scheduler_type,
         fp16=fp16_enabled,
         bf16=bf16_enabled,
-        eval_strategy="epoch",  # Evaluates and saves at end of each epoch
+        eval_strategy="steps",  # Evaluates and saves at end of each epoch
+        eval_steps=100,
+        metric_for_best="overall_event_arg_f1",
         save_best=True,
         early_stopping=True,
         early_stopping_patience=args.early_stopping_patience,
@@ -123,8 +181,8 @@ if __name__ == "__main__":
     )
 
     # Step 6: Train
-    trainer = GLiNER2Trainer(model, config)
-    results = trainer.train(train_data=args.train_file, eval_data=args.val_file)
+    trainer = GLiNER2Trainer(model, config, compute_metrics=evaluator)
+    results = trainer.train(train_data=train_dataset, eval_data=val_dataset)
 
     print("Training completed!")
     print(f"Best validation loss: {results['best_metric']:.4f}")
