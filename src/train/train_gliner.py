@@ -138,12 +138,17 @@ if __name__ == "__main__":
     train_dataset = TrainingDataset.load(args.train_file)
     val_dataset = TrainingDataset.load(args.val_file)
 
+    use_descriptions = True
     if args.schema_file:
         logger.info(f"Loading schema from {args.schema_file}")
         with open(args.schema_file, "r") as f:
             schema = json.load(f)
-        event_types = list(schema["macro_trigger_types"].keys())
-        argument_types = list(schema["roles"].keys())
+        if use_descriptions:
+            event_types = schema["macro_trigger_types"]
+            argument_types = schema["roles"]
+        else:
+            event_types = list(schema["macro_trigger_types"].keys())
+            argument_types = list(schema["roles"].keys())
     else:
         logger.info("Collecting schema from training and validation datasets")
         event_types, argument_types = collect_schema([train_dataset, val_dataset])

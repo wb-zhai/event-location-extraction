@@ -14,7 +14,7 @@ from src.train.eval import EventArgumentExtractionEvaluatorGliNER2
 
 
 DEFAULT_MODEL_ID = "fastino/gliner2-base-v1"
-DEFAULT_DATA_PATH = ROOT / "dataset/rams/processed/gliner/dev.jsonl"
+DEFAULT_DATA_PATH = ROOT / "dataset/rams/processed/gliner/dev.macro.jsonl"
 
 
 def resolve_model_path(model_ref: str) -> str:
@@ -99,6 +99,11 @@ def main() -> None:
         default=0,
         help="DataLoader workers passed to model.batch_extract.",
     )
+    parser.add_argument(
+        "--ontology-file",
+        type=Path,
+        help="Path to the ontology file defining event and argument types. If not provided, the schema will be automatically collected from the dataset.",
+    )
     args = parser.parse_args()
 
     dataset = TrainingDataset.load(args.data_file)
@@ -112,11 +117,18 @@ def main() -> None:
         )
 
     subset = TrainingDataset(subset_examples)
-    event_types, argument_types = collect_schema(dataset)
+
+    if args.ontology_file:
+        with open(args.ontology_file, "r") as f:
+            schema = json.load(f)
+        event_types = schema["macro_trigger_types"]
+        argument_types = schema["roles"]
+    else:
+        event_types, argument_types = collect_schema(dataset)
 
     model_path = resolve_model_path(args.model)
     model = GLiNER2.from_pretrained(
-        model_path, local_files_only=Path(model_path).exists()
+        model_path, local_files_only=Path(model_path).exists(), map_location="cpu"
     )
 
     evaluator = EventArgumentExtractionEvaluatorGliNER2(
@@ -126,6 +138,7 @@ def main() -> None:
         num_workers=args.num_workers,
     )
     schema = model.create_schema().entities(event_types).relations(argument_types)
+
     texts = [example.text for example in subset]
     results = model.batch_extract(
         texts,
@@ -158,13 +171,13 @@ def main() -> None:
         "arg_c_f1": argument_metrics["arg_c_f1"],
     }
 
-    sample_ids = [record.get("metadata", {}).get("id") for record in subset_records]
+    # sample_ids = [record.get("metadata", {}).get("id") for record in subset_records]
     samples = []
-    for sample_id, text, raw_record, result in zip(sample_ids, texts, subset_records, results):
+    for text, raw_record, result in zip(texts, subset_records, results):
         output = raw_record.get("output", {})
         samples.append(
             {
-                "id": sample_id,
+                # "id": sample_id,
                 "text": text,
                 "gold": {
                     "entities": output.get("entities", {}),
@@ -184,7 +197,7 @@ def main() -> None:
             {
                 "offset": args.offset,
                 "num_samples": len(subset),
-                "sample_ids": sample_ids,
+                # "sample_ids": sample_ids,
                 "metrics": metrics,
                 "samples": samples,
             },
