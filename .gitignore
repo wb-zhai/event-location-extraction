@@ -2,6 +2,7 @@
 
 dataset/*
 experiments/*
+.agents
 
 # VS Code
 .vscode/
