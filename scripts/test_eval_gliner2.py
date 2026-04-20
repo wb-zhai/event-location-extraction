@@ -42,7 +42,9 @@ def collect_schema(dataset: TrainingDataset) -> tuple[list[str], list[str]]:
     event_types = sorted(
         {event_type for example in dataset for event_type in example.entities.keys()}
     )
-    argument_types = sorted({relation.name for example in dataset for relation in example.relations})
+    argument_types = sorted(
+        {relation.name for example in dataset for relation in example.relations}
+    )
     return event_types, argument_types
 
 
@@ -60,6 +62,65 @@ def drop_empty_values(data: dict) -> dict:
     return {key: value for key, value in data.items() if value}
 
 
+def build_gold_event_predictions(text: str, gold_entities: dict) -> dict:
+    event_preds = {}
+    for event_type, mentions in (gold_entities or {}).items():
+        spans = []
+        for mention in mentions or []:
+            for (
+                start,
+                end,
+            ) in EventArgumentExtractionEvaluatorGliNER2._find_exact_matches(
+                text, mention
+            ):
+                spans.append({"start": start, "end": end, "text": text[start:end]})
+        if spans:
+            event_preds[event_type] = spans
+    return event_preds
+
+
+def build_gold_argument_predictions(text: str, gold_relations) -> dict:
+    relation_preds = {}
+    for relation in gold_relations or []:
+        if not isinstance(relation, dict):
+            continue
+
+        for role, payload in relation.items():
+            if not isinstance(payload, dict):
+                continue
+
+            event_text = payload.get("event")
+            argument_text = payload.get("argument")
+            if not event_text or not argument_text:
+                continue
+
+            event_spans = EventArgumentExtractionEvaluatorGliNER2._find_exact_matches(
+                text, event_text
+            )
+            argument_spans = (
+                EventArgumentExtractionEvaluatorGliNER2._find_exact_matches(
+                    text, argument_text
+                )
+            )
+            for event_start, event_end in event_spans:
+                for arg_start, arg_end in argument_spans:
+                    relation_preds.setdefault(role, []).append(
+                        {
+                            "event": {
+                                "start": event_start,
+                                "end": event_end,
+                                "text": text[event_start:event_end],
+                            },
+                            "argument": {
+                                "start": arg_start,
+                                "end": arg_end,
+                                "text": text[arg_start:arg_end],
+                            },
+                        }
+                    )
+    return relation_preds
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Smoke-test EventArgumentExtractionEvaluatorGliNER2 on RAMS."
@@ -68,6 +129,16 @@ def main() -> None:
         "--model",
         default=DEFAULT_MODEL_ID,
         help="Model id or local snapshot path (default: fastino/gliner2-base-v1).",
+    )
+    parser.add_argument(
+        "--prediction-source",
+        choices=["model", "gold"],
+        default="model",
+        help=(
+            "Use model outputs or gold-converted span outputs as predictions. "
+            "'gold' is a sanity mode that should return perfect arg/event metrics "
+            "when exact-match mapping succeeds."
+        ),
     )
     parser.add_argument(
         "--data-file",
@@ -114,30 +185,49 @@ def main() -> None:
     subset = TrainingDataset(subset_examples)
     event_types, argument_types = collect_schema(dataset)
 
-    model_path = resolve_model_path(args.model)
-    model = GLiNER2.from_pretrained(
-        model_path, local_files_only=Path(model_path).exists()
-    )
-
     evaluator = EventArgumentExtractionEvaluatorGliNER2(
         event_types=event_types,
         argument_types=argument_types,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
     )
-    schema = model.create_schema().entities(event_types).relations(argument_types)
     texts = [example.text for example in subset]
-    results = model.batch_extract(
-        texts,
-        schema,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        include_confidence=True,
-        include_spans=True,
-    )
 
-    event_preds = [sample["entities"] for sample in results]
-    argument_preds = [sample["relation_extraction"] for sample in results]
+    if args.prediction_source == "model":
+        model_path = resolve_model_path(args.model)
+        model = GLiNER2.from_pretrained(
+            model_path, local_files_only=Path(model_path).exists()
+        )
+        schema = model.create_schema().entities(event_types).relations(argument_types)
+        results = model.batch_extract(
+            texts,
+            schema,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            include_confidence=True,
+            include_spans=True,
+        )
+        event_preds = [sample["entities"] for sample in results]
+        argument_preds = [sample["relation_extraction"] for sample in results]
+    else:
+        results = []
+        event_preds = []
+        argument_preds = []
+        for text, raw_record in zip(texts, subset_records):
+            output = raw_record.get("output", {})
+            gold_entities = output.get("entities", {})
+            gold_relations = output.get("relations", [])
+            event_pred = build_gold_event_predictions(text, gold_entities)
+            argument_pred = build_gold_argument_predictions(text, gold_relations)
+
+            event_preds.append(event_pred)
+            argument_preds.append(argument_pred)
+            results.append(
+                {
+                    "entities": event_pred,
+                    "relation_extraction": argument_pred,
+                }
+            )
     event_golds = [sample.entities for sample in subset]
     argument_golds = [sample.relations for sample in subset]
 
@@ -160,7 +250,9 @@ def main() -> None:
 
     sample_ids = [record.get("metadata", {}).get("id") for record in subset_records]
     samples = []
-    for sample_id, text, raw_record, result in zip(sample_ids, texts, subset_records, results):
+    for sample_id, text, raw_record, result in zip(
+        sample_ids, texts, subset_records, results
+    ):
         output = raw_record.get("output", {})
         samples.append(
             {
@@ -184,6 +276,7 @@ def main() -> None:
             {
                 "offset": args.offset,
                 "num_samples": len(subset),
+                "prediction_source": args.prediction_source,
                 "sample_ids": sample_ids,
                 "metrics": metrics,
                 "samples": samples,
