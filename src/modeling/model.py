@@ -330,13 +330,24 @@ class EventReader(PreTrainedModel):
     def _mask_invalid_columns(
         logits: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:
-        return logits.masked_fill((positions < 0).unsqueeze(1), -1e9)
+        mask_value = torch.finfo(logits.dtype).min
+        return logits.masked_fill((positions < 0).unsqueeze(1), mask_value)
 
     def _encode(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor
     ) -> torch.Tensor:
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         return outputs.last_hidden_state
+
+    def _align_custom_head_dtype(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        target_dtype = hidden_states.dtype
+        for module in self.event_start_head.modules():
+            if isinstance(module, nn.Linear):
+                target_dtype = module.weight.dtype
+                break
+        if hidden_states.dtype == target_dtype:
+            return hidden_states
+        return hidden_states.to(target_dtype)
 
     def _span_probabilities(
         self,
@@ -612,11 +623,12 @@ class EventReader(PreTrainedModel):
         **_: Any,
     ) -> dict[str, Any]:
         hidden_states = self._encode(input_ids=input_ids, attention_mask=attention_mask)
+        aligned_hidden_states = self._align_custom_head_dtype(hidden_states)
 
-        event_start_logits = self.event_start_head(hidden_states)
-        event_end_logits = self.event_end_head(hidden_states)
-        argument_start_logits = self.argument_start_head(hidden_states)
-        argument_end_logits = self.argument_end_head(hidden_states)
+        event_start_logits = self.event_start_head(aligned_hidden_states)
+        event_end_logits = self.event_end_head(aligned_hidden_states)
+        argument_start_logits = self.argument_start_head(aligned_hidden_states)
+        argument_end_logits = self.argument_end_head(aligned_hidden_states)
 
         outputs: dict[str, Any] = {
             "event_start_logits": event_start_logits,
@@ -638,10 +650,10 @@ class EventReader(PreTrainedModel):
             losses.append(self._loss_or_zero(argument_end_logits, argument_end_labels))
 
         event_label_states = self._gather_positions(
-            hidden_states, event_marker_positions
+            aligned_hidden_states, event_marker_positions
         )
         argument_label_states = self._gather_positions(
-            hidden_states, argument_marker_positions
+            aligned_hidden_states, argument_marker_positions
         )
 
         if (
@@ -651,7 +663,7 @@ class EventReader(PreTrainedModel):
             and gold_event_token_starts.shape[1] > 0
         ):
             gold_event_features = self._build_span_features(
-                hidden_states,
+                aligned_hidden_states,
                 gold_event_token_starts,
                 gold_event_token_ends,
             )
@@ -671,7 +683,7 @@ class EventReader(PreTrainedModel):
             and gold_argument_token_starts.shape[1] > 0
         ):
             gold_argument_features = self._build_span_features(
-                hidden_states,
+                aligned_hidden_states,
                 gold_argument_token_starts,
                 gold_argument_token_ends,
             )
@@ -716,7 +728,7 @@ class EventReader(PreTrainedModel):
             )
             outputs["decoded_predictions"] = [
                 self._decode_document(
-                    hidden_states=hidden_states[batch_index],
+                    hidden_states=aligned_hidden_states[batch_index],
                     event_start_probs=event_start_probs[batch_index],
                     event_end_probs=event_end_probs[batch_index],
                     argument_start_probs=argument_start_probs[batch_index],

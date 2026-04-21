@@ -218,6 +218,8 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
         if pair in seen_pairs:
             raise ValueError(
                 f"{sample_id}: multiple labels for event/argument pair {pair} are not supported in v1"
+                # show the sample id and pair to help identify the issue
+                f" (sample_id={sample_id}, event_idx={event_idx}, argument_idx={argument_idx})"
             )
         seen_pairs.add(pair)
         relations.append(
