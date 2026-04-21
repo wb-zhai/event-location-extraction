@@ -6,11 +6,9 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers import AutoModel, PretrainedConfig, PreTrainedModel
+from transformers import AutoConfig, AutoModel, PretrainedConfig, PreTrainedModel
 
 DEFAULT_MODEL_NAME = "microsoft/deberta-v3-base"
-DEFAULT_EVENT_THRESHOLD = 0.5
-DEFAULT_ARGUMENT_THRESHOLD = 0.5
 DEFAULT_RELATION_THRESHOLD = 0.5
 INTERNAL_RELATION_PAIR_BUDGET = 256
 
@@ -178,22 +176,22 @@ class EventReaderConfig(PretrainedConfig):
     def __init__(
         self,
         model_name: str = DEFAULT_MODEL_NAME,
+        encoder_vocab_size: int | None = None,
         projection_dim: int = 256,
         hidden_dropout_prob: float = 0.1,
-        event_threshold: float = DEFAULT_EVENT_THRESHOLD,
-        argument_threshold: float = DEFAULT_ARGUMENT_THRESHOLD,
         relation_threshold: float = DEFAULT_RELATION_THRESHOLD,
         relation_pair_budget: int = INTERNAL_RELATION_PAIR_BUDGET,
+        relation_loss_weight: float = 1.0,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.model_name = model_name
+        self.encoder_vocab_size = encoder_vocab_size
         self.projection_dim = projection_dim
         self.hidden_dropout_prob = hidden_dropout_prob
-        self.event_threshold = event_threshold
-        self.argument_threshold = argument_threshold
         self.relation_threshold = relation_threshold
         self.relation_pair_budget = relation_pair_budget
+        self.relation_loss_weight = relation_loss_weight
 
 
 class EventReader(PreTrainedModel):
@@ -205,11 +203,36 @@ class EventReader(PreTrainedModel):
         encoder: PreTrainedModel | None = None,
     ) -> None:
         super().__init__(config)
+        self.all_tied_weights_keys = {}
+        default_device = getattr(torch, "get_default_device", lambda: torch.device("cpu"))()
+        load_encoder_from_config = (
+            encoder is None
+            and isinstance(default_device, torch.device)
+            and default_device.type == "meta"
+        )
+        encoder_from_config = None
+        if encoder is None and load_encoder_from_config:
+            encoder_config = AutoConfig.from_pretrained(config.model_name)
+            if config.encoder_vocab_size is not None:
+                encoder_config.vocab_size = config.encoder_vocab_size
+            encoder_from_config = AutoModel.from_config(encoder_config)
         self.encoder = (
             encoder
             if encoder is not None
-            else AutoModel.from_pretrained(config.model_name)
+            else (
+                encoder_from_config
+                if encoder_from_config is not None
+                else AutoModel.from_pretrained(config.model_name, dtype=torch.float32)
+            )
         )
+        input_embeddings = self.get_input_embeddings()
+        if input_embeddings is None:
+            raise ValueError("EventReader encoder must define input embeddings")
+        current_vocab_size = input_embeddings.num_embeddings
+        if config.encoder_vocab_size is None:
+            config.encoder_vocab_size = current_vocab_size
+        elif current_vocab_size != config.encoder_vocab_size:
+            self.resize_token_embeddings(config.encoder_vocab_size)
         hidden_size = self.encoder.config.hidden_size
         projection_dim = config.projection_dim
 
@@ -217,13 +240,13 @@ class EventReader(PreTrainedModel):
             hidden_size, 2, config.hidden_dropout_prob
         )
         self.event_end_head = self._make_classifier(
-            hidden_size, 2, config.hidden_dropout_prob
+            hidden_size * 2, 2, config.hidden_dropout_prob
         )
         self.argument_start_head = self._make_classifier(
             hidden_size, 2, config.hidden_dropout_prob
         )
         self.argument_end_head = self._make_classifier(
-            hidden_size, 2, config.hidden_dropout_prob
+            hidden_size * 2, 2, config.hidden_dropout_prob
         )
         self.event_span_projector = self._make_mlp(
             hidden_size * 2,
@@ -311,8 +334,28 @@ class EventReader(PreTrainedModel):
             nn.Linear(input_dim, output_dim),
         )
 
-    def resize_token_embeddings(self, new_num_tokens: int) -> nn.Embedding:
-        return self.encoder.resize_token_embeddings(new_num_tokens)
+    def resize_token_embeddings(
+        self,
+        new_num_tokens: int | None = None,
+        pad_to_multiple_of: int | None = None,
+        mean_resizing: bool = True,
+    ) -> nn.Embedding:
+        input_embeddings = self.encoder.resize_token_embeddings(
+            new_num_tokens,
+            pad_to_multiple_of=pad_to_multiple_of,
+            mean_resizing=mean_resizing,
+        )
+        self.config.encoder_vocab_size = input_embeddings.num_embeddings
+        return input_embeddings
+
+    def get_input_embeddings(self) -> nn.Module | None:
+        return self.encoder.get_input_embeddings()
+
+    def set_input_embeddings(self, value: nn.Module) -> None:
+        self.encoder.set_input_embeddings(value)
+        num_embeddings = getattr(value, "num_embeddings", None)
+        if isinstance(num_embeddings, int):
+            self.config.encoder_vocab_size = num_embeddings
 
     @staticmethod
     def _gather_positions(
@@ -349,14 +392,51 @@ class EventReader(PreTrainedModel):
             return hidden_states
         return hidden_states.to(target_dtype)
 
-    def _span_probabilities(
+    def _compute_conditioned_end_logits(
         self,
-        start_logits: torch.Tensor,
-        end_logits: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        start_probs = torch.softmax(start_logits, dim=-1)[..., 1]
-        end_probs = torch.softmax(end_logits, dim=-1)[..., 1]
-        return start_probs, end_probs
+        hidden_states: torch.Tensor,
+        start_positions: torch.Tensor,
+        end_head: nn.Module,
+    ) -> torch.Tensor:
+        start_states = self._gather_positions(hidden_states, start_positions)
+        token_states = hidden_states.unsqueeze(1).expand(
+            -1, start_positions.shape[1], -1, -1
+        )
+        conditioned_features = torch.cat(
+            [
+                start_states.unsqueeze(2).expand(-1, -1, hidden_states.shape[1], -1),
+                token_states,
+            ],
+            dim=-1,
+        )
+        return end_head(conditioned_features)
+
+    def _build_conditioned_end_labels(
+        self,
+        start_positions: torch.Tensor,
+        end_positions: torch.Tensor,
+        word_end_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        batch_size, span_count = start_positions.shape
+        sequence_length = word_end_mask.shape[1]
+        labels = torch.full(
+            (batch_size, span_count, sequence_length),
+            -100,
+            dtype=torch.long,
+            device=start_positions.device,
+        )
+        token_indices = torch.arange(sequence_length, device=start_positions.device)
+        valid_starts = start_positions >= 0
+        valid_ends = word_end_mask.unsqueeze(1).bool()
+        end_after_start = token_indices.view(1, 1, -1) >= start_positions.unsqueeze(-1)
+        valid_positions = valid_starts.unsqueeze(-1) & valid_ends & end_after_start
+        labels = labels.masked_fill(valid_positions, 0)
+
+        valid_gold = valid_starts & (end_positions >= 0)
+        if valid_gold.any():
+            batch_indices, span_indices = valid_gold.nonzero(as_tuple=True)
+            labels[batch_indices, span_indices, end_positions[batch_indices, span_indices]] = 1
+        return labels
 
     def _build_span_features(
         self,
@@ -408,32 +488,50 @@ class EventReader(PreTrainedModel):
 
     def _decode_spans(
         self,
+        hidden_states: torch.Tensor,
         start_scores: torch.Tensor,
-        end_scores: torch.Tensor,
+        start_logits: torch.Tensor,
+        end_head: nn.Module,
         word_start_mask: torch.Tensor,
         word_end_mask: torch.Tensor,
         token_to_word: torch.Tensor,
-        threshold: float,
     ) -> list[dict[str, Any]]:
+        start_predictions = start_logits.argmax(dim=-1)
         candidate_starts = [
             index
-            for index, score in enumerate(start_scores.tolist())
-            if score >= threshold and int(word_start_mask[index].item()) == 1
-        ]
-        candidate_ends = [
-            index
-            for index, score in enumerate(end_scores.tolist())
-            if score >= threshold and int(word_end_mask[index].item()) == 1
+            for index, prediction in enumerate(start_predictions.tolist())
+            if prediction == 1 and int(word_start_mask[index].item()) == 1
         ]
         decoded: list[dict[str, Any]] = []
         seen_word_spans: set[tuple[int, int]] = set()
+        if not candidate_starts:
+            return decoded
+
+        start_positions = torch.tensor(
+            [candidate_starts],
+            device=hidden_states.device,
+            dtype=torch.long,
+        )
+        conditioned_end_logits = self._compute_conditioned_end_logits(
+            hidden_states.unsqueeze(0),
+            start_positions,
+            end_head,
+        )[0]
+        conditioned_end_scores = torch.softmax(conditioned_end_logits, dim=-1)[..., 1]
+
         for start_idx in candidate_starts:
-            valid_ends = [end_idx for end_idx in candidate_ends if end_idx >= start_idx]
-            if not valid_ends:
-                continue
-            end_idx = max(
-                valid_ends, key=lambda candidate: float(end_scores[candidate].item())
+            start_offset = candidate_starts.index(start_idx)
+            end_scores = conditioned_end_scores[start_offset]
+            valid_end_mask = word_end_mask.bool() & (
+                torch.arange(word_end_mask.shape[0], device=word_end_mask.device)
+                >= start_idx
             )
+            if not valid_end_mask.any():
+                continue
+            masked_end_scores = end_scores.masked_fill(
+                ~valid_end_mask, torch.finfo(end_scores.dtype).min
+            )
+            end_idx = int(masked_end_scores.argmax().item())
             start_word = int(token_to_word[start_idx].item())
             end_word = int(token_to_word[end_idx].item())
             if start_word < 0 or end_word < start_word:
@@ -459,10 +557,8 @@ class EventReader(PreTrainedModel):
     def _decode_document(
         self,
         hidden_states: torch.Tensor,
-        event_start_probs: torch.Tensor,
-        event_end_probs: torch.Tensor,
-        argument_start_probs: torch.Tensor,
-        argument_end_probs: torch.Tensor,
+        event_start_logits: torch.Tensor,
+        argument_start_logits: torch.Tensor,
         word_start_mask: torch.Tensor,
         word_end_mask: torch.Tensor,
         token_to_word: torch.Tensor,
@@ -470,26 +566,28 @@ class EventReader(PreTrainedModel):
         argument_marker_positions: torch.Tensor,
         event_label_texts: list[str],
         argument_label_texts: list[str],
-        event_threshold: float,
-        argument_threshold: float,
         relation_threshold: float,
         relation_pair_budget: int,
     ) -> dict[str, Any]:
+        event_start_probs = torch.softmax(event_start_logits, dim=-1)[..., 1]
+        argument_start_probs = torch.softmax(argument_start_logits, dim=-1)[..., 1]
         event_predictions = self._decode_spans(
+            hidden_states,
             event_start_probs,
-            event_end_probs,
+            event_start_logits,
+            self.event_end_head,
             word_start_mask,
             word_end_mask,
             token_to_word,
-            event_threshold,
         )
         argument_predictions = self._decode_spans(
+            hidden_states,
             argument_start_probs,
-            argument_end_probs,
+            argument_start_logits,
+            self.argument_end_head,
             word_start_mask,
             word_end_mask,
             token_to_word,
-            argument_threshold,
         )
 
         if event_predictions and event_label_texts:
@@ -529,28 +627,34 @@ class EventReader(PreTrainedModel):
                     event_label_texts[0] if event_label_texts else "event"
                 )
 
-        event_predictions, argument_predictions = apply_relation_budget(
-            event_predictions,
-            argument_predictions,
+        budgeted_events, budgeted_arguments = apply_relation_budget(
+            [
+                {**item, "original_idx": index}
+                for index, item in enumerate(event_predictions)
+            ],
+            [
+                {**item, "original_idx": index}
+                for index, item in enumerate(argument_predictions)
+            ],
             relation_pair_budget,
         )
 
-        relation_predictions: list[dict[str, Any]] = []
-        if event_predictions and argument_predictions and argument_label_texts:
+        relation_candidates: list[dict[str, Any]] = []
+        if budgeted_events and budgeted_arguments and argument_label_texts:
             event_starts = torch.tensor(
-                [[item["token_start"] for item in event_predictions]],
+                [[item["token_start"] for item in budgeted_events]],
                 device=hidden_states.device,
             )
             event_ends = torch.tensor(
-                [[item["token_end"] for item in event_predictions]],
+                [[item["token_end"] for item in budgeted_events]],
                 device=hidden_states.device,
             )
             argument_starts = torch.tensor(
-                [[item["token_start"] for item in argument_predictions]],
+                [[item["token_start"] for item in budgeted_arguments]],
                 device=hidden_states.device,
             )
             argument_ends = torch.tensor(
-                [[item["token_end"] for item in argument_predictions]],
+                [[item["token_end"] for item in budgeted_arguments]],
                 device=hidden_states.device,
             )
             role_positions = argument_marker_positions.unsqueeze(0)
@@ -567,19 +671,34 @@ class EventReader(PreTrainedModel):
                 ),
                 self._gather_positions(hidden_states.unsqueeze(0), role_positions),
             )[0]
-            positive_scores = torch.softmax(relation_logits, dim=-1)[..., 1]
-            decoded_relations = decode_multi_label_relations(
-                positive_scores, relation_threshold
+            invalid_role_mask = (argument_marker_positions < 0).view(1, 1, -1, 1)
+            relation_logits = relation_logits.masked_fill(
+                invalid_role_mask,
+                torch.finfo(relation_logits.dtype).min,
             )
+            positive_scores = torch.softmax(relation_logits, dim=-1)[..., 1]
+            decoded_relations = decode_multi_label_relations(positive_scores, 0.0)
             for relation in decoded_relations:
-                relation_predictions.append(
+                if relation["label_idx"] >= len(argument_label_texts):
+                    continue
+                relation_candidates.append(
                     {
-                        "event_idx": relation["event_idx"],
-                        "argument_idx": relation["argument_idx"],
+                        "event_idx": budgeted_events[relation["event_idx"]][
+                            "original_idx"
+                        ],
+                        "argument_idx": budgeted_arguments[relation["argument_idx"]][
+                            "original_idx"
+                        ],
                         "label": argument_label_texts[relation["label_idx"]],
                         "score": relation["score"],
                     }
                 )
+
+        relation_predictions = [
+            relation
+            for relation in relation_candidates
+            if relation["score"] >= relation_threshold
+        ]
 
         return {
             "events": [
@@ -596,6 +715,7 @@ class EventReader(PreTrainedModel):
                 for item in argument_predictions
             ],
             "relations": relation_predictions,
+            "relation_candidates": relation_candidates,
         }
 
     def forward(
@@ -626,9 +746,9 @@ class EventReader(PreTrainedModel):
         aligned_hidden_states = self._align_custom_head_dtype(hidden_states)
 
         event_start_logits = self.event_start_head(aligned_hidden_states)
-        event_end_logits = self.event_end_head(aligned_hidden_states)
         argument_start_logits = self.argument_start_head(aligned_hidden_states)
-        argument_end_logits = self.argument_end_head(aligned_hidden_states)
+        event_end_logits = None
+        argument_end_logits = None
 
         outputs: dict[str, Any] = {
             "event_start_logits": event_start_logits,
@@ -637,17 +757,63 @@ class EventReader(PreTrainedModel):
             "argument_end_logits": argument_end_logits,
         }
 
-        losses: list[torch.Tensor] = []
+        losses: list[tuple[torch.Tensor, float]] = []
         if event_start_labels is not None:
-            losses.append(self._loss_or_zero(event_start_logits, event_start_labels))
-        if event_end_labels is not None:
-            losses.append(self._loss_or_zero(event_end_logits, event_end_labels))
-        if argument_start_labels is not None:
-            losses.append(
-                self._loss_or_zero(argument_start_logits, argument_start_labels)
+            event_start_loss = self._loss_or_zero(
+                event_start_logits, event_start_labels
             )
+            outputs["loss_event_start"] = event_start_loss
+            losses.append((event_start_loss, 1.0))
+        if event_end_labels is not None:
+            if gold_event_token_starts is None or gold_event_token_ends is None:
+                raise ValueError(
+                    "Conditioned event end loss requires gold start and end positions"
+                )
+            conditioned_event_end_logits = self._compute_conditioned_end_logits(
+                aligned_hidden_states,
+                gold_event_token_starts,
+                self.event_end_head,
+            )
+            conditioned_event_end_labels = self._build_conditioned_end_labels(
+                gold_event_token_starts,
+                gold_event_token_ends,
+                word_end_mask if word_end_mask is not None else (event_end_labels != -100),
+            )
+            outputs["event_end_logits"] = conditioned_event_end_logits
+            event_end_loss = self._loss_or_zero(
+                conditioned_event_end_logits, conditioned_event_end_labels
+            )
+            outputs["loss_event_end"] = event_end_loss
+            losses.append((event_end_loss, 1.0))
+        if argument_start_labels is not None:
+            argument_start_loss = self._loss_or_zero(
+                argument_start_logits, argument_start_labels
+            )
+            outputs["loss_argument_start"] = argument_start_loss
+            losses.append((argument_start_loss, 1.0))
         if argument_end_labels is not None:
-            losses.append(self._loss_or_zero(argument_end_logits, argument_end_labels))
+            if gold_argument_token_starts is None or gold_argument_token_ends is None:
+                raise ValueError(
+                    "Conditioned argument end loss requires gold start and end positions"
+                )
+            conditioned_argument_end_logits = self._compute_conditioned_end_logits(
+                aligned_hidden_states,
+                gold_argument_token_starts,
+                self.argument_end_head,
+            )
+            conditioned_argument_end_labels = self._build_conditioned_end_labels(
+                gold_argument_token_starts,
+                gold_argument_token_ends,
+                word_end_mask
+                if word_end_mask is not None
+                else (argument_end_labels != -100),
+            )
+            outputs["argument_end_logits"] = conditioned_argument_end_logits
+            argument_end_loss = self._loss_or_zero(
+                conditioned_argument_end_logits, conditioned_argument_end_labels
+            )
+            outputs["loss_argument_end"] = argument_end_loss
+            losses.append((argument_end_loss, 1.0))
 
         event_label_states = self._gather_positions(
             aligned_hidden_states, event_marker_positions
@@ -673,7 +839,11 @@ class EventReader(PreTrainedModel):
                 event_marker_positions,
             )
             outputs["event_type_logits"] = event_type_logits
-            losses.append(self._loss_or_zero(event_type_logits, gold_event_type_labels))
+            event_type_loss = self._loss_or_zero(
+                event_type_logits, gold_event_type_labels
+            )
+            outputs["loss_event_type"] = event_type_loss
+            losses.append((event_type_loss, 1.0))
         else:
             gold_event_features = None
 
@@ -704,10 +874,14 @@ class EventReader(PreTrainedModel):
                 argument_label_states,
             )
             outputs["relation_logits"] = relation_logits
-            losses.append(self._loss_or_zero(relation_logits, relation_labels))
+            relation_loss = self._loss_or_zero(relation_logits, relation_labels)
+            outputs["loss_relation"] = relation_loss
+            losses.append((relation_loss, self.config.relation_loss_weight))
 
         if losses:
-            outputs["loss"] = torch.stack(losses).mean()
+            weighted_losses = torch.stack([loss * weight for loss, weight in losses])
+            total_weight = sum(weight for _, weight in losses)
+            outputs["loss"] = weighted_losses.sum() / max(total_weight, 1e-8)
 
         if decode_predictions:
             if (
@@ -720,19 +894,11 @@ class EventReader(PreTrainedModel):
                 raise ValueError(
                     "Decoding requires word masks, token-to-word map, and label texts"
                 )
-            event_start_probs, event_end_probs = self._span_probabilities(
-                event_start_logits, event_end_logits
-            )
-            argument_start_probs, argument_end_probs = self._span_probabilities(
-                argument_start_logits, argument_end_logits
-            )
             outputs["decoded_predictions"] = [
                 self._decode_document(
                     hidden_states=aligned_hidden_states[batch_index],
-                    event_start_probs=event_start_probs[batch_index],
-                    event_end_probs=event_end_probs[batch_index],
-                    argument_start_probs=argument_start_probs[batch_index],
-                    argument_end_probs=argument_end_probs[batch_index],
+                    event_start_logits=event_start_logits[batch_index],
+                    argument_start_logits=argument_start_logits[batch_index],
                     word_start_mask=word_start_mask[batch_index],
                     word_end_mask=word_end_mask[batch_index],
                     token_to_word=token_to_word[batch_index],
@@ -740,8 +906,6 @@ class EventReader(PreTrainedModel):
                     argument_marker_positions=argument_marker_positions[batch_index],
                     event_label_texts=event_label_texts[batch_index],
                     argument_label_texts=argument_label_texts[batch_index],
-                    event_threshold=self.config.event_threshold,
-                    argument_threshold=self.config.argument_threshold,
                     relation_threshold=self.config.relation_threshold,
                     relation_pair_budget=self.config.relation_pair_budget,
                 )

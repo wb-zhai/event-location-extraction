@@ -7,8 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-logger = logging.getLogger(__name__)
 from gliner.modeling.span_rep import SpanRepLayer
 from gliner2 import GLiNER2
 from gliner2.layers import CountLSTM, CountLSTMoE, CountLSTMv2, create_mlp
@@ -21,6 +19,8 @@ from transformers import (
     PretrainedConfig,
     PreTrainedModel,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class EventArgumentExtractionEvaluatorGliNER2(GLiNER2):

@@ -12,6 +12,7 @@ from transformers import (
     TrainingArguments,
 )
 
+from src.train import train as train_module
 from src.data.dataset import (
     ARGUMENT_MARKER,
     EVENT_MARKER,
@@ -23,12 +24,17 @@ from src.data.dataset import (
     normalize_record,
 )
 from src.modeling.model import (
+    DEFAULT_RELATION_THRESHOLD,
     EventReaderConfig,
     EventReader,
     apply_relation_budget,
     decode_multi_label_relations,
 )
-from src.train.train import EventArgumentTrainer
+from src.train.train import EventArgumentTrainer, resolve_precision_flags
+from src.train.train import (
+    _prediction_with_relation_threshold,
+    tune_relation_threshold,
+)
 
 
 def build_record(sample_id: str = "doc-1") -> dict:
@@ -163,10 +169,10 @@ def build_subword_test_tokenizer(tmp_path: Path) -> BertTokenizerFast:
     return tokenizer
 
 
-def build_test_model(tokenizer: BertTokenizerFast) -> EventReader:
-    encoder = BertModel(
+def build_test_encoder(vocab_size: int) -> BertModel:
+    return BertModel(
         BertConfig(
-            vocab_size=len(tokenizer),
+            vocab_size=vocab_size,
             hidden_size=32,
             num_hidden_layers=1,
             num_attention_heads=4,
@@ -174,8 +180,17 @@ def build_test_model(tokenizer: BertTokenizerFast) -> EventReader:
             max_position_embeddings=128,
         )
     )
+
+
+def build_test_model(
+    tokenizer: BertTokenizerFast,
+    *,
+    model_name: str = "test",
+    encoder_vocab_size: int | None = None,
+) -> EventReader:
+    encoder = build_test_encoder(encoder_vocab_size or len(tokenizer))
     model = EventReader(
-        EventReaderConfig(model_name="test", projection_dim=16),
+        EventReaderConfig(model_name=model_name, projection_dim=16),
         encoder=encoder,
     )
     model.resize_token_embeddings(len(tokenizer))
@@ -434,6 +449,13 @@ def test_forward_aligns_half_hidden_states_with_float_heads(tmp_path: Path) -> N
         attention_mask=torch.tensor([[1, 1, 1, 1]], dtype=torch.long),
         event_marker_positions=torch.tensor([[0]], dtype=torch.long),
         argument_marker_positions=torch.tensor([[0]], dtype=torch.long),
+        word_end_mask=torch.tensor([[0, 1, 1, 1]], dtype=torch.long),
+        gold_event_token_starts=torch.tensor([[1]], dtype=torch.long),
+        gold_event_token_ends=torch.tensor([[2]], dtype=torch.long),
+        gold_argument_token_starts=torch.tensor([[1]], dtype=torch.long),
+        gold_argument_token_ends=torch.tensor([[2]], dtype=torch.long),
+        event_end_labels=torch.tensor([[-100, 0, 1, 0]], dtype=torch.long),
+        argument_end_labels=torch.tensor([[-100, 0, 1, 0]], dtype=torch.long),
     )
 
     expected_dtype = model.event_start_head[1].weight.dtype
@@ -478,6 +500,194 @@ def test_relation_budget_keeps_highest_confidence_spans() -> None:
     assert len(kept_events) * len(kept_arguments) <= 4
     assert [item["score"] for item in kept_events] == [0.9, 0.8]
     assert [item["score"] for item in kept_arguments] == [0.95, 0.7]
+
+
+def test_conditioned_end_decoding_recovers_multi_token_spans() -> None:
+    model = build_test_model(build_test_tokenizer(Path("/tmp")))
+    hidden_states = torch.randn(5, model.encoder.config.hidden_size)
+    start_logits = torch.tensor(
+        [
+            [4.0, -4.0],
+            [-4.0, 4.0],
+            [-4.0, 4.0],
+            [-4.0, 4.0],
+            [4.0, -4.0],
+        ]
+    )
+    word_start_mask = torch.tensor([0, 1, 1, 1, 0], dtype=torch.long)
+    word_end_mask = torch.tensor([0, 1, 1, 1, 1], dtype=torch.long)
+    token_to_word = torch.tensor([-1, 0, 1, 2, 3], dtype=torch.long)
+
+    def fake_conditioned_end_logits(
+        hidden_states: torch.Tensor,
+        start_positions: torch.Tensor,
+        end_head: torch.nn.Module,
+    ) -> torch.Tensor:
+        logits = torch.full((1, 3, 5, 2), -5.0)
+        logits[..., 0] = 5.0
+        logits[0, 0, 3, 1] = 9.0
+        logits[0, 1, 4, 1] = 9.0
+        logits[0, 2, 4, 1] = 8.0
+        return logits
+
+    model._compute_conditioned_end_logits = fake_conditioned_end_logits  # type: ignore[assignment]
+
+    spans = model._decode_spans(
+        hidden_states,
+        torch.softmax(start_logits, dim=-1)[..., 1],
+        start_logits,
+        model.event_end_head,
+        word_start_mask,
+        word_end_mask,
+        token_to_word,
+    )
+
+    assert [(span["start"], span["end"]) for span in spans] == [(0, 2), (1, 3), (2, 3)]
+
+
+def test_relation_threshold_projection_preserves_event_labels() -> None:
+    prediction = {
+        "events": [{"start": 0, "end": 0, "label": "attack", "score": 0.9}],
+        "arguments": [{"start": 1, "end": 1, "score": 0.8}],
+        "relations": [],
+        "relation_candidates": [
+            {"event_idx": 0, "argument_idx": 0, "label": "place", "score": 0.6}
+        ],
+    }
+
+    thresholded = _prediction_with_relation_threshold(prediction, 0.5)
+
+    assert thresholded["events"] == prediction["events"]
+    assert thresholded["events"][0]["label"] == "attack"
+    assert thresholded["relations"] == prediction["relation_candidates"]
+
+
+def test_relation_threshold_search_picks_better_value_than_default() -> None:
+    predictions = [
+        {
+            "events": [{"start": 0, "end": 0, "label": "attack", "score": 0.9}],
+            "arguments": [{"start": 1, "end": 1, "score": 0.8}],
+            "relations": [],
+            "relation_candidates": [
+                {"event_idx": 0, "argument_idx": 0, "label": "place", "score": 0.45},
+                {"event_idx": 0, "argument_idx": 0, "label": "victim", "score": 0.40},
+            ],
+        }
+    ]
+    references = [
+        {
+            "events": [{"start": 0, "end": 0, "label": "attack"}],
+            "arguments": [{"start": 1, "end": 1}],
+            "relations": [{"event_idx": 0, "argument_idx": 0, "label": "place"}],
+        }
+    ]
+
+    best_threshold, metrics = tune_relation_threshold(predictions, references)
+
+    assert best_threshold == pytest.approx(0.45)
+    assert best_threshold != DEFAULT_RELATION_THRESHOLD
+    assert metrics["relation_classification_f1"] == pytest.approx(1.0)
+
+
+def test_relation_budgeting_does_not_trim_returned_spans(tmp_path: Path) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    model = build_test_model(tokenizer)
+    hidden_states = torch.randn(5, model.encoder.config.hidden_size)
+    event_predictions = [
+        {"token_start": 1, "token_end": 1, "start": 0, "end": 0, "score": 0.9},
+        {"token_start": 2, "token_end": 2, "start": 1, "end": 1, "score": 0.8},
+        {"token_start": 3, "token_end": 3, "start": 2, "end": 2, "score": 0.7},
+    ]
+    argument_predictions = [
+        {"token_start": 1, "token_end": 1, "start": 0, "end": 0, "score": 0.9},
+        {"token_start": 2, "token_end": 2, "start": 1, "end": 1, "score": 0.8},
+        {"token_start": 3, "token_end": 3, "start": 2, "end": 2, "score": 0.7},
+    ]
+
+    calls = {"count": 0}
+
+    def fake_decode_spans(*args, **kwargs):
+        calls["count"] += 1
+        return event_predictions if calls["count"] == 1 else argument_predictions
+
+    model._decode_spans = fake_decode_spans  # type: ignore[assignment]
+    model.compute_relation_logits = lambda *args, **kwargs: torch.zeros(1, 2, 2, 1, 2)  # type: ignore[assignment]
+
+    decoded = model._decode_document(
+        hidden_states=hidden_states,
+        event_start_logits=torch.zeros(5, 2),
+        argument_start_logits=torch.zeros(5, 2),
+        word_start_mask=torch.tensor([0, 1, 1, 1, 0], dtype=torch.long),
+        word_end_mask=torch.tensor([0, 1, 1, 1, 0], dtype=torch.long),
+        token_to_word=torch.tensor([-1, 0, 1, 2, -1], dtype=torch.long),
+        event_marker_positions=torch.tensor([4], dtype=torch.long),
+        argument_marker_positions=torch.tensor([4], dtype=torch.long),
+        event_label_texts=["attack"],
+        argument_label_texts=["place"],
+        relation_threshold=0.5,
+        relation_pair_budget=4,
+    )
+
+    assert len(decoded["events"]) == 3
+    assert len(decoded["arguments"]) == 3
+
+
+def test_event_reader_save_load_round_trip_preserves_resized_embeddings(
+    tmp_path: Path,
+) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    encoder_dir = tmp_path / "base_encoder"
+    build_test_encoder(len(tokenizer) - 2).save_pretrained(encoder_dir)
+    model = build_test_model(
+        tokenizer,
+        model_name=str(encoder_dir),
+        encoder_vocab_size=len(tokenizer) - 2,
+    )
+    save_dir = tmp_path / "reader_checkpoint"
+
+    model.save_pretrained(save_dir)
+    tokenizer.save_pretrained(save_dir)
+
+    reloaded_model = EventReader.from_pretrained(save_dir)
+    reloaded_tokenizer = BertTokenizerFast.from_pretrained(save_dir)
+
+    assert model.config.encoder_vocab_size == len(tokenizer)
+    assert reloaded_model.get_input_embeddings() is not None
+    assert reloaded_model.get_input_embeddings().num_embeddings == len(
+        reloaded_tokenizer
+    )
+    assert reloaded_model.config.encoder_vocab_size == len(reloaded_tokenizer)
+    added_vocab = reloaded_tokenizer.get_added_vocab()
+    assert EVENT_MARKER in added_vocab
+    assert ARGUMENT_MARKER in added_vocab
+
+
+def test_resolve_precision_flags_auto_uses_fp32_on_cpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    assert resolve_precision_flags("auto") == ("fp32", False, False)
+
+
+@pytest.mark.parametrize("precision", ["fp16", "bf16"])
+def test_resolve_precision_flags_explicit_half_precision_requires_cuda(
+    monkeypatch: pytest.MonkeyPatch,
+    precision: str,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    with pytest.raises(ValueError, match="requires CUDA"):
+        resolve_precision_flags(precision)
+
+
+def test_resolve_precision_flags_auto_prefers_bf16(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_bf16_supported", lambda: True)
+
+    assert resolve_precision_flags("auto") == ("bf16", False, True)
 
 
 def test_trainer_smoke_runs_on_tiny_synthetic_dataset(tmp_path: Path) -> None:
@@ -553,6 +763,91 @@ def test_trainer_smoke_runs_with_zero_role_samples(tmp_path: Path) -> None:
 
     assert prediction["predictions"][0]["relations"] == []
     assert "test_relation_classification_f1" in prediction["metrics"]
+
+
+def test_main_accepts_and_forwards_resume_from_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    train_path = tmp_path / "train.jsonl"
+    eval_path = tmp_path / "eval.jsonl"
+    write_jsonl(train_path, [build_record()])
+    write_jsonl(eval_path, [build_second_record()])
+
+    tokenizer = build_test_tokenizer(tmp_path)
+    encoder_dir = tmp_path / "encoder"
+    build_test_encoder(len(tokenizer)).save_pretrained(encoder_dir)
+    resume_dir = tmp_path / "checkpoint-7"
+    resume_dir.mkdir()
+
+    captured: dict[str, object] = {}
+
+    class DummyTrainer:
+        def __init__(
+            self,
+            *,
+            model: EventReader,
+            args: TrainingArguments,
+            train_dataset: EventReaderDataset,
+            eval_dataset: EventReaderDataset,
+            data_collator: EventReaderCollator,
+        ) -> None:
+            captured["model"] = model
+            captured["args"] = args
+            captured["train_dataset"] = train_dataset
+            captured["eval_dataset"] = eval_dataset
+            captured["data_collator"] = data_collator
+
+        def train(self, resume_from_checkpoint: str | None = None) -> None:
+            captured["resume_from_checkpoint"] = resume_from_checkpoint
+
+        def evaluate(self) -> dict[str, float]:
+            return {
+                "eval_event_span_f1": 0.0,
+                "eval_best_relation_threshold": 0.7,
+            }
+
+        def save_model(self, output_dir: str) -> None:
+            captured["save_model_output_dir"] = output_dir
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(train_module, "EventArgumentTrainer", DummyTrainer)
+    monkeypatch.setattr(train_module, "build_tokenizer", lambda model_name: tokenizer)
+
+    output_dir = tmp_path / "output"
+    train_module.main(
+        [
+            "--model_name",
+            str(encoder_dir),
+            "--train_file",
+            str(train_path),
+            "--eval_file",
+            str(eval_path),
+            "--output_dir",
+            str(output_dir),
+            "--resume_from_checkpoint",
+            str(resume_dir),
+            "--precision",
+            "fp32",
+            "--batch_size",
+            "1",
+            "--num_epochs",
+            "1",
+            "--dataloader_num_workers",
+            "0",
+        ]
+    )
+
+    final_output_dir = output_dir / "final"
+    saved_tokenizer = BertTokenizerFast.from_pretrained(final_output_dir)
+
+    assert captured["resume_from_checkpoint"] == str(resume_dir)
+    assert captured["save_model_output_dir"] == str(final_output_dir)
+    assert final_output_dir.exists()
+    assert captured["model"].config.relation_threshold == pytest.approx(0.7)
+    added_vocab = saved_tokenizer.get_added_vocab()
+    assert EVENT_MARKER in added_vocab
+    assert ARGUMENT_MARKER in added_vocab
 
 
 def test_maven_reader_converter_writes_zero_role_document(tmp_path: Path) -> None:

@@ -164,7 +164,9 @@ def build_document_annotations(data: dict[str, Any]) -> dict[str, Any] | None:
             )
             event_span_to_indices[(event_start, event_end)] = event_indices
 
-        argument_indices = argument_span_to_indices.get((argument_start, argument_end), [])
+        argument_indices = argument_span_to_indices.get(
+            (argument_start, argument_end), []
+        )
         if not argument_indices:
             argument_idx = len(arguments)
             argument_indices = [argument_idx]
