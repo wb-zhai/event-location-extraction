@@ -148,6 +148,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--relation_threshold", default=DEFAULT_RELATION_THRESHOLD, type=float
     )
+    parser.add_argument(
+        "--dataloader_num_workers", default=4, type=int, help="Number of subprocesses to use for data loading."
+    )
+    
     return parser.parse_args()
 
 
@@ -181,6 +185,7 @@ def main() -> None:
         learning_rate=args.learning_rate,
         num_train_epochs=DEFAULT_NUM_EPOCHS,
         remove_unused_columns=False,
+        dataloader_num_workers=args.dataloader_num_workers,
         eval_strategy="no",
         save_strategy="epoch",
         logging_strategy="steps",
