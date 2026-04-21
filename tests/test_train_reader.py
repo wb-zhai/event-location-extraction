@@ -206,7 +206,9 @@ def test_normalized_schema_accepts_empty_argument_labels() -> None:
 def test_normalized_schema_rejects_relations_without_argument_labels() -> None:
     record = build_zero_role_record()
     record["relations"] = [{"event_idx": 0, "argument_idx": 0, "label": "victim"}]
-    with pytest.raises(ValueError, match="must be empty when 'argument_labels' is empty"):
+    with pytest.raises(
+        ValueError, match="must be empty when 'argument_labels' is empty"
+    ):
         normalize_record(record)
 
 
@@ -337,6 +339,21 @@ def test_event_label_dot_product_typing() -> None:
     assert logits.argmax(dim=-1).tolist() == [[0, 1]]
 
 
+def test_mask_invalid_columns_is_fp16_safe() -> None:
+    logits = torch.tensor(
+        [[[0.2, 0.5, -0.3], [0.1, -0.4, 0.7]]],
+        dtype=torch.float16,
+    )
+    positions = torch.tensor([[0, -1, 2]], dtype=torch.long)
+
+    masked = EventReader._mask_invalid_columns(logits, positions)
+
+    expected_fill = torch.tensor(torch.finfo(torch.float16).min, dtype=torch.float16)
+    assert masked.dtype == torch.float16
+    assert masked[0, 0, 1] == expected_fill
+    assert masked[0, 1, 1] == expected_fill
+
+
 def test_relation_tensor_construction_shape(tmp_path: Path) -> None:
     tokenizer = build_test_tokenizer(tmp_path)
     model = build_test_model(tokenizer)
@@ -347,6 +364,37 @@ def test_relation_tensor_construction_shape(tmp_path: Path) -> None:
         torch.randn(1, 4, hidden),
     )
     assert logits.shape == (1, 2, 3, 4, 2)
+
+
+def test_forward_aligns_half_hidden_states_with_float_heads(tmp_path: Path) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    model = build_test_model(tokenizer)
+    hidden_size = model.encoder.config.hidden_size
+
+    def fake_encode(
+        input_ids: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        return torch.randn(
+            input_ids.shape[0],
+            input_ids.shape[1],
+            hidden_size,
+            dtype=torch.float16,
+        )
+
+    model._encode = fake_encode  # type: ignore[assignment]
+
+    outputs = model(
+        input_ids=torch.tensor([[1, 2, 3, 4]], dtype=torch.long),
+        attention_mask=torch.tensor([[1, 1, 1, 1]], dtype=torch.long),
+        event_marker_positions=torch.tensor([[0]], dtype=torch.long),
+        argument_marker_positions=torch.tensor([[0]], dtype=torch.long),
+    )
+
+    expected_dtype = model.event_start_head[1].weight.dtype
+    assert outputs["event_start_logits"].dtype == expected_dtype
+    assert outputs["event_end_logits"].dtype == expected_dtype
+    assert outputs["argument_start_logits"].dtype == expected_dtype
+    assert outputs["argument_end_logits"].dtype == expected_dtype
 
 
 def test_thresholded_single_label_relation_decode() -> None:

@@ -3,8 +3,10 @@ import json
 import logging
 
 from gliner2 import GLiNER2
+from gliner2.model import ExtractorConfig
 from gliner2.training.data import TrainingDataset
 from gliner2.training.trainer import GLiNER2Trainer, TrainingConfig
+from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 from src.data.utils import collect_schema
 from src.train.eval import EventArgumentExtractionEvaluatorGliNER2
@@ -161,7 +163,36 @@ if __name__ == "__main__":
     )
 
     # Configure training
-    model = GLiNER2.from_pretrained(args.model_name)
+    from_pretrained = False
+    if from_pretrained:
+        model = GLiNER2.from_pretrained(args.model_name)
+    else:
+        config = ExtractorConfig(
+            model_name=args.model_name,
+            counting_layer="count_lstm_v2",
+            token_pooling="first",
+        )
+
+        encoder_config = AutoConfig.from_pretrained(args.model_name)
+        encoder_model = AutoModel.from_pretrained(args.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+
+        # update the tokens with the usual GLiNER special tokens
+        additional_special_tokens = [
+            "[SEP_STRUCT]",
+            "[SEP_TEXT]",
+            "[P]",
+            "[C]",
+            "[E]",
+            "[R]",
+            "[L]",
+            "[EXAMPLE]",
+            "[OUTPUT]",
+            "[DESCRIPTION]",
+        ]
+        tokenizer.add_special_tokens({"additional_special_tokens": additional_special_tokens})
+        model = GLiNER2(config, encoder_config=encoder_config, tokenizer=tokenizer)
+
     config = TrainingConfig(
         output_dir=args.output_dir,
         experiment_name=args.experiment_name,

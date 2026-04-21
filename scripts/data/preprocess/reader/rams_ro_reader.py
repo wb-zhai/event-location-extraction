@@ -2,179 +2,204 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 
+ROLE_PATTERN = re.compile(r"arg\d+(?P<role>.+)$")
+
+
 def normalize_label(label: str) -> str:
-    return label.strip().lower().replace("-", "_").replace(" ", "_")
+    return (
+        label.strip()
+        .lower()
+        .replace("-", "_")
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace(".", "_")
+    )
+
+
+def parse_role_label(raw_role: str) -> str:
+    role = raw_role.strip().lower()
+    match = ROLE_PATTERN.search(role)
+    if match and match.group("role"):
+        return normalize_label(match.group("role"))
+    return normalize_label(role)
+
+
+def flatten_sentences(sentences: list[list[str]]) -> list[str]:
+    return [token for sentence in sentences for token in sentence]
 
 
 def load_samples(input_path: Path) -> list[tuple[Path, dict[str, Any]]]:
     samples: list[tuple[Path, dict[str, Any]]] = []
+
+    def iter_json_lines(path: Path) -> None:
+        with open(path, "r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                samples.append((path, json.loads(line)))
+
     if input_path.is_dir():
-        for file_path in sorted(input_path.glob("*.jsonl")):
-            with open(file_path, "r", encoding="utf-8") as handle:
-                for line in handle:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    samples.append((file_path, json.loads(line)))
+        for pattern in ("*.jsonlines", "*.jsonl"):
+            for file_path in sorted(input_path.glob(pattern)):
+                iter_json_lines(file_path)
         return samples
 
-    with open(input_path, "r", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if not line:
-                continue
-            samples.append((input_path, json.loads(line)))
+    iter_json_lines(input_path)
     return samples
 
 
-def build_sentence_offsets(token_sentences: list[list[str]]) -> list[int]:
-    offsets: list[int] = []
-    running_total = 0
-    for sentence in token_sentences:
-        offsets.append(running_total)
-        running_total += len(sentence)
-    return offsets
-
-
-def globalize_span(
-    sentence_offsets: list[int], sent_id: int, offset: list[int]
-) -> tuple[int, int]:
-    sentence_offset = sentence_offsets[sent_id]
-    start = sentence_offset + offset[0]
-    end = sentence_offset + offset[1] - 1
-    return start, end
-
-
-def relation_label_sets(data: dict[str, Any]) -> set[str]:
-    labels = {
-        f"temporal_{normalize_label(label)}"
-        for label, pairs in data.get("temporal_relations", {}).items()
-        if pairs
-    }
-    labels.update(
-        f"causal_{normalize_label(label)}"
-        for label, pairs in data.get("causal_relations", {}).items()
-        if pairs
+def is_valid_span(start: Any, end: Any, token_count: int) -> bool:
+    return (
+        isinstance(start, int)
+        and isinstance(end, int)
+        and start >= 0
+        and end >= start
+        and end < token_count
     )
-    if data.get("subevent_relations"):
-        labels.add("subevent")
-    return labels
 
 
 def build_document_annotations(data: dict[str, Any]) -> dict[str, Any] | None:
-    token_sentences = data.get("tokens", [])
-    flat_tokens = [token for sentence in token_sentences for token in sentence]
-    sentence_offsets = build_sentence_offsets(token_sentences)
+    doc_id = data.get("doc_key")
+    if not isinstance(doc_id, str) or not doc_id:
+        return None
+
+    sentences = data.get("sentences", [])
+    if not isinstance(sentences, list) or not sentences:
+        return None
+
+    flat_tokens = flatten_sentences(sentences)
+    token_count = len(flat_tokens)
+    if token_count == 0:
+        return None
 
     events: list[dict[str, Any]] = []
     arguments: list[dict[str, Any]] = []
     relations: list[dict[str, Any]] = []
-    event_labels = sorted(
-        {
-            normalize_label(event["type"])
-            for event in data.get("events", [])
-            if event.get("type") and event.get("mention")
-        }
-    )
-    argument_labels = sorted(relation_label_sets(data))
 
-    event_mentions_by_id: dict[str, list[int]] = {}
-    argument_mentions_by_id: dict[str, list[int]] = {}
+    event_span_to_indices: dict[tuple[int, int], list[int]] = {}
+    argument_span_to_indices: dict[tuple[int, int], list[int]] = {}
 
-    for event in data.get("events", []):
-        event_type = event.get("type")
-        if not event_type:
+    for trigger in data.get("evt_triggers", []):
+        if not isinstance(trigger, list) or len(trigger) < 3:
             continue
-        normalized_type = normalize_label(event_type)
-        mention_indices: list[int] = []
-        mirrored_argument_indices: list[int] = []
-        for mention in event.get("mention", []):
-            sent_id = mention.get("sent_id")
-            offset = mention.get("offset")
-            if (
-                not isinstance(sent_id, int)
-                or sent_id < 0
-                or sent_id >= len(sentence_offsets)
-                or not isinstance(offset, list)
-                or len(offset) != 2
-            ):
-                continue
-            start, end = globalize_span(sentence_offsets, sent_id, offset)
-            mention_indices.append(len(events))
-            events.append({"start": start, "end": end, "label": normalized_type})
-            mirrored_argument_indices.append(len(arguments))
-            arguments.append({"start": start, "end": end})
-        if mention_indices:
-            event_mentions_by_id[event["id"]] = mention_indices
-            argument_mentions_by_id[event["id"]] = mirrored_argument_indices
+        start = trigger[0]
+        end = trigger[1]
+        trigger_info = trigger[2]
+        if not is_valid_span(start, end, token_count):
+            continue
+        if not isinstance(trigger_info, list) or not trigger_info:
+            continue
+        if not isinstance(trigger_info[0], list) or not trigger_info[0]:
+            continue
+
+        event_type = trigger_info[0][0]
+        if not isinstance(event_type, str) or not event_type:
+            continue
+        event_label = normalize_label(event_type.replace(".n/a", ""))
+
+        event_idx = len(events)
+        events.append({"start": start, "end": end, "label": event_label})
+        event_span_to_indices.setdefault((start, end), []).append(event_idx)
 
     if not events:
         return None
 
-    for timex in data.get("TIMEX", []):
-        sent_id = timex.get("sent_id")
-        offset = timex.get("offset")
-        timex_id = timex.get("id")
-        if (
-            not timex_id
-            or not isinstance(sent_id, int)
-            or sent_id < 0
-            or sent_id >= len(sentence_offsets)
-            or not isinstance(offset, list)
-            or len(offset) != 2
-        ):
+    for ent_span in data.get("ent_spans", []):
+        if not isinstance(ent_span, list) or len(ent_span) < 3:
             continue
-        start, end = globalize_span(sentence_offsets, sent_id, offset)
-        argument_mentions_by_id[timex_id] = [len(arguments)]
-        arguments.append({"start": start, "end": end})
+        start = ent_span[0]
+        end = ent_span[1]
+        if not is_valid_span(start, end, token_count):
+            continue
 
+        argument_idx = len(arguments)
+        arguments.append({"start": start, "end": end})
+        argument_span_to_indices.setdefault((start, end), []).append(argument_idx)
+
+    argument_labels: set[str] = set()
     seen_relations: set[tuple[int, int, str]] = set()
 
-    def add_relations(
-        pairs: list[list[str]],
-        relation_label: str,
-    ) -> None:
-        for pair in pairs:
-            if not isinstance(pair, list) or len(pair) != 2:
-                continue
-            head_ids = event_mentions_by_id.get(pair[0], [])
-            tail_ids = argument_mentions_by_id.get(pair[1], [])
-            for event_idx in head_ids:
-                for argument_idx in tail_ids:
-                    relation_key = (event_idx, argument_idx, relation_label)
-                    if relation_key in seen_relations:
-                        continue
-                    seen_relations.add(relation_key)
-                    relations.append(
-                        {
-                            "event_idx": event_idx,
-                            "argument_idx": argument_idx,
-                            "label": relation_label,
-                        }
-                    )
+    for link in data.get("gold_evt_links", []):
+        if not isinstance(link, list) or len(link) != 3:
+            continue
 
-    for label, pairs in data.get("temporal_relations", {}).items():
-        add_relations(pairs, f"temporal_{normalize_label(label)}")
-    for label, pairs in data.get("causal_relations", {}).items():
-        add_relations(pairs, f"causal_{normalize_label(label)}")
-    add_relations(data.get("subevent_relations", []), "subevent")
+        event_span = link[0]
+        argument_span = link[1]
+        raw_role = link[2]
+        if (
+            not isinstance(event_span, list)
+            or len(event_span) != 2
+            or not isinstance(argument_span, list)
+            or len(argument_span) != 2
+            or not isinstance(raw_role, str)
+        ):
+            continue
+
+        event_start, event_end = event_span
+        argument_start, argument_end = argument_span
+        if not is_valid_span(event_start, event_end, token_count):
+            continue
+        if not is_valid_span(argument_start, argument_end, token_count):
+            continue
+
+        relation_label = parse_role_label(raw_role)
+        argument_labels.add(relation_label)
+
+        event_indices = event_span_to_indices.get((event_start, event_end), [])
+        if not event_indices:
+            event_idx = len(events)
+            event_indices = [event_idx]
+            events.append(
+                {
+                    "start": event_start,
+                    "end": event_end,
+                    "label": "unknown_event",
+                }
+            )
+            event_span_to_indices[(event_start, event_end)] = event_indices
+
+        argument_indices = argument_span_to_indices.get((argument_start, argument_end), [])
+        if not argument_indices:
+            argument_idx = len(arguments)
+            argument_indices = [argument_idx]
+            arguments.append({"start": argument_start, "end": argument_end})
+            argument_span_to_indices[(argument_start, argument_end)] = argument_indices
+
+        for event_idx in event_indices:
+            for argument_idx in argument_indices:
+                relation_key = (event_idx, argument_idx, relation_label)
+                if relation_key in seen_relations:
+                    continue
+                seen_relations.add(relation_key)
+                relations.append(
+                    {
+                        "event_idx": event_idx,
+                        "argument_idx": argument_idx,
+                        "label": relation_label,
+                    }
+                )
+
+    event_labels = sorted({event["label"] for event in events})
 
     return {
-        "id": data["id"],
+        "id": doc_id,
         "tokens": flat_tokens,
         "event_labels": event_labels,
-        "argument_labels": argument_labels,
+        "argument_labels": sorted(argument_labels),
         "events": events,
         "arguments": arguments,
         "relations": relations,
         "metadata": {
-            "dataset": "MAVEN-ERE",
-            "doc_id": data["id"],
-            "title": data.get("title", ""),
+            "dataset": "RAMS",
+            "doc_id": doc_id,
+            "split": data.get("split", ""),
+            "source_url": data.get("source_url", ""),
             "event_count": len(events),
             "argument_count": len(arguments),
             "relation_count": len(relations),
@@ -253,10 +278,8 @@ def slice_window(
             or old_argument_idx not in argument_index_map
         ):
             continue
-        pair = (
-            event_index_map[old_event_idx],
-            argument_index_map[old_argument_idx],
-        )
+
+        pair = (event_index_map[old_event_idx], argument_index_map[old_argument_idx])
         if pair in seen_pairs:
             continue
         seen_pairs.add(pair)
@@ -327,6 +350,9 @@ def convert_document(
 
 def output_path_for(source_path: Path, input_path: Path, output_path: Path) -> Path:
     if input_path.is_dir():
+        stem = source_path.stem
+        if source_path.suffix == ".jsonlines":
+            return output_path / f"{stem}.jsonl"
         return output_path / source_path.name
     return output_path
 
@@ -362,12 +388,12 @@ def count_self_related_events(sample: dict[str, Any]) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Convert MAVEN-ERE dataset to reader-normalized JSONL format"
+        description="Convert RAMS dataset to reader-normalized JSONL format"
     )
     parser.add_argument(
         "input_path",
         type=str,
-        help="Path to a MAVEN-ERE JSONL file or directory of JSONL split files",
+        help="Path to a RAMS JSONL/JSONLINES file or directory of split files",
     )
     parser.add_argument(
         "output_path",
@@ -397,6 +423,7 @@ def main() -> None:
 
     input_path = Path(args.input_path)
     output_path = Path(args.output_path)
+
     samples_by_source: dict[Path, list[dict[str, Any]]] = {}
     processed = 0
     written = 0
@@ -415,8 +442,10 @@ def main() -> None:
         )
         if not converted_samples:
             continue
+
         samples_by_source.setdefault(source_path, []).extend(converted_samples)
         written += len(converted_samples)
+
         for sample in converted_samples:
             event_count = len(sample["events"])
             argument_count = len(sample["arguments"])

@@ -8,7 +8,8 @@ from typing import Any
 
 import torch
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer, Trainer, TrainingArguments
+from tqdm import tqdm
+from transformers import AutoModel, AutoTokenizer, Trainer, TrainingArguments
 
 from src.data.dataset import (
     ARGUMENT_MARKER,
@@ -55,6 +56,7 @@ class EventArgumentTrainer(Trainer):
         ignore_keys: list[str] | None = None,
         metric_key_prefix: str = "eval",
     ) -> dict[str, float]:
+        LOGGER.info("Starting evaluation with metric prefix '%s'.", metric_key_prefix)
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
         model = self.model
         model.eval()
@@ -63,7 +65,7 @@ class EventArgumentTrainer(Trainer):
         predictions: list[dict[str, Any]] = []
         losses: list[float] = []
 
-        for batch in eval_dataloader:
+        for batch in tqdm(eval_dataloader, desc="Evaluating"):
             references.extend(batch["references"])
             model_inputs = self._prepare_inputs(
                 self._model_inputs(batch, decode_predictions=True)
@@ -73,6 +75,13 @@ class EventArgumentTrainer(Trainer):
             if "loss" in outputs:
                 losses.append(float(outputs["loss"].detach().cpu().item()))
             predictions.extend(outputs["decoded_predictions"])
+
+        if predictions and references:
+            LOGGER.info(
+                "First eval sample prediction: %s | gold labels: %s",
+                json.dumps(predictions[0], ensure_ascii=False),
+                json.dumps(references[0], ensure_ascii=False),
+            )
 
         metrics = compute_reader_metrics(predictions, references)
         if losses:
@@ -149,10 +158,45 @@ def parse_args() -> argparse.Namespace:
         "--relation_threshold", default=DEFAULT_RELATION_THRESHOLD, type=float
     )
     parser.add_argument(
-        "--dataloader_num_workers", default=4, type=int, help="Number of subprocesses to use for data loading."
+        "--dataloader_num_workers",
+        default=4,
+        type=int,
+        help="Number of subprocesses to use for data loading.",
     )
-    
+
+    parser.add_argument(
+        "--precision",
+        type=str,
+        choices=["fp16", "bf16", "fp32"],
+        default="fp16",
+        help="Precision for training (default: fp16)",
+    )
+    parser.add_argument(
+        "--warmup_ratio",
+        type=float,
+        default=0.1,
+        help="Warmup ratio for scheduler (default: 0.1)",
+    )
+
     return parser.parse_args()
+
+
+def resolve_precision_flags(precision: str) -> tuple[bool, bool]:
+    if precision == "fp32":
+        return False, False
+
+    if not torch.cuda.is_available():
+        raise ValueError(
+            f"--precision {precision} requires CUDA. "
+            "Use --precision fp32 when training on CPU."
+        )
+
+    if precision == "bf16" and not torch.cuda.is_bf16_supported():
+        raise ValueError(
+            "--precision bf16 requires CUDA bf16 support on this device/runtime."
+        )
+
+    return precision == "fp16", precision == "bf16"
 
 
 def main() -> None:
@@ -161,6 +205,16 @@ def main() -> None:
         level=logging.INFO,
     )
     args = parse_args()
+
+    fp16_enabled, bf16_enabled = resolve_precision_flags(args.precision)
+    device_label = "cuda" if torch.cuda.is_available() else "cpu"
+    LOGGER.info(
+        "Training precision=%s (fp16=%s, bf16=%s) on device=%s",
+        args.precision,
+        fp16_enabled,
+        bf16_enabled,
+        device_label,
+    )
 
     train_samples = load_normalized_jsonl(args.train_file)
     eval_samples = load_normalized_jsonl(args.eval_file)
@@ -175,8 +229,10 @@ def main() -> None:
         argument_threshold=args.argument_threshold,
         relation_threshold=args.relation_threshold,
     )
-    model = EventReader(config)
+    encoder = AutoModel.from_pretrained(args.model_name, dtype=torch.float32)
+    model = EventReader(config, encoder)
     model.resize_token_embeddings(len(tokenizer))
+    model = model.float()
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,
@@ -186,11 +242,16 @@ def main() -> None:
         num_train_epochs=DEFAULT_NUM_EPOCHS,
         remove_unused_columns=False,
         dataloader_num_workers=args.dataloader_num_workers,
-        eval_strategy="no",
-        save_strategy="epoch",
+        eval_strategy="steps",
+        save_strategy="steps",
         logging_strategy="steps",
+        eval_steps=1_000,
+        save_steps=1_000,
         logging_steps=10,
         report_to=[],
+        warmup_ratio=args.warmup_ratio,
+        fp16=fp16_enabled,
+        bf16=bf16_enabled,
     )
 
     trainer = EventArgumentTrainer(
