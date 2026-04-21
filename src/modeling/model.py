@@ -46,27 +46,27 @@ def apply_relation_budget(
     return kept_events, kept_arguments
 
 
-def decode_single_label_relations(
+def decode_multi_label_relations(
     role_scores: torch.Tensor,
     threshold: float,
 ) -> list[dict[str, Any]]:
     decoded: list[dict[str, Any]] = []
     if role_scores.numel() == 0:
         return decoded
-    best_scores, best_labels = role_scores.max(dim=-1)
     for event_idx in range(role_scores.shape[0]):
         for argument_idx in range(role_scores.shape[1]):
-            score = float(best_scores[event_idx, argument_idx].item())
-            if score < threshold:
-                continue
-            decoded.append(
-                {
-                    "event_idx": event_idx,
-                    "argument_idx": argument_idx,
-                    "label_idx": int(best_labels[event_idx, argument_idx].item()),
-                    "score": score,
-                }
-            )
+            for label_idx in range(role_scores.shape[2]):
+                score = float(role_scores[event_idx, argument_idx, label_idx].item())
+                if score < threshold:
+                    continue
+                decoded.append(
+                    {
+                        "event_idx": event_idx,
+                        "argument_idx": argument_idx,
+                        "label_idx": label_idx,
+                        "score": score,
+                    }
+                )
     return decoded
 
 
@@ -568,7 +568,7 @@ class EventReader(PreTrainedModel):
                 self._gather_positions(hidden_states.unsqueeze(0), role_positions),
             )[0]
             positive_scores = torch.softmax(relation_logits, dim=-1)[..., 1]
-            decoded_relations = decode_single_label_relations(
+            decoded_relations = decode_multi_label_relations(
                 positive_scores, relation_threshold
             )
             for relation in decoded_relations:

@@ -17,6 +17,7 @@ from src.data.dataset import (
     EVENT_MARKER,
     EventReaderCollator,
     EventReaderDataset,
+    RelationAnnotation,
     encode_sample,
     load_normalized_jsonl,
     normalize_record,
@@ -25,7 +26,7 @@ from src.modeling.model import (
     EventReaderConfig,
     EventReader,
     apply_relation_budget,
-    decode_single_label_relations,
+    decode_multi_label_relations,
 )
 from src.train.train import EventArgumentTrainer
 
@@ -181,10 +182,55 @@ def build_test_model(tokenizer: BertTokenizerFast) -> EventReader:
     return model
 
 
-def test_normalized_schema_validation_rejects_duplicate_pair() -> None:
+def test_normalized_schema_allows_multiple_labels_for_same_pair() -> None:
     record = build_record()
     record["relations"].append({"event_idx": 0, "argument_idx": 0, "label": "victim"})
-    with pytest.raises(ValueError, match="multiple labels"):
+
+    sample = normalize_record(record)
+
+    assert sample.relations == [
+        RelationAnnotation(event_idx=0, argument_idx=0, label="place"),
+        RelationAnnotation(event_idx=1, argument_idx=1, label="victim"),
+        RelationAnnotation(event_idx=0, argument_idx=0, label="victim"),
+    ]
+
+
+def test_normalized_schema_merges_duplicate_argument_spans() -> None:
+    record = build_record()
+    record["arguments"] = [
+        {"start": 2, "end": 2},
+        {"start": 2, "end": 2},
+        {"start": 4, "end": 4},
+    ]
+    record["relations"] = [
+        {"event_idx": 0, "argument_idx": 0, "label": "place"},
+        {"event_idx": 0, "argument_idx": 1, "label": "victim"},
+        {"event_idx": 1, "argument_idx": 1, "label": "place"},
+    ]
+
+    sample = normalize_record(record)
+
+    assert [(span.start, span.end) for span in sample.arguments] == [(2, 2), (4, 4)]
+    assert sample.relations == [
+        RelationAnnotation(event_idx=0, argument_idx=0, label="place"),
+        RelationAnnotation(event_idx=0, argument_idx=0, label="victim"),
+        RelationAnnotation(event_idx=1, argument_idx=0, label="place"),
+    ]
+
+
+def test_normalized_schema_rejects_exact_duplicate_relation_after_argument_merge() -> None:
+    record = build_record()
+    record["arguments"] = [
+        {"start": 2, "end": 2},
+        {"start": 2, "end": 2},
+        {"start": 4, "end": 4},
+    ]
+    record["relations"] = [
+        {"event_idx": 0, "argument_idx": 0, "label": "place"},
+        {"event_idx": 0, "argument_idx": 1, "label": "place"},
+    ]
+
+    with pytest.raises(ValueError, match="duplicate relation"):
         normalize_record(record)
 
 
@@ -397,7 +443,7 @@ def test_forward_aligns_half_hidden_states_with_float_heads(tmp_path: Path) -> N
     assert outputs["argument_end_logits"].dtype == expected_dtype
 
 
-def test_thresholded_single_label_relation_decode() -> None:
+def test_thresholded_multi_label_relation_decode() -> None:
     scores = torch.tensor(
         [
             [
@@ -406,12 +452,21 @@ def test_thresholded_single_label_relation_decode() -> None:
             ]
         ]
     )
-    decoded = decode_single_label_relations(scores, threshold=0.5)
-    assert len(decoded) == 1
-    assert decoded[0]["event_idx"] == 0
-    assert decoded[0]["argument_idx"] == 0
-    assert decoded[0]["label_idx"] == 1
-    assert decoded[0]["score"] == pytest.approx(0.85)
+    decoded = decode_multi_label_relations(scores, threshold=0.5)
+    assert decoded == [
+        {
+            "event_idx": 0,
+            "argument_idx": 0,
+            "label_idx": 1,
+            "score": pytest.approx(0.85),
+        },
+        {
+            "event_idx": 0,
+            "argument_idx": 0,
+            "label_idx": 2,
+            "score": pytest.approx(0.70),
+        },
+    ]
 
 
 def test_relation_budget_keeps_highest_confidence_spans() -> None:
@@ -547,3 +602,84 @@ def test_maven_reader_converter_writes_zero_role_document(tmp_path: Path) -> Non
     assert converted[0].relations == []
     assert converted[0].arguments[0].start == 1
     assert converted[0].arguments[0].end == 1
+
+
+def test_maven_arg_reader_converter_supports_multi_relation_arguments(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "maven_arg.jsonl"
+    output_path = tmp_path / "reader.jsonl"
+    sample = {
+        "id": "maven-arg-doc-1",
+        "title": "Synthetic",
+        "document": "Protesters attacked the embassy in Rome",
+        "entities": [
+            {
+                "id": "ENTITY_1",
+                "type": "Location",
+                "mention": [
+                    {
+                        "id": "mention-1",
+                        "mention": "Rome",
+                        "offset": [35, 39],
+                    }
+                ],
+            }
+        ],
+        "events": [
+            {
+                "id": "EVENT_1",
+                "type": "Attack",
+                "mention": [
+                    {
+                        "id": "event-mention-1",
+                        "trigger_word": "attacked",
+                        "offset": [11, 19],
+                    }
+                ],
+                "argument": {
+                    "Location": [{"entity_id": "ENTITY_1"}],
+                    "Target": [{"entity_id": "ENTITY_1"}],
+                },
+            },
+            {
+                "id": "EVENT_2",
+                "type": "Movement",
+                "mention": [
+                    {
+                        "id": "event-mention-2",
+                        "trigger_word": "Rome",
+                        "offset": [35, 39],
+                    }
+                ],
+                "argument": {
+                    "Destination": [{"entity_id": "ENTITY_1"}],
+                },
+            },
+        ],
+        "negative_triggers": [],
+    }
+    write_jsonl(input_path, [sample])
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/data/preprocess/reader/maven_arg_to_reader.py",
+            str(input_path),
+            str(output_path),
+        ],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+
+    converted = load_normalized_jsonl(output_path)
+    assert len(converted) == 1
+    assert [(span.start, span.end) for span in converted[0].arguments] == [(5, 5)]
+    assert {
+        (relation.event_idx, relation.argument_idx, relation.label)
+        for relation in converted[0].relations
+    } == {
+        (0, 0, "location"),
+        (0, 0, "target"),
+        (1, 0, "destination"),
+    }

@@ -76,6 +76,45 @@ def dedupe_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return deduped
 
 
+def canonicalize_argument_spans(
+    arguments: list[dict[str, int]],
+    relations: list[dict[str, Any]],
+) -> tuple[list[dict[str, int]], list[dict[str, Any]]]:
+    canonical_arguments: list[dict[str, int]] = []
+    argument_index_map: dict[int, int] = {}
+    argument_index_by_span: dict[tuple[int, int], int] = {}
+
+    for old_index, argument in enumerate(arguments):
+        span_key = (argument["start"], argument["end"])
+        canonical_index = argument_index_by_span.get(span_key)
+        if canonical_index is None:
+            canonical_index = len(canonical_arguments)
+            argument_index_by_span[span_key] = canonical_index
+            canonical_arguments.append(argument)
+        argument_index_map[old_index] = canonical_index
+
+    canonical_relations: list[dict[str, Any]] = []
+    seen_relations: set[tuple[int, int, str]] = set()
+    for relation in relations:
+        relation_key = (
+            relation["event_idx"],
+            argument_index_map[relation["argument_idx"]],
+            relation["label"],
+        )
+        if relation_key in seen_relations:
+            continue
+        seen_relations.add(relation_key)
+        canonical_relations.append(
+            {
+                "event_idx": relation_key[0],
+                "argument_idx": relation_key[1],
+                "label": relation_key[2],
+            }
+        )
+
+    return canonical_arguments, canonical_relations
+
+
 def build_entity_mentions(
     data: dict[str, Any],
     char_start_to_token: dict[int, int],
@@ -338,6 +377,11 @@ def slice_window(
                 "label": relation_key[2],
             }
         )
+
+    windowed_arguments, windowed_relations = canonicalize_argument_spans(
+        windowed_arguments,
+        windowed_relations,
+    )
 
     metadata = dict(sample["metadata"])
     metadata.update(

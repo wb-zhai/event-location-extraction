@@ -128,6 +128,25 @@ def _validate_span(
     return SpanAnnotation(start=start, end=end, label=label)
 
 
+def _canonicalize_arguments(
+    arguments: list[SpanAnnotation],
+) -> tuple[list[SpanAnnotation], dict[int, int]]:
+    canonical_arguments: list[SpanAnnotation] = []
+    argument_index_map: dict[int, int] = {}
+    argument_index_by_span: dict[tuple[int, int], int] = {}
+
+    for old_index, argument in enumerate(arguments):
+        span_key = (argument.start, argument.end)
+        canonical_index = argument_index_by_span.get(span_key)
+        if canonical_index is None:
+            canonical_index = len(canonical_arguments)
+            argument_index_by_span[span_key] = canonical_index
+            canonical_arguments.append(argument)
+        argument_index_map[old_index] = canonical_index
+
+    return canonical_arguments, argument_index_map
+
+
 def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     required_fields = {
         "id",
@@ -181,11 +200,14 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
         _validate_span(span, sample_id, "arguments", len(tokens), require_label=False)
         for span in record["arguments"]
     ]
+    arguments, argument_index_map = _canonicalize_arguments(arguments)
 
     if not isinstance(record["relations"], list):
         raise ValueError(f"{sample_id}: 'relations' must be a list")
+
     relations: list[RelationAnnotation] = []
     seen_relations: set[tuple[int, int, str]] = set()
+
     for relation in record["relations"]:
         if not isinstance(relation, dict):
             raise ValueError(f"{sample_id}: every 'relations' item must be an object")
@@ -206,7 +228,7 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
             raise ValueError(
                 f"{sample_id}: relation event_idx {event_idx} is out of range"
             )
-        if argument_idx < 0 or argument_idx >= len(arguments):
+        if argument_idx < 0 or argument_idx >= len(record["arguments"]):
             raise ValueError(
                 f"{sample_id}: relation argument_idx {argument_idx} is out of range"
             )
@@ -214,6 +236,7 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
             raise ValueError(
                 f"{sample_id}: relation label '{label}' is not present in argument_labels"
             )
+        argument_idx = argument_index_map[argument_idx]
         relation_key = (event_idx, argument_idx, label)
         if relation_key in seen_relations:
             raise ValueError(
