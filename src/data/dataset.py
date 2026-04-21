@@ -185,7 +185,7 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     if not isinstance(record["relations"], list):
         raise ValueError(f"{sample_id}: 'relations' must be a list")
     relations: list[RelationAnnotation] = []
-    seen_pairs: set[tuple[int, int]] = set()
+    seen_relations: set[tuple[int, int, str]] = set()
     for relation in record["relations"]:
         if not isinstance(relation, dict):
             raise ValueError(f"{sample_id}: every 'relations' item must be an object")
@@ -214,12 +214,12 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
             raise ValueError(
                 f"{sample_id}: relation label '{label}' is not present in argument_labels"
             )
-        pair = (event_idx, argument_idx)
-        if pair in seen_pairs:
+        relation_key = (event_idx, argument_idx, label)
+        if relation_key in seen_relations:
             raise ValueError(
-                f"{sample_id}: multiple labels for event/argument pair {pair} are not supported in v1"
+                f"{sample_id}: duplicate relation {(event_idx, argument_idx, label)} is not allowed"
             )
-        seen_pairs.add(pair)
+        seen_relations.add(relation_key)
         relations.append(
             RelationAnnotation(
                 event_idx=event_idx, argument_idx=argument_idx, label=label
