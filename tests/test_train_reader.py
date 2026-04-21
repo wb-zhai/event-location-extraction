@@ -1,9 +1,16 @@
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import torch
-from transformers import BertConfig, BertModel, BertTokenizerFast, TrainingArguments
+from transformers import (
+    BertConfig,
+    BertModel,
+    BertTokenizerFast,
+    TrainingArguments,
+)
 
 from src.data.dataset import (
     ARGUMENT_MARKER,
@@ -67,6 +74,19 @@ def build_second_record(sample_id: str = "doc-2") -> dict:
     }
 
 
+def build_zero_role_record(sample_id: str = "doc-zero") -> dict:
+    return {
+        "id": sample_id,
+        "tokens": ["bombing", "injured", "civilians"],
+        "event_labels": ["attack"],
+        "argument_labels": [],
+        "events": [{"start": 0, "end": 0, "label": "attack"}],
+        "arguments": [{"start": 2, "end": 2}],
+        "relations": [],
+        "metadata": {"source": "synthetic"},
+    }
+
+
 def write_jsonl(path: Path, records: list[dict]) -> None:
     with open(path, "w", encoding="utf-8") as handle:
         for record in records:
@@ -114,6 +134,34 @@ def build_test_tokenizer(tmp_path: Path) -> BertTokenizerFast:
     return tokenizer
 
 
+def build_subword_test_tokenizer(tmp_path: Path) -> BertTokenizerFast:
+    vocab = [
+        "[PAD]",
+        "[UNK]",
+        "[CLS]",
+        "[SEP]",
+        "[MASK]",
+        EVENT_MARKER,
+        ARGUMENT_MARKER,
+        "injured",
+        "attack",
+    ]
+    vocab_path = tmp_path / "subword_vocab.txt"
+    vocab_path.write_text("\n".join(vocab), encoding="utf-8")
+    tokenizer = BertTokenizerFast(
+        vocab_file=str(vocab_path),
+        unk_token="[UNK]",
+        sep_token="[SEP]",
+        cls_token="[CLS]",
+        pad_token="[PAD]",
+        mask_token="[MASK]",
+    )
+    tokenizer.add_special_tokens(
+        {"additional_special_tokens": [EVENT_MARKER, ARGUMENT_MARKER]}
+    )
+    return tokenizer
+
+
 def build_test_model(tokenizer: BertTokenizerFast) -> EventReader:
     encoder = BertModel(
         BertConfig(
@@ -140,6 +188,28 @@ def test_normalized_schema_validation_rejects_duplicate_pair() -> None:
         normalize_record(record)
 
 
+def test_normalized_schema_allows_duplicate_tokens() -> None:
+    record = build_record()
+    record["tokens"] = ["the", "attack", "in", "the", "city"]
+
+    sample = normalize_record(record)
+
+    assert sample.tokens == record["tokens"]
+
+
+def test_normalized_schema_accepts_empty_argument_labels() -> None:
+    sample = normalize_record(build_zero_role_record())
+    assert sample.argument_labels == []
+    assert sample.relations == []
+
+
+def test_normalized_schema_rejects_relations_without_argument_labels() -> None:
+    record = build_zero_role_record()
+    record["relations"] = [{"event_idx": 0, "argument_idx": 0, "label": "victim"}]
+    with pytest.raises(ValueError, match="must be empty when 'argument_labels' is empty"):
+        normalize_record(record)
+
+
 def test_preprocessing_preserves_word_spans_and_marker_positions(
     tmp_path: Path,
 ) -> None:
@@ -152,6 +222,92 @@ def test_preprocessing_preserves_word_spans_and_marker_positions(
     assert encoded["token_to_word"][encoded["gold_event_token_starts"][0]] == 0
     assert encoded["token_to_word"][encoded["gold_event_token_ends"][1]] == 3
     assert encoded["token_to_word"][encoded["gold_argument_token_starts"][1]] == 4
+
+
+def test_preprocessing_supports_zero_role_samples(tmp_path: Path) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    sample = normalize_record(build_zero_role_record())
+    encoded = encode_sample(sample, tokenizer, max_length=64)
+
+    assert encoded["argument_marker_positions"] == []
+    assert encoded["relation_targets"] == []
+    assert len(encoded["gold_argument_token_starts"]) == 1
+
+
+def test_preprocessing_aligns_multi_subword_words(tmp_path: Path) -> None:
+    tokenizer = build_subword_test_tokenizer(tmp_path)
+    sample = normalize_record(
+        {
+            "id": "doc-subword",
+            "tokens": ["can't", "injured"],
+            "event_labels": ["attack"],
+            "argument_labels": [],
+            "events": [{"start": 0, "end": 0, "label": "attack"}],
+            "arguments": [{"start": 0, "end": 0}],
+            "relations": [],
+            "metadata": {"source": "synthetic"},
+        }
+    )
+
+    encoded = encode_sample(sample, tokenizer, max_length=64)
+
+    assert encoded["gold_event_token_starts"] == [1]
+    assert encoded["gold_event_token_ends"] == [3]
+    assert encoded["gold_argument_token_starts"] == [1]
+    assert encoded["gold_argument_token_ends"] == [3]
+    assert encoded["token_to_word"][1:5] == [0, 0, 0, 1]
+    assert encoded["word_start_mask"][1:5] == [1, 0, 0, 1]
+    assert encoded["word_end_mask"][1:5] == [0, 0, 1, 1]
+
+
+def test_preprocessing_truncates_by_whole_words(tmp_path: Path) -> None:
+    tokenizer = build_subword_test_tokenizer(tmp_path)
+    sample = normalize_record(
+        {
+            "id": "doc-truncate",
+            "tokens": ["can't", "injured"],
+            "event_labels": ["attack"],
+            "argument_labels": [],
+            "events": [{"start": 0, "end": 0, "label": "attack"}],
+            "arguments": [{"start": 1, "end": 1}],
+            "relations": [],
+            "metadata": {"source": "synthetic"},
+        }
+    )
+
+    encoded = encode_sample(sample, tokenizer, max_length=9)
+
+    assert encoded["reference"]["tokens"] == ["can't"]
+    assert encoded["reference"]["metadata"]["truncated"] is True
+    assert encoded["gold_event_token_starts"] == [1]
+    assert encoded["gold_event_token_ends"] == [3]
+    assert encoded["gold_argument_token_starts"] == []
+    assert encoded["gold_argument_token_ends"] == []
+
+
+def test_preprocessing_requires_fast_tokenizer_alignment(tmp_path: Path) -> None:
+    fast_tokenizer = build_test_tokenizer(tmp_path)
+
+    class SlowTokenizerProxy:
+        is_fast = False
+
+        def __init__(self, base_tokenizer: BertTokenizerFast):
+            self.base_tokenizer = base_tokenizer
+
+        def __call__(self, *args, **kwargs):
+            return self.base_tokenizer(*args, **kwargs)
+
+        def convert_tokens_to_ids(self, *args, **kwargs):
+            return self.base_tokenizer.convert_tokens_to_ids(*args, **kwargs)
+
+        def __getattr__(self, name: str):
+            return getattr(self.base_tokenizer, name)
+
+    tokenizer = SlowTokenizerProxy(fast_tokenizer)
+    sample = normalize_record(build_zero_role_record())
+
+    with pytest.raises(ValueError, match="fast tokenizer with word_ids\\(\\) support"):
+        encode_sample(sample, tokenizer, max_length=64)
 
 
 def test_marker_state_extraction() -> None:
@@ -258,3 +414,88 @@ def test_trainer_smoke_runs_on_tiny_synthetic_dataset(tmp_path: Path) -> None:
     assert "eval_argument_span_f1" in metrics
     assert "eval_relation_identification_f1" in metrics
     assert "eval_relation_classification_f1" in metrics
+
+
+def test_trainer_smoke_runs_with_zero_role_samples(tmp_path: Path) -> None:
+    train_path = tmp_path / "train_zero.jsonl"
+    eval_path = tmp_path / "eval_zero.jsonl"
+    write_jsonl(train_path, [build_zero_role_record(), build_record("doc-mixed")])
+    write_jsonl(eval_path, [build_zero_role_record("doc-zero-eval")])
+
+    tokenizer = build_test_tokenizer(tmp_path)
+    model = build_test_model(tokenizer)
+    train_dataset = EventReaderDataset(load_normalized_jsonl(train_path), tokenizer, 64)
+    eval_dataset = EventReaderDataset(load_normalized_jsonl(eval_path), tokenizer, 64)
+    trainer = EventArgumentTrainer(
+        model=model,
+        args=TrainingArguments(
+            output_dir=str(tmp_path / "output_zero"),
+            per_device_train_batch_size=1,
+            per_device_eval_batch_size=1,
+            max_steps=1,
+            num_train_epochs=1,
+            save_strategy="no",
+            eval_strategy="no",
+            remove_unused_columns=False,
+            report_to=[],
+            disable_tqdm=True,
+        ),
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        data_collator=EventReaderCollator(tokenizer.pad_token_id),
+    )
+
+    trainer.train()
+    prediction = trainer.predict(eval_dataset)
+
+    assert prediction["predictions"][0]["relations"] == []
+    assert "test_relation_classification_f1" in prediction["metrics"]
+
+
+def test_maven_reader_converter_writes_zero_role_document(tmp_path: Path) -> None:
+    input_path = tmp_path / "train.jsonl"
+    output_path = tmp_path / "reader.jsonl"
+    sample = {
+        "id": "maven-doc-1",
+        "title": "Synthetic",
+        "tokens": [["An", "explosion", "happened", "yesterday"], ["Witnesses", "ran"]],
+        "sentences": ["An explosion happened yesterday", "Witnesses ran"],
+        "events": [
+            {
+                "id": "EVENT_1",
+                "type": "Attack",
+                "mention": [
+                    {
+                        "id": "mention-1",
+                        "trigger_word": "explosion",
+                        "sent_id": 0,
+                        "offset": [1, 2],
+                    }
+                ],
+            }
+        ],
+        "TIMEX": [],
+        "temporal_relations": {},
+        "causal_relations": {},
+        "subevent_relations": [],
+    }
+    write_jsonl(input_path, [sample])
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/data/preprocess/reader/maven_to_reader.py",
+            str(input_path),
+            str(output_path),
+        ],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+
+    converted = load_normalized_jsonl(output_path)
+    assert len(converted) == 1
+    assert converted[0].sample_id == "maven-doc-1"
+    assert converted[0].argument_labels == []
+    assert converted[0].relations == []
+    assert converted[0].arguments[0].start == 1
+    assert converted[0].arguments[0].end == 1

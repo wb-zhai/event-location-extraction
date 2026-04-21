@@ -4,3 +4,4 @@ accelerate>=1.1.0
 datasets>=4.8,<4.9
 gliner2>=1.2.6,<1.3.0
 wandb
+pytest

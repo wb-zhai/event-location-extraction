@@ -29,7 +29,7 @@ from src.modeling.model import (
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_MAX_LENGTH = 512
+DEFAULT_MAX_LENGTH = 4096
 DEFAULT_BATCH_SIZE = 4
 DEFAULT_LEARNING_RATE = 2e-5
 DEFAULT_NUM_EPOCHS = 3.0

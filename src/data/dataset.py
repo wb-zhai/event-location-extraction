@@ -82,10 +82,16 @@ def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     return records
 
 
-def _validate_string_list(name: str, value: Any, sample_id: str) -> list[str]:
+def _validate_string_list(
+    name: str,
+    value: Any,
+    sample_id: str,
+    *,
+    require_unique: bool = True,
+) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"{sample_id}: '{name}' must be a list[str]")
-    if len(set(value)) != len(value):
+    if require_unique and len(set(value)) != len(value):
         raise ValueError(f"{sample_id}: '{name}' must not contain duplicates")
     return value
 
@@ -142,7 +148,9 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     if not isinstance(sample_id, str) or not sample_id:
         raise ValueError("Normalized record 'id' must be a non-empty string")
 
-    tokens = _validate_string_list("tokens", record["tokens"], sample_id)
+    tokens = _validate_string_list(
+        "tokens", record["tokens"], sample_id, require_unique=False
+    )
     if not tokens:
         raise ValueError(f"{sample_id}: 'tokens' must not be empty")
 
@@ -154,8 +162,6 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     )
     if not event_labels:
         raise ValueError(f"{sample_id}: 'event_labels' must not be empty")
-    if not argument_labels:
-        raise ValueError(f"{sample_id}: 'argument_labels' must not be empty")
 
     if not isinstance(record["events"], list):
         raise ValueError(f"{sample_id}: 'events' must be a list")
@@ -192,6 +198,10 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
             )
         if not isinstance(label, str):
             raise ValueError(f"{sample_id}: relation labels must be strings")
+        if not argument_labels:
+            raise ValueError(
+                f"{sample_id}: 'relations' must be empty when 'argument_labels' is empty"
+            )
         if event_idx < 0 or event_idx >= len(events):
             raise ValueError(
                 f"{sample_id}: relation event_idx {event_idx} is out of range"
@@ -236,15 +246,84 @@ def load_normalized_jsonl(path: str | Path) -> list[NormalizedSample]:
     return [normalize_record(record) for record in read_jsonl(path)]
 
 
-def _tokenize_word(tokenizer: Any, word: str) -> list[int]:
-    pieces = tokenizer(word, add_special_tokens=False)["input_ids"]
-    if pieces:
-        return pieces
-    if tokenizer.unk_token_id is None:
+def _tokenize_words_with_alignment(
+    tokenizer: Any,
+    words: list[str],
+    sample_id: str,
+) -> tuple[list[int], list[int], list[int], list[int], list[int], list[int]]:
+    if not getattr(tokenizer, "is_fast", False):
         raise ValueError(
-            "Tokenizer produced no pieces and does not define unk_token_id"
+            f"{sample_id}: reader encoding requires a fast tokenizer with word_ids() support"
         )
-    return [tokenizer.unk_token_id]
+
+    encoding = tokenizer(
+        words,
+        is_split_into_words=True,
+        add_special_tokens=False,
+    )
+    if not hasattr(encoding, "word_ids"):
+        raise ValueError(
+            f"{sample_id}: tokenizer output does not expose word_ids() alignment"
+        )
+
+    piece_ids = encoding["input_ids"]
+    word_ids = encoding.word_ids()
+    if not isinstance(piece_ids, list) or not isinstance(word_ids, list):
+        raise ValueError(f"{sample_id}: tokenizer alignment returned an invalid shape")
+    if len(piece_ids) != len(word_ids):
+        raise ValueError(
+            f"{sample_id}: tokenizer alignment length mismatch between pieces and word ids"
+        )
+    if not piece_ids:
+        raise ValueError(f"{sample_id}: tokenizer produced no document pieces")
+
+    word_to_token_start = [-1] * len(words)
+    word_to_token_end = [-1] * len(words)
+    token_to_word: list[int] = []
+    word_start_mask: list[int] = []
+    word_end_mask: list[int] = []
+
+    for token_idx, word_idx in enumerate(word_ids):
+        if word_idx is None or not isinstance(word_idx, int):
+            raise ValueError(
+                f"{sample_id}: tokenizer alignment produced an unexpected non-word token"
+            )
+        if word_idx < 0 or word_idx >= len(words):
+            raise ValueError(
+                f"{sample_id}: tokenizer alignment produced an out-of-range word index"
+            )
+        token_to_word.append(word_idx)
+        if word_to_token_start[word_idx] == -1:
+            word_to_token_start[word_idx] = token_idx
+            word_start_mask.append(1)
+        else:
+            word_start_mask.append(0)
+        next_word_idx = word_ids[token_idx + 1] if token_idx + 1 < len(word_ids) else None
+        is_word_end = next_word_idx != word_idx
+        word_end_mask.append(1 if is_word_end else 0)
+        if is_word_end:
+            word_to_token_end[word_idx] = token_idx
+
+    missing_words = [
+        str(word_idx)
+        for word_idx, (start, end) in enumerate(
+            zip(word_to_token_start, word_to_token_end, strict=True)
+        )
+        if start == -1 or end == -1
+    ]
+    if missing_words:
+        raise ValueError(
+            f"{sample_id}: tokenizer failed to align words at indices {', '.join(missing_words)}"
+        )
+
+    return (
+        piece_ids,
+        word_to_token_start,
+        word_to_token_end,
+        token_to_word,
+        word_start_mask,
+        word_end_mask,
+    )
 
 
 def _tokenize_label(tokenizer: Any, label: str) -> list[int]:
@@ -323,14 +402,14 @@ def _fit_sample_to_max_length(
             f"{sample.sample_id}: label banks consume {reserved_length} tokens, which exceeds max_length={max_length}"
         )
 
-    kept_word_count = 0
-    used_doc_pieces = 0
     available_doc_pieces = max_length - reserved_length
-    for word in sample.tokens:
-        word_pieces = _tokenize_word(tokenizer, word)
-        if used_doc_pieces + len(word_pieces) > available_doc_pieces:
+    _, _, word_to_token_end, _, _, _ = _tokenize_words_with_alignment(
+        tokenizer, sample.tokens, sample.sample_id
+    )
+    kept_word_count = 0
+    for word_end in word_to_token_end:
+        if word_end >= available_doc_pieces:
             break
-        used_doc_pieces += len(word_pieces)
         kept_word_count += 1
 
     if kept_word_count == 0:
@@ -363,16 +442,14 @@ def encode_sample(
     ):
         raise ValueError("Tokenizer is missing reader marker tokens")
 
-    document_piece_ids: list[int] = []
-    word_to_token_start: list[int] = []
-    word_to_token_end: list[int] = []
-    for word in sample.tokens:
-        word_piece_ids = _tokenize_word(tokenizer, word)
-        word_start = len(document_piece_ids)
-        document_piece_ids.extend(word_piece_ids)
-        word_end = len(document_piece_ids) - 1
-        word_to_token_start.append(word_start)
-        word_to_token_end.append(word_end)
+    (
+        document_piece_ids,
+        word_to_token_start,
+        word_to_token_end,
+        document_token_to_word,
+        document_word_start_mask,
+        document_word_end_mask,
+    ) = _tokenize_words_with_alignment(tokenizer, sample.tokens, sample.sample_id)
 
     input_ids = [cls_token_id]
     attention_mask = [1]
@@ -381,16 +458,9 @@ def encode_sample(
     word_end_mask = [0]
     input_ids.extend(document_piece_ids)
     attention_mask.extend([1] * len(document_piece_ids))
-    token_to_word.extend(
-        word_idx
-        for word_idx, word in enumerate(sample.tokens)
-        for _ in _tokenize_word(tokenizer, word)
-    )
-    word_start_lookup = set(word_to_token_start)
-    word_end_lookup = set(word_to_token_end)
-    for token_idx in range(len(document_piece_ids)):
-        word_start_mask.append(1 if token_idx in word_start_lookup else 0)
-        word_end_mask.append(1 if token_idx in word_end_lookup else 0)
+    token_to_word.extend(document_token_to_word)
+    word_start_mask.extend(document_word_start_mask)
+    word_end_mask.extend(document_word_end_mask)
     input_ids.append(sep_token_id)
     attention_mask.append(1)
     token_to_word.append(-1)
