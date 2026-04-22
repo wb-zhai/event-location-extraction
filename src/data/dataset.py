@@ -7,15 +7,20 @@ Assumption: normalized span indices use inclusive word boundaries, so a span wit
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import logging
+import random
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, get_worker_info
 
 EVENT_MARKER = "[E]"
 ARGUMENT_MARKER = "[A]"
+DEFAULT_CANDIDATE_SAMPLING_SEED = 13
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -64,6 +69,21 @@ class NormalizedSample:
             ],
             "metadata": dict(self.metadata),
         }
+
+
+@dataclass(frozen=True)
+class CandidateOntology:
+    event_labels: list[str]
+    argument_labels: list[str]
+
+
+@dataclass(frozen=True)
+class CandidateSample:
+    sample: NormalizedSample
+    event_labels: list[str]
+    argument_labels: list[str]
+    required_event_labels: list[str]
+    required_argument_labels: list[str]
 
 
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -267,6 +287,198 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
 
 def load_normalized_jsonl(path: str | Path) -> list[NormalizedSample]:
     return [normalize_record(record) for record in read_jsonl(path)]
+
+
+def load_candidate_ontology(path: str | Path) -> CandidateOntology:
+    with open(path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"Candidate ontology file '{path}' must contain a JSON object")
+    if "event_labels" not in payload or "argument_labels" not in payload:
+        raise ValueError(
+            f"Candidate ontology file '{path}' must define both 'event_labels' and 'argument_labels'"
+        )
+
+    event_labels = _validate_string_list(
+        "event_labels",
+        payload.get("event_labels", []),
+        str(path),
+    )
+    argument_labels = _validate_string_list(
+        "argument_labels",
+        payload.get("argument_labels", []),
+        str(path),
+    )
+    return CandidateOntology(
+        event_labels=event_labels,
+        argument_labels=argument_labels,
+    )
+
+
+def _labels_in_document_order(
+    document_labels: list[str], required_labels: list[str]
+) -> list[str]:
+    required_set = set(required_labels)
+    ordered = [label for label in document_labels if label in required_set]
+    missing = [label for label in required_labels if label not in set(ordered)]
+    return ordered + missing
+
+
+def _extract_required_event_labels(sample: NormalizedSample) -> list[str]:
+    return _labels_in_document_order(
+        sample.event_labels,
+        [event.label for event in sample.events if event.label is not None],
+    )
+
+
+def _extract_required_argument_labels(sample: NormalizedSample) -> list[str]:
+    return _labels_in_document_order(
+        sample.argument_labels,
+        [relation.label for relation in sample.relations],
+    )
+
+
+def _build_candidate_labels(
+    *,
+    sample_id: str,
+    label_kind: str,
+    required_labels: list[str],
+    document_labels: list[str],
+    ontology_labels: list[str] | None,
+    requested_total: int | None,
+    rng: random.Random,
+) -> list[str]:
+    if requested_total is None:
+        return list(document_labels)
+
+    required_set = set(required_labels)
+    missing_required_labels = [
+        label for label in required_labels if label not in document_labels
+    ]
+    if missing_required_labels:
+        raise ValueError(
+            f"{sample_id}: required {label_kind} labels {missing_required_labels} are missing from document-level labels"
+        )
+
+    if requested_total < len(required_labels):
+        LOGGER.warning(
+            "%s: requested %s %s candidates but sample has %s required labels from annotations; overriding the limit for this sample",
+            sample_id,
+            requested_total,
+            label_kind,
+            len(required_labels),
+        )
+        return list(required_labels)
+
+    if ontology_labels is not None:
+        missing_required_in_ontology = [
+            label for label in required_labels if label not in ontology_labels
+        ]
+        if missing_required_in_ontology:
+            raise ValueError(
+                f"{sample_id}: required {label_kind} labels {missing_required_in_ontology} are missing from the ontology"
+            )
+
+    selected_labels = list(required_labels)
+    remaining_capacity = requested_total - len(selected_labels)
+    if remaining_capacity <= 0:
+        return selected_labels
+
+    document_extra_labels = [
+        label for label in document_labels if label not in required_set
+    ]
+    if document_extra_labels:
+        selected_labels.extend(document_extra_labels[:remaining_capacity])
+        remaining_capacity = requested_total - len(selected_labels)
+
+    if remaining_capacity <= 0 or ontology_labels is None:
+        return selected_labels
+
+    selected_set = set(selected_labels)
+    ontology_extra_pool = [
+        label for label in ontology_labels if label not in selected_set
+    ]
+    if not ontology_extra_pool:
+        return selected_labels
+
+    sample_size = min(remaining_capacity, len(ontology_extra_pool))
+    if sample_size <= 0:
+        return selected_labels
+    selected_labels.extend(rng.sample(ontology_extra_pool, sample_size))
+    return selected_labels
+
+
+def _apply_training_candidate_transform(
+    *,
+    labels: list[str],
+    required_labels: list[str],
+    ontology_labels: list[str] | None,
+    shuffle_probability: float,
+    gold_dropout_probability: float,
+    rng: random.Random,
+) -> list[str]:
+    transformed_labels = list(labels)
+    if not transformed_labels:
+        return transformed_labels
+
+    if required_labels and ontology_labels and gold_dropout_probability > 0.0:
+        required_set = set(required_labels)
+        refillable_negatives = [
+            label
+            for label in ontology_labels
+            if label not in required_set and label not in transformed_labels
+        ]
+        dropped_required_labels = [
+            label for label in required_labels if rng.random() < gold_dropout_probability
+        ]
+        max_required_drops = min(
+            len(refillable_negatives),
+            max(len(required_labels) - 1, 0),
+        )
+        if len(dropped_required_labels) > max_required_drops:
+            rng.shuffle(dropped_required_labels)
+            dropped_required_labels = dropped_required_labels[:max_required_drops]
+
+        if dropped_required_labels:
+            dropped_required_set = set(dropped_required_labels)
+            transformed_labels = [
+                label for label in transformed_labels if label not in dropped_required_set
+            ]
+            transformed_labels.extend(
+                rng.sample(refillable_negatives, len(dropped_required_labels))
+            )
+
+    if len(transformed_labels) > 1 and rng.random() < shuffle_probability:
+        rng.shuffle(transformed_labels)
+
+    return transformed_labels
+
+
+def _make_candidate_sample(
+    sample: NormalizedSample,
+    event_labels: list[str],
+    argument_labels: list[str],
+    required_event_labels: list[str],
+    required_argument_labels: list[str],
+) -> CandidateSample:
+    return CandidateSample(
+        sample=sample,
+        event_labels=event_labels,
+        argument_labels=argument_labels,
+        required_event_labels=required_event_labels,
+        required_argument_labels=required_argument_labels,
+    )
+
+
+def _materialize_candidate_sample(
+    candidate_sample: CandidateSample,
+) -> NormalizedSample:
+    return replace(
+        candidate_sample.sample,
+        event_labels=list(candidate_sample.event_labels),
+        argument_labels=list(candidate_sample.argument_labels),
+    )
 
 
 def _tokenize_words_with_alignment(
@@ -495,8 +707,12 @@ def encode_sample(
     token_word_ends = [document_offset + index for index in word_to_token_end]
 
     event_marker_positions: list[int] = []
+    event_label_token_starts: list[int] = []
+    event_label_token_ends: list[int] = []
     for label in sample.event_labels:
-        event_marker_positions.append(len(input_ids))
+        label_start = len(input_ids)
+        event_marker_positions.append(label_start)
+        event_label_token_starts.append(label_start)
         input_ids.append(event_marker_id)
         attention_mask.append(1)
         token_to_word.append(-1)
@@ -508,6 +724,7 @@ def encode_sample(
         token_to_word.extend([-1] * len(label_piece_ids))
         word_start_mask.extend([0] * len(label_piece_ids))
         word_end_mask.extend([0] * len(label_piece_ids))
+        event_label_token_ends.append(len(input_ids) - 1)
 
     input_ids.append(sep_token_id)
     attention_mask.append(1)
@@ -516,8 +733,12 @@ def encode_sample(
     word_end_mask.append(0)
 
     argument_marker_positions: list[int] = []
+    argument_label_token_starts: list[int] = []
+    argument_label_token_ends: list[int] = []
     for label in sample.argument_labels:
-        argument_marker_positions.append(len(input_ids))
+        label_start = len(input_ids)
+        argument_marker_positions.append(label_start)
+        argument_label_token_starts.append(label_start)
         input_ids.append(argument_marker_id)
         attention_mask.append(1)
         token_to_word.append(-1)
@@ -529,6 +750,7 @@ def encode_sample(
         token_to_word.extend([-1] * len(label_piece_ids))
         word_start_mask.extend([0] * len(label_piece_ids))
         word_end_mask.extend([0] * len(label_piece_ids))
+        argument_label_token_ends.append(len(input_ids) - 1)
 
     input_ids.append(sep_token_id)
     attention_mask.append(1)
@@ -564,7 +786,7 @@ def encode_sample(
         event_end_labels[end_token] = 1
         gold_event_token_starts.append(start_token)
         gold_event_token_ends.append(end_token)
-        gold_event_type_labels.append(event_label_to_index[span.label or ""])
+        gold_event_type_labels.append(event_label_to_index.get(span.label or "", -100))
 
     gold_argument_token_starts: list[int] = []
     gold_argument_token_ends: list[int] = []
@@ -583,6 +805,7 @@ def encode_sample(
             argument_label_to_index[relation.label],
         )
         for relation in sample.relations
+        if relation.label in argument_label_to_index
     ]
 
     return {
@@ -594,6 +817,10 @@ def encode_sample(
         "word_end_mask": word_end_mask,
         "event_marker_positions": event_marker_positions,
         "argument_marker_positions": argument_marker_positions,
+        "event_label_token_starts": event_label_token_starts,
+        "event_label_token_ends": event_label_token_ends,
+        "argument_label_token_starts": argument_label_token_starts,
+        "argument_label_token_ends": argument_label_token_ends,
         "event_start_labels": event_start_labels,
         "event_end_labels": event_end_labels,
         "argument_start_labels": argument_start_labels,
@@ -612,17 +839,131 @@ def encode_sample(
 
 class EventReaderDataset(Dataset):
     def __init__(
-        self, samples: list[NormalizedSample], tokenizer: Any, max_length: int
+        self,
+        samples: list[NormalizedSample],
+        tokenizer: Any,
+        max_length: int,
+        *,
+        ontology: CandidateOntology | None = None,
+        num_event_candidates: int | None = None,
+        num_relation_candidates: int | None = None,
+        is_training: bool = False,
+        candidate_shuffle_probability: float = 0.0,
+        gold_candidate_dropout_probability: float = 0.0,
+        random_seed: int = DEFAULT_CANDIDATE_SAMPLING_SEED,
     ):
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.is_training = is_training
+        self.ontology = ontology
+        self.num_event_candidates = num_event_candidates
+        self.num_relation_candidates = num_relation_candidates
+        self.candidate_shuffle_probability = candidate_shuffle_probability
+        self.gold_candidate_dropout_probability = gold_candidate_dropout_probability
+        self.random_seed = random_seed
+
+        candidate_rng = random.Random(random_seed)
+        ontology_event_labels = ontology.event_labels if ontology is not None else None
+        ontology_argument_labels = (
+            ontology.argument_labels if ontology is not None else None
+        )
         self.samples = [
-            encode_sample(sample, tokenizer, max_length) for sample in samples
+            _make_candidate_sample(
+                sample,
+                _build_candidate_labels(
+                    sample_id=sample.sample_id,
+                    label_kind="event",
+                    required_labels=_extract_required_event_labels(sample),
+                    document_labels=sample.event_labels,
+                    ontology_labels=ontology_event_labels,
+                    requested_total=num_event_candidates,
+                    rng=candidate_rng,
+                ),
+                _build_candidate_labels(
+                    sample_id=sample.sample_id,
+                    label_kind="relation",
+                    required_labels=_extract_required_argument_labels(sample),
+                    document_labels=sample.argument_labels,
+                    ontology_labels=ontology_argument_labels,
+                    requested_total=num_relation_candidates,
+                    rng=candidate_rng,
+                ),
+                _extract_required_event_labels(sample),
+                _extract_required_argument_labels(sample),
+            )
+            for sample in samples
         ]
+
+    def _item_rng(self, index: int) -> random.Random:
+        worker_info = get_worker_info()
+        worker_seed = worker_info.seed if worker_info is not None else torch.initial_seed()
+        return random.Random(
+            f"{self.random_seed}:{worker_seed}:{index}:{self.samples[index].sample.sample_id}"
+        )
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, index: int) -> dict[str, Any]:
-        return self.samples[index]
+        candidate_sample = self.samples[index]
+        event_labels = list(candidate_sample.event_labels)
+        argument_labels = list(candidate_sample.argument_labels)
+        if self.is_training and self.ontology is not None:
+            rng = self._item_rng(index)
+            event_labels = _apply_training_candidate_transform(
+                labels=event_labels,
+                required_labels=candidate_sample.required_event_labels,
+                ontology_labels=(
+                    self.ontology.event_labels
+                    if self.num_event_candidates is not None
+                    else None
+                ),
+                shuffle_probability=(
+                    self.candidate_shuffle_probability
+                    if self.num_event_candidates is not None
+                    else 0.0
+                ),
+                gold_dropout_probability=(
+                    self.gold_candidate_dropout_probability
+                    if self.num_event_candidates is not None
+                    else 0.0
+                ),
+                rng=rng,
+            )
+            argument_labels = _apply_training_candidate_transform(
+                labels=argument_labels,
+                required_labels=candidate_sample.required_argument_labels,
+                ontology_labels=(
+                    self.ontology.argument_labels
+                    if self.num_relation_candidates is not None
+                    else None
+                ),
+                shuffle_probability=(
+                    self.candidate_shuffle_probability
+                    if self.num_relation_candidates is not None
+                    else 0.0
+                ),
+                gold_dropout_probability=(
+                    self.gold_candidate_dropout_probability
+                    if self.num_relation_candidates is not None
+                    else 0.0
+                ),
+                rng=rng,
+            )
+
+        return encode_sample(
+            _materialize_candidate_sample(
+                _make_candidate_sample(
+                    candidate_sample.sample,
+                    event_labels,
+                    argument_labels,
+                    candidate_sample.required_event_labels,
+                    candidate_sample.required_argument_labels,
+                )
+            ),
+            self.tokenizer,
+            self.max_length,
+        )
 
 
 class EventReaderCollator:
@@ -660,6 +1001,18 @@ class EventReaderCollator:
             ),
             "argument_marker_positions": self._pad_1d(
                 [item["argument_marker_positions"] for item in features], -1
+            ),
+            "event_label_token_starts": self._pad_1d(
+                [item["event_label_token_starts"] for item in features], -1
+            ),
+            "event_label_token_ends": self._pad_1d(
+                [item["event_label_token_ends"] for item in features], -1
+            ),
+            "argument_label_token_starts": self._pad_1d(
+                [item["argument_label_token_starts"] for item in features], -1
+            ),
+            "argument_label_token_ends": self._pad_1d(
+                [item["argument_label_token_ends"] for item in features], -1
             ),
             "event_start_labels": self._pad_1d(
                 [item["event_start_labels"] for item in features], -100

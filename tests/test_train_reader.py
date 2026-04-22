@@ -20,6 +20,7 @@ from src.data.dataset import (
     EventReaderDataset,
     RelationAnnotation,
     encode_sample,
+    load_candidate_ontology,
     load_normalized_jsonl,
     normalize_record,
 )
@@ -98,6 +99,31 @@ def write_jsonl(path: Path, records: list[dict]) -> None:
     with open(path, "w", encoding="utf-8") as handle:
         for record in records:
             handle.write(json.dumps(record) + "\n")
+
+
+def write_candidate_ontology(path: Path) -> Path:
+    path.write_text(
+        json.dumps(
+            {
+                "event_labels": [
+                    "attack",
+                    "injure",
+                    "disaster",
+                    "protest",
+                    "arrest",
+                ],
+                "argument_labels": [
+                    "place",
+                    "victim",
+                    "agent",
+                    "time",
+                    "weapon",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 def build_test_tokenizer(tmp_path: Path) -> BertTokenizerFast:
@@ -295,6 +321,160 @@ def test_preprocessing_supports_zero_role_samples(tmp_path: Path) -> None:
     assert encoded["argument_marker_positions"] == []
     assert encoded["relation_targets"] == []
     assert len(encoded["gold_argument_token_starts"]) == 1
+
+
+def test_candidate_augmentation_fills_requested_totals(tmp_path: Path) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    sample = normalize_record(build_record())
+
+    dataset = EventReaderDataset(
+        [sample],
+        tokenizer,
+        64,
+        ontology=ontology,
+        num_event_candidates=4,
+        num_relation_candidates=4,
+        random_seed=7,
+    )
+
+    candidate_sample = dataset.samples[0]
+    assert len(candidate_sample.event_labels) == 4
+    assert len(candidate_sample.argument_labels) == 4
+    assert set(sample.event_labels).issubset(candidate_sample.event_labels)
+    assert set(sample.argument_labels).issubset(candidate_sample.argument_labels)
+    assert len(set(candidate_sample.event_labels)) == len(candidate_sample.event_labels)
+    assert len(set(candidate_sample.argument_labels)) == len(
+        candidate_sample.argument_labels
+    )
+
+
+def test_candidate_augmentation_rejects_requested_total_below_gold_count(
+    tmp_path: Path,
+) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+
+    with pytest.raises(ValueError, match="requested 1 event candidates"):
+        EventReaderDataset(
+            [normalize_record(build_record())],
+            tokenizer,
+            64,
+            ontology=ontology,
+            num_event_candidates=1,
+        )
+
+
+def test_training_candidate_shuffle_reorders_labels(tmp_path: Path) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    dataset = EventReaderDataset(
+        [normalize_record(build_record())],
+        tokenizer,
+        64,
+        ontology=ontology,
+        num_event_candidates=5,
+        num_relation_candidates=5,
+        is_training=True,
+        candidate_shuffle_probability=1.0,
+        gold_candidate_dropout_probability=0.0,
+        random_seed=7,
+    )
+
+    encoded = dataset[0]
+
+    assert (
+        encoded["event_label_texts"] != dataset.samples[0].event_labels
+        or encoded["argument_label_texts"] != dataset.samples[0].argument_labels
+    )
+
+
+def test_training_gold_dropout_refills_and_ignores_dropped_event_types(
+    tmp_path: Path,
+) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    sample = normalize_record(build_record())
+    dataset = EventReaderDataset(
+        [sample],
+        tokenizer,
+        64,
+        ontology=ontology,
+        num_event_candidates=3,
+        num_relation_candidates=3,
+        is_training=True,
+        candidate_shuffle_probability=0.0,
+        gold_candidate_dropout_probability=1.0,
+        random_seed=7,
+    )
+
+    encoded = dataset[0]
+    remaining_event_golds = set(encoded["event_label_texts"]) & set(sample.event_labels)
+    remaining_relation_golds = set(encoded["argument_label_texts"]) & set(
+        sample.argument_labels
+    )
+
+    assert len(encoded["event_label_texts"]) == 3
+    assert len(encoded["argument_label_texts"]) == 3
+    assert 1 <= len(remaining_event_golds) < len(sample.event_labels)
+    assert 1 <= len(remaining_relation_golds) < len(sample.argument_labels)
+    assert -100 in encoded["gold_event_type_labels"]
+    assert len(encoded["relation_targets"]) < len(sample.relations)
+
+
+def test_eval_candidate_lists_are_deterministic(tmp_path: Path) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    dataset = EventReaderDataset(
+        [normalize_record(build_record())],
+        tokenizer,
+        64,
+        ontology=ontology,
+        num_event_candidates=4,
+        num_relation_candidates=4,
+        is_training=False,
+        random_seed=7,
+    )
+
+    first = dataset[0]
+    second = dataset[0]
+
+    assert first["event_label_texts"] == dataset.samples[0].event_labels
+    assert first["argument_label_texts"] == dataset.samples[0].argument_labels
+    assert second["event_label_texts"] == first["event_label_texts"]
+    assert second["argument_label_texts"] == first["argument_label_texts"]
+
+
+def test_candidate_banks_still_respect_max_length_truncation(tmp_path: Path) -> None:
+    tokenizer = build_subword_test_tokenizer(tmp_path)
+    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    sample = normalize_record(
+        {
+            "id": "doc-truncate-candidates",
+            "tokens": ["can't", "injured"],
+            "event_labels": ["attack"],
+            "argument_labels": [],
+            "events": [{"start": 0, "end": 0, "label": "attack"}],
+            "arguments": [{"start": 1, "end": 1}],
+            "relations": [],
+            "metadata": {"source": "synthetic"},
+        }
+    )
+
+    dataset = EventReaderDataset(
+        [sample],
+        tokenizer,
+        21,
+        ontology=ontology,
+        num_event_candidates=4,
+        num_relation_candidates=3,
+        random_seed=7,
+    )
+    encoded = dataset[0]
+
+    assert encoded["reference"]["tokens"] == ["can't"]
+    assert len(encoded["event_label_texts"]) == 4
+    assert len(encoded["argument_label_texts"]) == 3
 
 
 def test_preprocessing_aligns_multi_subword_words(tmp_path: Path) -> None:
@@ -848,6 +1028,99 @@ def test_main_accepts_and_forwards_resume_from_checkpoint(
     added_vocab = saved_tokenizer.get_added_vocab()
     assert EVENT_MARKER in added_vocab
     assert ARGUMENT_MARKER in added_vocab
+
+
+def test_main_forwards_candidate_sampling_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    train_path = tmp_path / "train.jsonl"
+    eval_path = tmp_path / "eval.jsonl"
+    ontology_path = write_candidate_ontology(tmp_path / "ontology.json")
+    write_jsonl(train_path, [build_record()])
+    write_jsonl(eval_path, [build_second_record()])
+
+    tokenizer = build_test_tokenizer(tmp_path)
+    encoder_dir = tmp_path / "encoder"
+    build_test_encoder(len(tokenizer)).save_pretrained(encoder_dir)
+
+    captured: dict[str, object] = {}
+
+    class DummyTrainer:
+        def __init__(
+            self,
+            *,
+            model: EventReader,
+            args: TrainingArguments,
+            train_dataset: EventReaderDataset,
+            eval_dataset: EventReaderDataset,
+            data_collator: EventReaderCollator,
+        ) -> None:
+            captured["train_dataset"] = train_dataset
+            captured["eval_dataset"] = eval_dataset
+
+        def train(self, resume_from_checkpoint: str | None = None) -> None:
+            captured["resume_from_checkpoint"] = resume_from_checkpoint
+
+        def evaluate(self) -> dict[str, float]:
+            return {
+                "eval_event_span_f1": 0.0,
+                "eval_best_relation_threshold": 0.5,
+            }
+
+        def save_model(self, output_dir: str) -> None:
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(train_module, "EventArgumentTrainer", DummyTrainer)
+    monkeypatch.setattr(train_module, "build_tokenizer", lambda model_name: tokenizer)
+
+    train_module.main(
+        [
+            "--model_name",
+            str(encoder_dir),
+            "--train_file",
+            str(train_path),
+            "--eval_file",
+            str(eval_path),
+            "--output_dir",
+            str(tmp_path / "output"),
+            "--precision",
+            "fp32",
+            "--batch_size",
+            "1",
+            "--num_epochs",
+            "1",
+            "--dataloader_num_workers",
+            "0",
+            "--ontology_file",
+            str(ontology_path),
+            "--num_event_candidates",
+            "4",
+            "--num_relation_candidates",
+            "4",
+            "--train_candidate_shuffle_prob",
+            "0.25",
+            "--train_gold_candidate_dropout_prob",
+            "0.1",
+            "--candidate_sampling_seed",
+            "99",
+        ]
+    )
+
+    train_dataset = captured["train_dataset"]
+    eval_dataset = captured["eval_dataset"]
+    assert isinstance(train_dataset, EventReaderDataset)
+    assert isinstance(eval_dataset, EventReaderDataset)
+    assert train_dataset.is_training is True
+    assert eval_dataset.is_training is False
+    assert train_dataset.num_event_candidates == 4
+    assert train_dataset.num_relation_candidates == 4
+    assert train_dataset.candidate_shuffle_probability == pytest.approx(0.25)
+    assert train_dataset.gold_candidate_dropout_probability == pytest.approx(0.1)
+    assert train_dataset.random_seed == 99
+    assert train_dataset.ontology is not None
+    assert len(train_dataset.samples[0].event_labels) == 4
+    assert len(eval_dataset.samples[0].argument_labels) == 4
 
 
 def test_maven_reader_converter_writes_zero_role_document(tmp_path: Path) -> None:

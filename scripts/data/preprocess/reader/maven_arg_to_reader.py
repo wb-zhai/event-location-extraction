@@ -34,7 +34,9 @@ def load_samples(input_path: Path) -> list[tuple[Path, dict[str, Any]]]:
     return samples
 
 
-def tokenize_document(document: str) -> tuple[list[str], dict[int, int], dict[int, int]]:
+def tokenize_document(
+    document: str,
+) -> tuple[list[str], dict[int, int], dict[int, int]]:
     tokens: list[str] = []
     char_start_to_token: dict[int, int] = {}
     char_end_to_token: dict[int, int] = {}
@@ -57,7 +59,12 @@ def char_offset_to_token_span(
         return None
 
     start, end = offset
-    if not isinstance(start, int) or not isinstance(end, int) or start < 0 or end <= start:
+    if (
+        not isinstance(start, int)
+        or not isinstance(end, int)
+        or start < 0
+        or end <= start
+    ):
         return None
     if start not in char_start_to_token or end not in char_end_to_token:
         return None
@@ -562,19 +569,16 @@ def main() -> None:
             for record in records:
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    ontology_output = (
-        Path(args.ontology_output)
-        if args.ontology_output is not None
-        else default_ontology_output_path(input_path, output_path)
-    )
-    ontology_output.parent.mkdir(parents=True, exist_ok=True)
-    ontology = build_ontology(ontology_source_files(input_path))
-    with open(ontology_output, "w", encoding="utf-8") as handle:
-        json.dump(ontology, handle, indent=2, ensure_ascii=False)
+    if args.ontology_output:
+        ontology_output = Path(args.ontology_output)
+        ontology_output.parent.mkdir(parents=True, exist_ok=True)
+        ontology = build_ontology(ontology_source_files(input_path))
+        with open(ontology_output, "w", encoding="utf-8") as handle:
+            json.dump(ontology, handle, indent=2, ensure_ascii=False)
+            print(f"Wrote ontology to {ontology_output}")
 
     print(f"Processed {processed} samples")
     print(f"Wrote {written} normalized samples")
-    print(f"Wrote ontology to {ontology_output}")
 
 
 if __name__ == "__main__":

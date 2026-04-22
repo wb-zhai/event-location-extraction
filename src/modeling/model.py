@@ -370,6 +370,43 @@ class EventReader(PreTrainedModel):
         return gathered
 
     @staticmethod
+    def _pool_token_spans(
+        hidden_states: torch.Tensor,
+        start_positions: torch.Tensor,
+        end_positions: torch.Tensor,
+    ) -> torch.Tensor:
+        sequence_length = hidden_states.shape[1]
+        token_indices = torch.arange(
+            sequence_length,
+            device=hidden_states.device,
+        ).view(1, 1, -1)
+        valid_spans = (start_positions >= 0) & (end_positions >= 0)
+        span_mask = (
+            valid_spans.unsqueeze(-1)
+            & (token_indices >= start_positions.unsqueeze(-1))
+            & (token_indices <= end_positions.unsqueeze(-1))
+        )
+        weights = span_mask.to(hidden_states.dtype)
+        pooled = torch.einsum("blt,bth->blh", weights, hidden_states)
+        counts = weights.sum(dim=-1, keepdim=True).clamp_min(1.0)
+        return pooled / counts
+
+    def _build_label_representations(
+        self,
+        hidden_states: torch.Tensor,
+        marker_positions: torch.Tensor,
+        label_token_starts: torch.Tensor | None,
+        label_token_ends: torch.Tensor | None,
+    ) -> torch.Tensor:
+        if label_token_starts is None or label_token_ends is None:
+            return self._gather_positions(hidden_states, marker_positions)
+        return self._pool_token_spans(
+            hidden_states,
+            label_token_starts,
+            label_token_ends,
+        )
+
+    @staticmethod
     def _mask_invalid_columns(
         logits: torch.Tensor, positions: torch.Tensor
     ) -> torch.Tensor:
@@ -564,6 +601,10 @@ class EventReader(PreTrainedModel):
         token_to_word: torch.Tensor,
         event_marker_positions: torch.Tensor,
         argument_marker_positions: torch.Tensor,
+        event_label_token_starts: torch.Tensor,
+        event_label_token_ends: torch.Tensor,
+        argument_label_token_starts: torch.Tensor,
+        argument_label_token_ends: torch.Tensor,
         event_label_texts: list[str],
         argument_label_texts: list[str],
         relation_threshold: float,
@@ -605,8 +646,11 @@ class EventReader(PreTrainedModel):
                 event_ends,
             )
             event_label_repr = self.event_label_projector(
-                self._gather_positions(
-                    hidden_states.unsqueeze(0), event_marker_positions.unsqueeze(0)
+                self._build_label_representations(
+                    hidden_states.unsqueeze(0),
+                    event_marker_positions.unsqueeze(0),
+                    event_label_token_starts.unsqueeze(0),
+                    event_label_token_ends.unsqueeze(0),
                 )
             )
             type_logits = self._compute_event_type_logits(
@@ -669,7 +713,12 @@ class EventReader(PreTrainedModel):
                     argument_starts,
                     argument_ends,
                 ),
-                self._gather_positions(hidden_states.unsqueeze(0), role_positions),
+                self._build_label_representations(
+                    hidden_states.unsqueeze(0),
+                    role_positions,
+                    argument_label_token_starts.unsqueeze(0),
+                    argument_label_token_ends.unsqueeze(0),
+                ),
             )[0]
             invalid_role_mask = (argument_marker_positions < 0).view(1, 1, -1, 1)
             relation_logits = relation_logits.masked_fill(
@@ -724,6 +773,10 @@ class EventReader(PreTrainedModel):
         attention_mask: torch.Tensor,
         event_marker_positions: torch.Tensor,
         argument_marker_positions: torch.Tensor,
+        event_label_token_starts: torch.Tensor | None = None,
+        event_label_token_ends: torch.Tensor | None = None,
+        argument_label_token_starts: torch.Tensor | None = None,
+        argument_label_token_ends: torch.Tensor | None = None,
         word_start_mask: torch.Tensor | None = None,
         word_end_mask: torch.Tensor | None = None,
         token_to_word: torch.Tensor | None = None,
@@ -815,11 +868,17 @@ class EventReader(PreTrainedModel):
             outputs["loss_argument_end"] = argument_end_loss
             losses.append((argument_end_loss, 1.0))
 
-        event_label_states = self._gather_positions(
-            aligned_hidden_states, event_marker_positions
+        event_label_states = self._build_label_representations(
+            aligned_hidden_states,
+            event_marker_positions,
+            event_label_token_starts,
+            event_label_token_ends,
         )
-        argument_label_states = self._gather_positions(
-            aligned_hidden_states, argument_marker_positions
+        argument_label_states = self._build_label_representations(
+            aligned_hidden_states,
+            argument_marker_positions,
+            argument_label_token_starts,
+            argument_label_token_ends,
         )
 
         if (
@@ -904,6 +963,10 @@ class EventReader(PreTrainedModel):
                     token_to_word=token_to_word[batch_index],
                     event_marker_positions=event_marker_positions[batch_index],
                     argument_marker_positions=argument_marker_positions[batch_index],
+                    event_label_token_starts=event_label_token_starts[batch_index],
+                    event_label_token_ends=event_label_token_ends[batch_index],
+                    argument_label_token_starts=argument_label_token_starts[batch_index],
+                    argument_label_token_ends=argument_label_token_ends[batch_index],
                     event_label_texts=event_label_texts[batch_index],
                     argument_label_texts=argument_label_texts[batch_index],
                     relation_threshold=self.config.relation_threshold,

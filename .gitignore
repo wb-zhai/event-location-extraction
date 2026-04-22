@@ -3,6 +3,9 @@
 dataset/*
 experiments/*
 .agents
+unsloth_compiled_cache
+wandb
+outputs
 
 # VS Code
 .vscode/

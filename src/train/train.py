@@ -13,9 +13,11 @@ from transformers import AutoModel, AutoTokenizer, Trainer, TrainingArguments
 
 from src.data.dataset import (
     ARGUMENT_MARKER,
+    DEFAULT_CANDIDATE_SAMPLING_SEED,
     EVENT_MARKER,
     EventReaderCollator,
     EventReaderDataset,
+    load_candidate_ontology,
     load_normalized_jsonl,
 )
 from src.modeling.model import (
@@ -36,7 +38,7 @@ DEFAULT_TASK_LEARNING_RATE = 1e-4
 DEFAULT_WEIGHT_DECAY = 0.01
 DEFAULT_MAX_GRAD_NORM = 1.0
 DEFAULT_GRADIENT_ACCUMULATION_STEPS = 1
-DEFAULT_RELATION_LOSS_WEIGHT = 2.0
+DEFAULT_RELATION_LOSS_WEIGHT = 1.0
 RELATION_THRESHOLD_GRID = [step / 20 for step in range(1, 20)]
 
 
@@ -354,6 +356,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_RELATION_LOSS_WEIGHT,
         help="Relative weight for relation loss in multi-task training.",
     )
+    parser.add_argument(
+        "--ontology_file",
+        type=str,
+        default=None,
+        help="Ontology JSON with 'event_labels' and 'argument_labels' used for candidate sampling.",
+    )
+    parser.add_argument(
+        "--num_event_candidates",
+        type=int,
+        default=None,
+        help="Total number of event candidates per sample, including gold labels.",
+    )
+    parser.add_argument(
+        "--num_relation_candidates",
+        type=int,
+        default=None,
+        help="Total number of relation candidates per sample, including gold labels.",
+    )
+    parser.add_argument(
+        "--train_candidate_shuffle_prob",
+        type=float,
+        default=0.5,
+        help="Probability of shuffling candidate labels for each training sample.",
+    )
+    parser.add_argument(
+        "--train_gold_candidate_dropout_prob",
+        type=float,
+        default=0.05,
+        help="Probability of dropping each gold candidate label during training.",
+    )
+    parser.add_argument(
+        "--candidate_sampling_seed",
+        type=int,
+        default=DEFAULT_CANDIDATE_SAMPLING_SEED,
+        help="Random seed used for deterministic candidate sampling.",
+    )
 
     return parser.parse_args(argv)
 
@@ -407,10 +445,43 @@ def main(argv: list[str] | None = None) -> None:
 
     train_samples = load_normalized_jsonl(args.train_file)
     eval_samples = load_normalized_jsonl(args.eval_file)
+    candidate_sampling_enabled = (
+        args.num_event_candidates is not None
+        or args.num_relation_candidates is not None
+    )
+    if candidate_sampling_enabled and args.ontology_file is None:
+        raise ValueError(
+            "--ontology_file is required when candidate sampling is enabled"
+        )
+    ontology = (
+        load_candidate_ontology(args.ontology_file)
+        if candidate_sampling_enabled and args.ontology_file is not None
+        else None
+    )
 
     tokenizer = build_tokenizer(args.model_name)
-    train_dataset = EventReaderDataset(train_samples, tokenizer, args.max_length)
-    eval_dataset = EventReaderDataset(eval_samples, tokenizer, args.max_length)
+    train_dataset = EventReaderDataset(
+        train_samples,
+        tokenizer,
+        args.max_length,
+        ontology=ontology,
+        num_event_candidates=args.num_event_candidates,
+        num_relation_candidates=args.num_relation_candidates,
+        is_training=True,
+        candidate_shuffle_probability=args.train_candidate_shuffle_prob,
+        gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
+        random_seed=args.candidate_sampling_seed,
+    )
+    eval_dataset = EventReaderDataset(
+        eval_samples,
+        tokenizer,
+        args.max_length,
+        ontology=ontology,
+        num_event_candidates=args.num_event_candidates,
+        num_relation_candidates=args.num_relation_candidates,
+        is_training=False,
+        random_seed=args.candidate_sampling_seed,
+    )
 
     config = EventReaderConfig(
         model_name=args.model_name,
@@ -436,10 +507,12 @@ def main(argv: list[str] | None = None) -> None:
         eval_strategy="steps",
         save_strategy="steps",
         logging_strategy="steps",
-        eval_steps=100,
-        save_steps=100,
+        eval_steps=500,
+        save_steps=500,
         logging_steps=10,
-        report_to=[],
+        report_to=["wandb"],
+        project="event-location-extraction",
+        run_name=args.output_dir.split("/")[-1],
         warmup_ratio=args.warmup_ratio,
         fp16=fp16_enabled,
         bf16=bf16_enabled,
