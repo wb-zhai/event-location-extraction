@@ -145,7 +145,10 @@ def _generate_prediction_text(
     event_labels: list[str],
     max_new_tokens: int,
     temperature: float,
-    min_p: float,
+    min_p: float | None = None,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    repetition_penalty: float | None = None,
 ) -> str:
     import torch
 
@@ -164,10 +167,18 @@ def _generate_prediction_text(
     generation_kwargs: dict[str, Any] = {
         "max_new_tokens": max_new_tokens,
         "do_sample": temperature > 0.0,
-        "min_p": min_p,
     }
     if temperature > 0.0:
         generation_kwargs["temperature"] = temperature
+    
+    if min_p is not None:
+        generation_kwargs["min_p"] = min_p
+    if top_k is not None:
+        generation_kwargs["top_k"] = top_k
+    if top_p is not None:
+        generation_kwargs["top_p"] = top_p
+    if repetition_penalty is not None:
+        generation_kwargs["repetition_penalty"] = repetition_penalty
 
     with torch.inference_mode():
         outputs = model.generate(**model_inputs, **generation_kwargs)
@@ -197,7 +208,10 @@ def predict_document(
     event_labels: list[str],
     max_new_tokens: int,
     temperature: float,
-    min_p: float,
+    min_p: float | None = None,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    repetition_penalty: float | None = None,
 ) -> dict[str, Any]:
     prediction_text = _generate_prediction_text(
         model,
@@ -207,6 +221,9 @@ def predict_document(
         max_new_tokens=max_new_tokens,
         temperature=temperature,
         min_p=min_p,
+        top_k=top_k,
+        top_p=top_p,
+        repetition_penalty=repetition_penalty,
     )
     print("Raw model output:", prediction_text)
     parsed_prediction = _parse_prediction_text(prediction_text)
@@ -225,6 +242,9 @@ def run_inference(args: argparse.Namespace) -> dict[str, Any]:
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         min_p=args.min_p,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        repetition_penalty=args.repetition_penalty
     )
 
 
@@ -258,6 +278,9 @@ def run_interactive(args: argparse.Namespace) -> None:
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
             min_p=args.min_p,
+            top_k=args.top_k,
+            top_p=args.top_p,
+            repetition_penalty=args.repetition_penalty,
         )
         print(json.dumps(prediction, ensure_ascii=False, indent=2))
 
@@ -269,8 +292,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--event_labels", nargs="+", default=None)
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--max_new_tokens", type=int, default=4096)
-    parser.add_argument("--temperature", type=float, default=1.5)
-    parser.add_argument("--min_p", type=float, default=0.1)
+    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--min_p", type=float, default=None)
+    parser.add_argument("--top_k", type=int, default=None)
+    parser.add_argument("--top_p", type=float, default=None)
+    parser.add_argument("--repetition_penalty", type=float, default=None)
     parser.add_argument("--load_in_4bit", action="store_true")
     parser.add_argument("--interactive", action="store_true")
 

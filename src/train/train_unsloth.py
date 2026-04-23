@@ -8,6 +8,7 @@ from typing import Any
 
 import torch
 from unsloth import FastLanguageModel
+from unsloth.chat_templates import train_on_responses_only
 from datasets import load_dataset
 from trl import SFTConfig, SFTTrainer
 
@@ -458,6 +459,27 @@ def _print_train_dataset_preview(
     print("Sample label:")
     print(label_text)
 
+def _response_only(trainer: SFTTrainer, model_name: str) -> SFTTrainer:
+    if "lfm" in model_name.lower():
+        print("Applying response-only training template for LFM model")
+        return train_on_responses_only(
+            trainer,
+            instruction_part = "<|im_start|>user\n",
+            response_part = "<|im_start|>assistant\n",
+        )
+    if "qwen3.5" in model_name.lower():
+        print("Applying response-only training template for Qwen3.5 model")
+        return train_on_responses_only(
+            trainer,
+            instruction_part = "<|im_start|>user\n",
+            response_part = "<|im_start|>assistant\n<think>",
+        )
+    
+    raise ValueError(
+        "Response-only training template is not defined for the specified model. "
+        "Supported models for response-only training: LFM, Qwen3.5."
+    )
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -483,8 +505,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--warmup_ratio", type=float, default=0.05)
     parser.add_argument("--epochs", type=float, default=3.0)
+    parser.add_argument("--full_finetuning", action="store_true")
     parser.add_argument("--load_in_4bit", action="store_true")
+    parser.add_argument("--load_in_8bit", action="store_true")
+    parser.add_argument("--load_in_16bit", action="store_true")
     parser.add_argument("--lora_r", type=int, default=16)
+    parser.add_argument("--train_on_responses_only", action="store_true")
     parser.add_argument(
         "--ontology_file",
         type=str,
@@ -541,32 +567,47 @@ def main(argv: list[str] | None = None) -> None:
         else None
     )
 
+    # check that only one of load_in_4bit, load_in_8bit, load_in_16bit is set
+    precision_flags = [
+        args.load_in_4bit,
+        args.load_in_8bit,
+        args.load_in_16bit,
+    ]
+    if sum(precision_flags) > 1:
+        raise ValueError(
+            "Only one of --load_in_4bit, --load_in_8bit, --load_in_16bit can be set"
+        )
+
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
         max_seq_length=args.max_seq_length,
         load_in_4bit=args.load_in_4bit,
+        load_in_8bit=args.load_in_8bit,
+        load_in_16bit=args.load_in_16bit,
+        full_finetuning=args.full_finetuning,
     )
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=args.lora_r,
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
-        lora_alpha=args.lora_r,
-        lora_dropout=0.0,
-        bias="none",
-        use_gradient_checkpointing=False, #"unsloth",
-        random_state=3407,
-        max_seq_length=args.max_seq_length,
-        finetune_vision_layers=False,
-    )
+    if not args.full_finetuning:
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=args.lora_r,
+            target_modules=[
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            ],
+            lora_alpha=args.lora_r,
+            lora_dropout=0.0,
+            bias="none",
+            use_gradient_checkpointing=False, #"unsloth",
+            random_state=3407,
+            max_seq_length=args.max_seq_length,
+            finetune_vision_layers=False,
+        )
 
     train_ds = load_dataset("json", data_files=args.train_file, split="train")
     if args.max_train_samples is not None:
@@ -651,6 +692,9 @@ def main(argv: list[str] | None = None) -> None:
             report_to="none",
         ),
     )
+
+    if args.train_on_responses_only:
+        trainer = _response_only(trainer, args.model_name)
 
     _print_train_dataset_preview(
         train_ds,
