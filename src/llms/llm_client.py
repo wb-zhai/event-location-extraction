@@ -242,7 +242,8 @@ class GeminiLLMClient(LLMClient):
 
         if "gemini" in self.model_name:
             self.client = genai.Client(
-                vertexai=True, project=os.getenv("PROJECT_ID"), location="global"
+                # vertexai=True, project=os.getenv("PROJECT_ID"), location="global"
+                api_key=os.getenv("GEMINI_API_KEY")
             )
         elif (
             "deepseek-r1-0528-maas" in self.model_name

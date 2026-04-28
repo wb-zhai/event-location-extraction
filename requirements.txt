@@ -11,3 +11,4 @@ google-genai
 jinja2
 openai
 anthropic[vertex]
+trafilatura

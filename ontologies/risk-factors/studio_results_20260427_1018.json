@@ -1,0 +1,1171 @@
+[
+  {
+    "id": "669",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land seizures",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "670",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "slashed export",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "671",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "price rise",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "672",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "mass hunger",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "673",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cyclone",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "674",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "failed crops",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "675",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "disruption to farming",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "676",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "massive starvation",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "677",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "abnormally low rainfall",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "678",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "withheld relief",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "679",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international alarm",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "680",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "reduced national output",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "681",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "oppressive regimes",
+    "cluster": "political instability"
+  },
+  {
+    "id": "682",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "pests",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "683",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "continued deterioration",
+    "cluster": "other"
+  },
+  {
+    "id": "684",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "forests destroyed",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "685",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "man-made disaster",
+    "cluster": "other"
+  },
+  {
+    "id": "686",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "food insecurity",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "687",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "harvests are devastated",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "688",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "humanitarian situation",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "689",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "economic impoverishment",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "690",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "clan battle",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "691",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "population crisis",
+    "cluster": "other"
+  },
+  {
+    "id": "692",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "aid appeal",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "693",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "weather extremes",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "694",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "anti-western policies",
+    "cluster": "political instability"
+  },
+  {
+    "id": "695",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rinderpest",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "696",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "inadequate rainfall",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "697",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of authority",
+    "cluster": "political instability"
+  },
+  {
+    "id": "698",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "acute hunger",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "699",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "foreign troops",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "700",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "increased external debt",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "701",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "drought",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "702",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "conflict",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "703",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "failed rains",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "704",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "makeshift camps",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "705",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "civilians uprooted",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "706",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "dysfunction",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "707",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "foreign aid",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "708",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "violent suppression",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "709",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "military dictatorship",
+    "cluster": "political instability"
+  },
+  {
+    "id": "710",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "climatic hazards",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "711",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "migration",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "712",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land grab",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "713",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "terrorism",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "714",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "bombing campaign",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "715",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "collapsing economy",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "716",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "military junta",
+    "cluster": "political instability"
+  },
+  {
+    "id": "717",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "climate change",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "718",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rising inflation",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "719",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international terrorists",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "720",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cycle of poverty",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "721",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "bad harvests",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "722",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "destructive pattern",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "723",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "price of food",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "724",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "corrupt government",
+    "cluster": "political instability"
+  },
+  {
+    "id": "725",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "militia groups",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "726",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "poor soil quality",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "727",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cattle plague",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "728",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "food assistance",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "729",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "continued strife",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "730",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "ecological crisis",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "731",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "hunger crises",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "732",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rising food prices",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "733",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "restricted humanitarian access",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "734",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "water availability",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "735",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "alarming level",
+    "cluster": "other"
+  },
+  {
+    "id": "736",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "police torture",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "737",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "potato blight",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "738",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "the offensive",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "739",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land invasions",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "740",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "clan warfare",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "741",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "stolen food aid",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "742",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "politically engineered",
+    "cluster": "political instability"
+  },
+  {
+    "id": "743",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "scanty rainfall",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "744",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "water distribution shortages",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "745",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cattle death",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "746",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "asylum seekers",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "747",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "major offensive",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "748",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "without international aid",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "749",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "prolonged dry spell",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "750",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rise",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "751",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "restricted relief flights",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "752",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "civil strife",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "753",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "aid workers died",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "754",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rival warlords",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "755",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land reform",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "756",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of roads",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "757",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "pushing peasants off",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "758",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "locusts",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "759",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "gangs of bandits",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "760",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "repression",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "761",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "humanitarian disaster",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "762",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "years of warfare",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "763",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "floods",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "764",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "unable to sow",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "765",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "transport bottleneck",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "766",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "pirates",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "767",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "reduced imports",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "768",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "apathy",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "769",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "coup",
+    "cluster": "political instability"
+  },
+  {
+    "id": "770",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "epidemics",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "771",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "siege",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "772",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "power struggle",
+    "cluster": "political instability"
+  },
+  {
+    "id": "773",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "livestock had died",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "774",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "blockade",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "775",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "burning houses",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "776",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "brain drain",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "777",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "severe rains",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "778",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "infrastructure damage",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "779",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land degradation",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "780",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "human rights abuses",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "781",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of cultivation",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "782",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "harvest decline",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "783",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "flee",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "784",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "economic crisis",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "785",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "greenhouse gases",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "786",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "prolonged fighting",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "787",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "tragedy",
+    "cluster": "other"
+  },
+  {
+    "id": "788",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "slave trade",
+    "cluster": "other"
+  },
+  {
+    "id": "789",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "environmental degradation",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "790",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "infant mortality",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "791",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "catastrophe",
+    "cluster": "other"
+  },
+  {
+    "id": "792",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "wreaked havoc",
+    "cluster": "other"
+  },
+  {
+    "id": "793",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "internal strife",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "794",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "malnourished",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "795",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "secession",
+    "cluster": "political instability"
+  },
+  {
+    "id": "796",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "natural disaster",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "797",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "life-threatening hunger",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "798",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "air attack",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "799",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "corruption",
+    "cluster": "political instability"
+  },
+  {
+    "id": "800",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "call for donations",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "801",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "collapse of government",
+    "cluster": "political instability"
+  },
+  {
+    "id": "802",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international intervention",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "803",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "refugees",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "804",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "disrupted trade",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "805",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of agricultural infrastructure",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "806",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rebel insurgency",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "807",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "brutal government",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "808",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "looting",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "809",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "displaced",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "810",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "food crisis",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "811",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of rains",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "812",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of alternatives",
+    "cluster": "other"
+  },
+  {
+    "id": "813",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "regimes were toppled",
+    "cluster": "political instability"
+  },
+  {
+    "id": "814",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "jihadist groups",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "815",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "toll on livestock",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "816",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "shortage of rains",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "817",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "devastated the economy",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "818",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "self reliance",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "819",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cholera outbreak",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "820",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international embargo",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "821",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "farmland",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "822",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "totalitarian",
+    "cluster": "political instability"
+  },
+  {
+    "id": "823",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "authoritarian",
+    "cluster": "political instability"
+  },
+  {
+    "id": "824",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "dictators",
+    "cluster": "political instability"
+  },
+  {
+    "id": "825",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "clans",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "826",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "gastrointestinal",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "827",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "terrorist",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "828",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "warlord",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "829",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "d'etat",
+    "cluster": "political instability"
+  },
+  {
+    "id": "830",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "overthrow",
+    "cluster": "political instability"
+  },
+  {
+    "id": "831",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "convoys",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "832",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "carbon",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "833",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "mayhem",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "834",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "dehydrated",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "835",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "mismanagement",
+    "cluster": "political instability"
+  }
+]

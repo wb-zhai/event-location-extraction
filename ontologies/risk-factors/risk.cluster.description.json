@@ -1,0 +1,16 @@
+{
+    "events": {
+        "agricultural production issues": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
+        "conflicts and violence": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
+        "economic issues": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
+        "environmental issues": "Mentions of environmental degradation or ecological problems, such as soil degradation, deforestation, desertification, pollution, water scarcity, or damage to natural resources.",
+        "food crisis": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
+        "forced displacement": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
+        "humanitarian aid": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
+        "land-related issues": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
+        "other": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
+        "pests and diseases": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
+        "political instability": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
+        "weather shocks": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
+    }
+}
