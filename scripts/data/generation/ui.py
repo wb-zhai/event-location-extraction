@@ -37,6 +37,18 @@ DEFAULT_ONTOLOGY = Path("ontologies/risk-factors/risk.cluster.description.json")
 LOGGER = logging.getLogger("span_annotation_ui")
 
 
+def list_dataset_files() -> list[str]:
+    dataset_root = REPO_ROOT / "dataset"
+    if not dataset_root.exists():
+        return []
+    suffixes = {".jsonl", ".jsonlines"}
+    return [
+        str(path.relative_to(REPO_ROOT))
+        for path in sorted(dataset_root.rglob("*"))
+        if path.is_file() and path.suffix.lower() in suffixes
+    ]
+
+
 def resolve_local_path(path_text: str) -> Path:
     path = Path(path_text).expanduser()
     if not path.is_absolute():
@@ -56,6 +68,7 @@ def normalize_record(record: dict[str, Any], index: int) -> dict[str, Any]:
     title = str(source.get("title") or record.get("title") or "")
     text = str(source.get("text") or record.get("text") or "")
     spans = record.get("spans") if isinstance(record.get("spans"), list) else []
+    events = record.get("events") if isinstance(record.get("events"), list) else []
     record_id = str(record.get("id") or f"record_{index}")
     return {
         "id": record_id,
@@ -66,6 +79,7 @@ def normalize_record(record: dict[str, Any], index: int) -> dict[str, Any]:
         "source_url": source.get("source_url") or record.get("source_url"),
         "publish_date": source.get("publish_date") or record.get("publish_date"),
         "spans": spans,
+        "events": events,
         "llm": record.get("llm") if isinstance(record.get("llm"), dict) else {},
         "error": record.get("error"),
     }
@@ -76,12 +90,17 @@ def summarize_record(record: dict[str, Any], index: int) -> dict[str, Any]:
     title = normalized["title"] or normalized["text"][:80].replace("\n", " ")
     if len(title) > 100:
         title = title[:97] + "..."
+    argument_count = sum(
+        len(event.get("arguments") or [])
+        for event in normalized["events"]
+        if isinstance(event, dict)
+    )
     return {
         "id": normalized["id"],
         "index": index,
         "title": title,
         "status": normalized["status"],
-        "span_count": len(normalized["spans"]),
+        "span_count": len(normalized["spans"]) + len(normalized["events"]) + argument_count,
     }
 
 
@@ -89,7 +108,9 @@ class AppState:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
         self.records: list[dict[str, Any]] = []
+        self.compare_records: list[dict[str, Any]] = []
         self.loaded_path: str | None = None
+        self.loaded_compare_path: str | None = None
         self.ontology = normalize_ontology(load_json_tolerant(args.ontology))
         self.ontology_text = format_ontology(self.ontology)
         self.labels = set(self.ontology)
@@ -121,6 +142,14 @@ class SpanUIHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             self.send_text(INDEX_HTML, content_type="text/html; charset=utf-8")
+            return
+        if parsed.path == "/api/datasets":
+            self.send_json(
+                {
+                    "datasets": list_dataset_files(),
+                    "default": DEFAULT_JSONL,
+                }
+            )
             return
         if parsed.path == "/api/record":
             self.handle_get_record(parsed.query)
@@ -179,12 +208,18 @@ class SpanUIHandler(BaseHTTPRequestHandler):
                 raise ValueError("Missing JSONL path.")
             path = resolve_local_path(path_text)
             records = iter_jsonl(path)
-            self.server.state.records = records
-            self.server.state.loaded_path = str(path)
+            role = str(payload.get("role") or "primary")
+            if role == "compare":
+                self.server.state.compare_records = records
+                self.server.state.loaded_compare_path = str(path)
+            else:
+                self.server.state.records = records
+                self.server.state.loaded_path = str(path)
             first = normalize_record(records[0], 0) if records else None
             self.send_json(
                 {
                     "path": str(path),
+                    "role": role,
                     "count": len(records),
                     "records": [
                         summarize_record(record, index)
@@ -203,7 +238,26 @@ class SpanUIHandler(BaseHTTPRequestHandler):
             records = self.server.state.records
             if index < 0 or index >= len(records):
                 raise ValueError(f"Record index out of range: {index}")
-            self.send_json({"record": normalize_record(records[index], index)})
+            record = normalize_record(records[index], index)
+            compare_records = self.server.state.compare_records
+            compare_record = None
+            record_id = record.get("id")
+            if record_id:
+                for compare_index, raw_compare_record in enumerate(compare_records):
+                    normalized_compare = normalize_record(
+                        raw_compare_record, compare_index
+                    )
+                    if normalized_compare.get("id") == record_id:
+                        compare_record = normalized_compare
+                        break
+            if compare_record is None and 0 <= index < len(compare_records):
+                compare_record = normalize_record(compare_records[index], index)
+            self.send_json(
+                {
+                    "record": record,
+                    "compare_record": compare_record,
+                }
+            )
         except Exception as exc:
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
 
@@ -381,17 +435,51 @@ INDEX_HTML = r"""<!doctype html>
     .doc {
       padding: 18px;
     }
+    .doc-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+    .doc-grid.compare {
+      grid-template-columns: 1fr 1fr;
+    }
+    .record-pane {
+      min-width: 0;
+    }
+    .record-pane + .record-pane {
+      border-left: 1px solid var(--line);
+      padding-left: 18px;
+    }
     .annotated-text {
+      position: relative;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       font-size: 15px;
       line-height: 1.72;
     }
     mark.span {
+      position: relative;
       border-radius: 4px;
       padding: 2px 3px;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
+      cursor: pointer;
+    }
+    mark.event {
+      outline: 2px solid rgba(31, 41, 51, 0.72);
+    }
+    mark.argument {
+      border-bottom: 3px dashed rgba(31, 41, 51, 0.72);
+    }
+    mark.span.dimmed {
+      background: #e5e7eb !important;
+      color: #6b7280;
+      outline-color: #c5cbd3;
+      border-bottom-color: #c5cbd3;
+    }
+    mark.span.selected {
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.34);
+      z-index: 1;
     }
     .span-label {
       display: inline-block;
@@ -402,6 +490,22 @@ INDEX_HTML = r"""<!doctype html>
       line-height: 1.4;
       font-weight: 700;
       background: rgba(255, 255, 255, 0.72);
+    }
+    .span-label .badge-kind {
+      display: inline-block;
+      margin-right: 3px;
+      border-radius: 3px;
+      padding: 0 3px;
+      color: #ffffff;
+      font-size: 9px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    mark.event .badge-kind {
+      background: #1f2933;
+    }
+    mark.argument .badge-kind {
+      background: #2563eb;
     }
     .span-list {
       display: grid;
@@ -416,11 +520,43 @@ INDEX_HTML = r"""<!doctype html>
       border-radius: 8px;
       padding: 9px;
       background: #ffffff;
+      cursor: pointer;
+    }
+    .span-card.dimmed,
+    .relation-card.dimmed {
+      border-left-color: #c5cbd3 !important;
+      color: #6b7280;
+      background: #f5f6f8;
+    }
+    .span-card.selected,
+    .relation-card.selected {
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
+      border-color: #2563eb;
     }
     .span-card strong {
       display: block;
       margin-bottom: 4px;
       overflow-wrap: anywhere;
+    }
+    .relation-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px;
+      background: #ffffff;
+      cursor: pointer;
+    }
+    .relation-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .relation-node {
+      overflow-wrap: anywhere;
+    }
+    .relation-arrow {
+      color: var(--muted);
+      font-weight: 700;
     }
     .tabs {
       display: grid;
@@ -441,6 +577,15 @@ INDEX_HTML = r"""<!doctype html>
     @media (max-width: 1050px) {
       .layout {
         grid-template-columns: 1fr;
+      }
+      .doc-grid.compare {
+        grid-template-columns: 1fr;
+      }
+      .record-pane + .record-pane {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-left: 0;
+        padding-top: 18px;
       }
       .span-list {
         max-height: none;
@@ -464,11 +609,24 @@ INDEX_HTML = r"""<!doctype html>
 
         <div id="fileMode">
           <div class="field">
-            <label for="jsonlPath">JSONL path</label>
+            <label for="datasetSelect">Dataset</label>
+            <select id="datasetSelect"></select>
+          </div>
+          <div class="field">
+            <label for="jsonlPath">Selected path</label>
             <input id="jsonlPath" value="__DEFAULT_JSONL__">
+          </div>
+          <div class="field">
+            <label for="compareDatasetSelect">Compare dataset</label>
+            <select id="compareDatasetSelect"></select>
+          </div>
+          <div class="field">
+            <label for="compareJsonlPath">Compare path</label>
+            <input id="compareJsonlPath" placeholder="Optional comparison JSONL">
           </div>
           <div class="row">
             <button id="loadFile" class="primary" type="button">Load</button>
+            <button id="loadCompareFile" type="button">Load comparison</button>
             <button id="prevRecord" type="button" disabled>Prev</button>
             <button id="nextRecord" type="button" disabled>Next</button>
           </div>
@@ -501,10 +659,20 @@ INDEX_HTML = r"""<!doctype html>
     </aside>
 
     <section class="panel doc">
-      <h2 class="title" id="docTitle">No record loaded</h2>
-      <div class="meta" id="docMeta"></div>
-      <hr style="border: 0; border-top: 1px solid var(--line); margin: 14px 0;">
-      <div class="annotated-text" id="annotatedText">Load a JSONL file or paste text to run inference.</div>
+      <div class="doc-grid" id="docGrid">
+        <div class="record-pane">
+          <h2 class="title" id="docTitle">No record loaded</h2>
+          <div class="meta" id="docMeta"></div>
+          <hr style="border: 0; border-top: 1px solid var(--line); margin: 14px 0;">
+          <div class="annotated-text" id="annotatedText">Load a JSONL file or paste text to run inference.</div>
+        </div>
+        <div class="record-pane hidden" id="comparePane">
+          <h2 class="title" id="compareTitle">No comparison loaded</h2>
+          <div class="meta" id="compareMeta"></div>
+          <hr style="border: 0; border-top: 1px solid var(--line); margin: 14px 0;">
+          <div class="annotated-text" id="compareAnnotatedText"></div>
+        </div>
+      </div>
     </section>
 
     <aside class="panel">
@@ -517,6 +685,13 @@ INDEX_HTML = r"""<!doctype html>
       <div class="section">
         <div class="span-list" id="spanList"></div>
       </div>
+      <div class="section hidden" id="compareSpanSection">
+        <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+          <strong>Comparison spans</strong>
+          <span class="meta" id="compareSpanCount">0</span>
+        </div>
+        <div class="span-list" id="compareSpanList"></div>
+      </div>
     </aside>
   </main>
 
@@ -527,8 +702,11 @@ INDEX_HTML = r"""<!doctype html>
     ];
     const state = {
       records: [],
+      compareRecords: [],
       currentIndex: -1,
       currentRecord: null,
+      currentCompareRecord: null,
+      selections: {primary: null, compare: null},
       mode: "file"
     };
 
@@ -556,9 +734,10 @@ INDEX_HTML = r"""<!doctype html>
       return palette[Math.abs(hash) % palette.length];
     }
 
-    function validSortedSpans(record) {
+    function validSortedAnnotations(record) {
       const text = record?.text || "";
       const spans = Array.isArray(record?.spans) ? record.spans : [];
+      const events = Array.isArray(record?.events) ? record.events : [];
       const out = [];
       const seen = new Set();
       for (const span of spans) {
@@ -567,74 +746,302 @@ INDEX_HTML = r"""<!doctype html>
         const label = String(span.label || "");
         if (!Number.isInteger(start) || !Number.isInteger(end)) continue;
         if (start < 0 || end <= start || end > text.length) continue;
-        const key = `${start}:${end}:${label}`;
+        const key = `span:${start}:${end}:${label}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push({...span, start_char: start, end_char: end, label});
+        out.push({...span, start_char: start, end_char: end, label, kind: "span"});
       }
+      events.forEach((event, eventIndex) => {
+        if (!event || typeof event !== "object") return;
+        const start = Number(event.start_char);
+        const end = Number(event.end_char);
+        const label = String(event.event_type || event.label || "");
+        if (!Number.isInteger(start) || !Number.isInteger(end)) return;
+        if (start < 0 || end <= start || end > text.length) return;
+        const key = `event:${eventIndex}:${start}:${end}:${label}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({
+          ...event,
+          start_char: start,
+          end_char: end,
+          span_text: event.trigger_text || text.slice(start, end),
+          label,
+          kind: "event",
+          event_index: eventIndex
+        });
+        const args = Array.isArray(event.arguments) ? event.arguments : [];
+        args.forEach((argument, argumentIndex) => {
+          if (!argument || typeof argument !== "object") return;
+          const argStart = Number(argument.start_char);
+          const argEnd = Number(argument.end_char);
+          const role = String(argument.role || "argument");
+          if (!Number.isInteger(argStart) || !Number.isInteger(argEnd)) return;
+          if (argStart < 0 || argEnd <= argStart || argEnd > text.length) return;
+          const argKey = `arg:${eventIndex}:${argumentIndex}:${argStart}:${argEnd}:${role}`;
+          if (seen.has(argKey)) return;
+          seen.add(argKey);
+          out.push({
+            ...argument,
+            start_char: argStart,
+            end_char: argEnd,
+            span_text: argument.text || text.slice(argStart, argEnd),
+            label: role,
+            kind: "argument",
+            event_index: eventIndex,
+            argument_index: argumentIndex
+          });
+        });
+      });
       out.sort((a, b) => a.start_char - b.start_char || a.end_char - b.end_char);
       const nonOverlapping = [];
       let cursor = 0;
-      for (const span of out) {
-        if (span.start_char < cursor) continue;
-        nonOverlapping.push(span);
-        cursor = span.end_char;
+      for (const annotation of out) {
+        if (annotation.start_char < cursor) continue;
+        nonOverlapping.push(annotation);
+        cursor = annotation.end_char;
       }
       return nonOverlapping;
     }
 
-    function renderText(record) {
-      const text = record?.text || "";
-      const spans = validSortedSpans(record);
-      let html = "";
-      let cursor = 0;
-      for (const span of spans) {
-        const color = labelColor(span.label);
-        html += escapeHtml(text.slice(cursor, span.start_char));
-        html += `<mark class="span" style="background:${color}" title="${escapeHtml(span.label)}">`;
-        html += escapeHtml(text.slice(span.start_char, span.end_char));
-        html += `<span class="span-label">${escapeHtml(span.label)}</span></mark>`;
-        cursor = span.end_char;
-      }
-      html += escapeHtml(text.slice(cursor));
-      el("annotatedText").innerHTML = html || "No text to display.";
-      el("spanCount").textContent = `${spans.length}`;
+    function annotationKey(annotation) {
+      return `${annotation.kind}:${annotation.start_char}:${annotation.end_char}:${annotation.label}`;
     }
 
-    function renderSpanList(record) {
-      const spans = validSortedSpans(record);
-      if (!spans.length) {
-        el("spanList").innerHTML = '<div class="meta">No valid spans.</div>';
+    function paneIds(pane) {
+      if (pane === "compare") {
+        return {
+          text: "compareAnnotatedText",
+          list: "compareSpanList"
+        };
+      }
+      return {
+        text: "annotatedText",
+        list: "spanList"
+      };
+    }
+
+    function annotationMatchesSelection(element, selection) {
+      if (!selection) return false;
+      if (selection.eventIndex !== null && selection.eventIndex !== undefined) {
+        if (Number(element.dataset.eventIndex) === selection.eventIndex) return true;
+      }
+      const start = Number(element.dataset.start);
+      const end = Number(element.dataset.end);
+      if (Number.isInteger(start) && Number.isInteger(end)) {
+        return selection.ranges.some((range) => range.start === start && range.end === end);
+      }
+      return element.dataset.spanKey === selection.spanKey;
+    }
+
+    function applySelection(pane) {
+      const selection = state.selections[pane];
+      const ids = paneIds(pane);
+      const textMarks = Array.from(el(ids.text).querySelectorAll("[data-clickable-span]"));
+      const cards = Array.from(el(ids.list).querySelectorAll("[data-clickable-span]"));
+      for (const item of [...textMarks, ...cards]) {
+        const selected = annotationMatchesSelection(item, selection);
+        item.classList.toggle("selected", selected);
+        item.classList.toggle("dimmed", Boolean(selection) && !selected);
+      }
+    }
+
+    function scrollToSelectionTarget(pane, selection, targetArea) {
+      const ids = paneIds(pane);
+      const root = el(targetArea === "list" ? ids.list : ids.text);
+      const eventSelector = selection.eventIndex !== null && selection.eventIndex !== undefined
+        ? `[data-clickable-span][data-event-index="${selection.eventIndex}"]`
+        : "";
+      const spanSelector = selection.spanKey
+        ? `[data-clickable-span][data-span-key="${CSS.escape(selection.spanKey)}"]`
+        : "";
+      const target = root.querySelector(eventSelector || spanSelector);
+      if (target) {
+        target.scrollIntoView({behavior: "smooth", block: "center", inline: "nearest"});
+      }
+    }
+
+    function recordForPane(pane) {
+      return pane === "compare" ? state.currentCompareRecord : state.currentRecord;
+    }
+
+    function eventRanges(record, eventIndex) {
+      const event = Array.isArray(record?.events) ? record.events[eventIndex] : null;
+      if (!event || typeof event !== "object") return [];
+      const ranges = [];
+      const start = Number(event.start_char);
+      const end = Number(event.end_char);
+      if (Number.isInteger(start) && Number.isInteger(end)) {
+        ranges.push({start, end});
+      }
+      const args = Array.isArray(event.arguments) ? event.arguments : [];
+      for (const argument of args) {
+        const argStart = Number(argument?.start_char);
+        const argEnd = Number(argument?.end_char);
+        if (Number.isInteger(argStart) && Number.isInteger(argEnd)) {
+          ranges.push({start: argStart, end: argEnd});
+        }
+      }
+      return ranges;
+    }
+
+    function selectSpan(pane, element, targetArea) {
+      const eventIndex = element.dataset.eventIndex === undefined ? null : Number(element.dataset.eventIndex);
+      const start = Number(element.dataset.start);
+      const end = Number(element.dataset.end);
+      const selection = {
+        eventIndex: Number.isInteger(eventIndex) ? eventIndex : null,
+        spanKey: element.dataset.spanKey || null,
+        ranges: []
+      };
+      if (selection.eventIndex !== null) {
+        selection.ranges = eventRanges(recordForPane(pane), selection.eventIndex);
+      } else if (Number.isInteger(start) && Number.isInteger(end)) {
+        selection.ranges = [{start, end}];
+      }
+      state.selections[pane] = selection;
+      applySelection(pane);
+      scrollToSelectionTarget(pane, selection, targetArea);
+    }
+
+    function renderText(record, textElementId, countElementId) {
+      const pane = textElementId === "compareAnnotatedText" ? "compare" : "primary";
+      const text = record?.text || "";
+      const annotations = validSortedAnnotations(record);
+      let html = "";
+      let cursor = 0;
+      for (const annotation of annotations) {
+        const relationId = Number.isInteger(annotation.event_index) ? `E${annotation.event_index + 1}` : "";
+        const colorKey = annotation.kind === "argument" ? `event:${annotation.event_index}` : annotation.label;
+        const color = labelColor(colorKey);
+        const title = annotation.kind === "argument"
+          ? `${relationId} role ${annotation.label}`
+          : annotation.kind === "event"
+            ? `${relationId} event ${annotation.label}`
+            : annotation.label;
+        const labelKind = annotation.kind === "argument" ? "ROLE" : annotation.kind === "event" ? "EVENT" : "SPAN";
+        const labelText = annotation.kind === "argument"
+          ? `${relationId}:${annotation.label}`
+          : annotation.kind === "event" && relationId
+            ? `${relationId}:${annotation.label}`
+            : annotation.label;
+        const key = annotationKey(annotation);
+        const eventData = Number.isInteger(annotation.event_index) ? ` data-event-index="${annotation.event_index}"` : "";
+        html += escapeHtml(text.slice(cursor, annotation.start_char));
+        html += `<mark class="span ${annotation.kind}" data-clickable-span data-pane="${pane}" data-span-key="${escapeHtml(key)}" data-start="${annotation.start_char}" data-end="${annotation.end_char}"${eventData} style="background:${color}" title="${escapeHtml(title)}">`;
+        html += escapeHtml(text.slice(annotation.start_char, annotation.end_char));
+        html += `<span class="span-label"><span class="badge-kind">${labelKind}</span>${escapeHtml(labelText)}</span></mark>`;
+        cursor = annotation.end_char;
+      }
+      html += escapeHtml(text.slice(cursor));
+      el(textElementId).innerHTML = html || "No text to display.";
+      if (countElementId) el(countElementId).textContent = `${annotations.length}`;
+      applySelection(pane);
+    }
+
+    function renderSpanList(record, listElementId) {
+      const pane = listElementId === "compareSpanList" ? "compare" : "primary";
+      const events = Array.isArray(record?.events) ? record.events : [];
+      if (events.length) {
+        el(listElementId).innerHTML = events.map((event, eventIndex) => {
+          const eventType = String(event.event_type || event.label || "");
+          const eventText = String(event.trigger_text || event.span_text || "");
+          const args = Array.isArray(event.arguments) ? event.arguments : [];
+          const color = labelColor(eventType);
+          const argumentRows = args.length ? args.map((argument) => {
+            const role = String(argument.role || "argument");
+            const argText = String(argument.text || argument.span_text || "");
+            return `
+              <div class="relation-card" data-clickable-span data-pane="${pane}" data-event-index="${eventIndex}">
+                <div class="relation-row">
+                  <div class="relation-node"><strong>EVENT E${eventIndex + 1} ${escapeHtml(eventText)}</strong><div class="meta">${escapeHtml(eventType)} · ${event.start_char}-${event.end_char}</div></div>
+                  <div class="relation-arrow">-&gt;<div class="meta">ROLE ${escapeHtml(role)}</div></div>
+                  <div class="relation-node"><strong>${escapeHtml(argText)}</strong><div class="meta">${argument.start_char}-${argument.end_char}</div></div>
+                </div>
+              </div>
+            `;
+          }).join("") : '<div class="meta">No linked arguments.</div>';
+          return `
+            <div class="span-card" data-clickable-span data-pane="${pane}" data-event-index="${eventIndex}" style="border-left-color:${color}">
+              <strong>EVENT E${eventIndex + 1} ${escapeHtml(eventText)}</strong>
+              <div class="meta">event ${eventIndex + 1} · ${escapeHtml(eventType)} · ${event.start_char}-${event.end_char}</div>
+              <div class="meta">${escapeHtml(event.rationale || "")}</div>
+              <div style="display: grid; gap: 8px; margin-top: 8px;">${argumentRows}</div>
+            </div>
+          `;
+        }).join("");
+        applySelection(pane);
         return;
       }
-      el("spanList").innerHTML = spans.map((span) => {
+
+      const spans = validSortedAnnotations(record);
+      if (!spans.length) {
+        el(listElementId).innerHTML = '<div class="meta">No valid spans.</div>';
+        return;
+      }
+      el(listElementId).innerHTML = spans.map((span) => {
         const color = labelColor(span.label);
+        const key = annotationKey(span);
         return `
-          <div class="span-card" style="border-left-color:${color}">
+          <div class="span-card" data-clickable-span data-pane="${pane}" data-span-key="${escapeHtml(key)}" data-start="${span.start_char}" data-end="${span.end_char}" style="border-left-color:${color}">
             <strong>${escapeHtml(span.span_text || "")}</strong>
             <div class="meta">${escapeHtml(span.label)} · ${span.start_char}-${span.end_char}</div>
             <div class="meta">${escapeHtml(span.rationale || "")}</div>
           </div>
         `;
       }).join("");
+      applySelection(pane);
     }
 
-    function renderRecord(record) {
-      state.currentRecord = record;
-      el("docTitle").textContent = record?.title || "Untitled";
+    function recordMeta(record) {
       const meta = [];
       if (record?.id) meta.push(record.id);
       if (record?.publish_date) meta.push(record.publish_date);
       if (record?.source_url) meta.push(record.source_url);
       if (record?.llm?.model) meta.push(`model: ${record.llm.model}`);
       if (record?.error) meta.push(`error: ${record.error}`);
-      el("docMeta").textContent = meta.join(" · ");
-      renderText(record);
-      renderSpanList(record);
+      return meta.join(" · ");
+    }
+
+    function renderRecord(record) {
+      state.currentRecord = record;
+      state.selections.primary = null;
+      el("docTitle").textContent = record?.title || "Untitled";
+      el("docMeta").textContent = recordMeta(record);
+      renderText(record, "annotatedText", "spanCount");
+      renderSpanList(record, "spanList");
       if (state.mode === "file") {
         el("manualTitle").value = record?.title || "";
         el("manualText").value = record?.text || "";
       }
+    }
+
+    function renderCompareRecord(record) {
+      state.currentCompareRecord = record;
+      state.selections.compare = null;
+      const hasRecord = Boolean(record);
+      el("docGrid").classList.toggle("compare", hasRecord);
+      el("comparePane").classList.toggle("hidden", !hasRecord);
+      el("compareSpanSection").classList.toggle("hidden", !hasRecord);
+      if (!hasRecord) {
+        el("compareTitle").textContent = "No comparison loaded";
+        el("compareMeta").textContent = "";
+        el("compareAnnotatedText").innerHTML = "";
+        el("compareSpanCount").textContent = "0";
+        el("compareSpanList").innerHTML = "";
+        return;
+      }
+      el("compareTitle").textContent = record.title || "Untitled";
+      el("compareMeta").textContent = recordMeta(record);
+      renderText(record, "compareAnnotatedText", "compareSpanCount");
+      renderSpanList(record, "compareSpanList");
+    }
+
+    function handleSpanClick(event, pane, targetArea) {
+      const target = event.target.closest("[data-clickable-span]");
+      if (!target) return;
+      event.preventDefault();
+      selectSpan(pane, target, targetArea);
     }
 
     async function requestJson(url, options = {}) {
@@ -649,12 +1056,52 @@ INDEX_HTML = r"""<!doctype html>
       return payload;
     }
 
-    async function loadFile() {
-      setStatus("Loading file...");
+    function reportError(err) {
+      setStatus(err?.message || String(err), true);
+    }
+
+    function datasetOptions(datasets, includeEmpty = false) {
+      const options = includeEmpty ? ['<option value="">None</option>'] : [];
+      for (const path of datasets) {
+        options.push(`<option value="${escapeHtml(path)}">${escapeHtml(path)}</option>`);
+      }
+      return options.join("");
+    }
+
+    async function loadDatasets() {
+      const payload = await requestJson("/api/datasets");
+      const datasets = payload.datasets || [];
+      el("datasetSelect").innerHTML = datasetOptions(datasets);
+      el("compareDatasetSelect").innerHTML = datasetOptions(datasets, true);
+      if (datasets.includes(payload.default)) {
+        el("datasetSelect").value = payload.default;
+      }
+      if (el("datasetSelect").value) {
+        el("jsonlPath").value = el("datasetSelect").value;
+      }
+      if (el("jsonlPath").value) {
+        await loadFile();
+      }
+    }
+
+    async function loadFile(role = "primary") {
+      const isCompare = role === "compare";
+      const path = isCompare ? el("compareJsonlPath").value : el("jsonlPath").value;
+      setStatus(isCompare ? "Loading comparison..." : "Loading file...");
       const payload = await requestJson("/api/load-file", {
         method: "POST",
-        body: JSON.stringify({path: el("jsonlPath").value})
+        body: JSON.stringify({path, role})
       });
+      if (isCompare) {
+        state.compareRecords = payload.records || [];
+        el("loadedMeta").textContent = `${state.records.length} records · ${el("jsonlPath").value} · compare ${payload.count} records`;
+        if (state.currentIndex >= 0) {
+          if (state.currentIndex < payload.count) renderCompareRecord(payload.record && state.currentIndex === 0 ? payload.record : null);
+          await loadRecord(state.currentIndex);
+        }
+        setStatus(`Loaded ${payload.count} comparison records`);
+        return;
+      }
       state.records = payload.records || [];
       state.currentIndex = payload.record ? 0 : -1;
       el("recordSelect").innerHTML = state.records.map((record) => {
@@ -665,7 +1112,12 @@ INDEX_HTML = r"""<!doctype html>
       el("prevRecord").disabled = !state.records.length;
       el("nextRecord").disabled = !state.records.length;
       el("loadedMeta").textContent = `${payload.count} records · ${payload.path}`;
-      if (payload.record) renderRecord(payload.record);
+      if (payload.record && state.compareRecords.length) {
+        await loadRecord(0);
+      } else {
+        if (payload.record) renderRecord(payload.record);
+        renderCompareRecord(null);
+      }
       setStatus(`Loaded ${payload.count} records`);
     }
 
@@ -676,6 +1128,7 @@ INDEX_HTML = r"""<!doctype html>
       state.currentIndex = index;
       el("recordSelect").value = String(index);
       renderRecord(payload.record);
+      renderCompareRecord(payload.compare_record);
       setStatus(`Record ${index + 1} of ${state.records.length}`);
     }
 
@@ -713,11 +1166,19 @@ INDEX_HTML = r"""<!doctype html>
 
     el("fileTab").addEventListener("click", () => setMode("file"));
     el("textTab").addEventListener("click", () => setMode("text"));
-    el("loadFile").addEventListener("click", () => loadFile().catch((err) => setStatus(err.message, true)));
-    el("recordSelect").addEventListener("change", (event) => loadRecord(Number(event.target.value)).catch((err) => setStatus(err.message, true)));
-    el("prevRecord").addEventListener("click", () => loadRecord(state.currentIndex - 1).catch((err) => setStatus(err.message, true)));
-    el("nextRecord").addEventListener("click", () => loadRecord(state.currentIndex + 1).catch((err) => setStatus(err.message, true)));
-    el("runInference").addEventListener("click", () => runInference().catch((err) => setStatus(err.message, true)));
+    el("datasetSelect").addEventListener("change", (event) => { el("jsonlPath").value = event.target.value; });
+    el("compareDatasetSelect").addEventListener("change", (event) => { el("compareJsonlPath").value = event.target.value; });
+    el("loadFile").addEventListener("click", () => loadFile().catch(reportError));
+    el("loadCompareFile").addEventListener("click", () => loadFile("compare").catch(reportError));
+    el("recordSelect").addEventListener("change", (event) => loadRecord(Number(event.target.value)).catch(reportError));
+    el("prevRecord").addEventListener("click", () => loadRecord(state.currentIndex - 1).catch(reportError));
+    el("nextRecord").addEventListener("click", () => loadRecord(state.currentIndex + 1).catch(reportError));
+    el("runInference").addEventListener("click", () => runInference().catch(reportError));
+    el("annotatedText").addEventListener("click", (event) => handleSpanClick(event, "primary", "list"));
+    el("spanList").addEventListener("click", (event) => handleSpanClick(event, "primary", "text"));
+    el("compareAnnotatedText").addEventListener("click", (event) => handleSpanClick(event, "compare", "list"));
+    el("compareSpanList").addEventListener("click", (event) => handleSpanClick(event, "compare", "text"));
+    loadDatasets().catch(reportError);
   </script>
 </body>
 </html>

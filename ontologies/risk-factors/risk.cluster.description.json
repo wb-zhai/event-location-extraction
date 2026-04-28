@@ -12,5 +12,24 @@
         "pests and diseases": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
         "political instability": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
         "weather shocks": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
+    },
+    "argument_roles": {
+        "location": "Place where the event or risk occurs, exists, is observed, or affects people, livelihoods, markets, crops, livestock, or resources.",
+        "source_location": "Place an action, movement, hazard, people, goods, aid, or pressure originates from.",
+        "target_location": "Place an action, movement, hazard, people, goods, aid, or pressure is directed to or ends in.",
+    },
+    "event_argument_roles": {
+        "agricultural production issues": ["location"],
+        "conflicts and violence": ["location", "source_location", "target_location"],
+        "economic issues": ["location", "source_location", "target_location"],
+        "environmental issues": ["location"],
+        "food crisis": ["location"],
+        "forced displacement": ["location", "source_location", "target_location"],
+        "humanitarian aid": ["location", "source_location", "target_location"],
+        "land-related issues": ["location"],
+        "other": ["location"],
+        "pests and diseases": ["location", "source_location", "target_location"],
+        "political instability": ["location"],
+        "weather shocks": ["location"],
     }
 }
