@@ -8,6 +8,7 @@ wandb
 pytest
 # llm inference
 google-genai
+langextract
 jinja2
 openai
 anthropic[vertex]

@@ -8,7 +8,6 @@ import re
 import sys
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +18,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.llms.llm_client import GeminiLLMClient
+from scripts.data.generation import adjudication, pipeline_config, reports, validation
+from scripts.data.generation.windowing import ArticleWindow
+from scripts.data.generation.windowing import build_article_windows as build_windows
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_SYSTEM_PROMPT = """Role: You are a precise information extraction annotator for food-security news.
@@ -127,21 +129,31 @@ Article text (offset source):
 {text}
 """
 
+DEFAULT_VERIFIER_PROMPT = """Task: Verify candidate event annotations.
+
+Ontology labels:
+{ontology}
+
+Rules:
+- Accept only events explicitly supported by the article text.
+- Reject inferred events, wrong labels, overly broad triggers, bad offsets, and unsupported arguments.
+- Do not create new events.
+- start_char/end_char in your decisions must copy the candidate event offsets.
+
+Title (context only):
+{title}
+
+Article text:
+{text}
+
+Candidate events:
+{events_json}
+"""
+
 LOGGER = logging.getLogger("gemini_event_gen")
 OUTPUT_MODE_SPANS = "spans"
 OUTPUT_MODE_EVENTS_WITH_ARGS = "events-with-args"
 OUTPUT_MODES = (OUTPUT_MODE_SPANS, OUTPUT_MODE_EVENTS_WITH_ARGS)
-
-
-@dataclass(frozen=True)
-class ArticleWindow:
-    window_index: int
-    window_count: int
-    start_char: int
-    end_char: int
-    text: str
-    overlap_prev: bool
-    overlap_next: bool
 
 
 class ExtractedSpan(BaseModel):
@@ -186,6 +198,15 @@ class SampleResult(BaseModel):
     spans: list[dict[str, Any]] = Field(default_factory=list)
     events: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any]
+
+
+class VerifierDecision(BaseModel):
+    event_type: str
+    start_char: int
+    end_char: int
+    decision: str = Field(..., description="'accept' or 'reject'.")
+    reason: str = Field(default="")
+    confidence: float = Field(default=0.0)
 
 
 def load_env_file(path: Path) -> None:
@@ -372,6 +393,16 @@ def load_records(path: Path) -> list[dict[str, Any]]:
             for index, record in enumerate(iter_jsonl(path))
         ]
     return records_from_json_payload(load_json_tolerant(path), path)
+
+
+def select_limited_records(
+    records: list[dict[str, Any]], limit: int | None, random_sample: bool
+) -> list[dict[str, Any]]:
+    if limit is None:
+        return records
+    if not random_sample:
+        return records[:limit]
+    return random.sample(records, k=min(limit, len(records)))
 
 
 def completed_ids(path: Path, retry_failed: bool) -> set[str]:
@@ -707,6 +738,9 @@ def project_window_spans(
                 "start_char": start_char,
                 "end_char": end_char,
                 "window_indices": [window.window_index],
+                "trigger_in_core": (
+                    window.core_start_char <= start_char < end_char <= window.core_end_char
+                ),
             }
         )
     return projected
@@ -756,6 +790,9 @@ def project_window_events(
                 "end_char": end_char,
                 "arguments": arguments,
                 "window_indices": [window.window_index],
+                "trigger_in_core": (
+                    window.core_start_char <= start_char < end_char <= window.core_end_char
+                ),
             }
         )
     return projected
@@ -776,13 +813,18 @@ def merge_window_spans(
                 **span,
                 "span_text": article_text[key[0] : key[1]],
                 "window_indices": [],
+                "core_window_indices": [],
             }
         grouped[key]["window_indices"].extend(span.get("window_indices", []))
+        if span.get("trigger_in_core"):
+            grouped[key]["core_window_indices"].extend(span.get("window_indices", []))
 
     merged: list[dict[str, Any]] = []
     for key in sorted(grouped):
         span = grouped[key]
         span["window_indices"] = sorted(set(span["window_indices"]))
+        span["core_window_indices"] = sorted(set(span["core_window_indices"]))
+        span.pop("trigger_in_core", None)
         merged.append(span)
     return merged
 
@@ -807,8 +849,13 @@ def merge_window_events(
                 "trigger_text": article_text[event_key[0] : event_key[1]],
                 "arguments": [],
                 "window_indices": [],
+                "core_window_indices": [],
             }
         grouped[event_key]["window_indices"].extend(event.get("window_indices", []))
+        if event.get("trigger_in_core"):
+            grouped[event_key]["core_window_indices"].extend(
+                event.get("window_indices", [])
+            )
 
         for argument in event.get("arguments", []) or []:
             argument_key = (
@@ -833,6 +880,8 @@ def merge_window_events(
     for key in sorted(grouped):
         event = grouped[key]
         event["window_indices"] = sorted(set(event["window_indices"]))
+        event["core_window_indices"] = sorted(set(event["core_window_indices"]))
+        event.pop("trigger_in_core", None)
         event["arguments"].sort(
             key=lambda argument: (
                 int(argument["start_char"]),
@@ -851,6 +900,8 @@ def format_window_metadata(windows: list[ArticleWindow]) -> list[dict[str, Any]]
             "window_count": window.window_count,
             "start_char": window.start_char,
             "end_char": window.end_char,
+            "core_start_char": window.core_start_char,
+            "core_end_char": window.core_end_char,
             "overlap_prev": window.overlap_prev,
             "overlap_next": window.overlap_next,
         }
@@ -1026,6 +1077,17 @@ def merge_self_consistency_events(
     return merged, event_support_by_key, argument_support_by_event_key, threshold
 
 
+# Keep the public names stable while moving deterministic logic into focused modules.
+find_offsets = validation.find_offsets
+clamp_offsets = validation.clamp_offsets
+clean_spans = validation.clean_spans
+clean_events_with_args = validation.clean_events_with_args
+build_article_windows = build_windows
+merge_self_consistency_spans = adjudication.merge_self_consistency_spans
+most_common_first_seen = adjudication.most_common_first_seen
+merge_self_consistency_events = adjudication.merge_self_consistency_events
+
+
 async def generate_sample(
     client: GeminiLLMClient,
     prompt: str,
@@ -1106,6 +1168,86 @@ async def generate_sample(
     raise RuntimeError("Gemini returned no response.")
 
 
+def clean_verifier_decisions(
+    parsed: dict[str, Any], events: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Keep verifier decisions that refer to existing event keys."""
+    event_keys = {
+        (
+            int(event.get("start_char", -1)),
+            int(event.get("end_char", -1)),
+            str(event.get("event_type", "")),
+        )
+        for event in events
+    }
+    decisions: list[dict[str, Any]] = []
+    for decision in parsed.get("decisions", []) or []:
+        if hasattr(decision, "model_dump"):
+            decision = decision.model_dump()
+        if not isinstance(decision, dict):
+            continue
+        normalized_decision = str(decision.get("decision", "")).strip().lower()
+        if normalized_decision not in {"accept", "reject"}:
+            continue
+        try:
+            start_char = int(decision.get("start_char", -1))
+            end_char = int(decision.get("end_char", -1))
+        except (TypeError, ValueError):
+            continue
+        event_type = str(decision.get("event_type", "")).strip()
+        key = (start_char, end_char, event_type)
+        if key not in event_keys:
+            continue
+        decisions.append(
+            {
+                "event_type": event_type,
+                "start_char": start_char,
+                "end_char": end_char,
+                "decision": normalized_decision,
+                "reason": str(decision.get("reason", "")).strip(),
+                "confidence": float(decision.get("confidence", 0.0) or 0.0),
+            }
+        )
+    return decisions
+
+
+async def verify_events(
+    client: GeminiLLMClient,
+    ontology_text: str,
+    title: str,
+    text: str,
+    events: list[dict[str, Any]],
+    system_prompt: str,
+    verifier_prompt_template: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Ask the teacher model to accept/reject already validated events."""
+    if not events:
+        return [], {}
+
+    prompt = verifier_prompt_template.format(
+        ontology=ontology_text,
+        title=title,
+        text=text,
+        events_json=json.dumps(events, ensure_ascii=False, indent=2),
+    )
+    response = None
+    async for candidate in client.generate(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        response_format={"decisions": list[VerifierDecision]},
+        add_cot_field=False,
+    ):
+        response = candidate
+        break
+    if response is None:
+        raise RuntimeError("Gemini returned no verifier response.")
+
+    parsed = (
+        response_to_dict(response.parsed) if response.parsed else json.loads(response.text)
+    )
+    return clean_verifier_decisions(parsed, events), response.metadata
+
+
 def combine_metadata(sample_metadata: list[dict[str, Any]]) -> dict[str, Any]:
     combined: dict[str, Any] = {}
     numeric_keys = {
@@ -1141,8 +1283,20 @@ async def generate_windowed_one(
     event_argument_roles: dict[str, list[str]] | None,
     argument_roles_text: str,
     event_argument_roles_text: str,
+    window_target_chars: int,
+    window_max_chars: int,
+    window_overlap_sentences: int,
+    self_consistency: bool = False,
+    self_consistency_samples: int = 5,
+    self_consistency_temperature: float = 0.7,
+    self_consistency_min_successful_samples: int = 3,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    windows = build_article_windows(text)
+    windows = build_article_windows(
+        text,
+        target_chars=window_target_chars,
+        max_chars=window_max_chars,
+        overlap_sentences=window_overlap_sentences,
+    )
     if not windows:
         windows = [
             ArticleWindow(
@@ -1153,6 +1307,8 @@ async def generate_windowed_one(
                 text=text,
                 overlap_prev=False,
                 overlap_next=False,
+                core_start_char=0,
+                core_end_char=len(text),
             )
         ]
 
@@ -1171,6 +1327,71 @@ async def generate_windowed_one(
             event_argument_roles_text=event_argument_roles_text,
         )
         try:
+            if self_consistency:
+                sample_spans: list[list[dict[str, Any]]] = []
+                sample_events: list[list[dict[str, Any]]] = []
+                window_sample_errors: list[dict[str, Any]] = []
+                override_settings = {"temperature": self_consistency_temperature}
+
+                for sample_index in range(self_consistency_samples):
+                    try:
+                        sample = await generate_sample(
+                            client=client,
+                            prompt=prompt,
+                            text=window.text,
+                            labels=labels,
+                            system_prompt=system_prompt,
+                            max_retries=max_retries,
+                            initial_backoff=initial_backoff,
+                            max_backoff=max_backoff,
+                            strict_offsets=strict_offsets,
+                            record_id=f"{record_id}__w{window.window_index}",
+                            output_mode=output_mode,
+                            argument_roles=argument_roles,
+                            event_argument_roles=event_argument_roles,
+                            override_settings=override_settings,
+                        )
+                        sample_metadata.append(sample.metadata)
+                        if output_mode == OUTPUT_MODE_SPANS:
+                            sample_spans.append(sample.spans)
+                        else:
+                            sample_events.append(sample.events)
+                    except Exception as exc:
+                        window_sample_errors.append(
+                            {"sample": sample_index, "error": str(exc)}
+                        )
+
+                samples_succeeded = len(
+                    sample_spans
+                    if output_mode == OUTPUT_MODE_SPANS
+                    else sample_events
+                )
+                if samples_succeeded < self_consistency_min_successful_samples:
+                    raise RuntimeError(
+                        "Self-consistency failed for window "
+                        f"{window.window_index}: "
+                        f"{samples_succeeded}/{self_consistency_samples} "
+                        "samples succeeded; minimum required is "
+                        f"{self_consistency_min_successful_samples}; "
+                        f"errors={window_sample_errors}"
+                    )
+
+                if output_mode == OUTPUT_MODE_SPANS:
+                    local_spans, _, _ = merge_self_consistency_spans(
+                        sample_spans, window.text
+                    )
+                    projected_spans.extend(
+                        project_window_spans(local_spans, window, text)
+                    )
+                else:
+                    local_events, _, _, _ = merge_self_consistency_events(
+                        sample_events, window.text
+                    )
+                    projected_events.extend(
+                        project_window_events(local_events, window, text)
+                    )
+                continue
+
             sample = await generate_sample(
                 client=client,
                 prompt=prompt,
@@ -1209,10 +1430,25 @@ async def generate_windowed_one(
     metadata["long_document"] = {
         "enabled": True,
         "threshold_triggered": True,
-        "window_boundary": "paragraph",
+        "window_boundary": "sentence_adaptive_overlap",
+        "window_target_chars": window_target_chars,
+        "window_max_chars": window_max_chars,
+        "window_overlap_sentences": window_overlap_sentences,
         "window_count": len(windows),
         "windows": format_window_metadata(windows),
         "window_errors": window_errors,
+        "self_consistency": {
+            "enabled": self_consistency,
+            "samples_requested": self_consistency_samples
+            if self_consistency
+            else None,
+            "temperature": self_consistency_temperature
+            if self_consistency
+            else None,
+            "min_successful_samples": self_consistency_min_successful_samples
+            if self_consistency
+            else None,
+        },
     }
     return payload, metadata
 
@@ -1239,6 +1475,11 @@ async def generate_one(
     event_argument_roles_text: str = "",
     long_document_mode: bool = False,
     long_document_threshold_chars: int = 12000,
+    window_target_chars: int = 6000,
+    window_max_chars: int = 9000,
+    window_overlap_sentences: int = 2,
+    enable_verifier: bool = False,
+    verifier_prompt_template: str = DEFAULT_VERIFIER_PROMPT,
 ) -> dict[str, Any]:
     if output_mode not in OUTPUT_MODES:
         raise ValueError(f"Unsupported output mode: {output_mode}")
@@ -1249,16 +1490,6 @@ async def generate_one(
     source = make_source(record, title, text)
 
     if long_document_mode and len(text) >= long_document_threshold_chars:
-        if self_consistency:
-            return {
-                "id": record_id,
-                "status": "error",
-                "error": (
-                    "Long-document windowing does not support "
-                    "--self-consistency yet."
-                ),
-                "source": source,
-            }
         try:
             payload, metadata = await generate_windowed_one(
                 client=client,
@@ -1278,8 +1509,33 @@ async def generate_one(
                 event_argument_roles=event_argument_roles,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
+                window_target_chars=window_target_chars,
+                window_max_chars=window_max_chars,
+                window_overlap_sentences=window_overlap_sentences,
+                self_consistency=self_consistency,
+                self_consistency_samples=self_consistency_samples,
+                self_consistency_temperature=self_consistency_temperature,
+                self_consistency_min_successful_samples=(
+                    self_consistency_min_successful_samples
+                ),
             )
             payload_key = "spans" if output_mode == OUTPUT_MODE_SPANS else "events"
+            if enable_verifier and output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+                decisions, verifier_metadata = await verify_events(
+                    client=client,
+                    ontology_text=ontology_text,
+                    title=title,
+                    text=text,
+                    events=payload,
+                    system_prompt=system_prompt,
+                    verifier_prompt_template=verifier_prompt_template,
+                )
+                payload = adjudication.apply_verifier_decisions(payload, decisions)
+                metadata["verifier"] = {
+                    "enabled": True,
+                    "decisions": decisions,
+                    "metadata": verifier_metadata,
+                }
             return {
                 "id": record_id,
                 "status": "ok",
@@ -1329,6 +1585,23 @@ async def generate_one(
             payload = (
                 sample.spans if output_mode == OUTPUT_MODE_SPANS else sample.events
             )
+            metadata = dict(sample.metadata)
+            if enable_verifier and output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+                decisions, verifier_metadata = await verify_events(
+                    client=client,
+                    ontology_text=ontology_text,
+                    title=title,
+                    text=text,
+                    events=payload,
+                    system_prompt=system_prompt,
+                    verifier_prompt_template=verifier_prompt_template,
+                )
+                payload = adjudication.apply_verifier_decisions(payload, decisions)
+                metadata["verifier"] = {
+                    "enabled": True,
+                    "decisions": decisions,
+                    "metadata": verifier_metadata,
+                }
             return {
                 "id": record_id,
                 "status": "ok",
@@ -1336,7 +1609,7 @@ async def generate_one(
                 payload_key: payload,
                 "llm": {
                     "model": client.model_name,
-                    "metadata": sample.metadata,
+                    "metadata": metadata,
                     "output_mode": output_mode,
                 },
             }
@@ -1423,6 +1696,23 @@ async def generate_one(
         events, event_support_by_key, argument_support_by_event_key, threshold = (
             merge_self_consistency_events(sample_events, text)
         )
+        metadata = combine_metadata(sample_metadata)
+        if enable_verifier:
+            decisions, verifier_metadata = await verify_events(
+                client=client,
+                ontology_text=ontology_text,
+                title=title,
+                text=text,
+                events=events,
+                system_prompt=system_prompt,
+                verifier_prompt_template=verifier_prompt_template,
+            )
+            events = adjudication.apply_verifier_decisions(events, decisions)
+            metadata["verifier"] = {
+                "enabled": True,
+                "decisions": decisions,
+                "metadata": verifier_metadata,
+            }
         event_support = [
             {
                 "start_char": start_char,
@@ -1468,7 +1758,7 @@ async def generate_one(
             "events": events,
             "llm": {
                 "model": client.model_name,
-                "metadata": combine_metadata(sample_metadata),
+                "metadata": metadata,
                 "output_mode": output_mode,
                 "self_consistency": {
                     "enabled": True,
@@ -1601,7 +1891,18 @@ async def worker(
                 event_argument_roles_text=event_argument_roles_text,
                 long_document_mode=args.long_document_mode,
                 long_document_threshold_chars=args.long_document_threshold_chars,
+                window_target_chars=args.window_target_chars,
+                window_max_chars=args.window_max_chars,
+                window_overlap_sentences=args.window_overlap_sentences,
+                enable_verifier=args.enable_verifier,
             )
+            result.setdefault("llm", {})
+            result["llm"]["pipeline"] = {
+                "mode": args.mode,
+                "enable_verifier": args.enable_verifier,
+                "enable_synthetic_gaps": args.enable_synthetic_gaps,
+                "window_strategy": "sentence_adaptive_overlap",
+            }
             await output_queue.put(result)
             LOGGER.info(
                 "worker=%s id=%s status=%s", worker_id, result["id"], result["status"]
@@ -1636,9 +1937,9 @@ async def run(args: argparse.Namespace) -> None:
     )
     user_prompt_template = load_prompt(args.user_prompt_file, default_user_prompt)
 
-    records = load_records(args.input)
-    if args.limit is not None:
-        records = records[: args.limit]
+    records = select_limited_records(
+        load_records(args.input), args.limit, args.random_sample
+    )
 
     if args.overwrite:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -1700,6 +2001,18 @@ async def run(args: argparse.Namespace) -> None:
     await output_queue.join()
     await writer_task
 
+    report_path = args.report or args.output.with_suffix(".report.json")
+    report = reports.write_report(args.output, report_path)
+    if args.enable_synthetic_gaps:
+        report["synthetic_gap_requests"] = reports.synthetic_gap_requests(
+            report, ontology
+        )
+        report_path.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    LOGGER.info("wrote report: %s", report_path)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -1717,6 +2030,18 @@ def parse_args() -> argparse.Namespace:
         "output", type=Path, help="Output JSONL. Existing IDs are skipped."
     )
     parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Optional JSON or simple key: value pipeline config.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=sorted(pipeline_config.MODE_DEFAULTS),
+        default="quality_first",
+        help="Pipeline defaults to apply before explicit CLI values.",
+    )
+    parser.add_argument(
         "--ontology",
         type=Path,
         default=Path("ontologies/risk-factors/risk.cluster.description.json"),
@@ -1732,7 +2057,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-mode",
         choices=OUTPUT_MODES,
-        default=OUTPUT_MODE_SPANS,
+        default=None,
         help=(
             "Output schema to request from Gemini. 'spans' preserves the existing "
             "flat span output; 'events-with-args' emits event triggers with linked "
@@ -1746,7 +2071,12 @@ def parse_args() -> argparse.Namespace:
         "--limit",
         type=int,
         default=None,
-        help="Process only the first N input records.",
+        help="Process only N input records; defaults to the first N.",
+    )
+    parser.add_argument(
+        "--random-sample",
+        action="store_true",
+        help="When --limit is set, choose N random input records instead of the first N.",
     )
     parser.add_argument(
         "--retry-failed",
@@ -1760,24 +2090,26 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--strict-offsets",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Drop spans whose text cannot be exactly located in the article text.",
     )
     parser.add_argument(
         "--self-consistency",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Run multiple Gemini samples per record and keep majority-voted spans.",
     )
     parser.add_argument(
         "--self-consistency-samples",
         type=int,
-        default=5,
+        default=None,
         help="Number of Gemini samples per record when --self-consistency is enabled.",
     )
     parser.add_argument(
         "--self-consistency-temperature",
         type=float,
-        default=0.7,
+        default=None,
         help="Sampling temperature used only for self-consistency calls.",
     )
     parser.add_argument(
@@ -1788,14 +2120,36 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--long-document-mode",
-        action="store_true",
-        help="Use paragraph windows for articles at or above the long-document threshold.",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Use sentence windows for articles at or above the long-document threshold.",
     )
     parser.add_argument(
         "--long-document-threshold-chars",
         type=int,
         default=1000,
         help="Minimum article character length that triggers windowed extraction.",
+    )
+    parser.add_argument("--window-target-chars", type=int, default=None)
+    parser.add_argument("--window-max-chars", type=int, default=None)
+    parser.add_argument("--window-overlap-sentences", type=int, default=None)
+    parser.add_argument(
+        "--enable-verifier",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Reserved flag for LLM verifier/adjudication runs.",
+    )
+    parser.add_argument(
+        "--enable-synthetic-gaps",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Write synthetic gap requests in the report when enabled.",
+    )
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="Optional JSON report path. Defaults to OUTPUT.report.json.",
     )
     parser.add_argument(
         "--system-prompt-file",
@@ -1826,10 +2180,80 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def apply_pipeline_defaults(args: argparse.Namespace) -> None:
+    """Apply mode/config values to argparse output in place."""
+    config = pipeline_config.load_config(args.config)
+    mode_name = str(config.get("mode") or args.mode)
+    mode = pipeline_config.MODE_DEFAULTS[mode_name]
+
+    args.mode = mode_name
+    args.output_mode = str(
+        args.output_mode or config.get("output_mode") or mode.output_mode
+    )
+    args.self_consistency = bool(
+        args.self_consistency
+        if args.self_consistency is not None
+        else config.get("self_consistency", mode.self_consistency)
+    )
+    args.self_consistency_samples = int(
+        args.self_consistency_samples
+        if args.self_consistency_samples is not None
+        else config.get("teacher_samples", mode.self_consistency_samples)
+    )
+    args.self_consistency_temperature = float(
+        args.self_consistency_temperature
+        if args.self_consistency_temperature is not None
+        else config.get("teacher_temperature", mode.self_consistency_temperature)
+    )
+    args.strict_offsets = bool(
+        args.strict_offsets
+        if args.strict_offsets is not None
+        else config.get("strict_offsets", mode.strict_offsets)
+    )
+    args.long_document_mode = bool(
+        args.long_document_mode
+        if args.long_document_mode is not None
+        else config.get("long_document_mode", mode.long_document_mode)
+    )
+    args.enable_verifier = bool(
+        args.enable_verifier
+        if args.enable_verifier is not None
+        else config.get("enable_verifier", mode.enable_verifier)
+    )
+    args.enable_synthetic_gaps = bool(
+        args.enable_synthetic_gaps
+        if args.enable_synthetic_gaps is not None
+        else config.get("enable_synthetic_gaps", mode.enable_synthetic_gaps)
+    )
+
+    args.window_target_chars = int(
+        args.window_target_chars
+        if args.window_target_chars is not None
+        else config.get("window_target_chars", 6000)
+    )
+    args.window_max_chars = int(
+        args.window_max_chars
+        if args.window_max_chars is not None
+        else config.get("window_max_chars", 9000)
+    )
+    args.window_overlap_sentences = int(
+        args.window_overlap_sentences
+        if args.window_overlap_sentences is not None
+        else config.get("window_overlap_sentences", 2)
+    )
+
+    for field in ("model", "workers", "long_document_threshold_chars"):
+        if field in config:
+            setattr(args, field, config[field])
+
+
 def main() -> None:
     args = parse_args()
+    apply_pipeline_defaults(args)
     if args.workers < 1:
         raise ValueError("--workers must be >= 1")
+    if args.limit is not None and args.limit < 1:
+        raise ValueError("--limit must be >= 1")
     if args.self_consistency_samples < 1:
         raise ValueError("--self-consistency-samples must be >= 1")
     if args.self_consistency_min_successful_samples < 1:
@@ -1841,6 +2265,12 @@ def main() -> None:
         )
     if args.long_document_threshold_chars < 1:
         raise ValueError("--long-document-threshold-chars must be >= 1")
+    if args.window_target_chars < 1:
+        raise ValueError("--window-target-chars must be >= 1")
+    if args.window_max_chars < args.window_target_chars:
+        raise ValueError("--window-max-chars must be >= --window-target-chars")
+    if args.window_overlap_sentences < 0:
+        raise ValueError("--window-overlap-sentences must be >= 0")
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
