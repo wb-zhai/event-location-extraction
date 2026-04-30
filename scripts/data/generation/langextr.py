@@ -9,6 +9,8 @@ from typing import Any
 
 import langextract as lx
 
+from langextract import prompt_validation
+from langextract import resolver
 from langextract import schema
 
 
@@ -58,7 +60,7 @@ def load_input_records(path: Path | None, text: str | None) -> list[dict[str, An
 
     path = resolve_path(path)
     if path.suffix.lower() in {".json", ".jsonl"}:
-        return load_records(path)
+        return dedupe_input_records(load_records(path))
 
     raw_text = path.read_text(encoding="utf-8")
     return [
@@ -169,6 +171,24 @@ def record_title(record: dict[str, Any]) -> str:
     return str(record.get("title") or "")
 
 
+def dedupe_input_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for record in records:
+        key = (record_title(record), record_text(record))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(record)
+    skipped = len(records) - len(deduped)
+    print(
+        f"Deduped input records: loaded={len(records)} unique={len(deduped)} "
+        f"duplicates_skipped={skipped}",
+        file=sys.stderr,
+    )
+    return deduped
+
+
 def record_source(record: dict[str, Any], title: str, text: str) -> dict[str, Any]:
     source = make_source(record, title, text)
     raw_source = record.get("source")
@@ -221,8 +241,20 @@ def load_examples(path: Path) -> list[Any]:
         if not text:
             continue
 
+        events = record.get("events", []) or []
+        if not isinstance(events, list):
+            continue
+
+        def event_start(event: Any) -> int:
+            if not isinstance(event, dict):
+                return sys.maxsize
+            try:
+                return int(event.get("start_char", sys.maxsize))
+            except (TypeError, ValueError):
+                return sys.maxsize
+
         extractions = []
-        for event in record.get("events", []) or []:
+        for event in sorted(events, key=event_start):
             if not isinstance(event, dict):
                 continue
             event_type = str(event.get("event_type") or "").strip()
@@ -266,11 +298,32 @@ def load_examples(path: Path) -> list[Any]:
 def sample_examples(
     examples: list[Any], sample_size: int | None, seed: int | None
 ) -> list[Any]:
+    return sample_examples_with_rng(examples, sample_size, random.Random(seed))
+
+
+def sample_examples_with_rng(
+    examples: list[Any], sample_size: int | None, rng: random.Random
+) -> list[Any]:
     if sample_size is None:
         return examples
     if sample_size >= len(examples):
         return examples
-    return random.Random(seed).sample(examples, sample_size)
+    return rng.sample(examples, sample_size)
+
+
+def print_prompt_alignment_report(examples: list[Any]) -> int:
+    report = prompt_validation.validate_prompt_alignment(
+        examples=examples,
+        aligner=resolver.WordAligner(),
+    )
+    print(
+        f"Prompt alignment: {len(report.issues)} issue(s) across "
+        f"{len(examples)} example(s)",
+        file=sys.stderr,
+    )
+    for issue in report.issues:
+        print(f"  {issue.short_msg()}", file=sys.stderr)
+    return 1 if report.has_failed else 0
 
 
 def attribute_values(value: Any) -> list[str]:
@@ -458,7 +511,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Input .json/.jsonl file, or a raw text file.",
     )
-    parser.add_argument("--output", type=Path, required=True, help="Output JSONL path.")
+    parser.add_argument("--output", type=Path, help="Output JSONL path.")
     parser.add_argument("--ontology", type=Path, default=DEFAULT_ONTOLOGY)
     parser.add_argument("--examples", type=Path, default=DEFAULT_EXAMPLES)
     parser.add_argument(
@@ -473,14 +526,27 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional seed for --example-sample-size.",
     )
+    parser.add_argument(
+        "--resample-examples-per-request",
+        action="store_true",
+        help=(
+            "When --example-sample-size is set, draw a fresh random example "
+            "sample for each input record."
+        ),
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--html", type=Path, default=None)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
-    parser.add_argument("--max-workers", type=int, default=4)
+    parser.add_argument("--max-workers", type=int, default=8)
     parser.add_argument("--max-char-buffer", type=int, default=1000)
     parser.add_argument("--extraction-passes", type=int, default=1)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Load and validate inputs/examples without calling the model or writing output.",
+    )
     return parser.parse_args()
 
 
@@ -488,6 +554,10 @@ def main() -> int:
     args = parse_args()
     if args.example_sample_size is not None and args.example_sample_size < 1:
         raise ValueError("--example-sample-size must be >= 1")
+    if args.resample_examples_per_request and args.example_sample_size is None:
+        raise ValueError(
+            "--resample-examples-per-request requires --example-sample-size"
+        )
 
     load_env_file(resolve_path(args.env_file))
 
@@ -497,24 +567,54 @@ def main() -> int:
 
     events, argument_roles, event_argument_roles = load_ontology(args.ontology)
     response_schema = gemini_response_schema(events, event_argument_roles)
+    print("Gemini response schema:", file=sys.stderr)
+    print(
+        json.dumps(response_schema, ensure_ascii=False, indent=2),
+        file=sys.stderr,
+    )
+    all_examples = load_examples(args.examples)
     examples = sample_examples(
-        load_examples(args.examples),
+        all_examples,
         args.example_sample_size,
         args.example_seed,
     )
     prompt = prompt_description(events, argument_roles, event_argument_roles)
+
+    if args.dry_run:
+        status = print_prompt_alignment_report(examples)
+        print(
+            "Dry run: "
+            f"records={len(records)} examples={len(examples)} "
+            f"event_labels={len(events)} argument_roles={len(argument_roles)} "
+            f"model={args.model}",
+            file=sys.stderr,
+        )
+        return status
+
+    if args.output is None:
+        raise ValueError("--output is required unless --dry-run is set.")
 
     output_path = resolve_path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     mode = "w" if args.overwrite else "a"
 
     annotated_documents: list[Any] = []
+    example_rng = random.Random(args.example_seed)
     with output_path.open(mode, encoding="utf-8") as handle:
         for record in records:
+            request_examples = (
+                sample_examples_with_rng(
+                    all_examples,
+                    args.example_sample_size,
+                    example_rng,
+                )
+                if args.resample_examples_per_request
+                else examples
+            )
             result, annotated_document = annotate_record(
                 record=record,
                 prompt=prompt,
-                examples=examples,
+                examples=request_examples,
                 model=args.model,
                 response_schema=response_schema,
                 labels=set(events),

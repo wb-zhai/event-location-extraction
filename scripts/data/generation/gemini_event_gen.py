@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
@@ -23,6 +24,7 @@ from scripts.data.generation.windowing import ArticleWindow
 from scripts.data.generation.windowing import build_article_windows as build_windows
 
 DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_EXAMPLES = REPO_ROOT / "dataset/manual/manual_fixes.jsonl"
 DEFAULT_SYSTEM_PROMPT = """Role: You are a precise information extraction annotator for food-security news.
 
 Goal:
@@ -149,6 +151,8 @@ Article text:
 Candidate events:
 {events_json}
 """
+EXAMPLES_HEADER = """Reference examples from manually fixed annotations.
+Use these only as examples of annotation style. The target article appears after the examples."""
 
 LOGGER = logging.getLogger("gemini_event_gen")
 OUTPUT_MODE_SPANS = "spans"
@@ -347,16 +351,30 @@ def iter_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def normalize_input_record(record: dict[str, Any], index: int) -> dict[str, Any]:
     normalized = dict(record)
+    source = record.get("source")
+    source_title = source.get("title") if isinstance(source, dict) else None
+    source_text = source.get("text") if isinstance(source, dict) else None
+    source_url = source.get("source_url") if isinstance(source, dict) else None
+    source_publish_date = (
+        source.get("publish_date") if isinstance(source, dict) else None
+    )
     normalized["id"] = str(
         record.get("id") or record.get("uri") or record.get("doc_id") or index
     )
-    normalized["title"] = str(record.get("title") or "")
-    normalized["text"] = str(record.get("text") or record.get("body") or "")
-    normalized["source_url"] = (
-        record.get("source_url") or record.get("url") or record.get("source_uri")
+    normalized["title"] = str(record.get("title") or source_title or "")
+    normalized["text"] = str(
+        record.get("text") or record.get("body") or source_text or ""
     )
-    normalized["publish_date"] = record.get("publish_date") or record.get(
-        "published_at"
+    normalized["source_url"] = (
+        record.get("source_url")
+        or record.get("url")
+        or record.get("source_uri")
+        or source_url
+    )
+    normalized["publish_date"] = (
+        record.get("publish_date")
+        or record.get("published_at")
+        or source_publish_date
     )
     return normalized
 
@@ -395,6 +413,18 @@ def load_records(path: Path) -> list[dict[str, Any]]:
     return records_from_json_payload(load_json_tolerant(path), path)
 
 
+def dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for record in records:
+        key = (str(record.get("title") or ""), str(record.get("text") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(record)
+    return deduped
+
+
 def select_limited_records(
     records: list[dict[str, Any]], limit: int | None, random_sample: bool
 ) -> list[dict[str, Any]]:
@@ -403,6 +433,97 @@ def select_limited_records(
     if not random_sample:
         return records[:limit]
     return random.sample(records, k=min(limit, len(records)))
+
+
+def load_examples(path: Path) -> list[dict[str, Any]]:
+    examples = []
+    for record in load_records(path):
+        if str(record.get("text") or "").strip():
+            examples.append(record)
+    if not examples:
+        raise ValueError(f"No usable examples found in {path}.")
+    return examples
+
+
+def sample_examples(
+    examples: list[dict[str, Any]], sample_size: int | None
+) -> list[dict[str, Any]]:
+    if sample_size is None:
+        return []
+    if sample_size >= len(examples):
+        return examples
+    return random.sample(examples, k=sample_size)
+
+
+def format_example_output(
+    record: dict[str, Any], output_mode: str
+) -> dict[str, list[dict[str, Any]]]:
+    events = record.get("events", []) or []
+    if not isinstance(events, list):
+        events = []
+    if output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+        formatted_events = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            arguments = []
+            for argument in event.get("arguments", []) or []:
+                if not isinstance(argument, dict):
+                    continue
+                arguments.append(
+                    {
+                        "role": argument.get("role", ""),
+                        "text": argument.get("text", ""),
+                        "start_char": argument.get("start_char"),
+                        "end_char": argument.get("end_char"),
+                    }
+                )
+            formatted_events.append(
+                {
+                    "event_type": event.get("event_type", ""),
+                    "trigger_text": event.get("trigger_text", ""),
+                    "start_char": event.get("start_char"),
+                    "end_char": event.get("end_char"),
+                    "arguments": arguments,
+                    "rationale": event.get("rationale", ""),
+                }
+            )
+        return {"events": formatted_events}
+
+    spans = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        spans.append(
+            {
+                "span_text": event.get("trigger_text", ""),
+                "label": event.get("event_type", ""),
+                "start_char": event.get("start_char"),
+                "end_char": event.get("end_char"),
+                "rationale": event.get("rationale", ""),
+            }
+        )
+    return {"spans": spans}
+
+
+def format_examples(
+    examples: list[dict[str, Any]], output_mode: str
+) -> str:
+    if not examples:
+        return ""
+
+    formatted = []
+    for index, record in enumerate(examples, start=1):
+        payload = {
+            "title": record.get("title") or "",
+            "text": record.get("text") or "",
+            "expected_output": format_example_output(record, output_mode),
+        }
+        formatted.append(
+            f"Example {index}:\n"
+            + json.dumps(payload, ensure_ascii=False, indent=2)
+        )
+    return EXAMPLES_HEADER + "\n\n" + "\n\n".join(formatted)
 
 
 def completed_ids(path: Path, retry_failed: bool) -> set[str]:
@@ -435,14 +556,18 @@ def render_user_prompt(
     text: str,
     argument_roles_text: str = "",
     event_argument_roles_text: str = "",
+    examples_text: str = "",
 ) -> str:
-    return template.format(
+    rendered = template.format(
         ontology=ontology_text,
         argument_roles=argument_roles_text,
         event_argument_roles=event_argument_roles_text,
         title=title,
         text=text,
     )
+    if examples_text:
+        return examples_text + "\n\n" + rendered
+    return rendered
 
 
 def response_to_dict(response: Any) -> dict[str, Any]:
@@ -1290,6 +1415,8 @@ async def generate_windowed_one(
     self_consistency_samples: int = 5,
     self_consistency_temperature: float = 0.7,
     self_consistency_min_successful_samples: int = 3,
+    examples: list[dict[str, Any]] | None = None,
+    example_sample_size: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     windows = build_article_windows(
         text,
@@ -1318,14 +1445,6 @@ async def generate_windowed_one(
     window_errors: list[dict[str, Any]] = []
 
     for window in windows:
-        prompt = render_user_prompt(
-            user_prompt_template,
-            ontology_text,
-            title,
-            window.text,
-            argument_roles_text=argument_roles_text,
-            event_argument_roles_text=event_argument_roles_text,
-        )
         try:
             if self_consistency:
                 sample_spans: list[list[dict[str, Any]]] = []
@@ -1334,6 +1453,18 @@ async def generate_windowed_one(
                 override_settings = {"temperature": self_consistency_temperature}
 
                 for sample_index in range(self_consistency_samples):
+                    prompt = render_user_prompt(
+                        user_prompt_template,
+                        ontology_text,
+                        title,
+                        window.text,
+                        argument_roles_text=argument_roles_text,
+                        event_argument_roles_text=event_argument_roles_text,
+                        examples_text=format_examples(
+                            sample_examples(examples or [], example_sample_size),
+                            output_mode,
+                        ),
+                    )
                     try:
                         sample = await generate_sample(
                             client=client,
@@ -1392,6 +1523,18 @@ async def generate_windowed_one(
                     )
                 continue
 
+            prompt = render_user_prompt(
+                user_prompt_template,
+                ontology_text,
+                title,
+                window.text,
+                argument_roles_text=argument_roles_text,
+                event_argument_roles_text=event_argument_roles_text,
+                examples_text=format_examples(
+                    sample_examples(examples or [], example_sample_size),
+                    output_mode,
+                ),
+            )
             sample = await generate_sample(
                 client=client,
                 prompt=prompt,
@@ -1480,6 +1623,8 @@ async def generate_one(
     window_overlap_sentences: int = 2,
     enable_verifier: bool = False,
     verifier_prompt_template: str = DEFAULT_VERIFIER_PROMPT,
+    examples: list[dict[str, Any]] | None = None,
+    example_sample_size: int | None = None,
 ) -> dict[str, Any]:
     if output_mode not in OUTPUT_MODES:
         raise ValueError(f"Unsupported output mode: {output_mode}")
@@ -1518,6 +1663,8 @@ async def generate_one(
                 self_consistency_min_successful_samples=(
                     self_consistency_min_successful_samples
                 ),
+                examples=examples,
+                example_sample_size=example_sample_size,
             )
             payload_key = "spans" if output_mode == OUTPUT_MODE_SPANS else "events"
             if enable_verifier and output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
@@ -1555,17 +1702,20 @@ async def generate_one(
                 "source": source,
             }
 
-    prompt = render_user_prompt(
-        user_prompt_template,
-        ontology_text,
-        title,
-        text,
-        argument_roles_text=argument_roles_text,
-        event_argument_roles_text=event_argument_roles_text,
-    )
-
     if not self_consistency:
         try:
+            prompt = render_user_prompt(
+                user_prompt_template,
+                ontology_text,
+                title,
+                text,
+                argument_roles_text=argument_roles_text,
+                event_argument_roles_text=event_argument_roles_text,
+                examples_text=format_examples(
+                    sample_examples(examples or [], example_sample_size),
+                    output_mode,
+                ),
+            )
             sample = await generate_sample(
                 client=client,
                 prompt=prompt,
@@ -1629,6 +1779,18 @@ async def generate_one(
 
     for sample_index in range(self_consistency_samples):
         try:
+            prompt = render_user_prompt(
+                user_prompt_template,
+                ontology_text,
+                title,
+                text,
+                argument_roles_text=argument_roles_text,
+                event_argument_roles_text=event_argument_roles_text,
+                examples_text=format_examples(
+                    sample_examples(examples or [], example_sample_size),
+                    output_mode,
+                ),
+            )
             sample = await generate_sample(
                 client=client,
                 prompt=prompt,
@@ -1807,7 +1969,9 @@ async def generate_one(
 
 
 async def writer(
-    output_path: Path, queue: asyncio.Queue[dict[str, Any] | None]
+    output_path: Path,
+    queue: asyncio.Queue[dict[str, Any] | None],
+    progress: Any = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("a", encoding="utf-8") as handle:
@@ -1818,6 +1982,8 @@ async def writer(
                     return
                 handle.write(json.dumps(item, ensure_ascii=False) + "\n")
                 handle.flush()
+                if progress is not None:
+                    progress.update()
             finally:
                 queue.task_done()
 
@@ -1835,6 +2001,7 @@ async def worker(
     argument_roles_text: str,
     event_argument_roles_text: str,
     user_prompt_template: str,
+    examples: list[dict[str, Any]],
 ) -> None:
     client: GeminiLLMClient | None = None
 
@@ -1895,6 +2062,8 @@ async def worker(
                 window_max_chars=args.window_max_chars,
                 window_overlap_sentences=args.window_overlap_sentences,
                 enable_verifier=args.enable_verifier,
+                examples=examples,
+                example_sample_size=args.example_sample_size,
             )
             result.setdefault("llm", {})
             result["llm"]["pipeline"] = {
@@ -1937,9 +2106,29 @@ async def run(args: argparse.Namespace) -> None:
     )
     user_prompt_template = load_prompt(args.user_prompt_file, default_user_prompt)
 
+    loaded_records = load_records(args.input)
+    unique_records = dedupe_records(loaded_records)
     records = select_limited_records(
-        load_records(args.input), args.limit, args.random_sample
+        unique_records, args.limit, args.random_sample
     )
+    LOGGER.info(
+        "input loaded=%s unique=%s duplicates_skipped=%s selected=%s",
+        len(loaded_records),
+        len(unique_records),
+        len(loaded_records) - len(unique_records),
+        len(records),
+    )
+    examples = (
+        load_examples(args.examples)
+        if args.example_sample_size is not None
+        else []
+    )
+    if examples:
+        LOGGER.info(
+            "loaded examples=%s sample_size=%s",
+            len(examples),
+            min(args.example_sample_size, len(examples)),
+        )
 
     if args.overwrite:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -1959,7 +2148,13 @@ async def run(args: argparse.Namespace) -> None:
     input_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
     output_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
-    writer_task = asyncio.create_task(writer(args.output, output_queue))
+    progress = tqdm(
+        total=len(pending),
+        desc="Progress",
+        unit="record",
+        disable=not args.progress,
+    )
+    writer_task = asyncio.create_task(writer(args.output, output_queue, progress))
     workers = [
         asyncio.create_task(
             worker(
@@ -1975,6 +2170,7 @@ async def run(args: argparse.Namespace) -> None:
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
                 user_prompt_template=user_prompt_template,
+                examples=examples,
             )
         )
         for i in range(args.workers)
@@ -2000,6 +2196,7 @@ async def run(args: argparse.Namespace) -> None:
     await output_queue.put(None)
     await output_queue.join()
     await writer_task
+    progress.close()
 
     report_path = args.report or args.output.with_suffix(".report.json")
     report = reports.write_report(args.output, report_path)
@@ -2077,6 +2274,27 @@ def parse_args() -> argparse.Namespace:
         "--random-sample",
         action="store_true",
         help="When --limit is set, choose N random input records instead of the first N.",
+    )
+    parser.add_argument(
+        "--examples",
+        type=Path,
+        default=DEFAULT_EXAMPLES,
+        help="Manual examples JSONL used when --example-sample-size is set.",
+    )
+    parser.add_argument(
+        "--example-sample-size",
+        type=int,
+        default=None,
+        help=(
+            "Sample N examples from --examples for each Gemini extraction call. "
+            "Defaults to no examples."
+        ),
+    )
+    parser.add_argument(
+        "--progress",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Show a progress bar while writing results.",
     )
     parser.add_argument(
         "--retry-failed",
@@ -2254,6 +2472,8 @@ def main() -> None:
         raise ValueError("--workers must be >= 1")
     if args.limit is not None and args.limit < 1:
         raise ValueError("--limit must be >= 1")
+    if args.example_sample_size is not None and args.example_sample_size < 1:
+        raise ValueError("--example-sample-size must be >= 1")
     if args.self_consistency_samples < 1:
         raise ValueError("--self-consistency-samples must be >= 1")
     if args.self_consistency_min_successful_samples < 1:
