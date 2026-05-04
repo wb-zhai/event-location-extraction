@@ -25,134 +25,184 @@ from scripts.data.generation.windowing import build_article_windows as build_win
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_EXAMPLES = REPO_ROOT / "dataset/manual/manual_fixes.jsonl"
-DEFAULT_SYSTEM_PROMPT = """Role: You are a precise information extraction annotator for food-security news.
+DEFAULT_SYSTEM_PROMPT = """<role>
+You are a strictly grounded data extractor for food-security news.
+</role>
 
-Goal:
-- Extract only explicit evidence spans from the article text.
-- Focus on food insecurity events or risk factors using the provided ontology labels.
+<goal>
+Extract only explicit food-insecurity event or risk-factor evidence from the article text using the provided ontology labels.
+</goal>
 
-Critical constraints:
-- Use only text that appears verbatim in the article body.
-- Do not use title text for offsets.
-- Do not infer, paraphrase, or combine non-contiguous text.
-- If evidence is absent, return zero spans.
+<grounding>
+- Use only the user-provided article text as evidence.
+- Do not use outside knowledge, common sense, assumptions, or inferred facts.
+- Do not clarify, explain, normalize, paraphrase, or expand terms.
+- Copy evidence text exactly as it appears in the article body.
+- Do not use the title for offsets.
+</grounding>
 
-Span granularity (very important):
+<span_granularity>
 - Prefer the narrowest meaningful event/risk phrase, not full clauses.
 - Keep only the core trigger phrase and essential modifiers.
-- Remove location/time/context words unless required to preserve meaning.
-- Treat locations, participants, sources, targets, dates, and attribution as context, not event trigger text.
+- Remove location, time, attribution, source, target, participant, and background words unless required to preserve event meaning.
 - If an event is expressed by a non-contiguous noun plus predicate, select the contiguous trigger predicate rather than the whole clause.
+</span_granularity>
 
-Examples of narrow spans:
-- "the current desert locust outbreak in the Horn of Africa" -> "desert locust outbreak"
-- "recent drought crisis in South Africa's Cape Town region" -> "drought crisis"
-- "missiles from Gaza again raining down on Israel" -> "raining down"
+<quality_checks>
+Before finalizing each annotation, verify:
+1. The label is in the ontology.
+2. The copied text is verbatim and contiguous in the article text.
+3. The copied text is the narrowest phrase that preserves event/risk meaning.
+4. start_char and end_char exactly match the copied text in article text.
+</quality_checks>
 
-Quality checks before finalizing each span:
-1) Is the label in the ontology?
-2) Is the span verbatim and contiguous in article text?
-3) Is this the narrowest phrase that still preserves event/risk meaning?
-4) Do start_char/end_char exactly match that span in article text?
+<output_constraints>
+- Return only annotations that satisfy every quality check.
+- If evidence is absent, return an empty list.
+</output_constraints>"""
 
-Output discipline:
-- Return only spans that satisfy all checks.
-- Keep rationale short and factual."""
+DEFAULT_USER_PROMPT = """<context>
+<title usage="context_only_do_not_offset">
+{title}
+</title>
 
-DEFAULT_USER_PROMPT = """Task: Extract food-insecurity and risk-factor evidence spans from the article.
+<article_text offset_source="true">
+{text}
+</article_text>
 
-Ontology labels (allowed labels only):
+<ontology allowed_labels_only="true">
 {ontology}
+</ontology>
+</context>
 
-Extraction rules:
-- Select only explicit evidence from the article text.
-- span_text must be an exact contiguous substring from article text.
-- Each span gets exactly one ontology label.
-- Use the narrowest valid span. Avoid long clauses when a short core phrase is sufficient.
-- Exclude surrounding context (location, date, attribution, background) unless essential to preserve event meaning.
-- Treat locations, participants, sources, targets, dates, and attribution as context, not event trigger text.
+<task>
+Extract food-insecurity and risk-factor evidence spans from the article based strictly on explicit article text.
+</task>
+
+<parameters>
+- span_text: exact contiguous substring copied from article_text.
+- label: exactly one allowed ontology label.
+- start_char: zero-based character offset in article_text where span_text starts.
+- end_char: exclusive zero-based character offset in article_text where span_text ends.
+</parameters>
+
+<extraction_rules>
+- Select only explicit evidence from article_text.
+- Use the narrowest valid span; avoid long clauses when a short core phrase is sufficient.
+- Exclude surrounding context such as location, date, attribution, source, target, participant, and background unless essential to preserve event meaning.
 - If an event is expressed by a non-contiguous noun plus predicate, select the contiguous trigger predicate rather than the whole clause.
 - Do not output duplicates.
 - If no valid evidence exists, return an empty spans list.
+</extraction_rules>
 
-Narrow-span examples:
+<examples>
 - "the current desert locust outbreak in the Horn of Africa" -> "desert locust outbreak"
 - "recent drought crisis in South Africa's Cape Town region" -> "drought crisis"
 - "missiles from Gaza again raining down on Israel" -> "raining down"
+</examples>
 
-Offset rules:
-- start_char and end_char must index article text only (not title).
+<critical_constraints>
+- start_char and end_char must index article_text only, not title.
 - end_char is exclusive.
-- Offsets must match span_text exactly.
-
-Title (context only, do not offset against this field):
-{title}
-
-Article text (offset source):
-{text}
+- article_text[start_char:end_char] must equal span_text exactly.
+- Do not infer events, labels, arguments, locations, or dates.
+</critical_constraints>
 """
 
-DEFAULT_EVENTS_WITH_ARGS_USER_PROMPT = """Task: Extract food-insecurity and risk-factor events from the article, including linked argument spans.
+DEFAULT_EVENTS_WITH_ARGS_USER_PROMPT = """<context>
+<title usage="context_only_do_not_offset">
+{title}
+</title>
 
-Ontology labels (allowed event labels only):
+<article_text offset_source="true">
+{text}
+</article_text>
+
+<ontology allowed_event_labels_only="true">
 {ontology}
+</ontology>
 
-Extraction rules:
-- Select only explicit evidence from the article text.
-- trigger_text and argument text must be exact contiguous substrings from article text.
-- Each event gets exactly one ontology event_type.
-- Event trigger = the minimal contiguous word or phrase that evokes the event/risk.
-- Arguments = linked entities, locations, times, participants, affected populations, sources, or targets.
-- Do not include locations or participants inside trigger_text unless they are part of the trigger expression itself.
-- Do not infer arguments that are not explicit in the article text.
+<argument_roles allowed_roles_only="true">
+{argument_roles}
+</argument_roles>
+
+<event_argument_roles allowed_roles_by_event_label="true">
+{event_argument_roles}
+</event_argument_roles>
+</context>
+
+<task>
+Extract food-insecurity and risk-factor events from the article, including linked argument spans.
+</task>
+
+<parameters>
+- event_type: exactly one allowed ontology event label.
+- trigger_text: minimal contiguous word or phrase that explicitly evokes the event/risk.
+- event start_char/end_char: zero-based offsets for trigger_text in article_text; end_char is exclusive.
+- argument text: exact contiguous substring copied from article_text and linked to the trigger.
+- argument role: exactly one allowed role for the event_type.
+</parameters>
+
+<extraction_rules>
+- Select only explicit evidence from article_text.
+- trigger_text and argument text must be exact contiguous substrings from article_text.
+- Do not include locations, participants, dates, attribution, sources, or targets inside trigger_text unless they are part of the trigger expression itself.
+- Arguments may include linked entities, locations, times, participants, affected populations, sources, or targets when explicitly stated.
 - Do not output duplicates.
 - If no valid evidence exists, return an empty events list.
+</extraction_rules>
 
-Argument roles (allowed roles only):
-{argument_roles}
-
-Allowed roles by event label:
-{event_argument_roles}
-
-Examples:
+<examples>
 - "the current desert locust outbreak in the Horn of Africa" -> trigger_text "desert locust outbreak", argument "Horn of Africa" with role "location"
 - "recent drought crisis in South Africa's Cape Town region" -> trigger_text "drought crisis", argument "South Africa's Cape Town region" with role "location"
 - "missiles from Gaza again raining down on Israel" -> trigger_text "raining down", argument "Gaza" with role "source_location", argument "Israel" with role "target_location"
+</examples>
 
-Offset rules:
-- start_char and end_char must index article text only (not title).
-- end_char is exclusive.
+<critical_constraints>
+- start_char and end_char must index article_text only, not title.
 - Offsets must match the copied text exactly.
-
-Title (context only, do not offset against this field):
-{title}
-
-Article text (offset source):
-{text}
+- Do not infer events, labels, arguments, locations, or dates.
+</critical_constraints>
 """
 
-DEFAULT_VERIFIER_PROMPT = """Task: Verify candidate event annotations.
+DEFAULT_VERIFIER_PROMPT = """<context>
+<title usage="context_only">
+{title}
+</title>
 
-Ontology labels:
+<article_text>
+{text}
+</article_text>
+
+<candidate_events>
+{events_json}
+</candidate_events>
+
+<ontology allowed_labels_only="true">
 {ontology}
+</ontology>
+</context>
 
-Rules:
-- Accept only events explicitly supported by the article text.
+<task>
+Verify candidate event annotations against the article text.
+</task>
+
+<rules>
+- Accept only events explicitly supported by article_text.
 - Reject inferred events, wrong labels, overly broad triggers, bad offsets, and unsupported arguments.
 - Do not create new events.
-- start_char/end_char in your decisions must copy the candidate event offsets.
+- Copy candidate event start_char/end_char values exactly in your decisions.
+</rules>
 
-Title (context only):
-{title}
-
-Article text:
-{text}
-
-Candidate events:
-{events_json}
+<critical_constraints>
+- Use only article_text as evidence.
+- Do not introduce external information.
+</critical_constraints>
 """
-EXAMPLES_HEADER = """Reference examples from manually fixed annotations.
-Use these only as examples of annotation style. The target article appears after the examples."""
+EXAMPLES_HEADER = """<reference_examples>
+Reference examples from manually fixed annotations.
+Use these only as examples of annotation style. The target article appears after the examples.
+</reference_examples>"""
 
 LOGGER = logging.getLogger("gemini_event_gen")
 OUTPUT_MODE_SPANS = "spans"
@@ -167,9 +217,9 @@ class ExtractedSpan(BaseModel):
     end_char: int = Field(
         ..., description="Exclusive end character offset in article text."
     )
-    rationale: str = Field(
-        default="", description="Brief reason for assigning the label."
-    )
+    # rationale: str = Field(
+    #     default="", description="Brief reason for assigning the label."
+    # )
 
 
 class ExtractedArgument(BaseModel):
@@ -193,9 +243,9 @@ class ExtractedEvent(BaseModel):
         ..., description="Exclusive end character offset in article text."
     )
     arguments: list[ExtractedArgument] = Field(default_factory=list)
-    rationale: str = Field(
-        default="", description="Brief reason for assigning the event label."
-    )
+    # rationale: str = Field(
+    #     default="", description="Brief reason for assigning the event label."
+    # )
 
 
 class SampleResult(BaseModel):
@@ -446,18 +496,192 @@ def load_examples(path: Path) -> list[dict[str, Any]]:
 
 
 def sample_examples(
-    examples: list[dict[str, Any]], sample_size: int | None
+    examples: list[dict[str, Any]], sample_size: int | None, output_mode: str
 ) -> list[dict[str, Any]]:
     if sample_size is None:
         return []
-    if sample_size >= len(examples):
-        return examples
-    return random.sample(examples, k=sample_size)
+    if all(example.get("_compact_example_window") for example in examples):
+        example_windows = examples
+    else:
+        example_windows = compact_example_records(examples, output_mode)
+    if sample_size >= len(example_windows):
+        return example_windows
+    return random.sample(example_windows, k=sample_size)
+
+
+EXAMPLE_WINDOW_MAX_CHARS = 1000
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _valid_range(start_char: Any, end_char: Any, text: str) -> tuple[int, int] | None:
+    start = _int_or_none(start_char)
+    end = _int_or_none(end_char)
+    if start is None or end is None:
+        return None
+    if 0 <= start < end <= len(text):
+        return start, end
+    return None
+
+
+def _sentence_window_bounds(
+    text: str, start_char: int, end_char: int, max_chars: int
+) -> tuple[int, int]:
+    window_start = start_char
+    window_end = end_char
+    stripped_start, stripped_end = trim_span_to_non_whitespace(
+        text, 0, len(text)
+    ) or (0, len(text))
+
+    def is_allowed_expansion(candidate_start: int, candidate_end: int) -> bool:
+        if candidate_end - candidate_start > max_chars:
+            return False
+        is_full_text = (
+            candidate_start <= stripped_start and candidate_end >= stripped_end
+        )
+        annotation_is_full_text = (
+            start_char <= stripped_start and end_char >= stripped_end
+        )
+        return not is_full_text or annotation_is_full_text
+
+    paragraph_start = text.rfind("\n\n", 0, start_char)
+    if paragraph_start >= 0:
+        paragraph_start += 2
+    else:
+        paragraph_start = 0
+    paragraph_end = text.find("\n\n", end_char)
+    if paragraph_end < 0:
+        paragraph_end = len(text)
+    if is_allowed_expansion(paragraph_start, paragraph_end):
+        window_start = paragraph_start
+        window_end = paragraph_end
+    else:
+        sentence_start = max(
+            text.rfind(". ", 0, start_char),
+            text.rfind("? ", 0, start_char),
+            text.rfind("! ", 0, start_char),
+        )
+        if sentence_start >= 0:
+            sentence_start += 2
+        else:
+            sentence_start = paragraph_start
+
+        sentence_ends = [
+            position
+            for marker in (".", "?", "!")
+            if (position := text.find(marker, end_char)) >= 0
+        ]
+        sentence_end = min(sentence_ends) + 1 if sentence_ends else paragraph_end
+        if is_allowed_expansion(sentence_start, sentence_end):
+            window_start = sentence_start
+            window_end = sentence_end
+
+    while window_start < start_char and text[window_start].isspace():
+        window_start += 1
+    while window_end > end_char and text[window_end - 1].isspace():
+        window_end -= 1
+    return window_start, window_end
+
+
+def _example_event_range(
+    event: dict[str, Any], text: str, output_mode: str, max_chars: int
+) -> tuple[int, int] | None:
+    trigger_range = _valid_range(event.get("start_char"), event.get("end_char"), text)
+    if trigger_range is None:
+        return None
+    if output_mode != OUTPUT_MODE_EVENTS_WITH_ARGS:
+        return trigger_range
+
+    start_char, end_char = trigger_range
+    for argument in event.get("arguments", []) or []:
+        if not isinstance(argument, dict):
+            continue
+        argument_range = _valid_range(
+            argument.get("start_char"), argument.get("end_char"), text
+        )
+        if argument_range is None:
+            continue
+        proposed_start = min(start_char, argument_range[0])
+        proposed_end = max(end_char, argument_range[1])
+        if proposed_end - proposed_start <= max_chars:
+            start_char = proposed_start
+            end_char = proposed_end
+    return start_char, end_char
+
+
+def compact_example_windows(
+    record: dict[str, Any],
+    output_mode: str,
+    max_chars: int = EXAMPLE_WINDOW_MAX_CHARS,
+) -> list[tuple[int, int]]:
+    text = str(record.get("text") or "")
+    events = record.get("events", []) or []
+    if not text or not isinstance(events, list):
+        return []
+
+    ranges = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        event_range = _example_event_range(event, text, output_mode, max_chars)
+        if event_range is not None:
+            ranges.append(event_range)
+    if not ranges:
+        return []
+
+    ranges.sort()
+    merged: list[tuple[int, int]] = []
+    for start_char, end_char in ranges:
+        if not merged:
+            merged.append((start_char, end_char))
+            continue
+        previous_start, previous_end = merged[-1]
+        if max(previous_end, end_char) - previous_start <= max_chars:
+            merged[-1] = (previous_start, max(previous_end, end_char))
+        else:
+            merged.append((start_char, end_char))
+
+    windows: list[tuple[int, int]] = []
+    for start_char, end_char in merged:
+        window_start, window_end = _sentence_window_bounds(
+            text, start_char, end_char, max_chars
+        )
+        if window_end - window_start > max_chars:
+            window_start, window_end = start_char, end_char
+        windows.append((window_start, window_end))
+    return windows
+
+
+def output_has_labels(
+    expected_output: dict[str, list[dict[str, Any]]], output_mode: str
+) -> bool:
+    if output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+        return any(
+            str(event.get("event_type") or "").strip()
+            for event in expected_output.get("events", []) or []
+            if isinstance(event, dict)
+        )
+    return any(
+        str(span.get("label") or "").strip()
+        for span in expected_output.get("spans", []) or []
+        if isinstance(span, dict)
+    )
 
 
 def format_example_output(
-    record: dict[str, Any], output_mode: str
+    record: dict[str, Any],
+    output_mode: str,
+    window_start: int = 0,
+    window_end: int | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
+    text = str(record.get("text") or "")
+    if window_end is None:
+        window_end = len(text)
     events = record.get("events", []) or []
     if not isinstance(events, list):
         events = []
@@ -466,26 +690,44 @@ def format_example_output(
         for event in events:
             if not isinstance(event, dict):
                 continue
+            event_range = _valid_range(
+                event.get("start_char"), event.get("end_char"), text
+            )
+            if event_range is None:
+                continue
+            start_char, end_char = event_range
+            if not (window_start <= start_char < end_char <= window_end):
+                continue
             arguments = []
             for argument in event.get("arguments", []) or []:
                 if not isinstance(argument, dict):
+                    continue
+                argument_range = _valid_range(
+                    argument.get("start_char"), argument.get("end_char"), text
+                )
+                if argument_range is None:
+                    continue
+                arg_start_char, arg_end_char = argument_range
+                if not (
+                    window_start <= arg_start_char < arg_end_char <= window_end
+                ):
                     continue
                 arguments.append(
                     {
                         "role": argument.get("role", ""),
                         "text": argument.get("text", ""),
-                        "start_char": argument.get("start_char"),
-                        "end_char": argument.get("end_char"),
+                        "start_char": arg_start_char - window_start,
+                        "end_char": arg_end_char - window_start,
                     }
                 )
             formatted_events.append(
                 {
                     "event_type": event.get("event_type", ""),
                     "trigger_text": event.get("trigger_text", ""),
-                    "start_char": event.get("start_char"),
-                    "end_char": event.get("end_char"),
+                    "start_char": start_char - window_start,
+                    "end_char": end_char - window_start,
                     "arguments": arguments,
-                    "rationale": event.get("rationale", ""),
+                    # "rationale": event.get("rationale", ""),
                 }
             )
         return {"events": formatted_events}
@@ -494,16 +736,51 @@ def format_example_output(
     for event in events:
         if not isinstance(event, dict):
             continue
+        event_range = _valid_range(event.get("start_char"), event.get("end_char"), text)
+        if event_range is None:
+            continue
+        start_char, end_char = event_range
+        if not (window_start <= start_char < end_char <= window_end):
+            continue
         spans.append(
             {
                 "span_text": event.get("trigger_text", ""),
                 "label": event.get("event_type", ""),
-                "start_char": event.get("start_char"),
-                "end_char": event.get("end_char"),
-                "rationale": event.get("rationale", ""),
+                "start_char": start_char - window_start,
+                "end_char": end_char - window_start,
+                # "rationale": event.get("rationale", ""),
             }
         )
     return {"spans": spans}
+
+
+def compact_example_records(
+    examples: list[dict[str, Any]], output_mode: str
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for example_index, record in enumerate(examples, start=1):
+        text = str(record.get("text") or "")
+        for window_index, (window_start, window_end) in enumerate(
+            compact_example_windows(record, output_mode), start=1
+        ):
+            expected_output = format_example_output(
+                record,
+                output_mode,
+                window_start=window_start,
+                window_end=window_end,
+            )
+            if not output_has_labels(expected_output, output_mode):
+                continue
+            records.append(
+                {
+                    "text": text[window_start:window_end],
+                    "expected_output": expected_output,
+                    "_compact_example_window": True,
+                    "_example_index": example_index,
+                    "_window_index": window_index,
+                }
+            )
+    return records
 
 
 def format_examples(
@@ -514,15 +791,38 @@ def format_examples(
 
     formatted = []
     for index, record in enumerate(examples, start=1):
-        payload = {
-            "title": record.get("title") or "",
-            "text": record.get("text") or "",
-            "expected_output": format_example_output(record, output_mode),
-        }
-        formatted.append(
-            f"Example {index}:\n"
-            + json.dumps(payload, ensure_ascii=False, indent=2)
-        )
+        if record.get("_compact_example_window"):
+            payload = {
+                "text": record.get("text") or "",
+                "expected_output": record.get("expected_output") or {},
+            }
+            formatted.append(
+                f"Example {index}:\n"
+                + json.dumps(payload, ensure_ascii=False, indent=2)
+            )
+            continue
+
+        text = str(record.get("text") or "")
+        windows = compact_example_windows(record, output_mode)
+        for window_index, (window_start, window_end) in enumerate(windows, start=1):
+            expected_output = format_example_output(
+                record,
+                output_mode,
+                window_start=window_start,
+                window_end=window_end,
+            )
+            if not output_has_labels(expected_output, output_mode):
+                continue
+            payload = {
+                "text": text[window_start:window_end],
+                "expected_output": expected_output,
+            }
+            formatted.append(
+                f"Example {index}.{window_index}:\n"
+                + json.dumps(payload, ensure_ascii=False, indent=2)
+            )
+    if not formatted:
+        return ""
     return EXAMPLES_HEADER + "\n\n" + "\n\n".join(formatted)
 
 
@@ -576,6 +876,40 @@ def response_to_dict(response: Any) -> dict[str, Any]:
     if isinstance(response, dict):
         return response
     return json.loads(str(response))
+
+
+def log_llm_call(
+    *,
+    enabled: bool,
+    record_id: str,
+    step: str,
+    call_type: str,
+    system_prompt: str,
+    prompt: str,
+    answer: Any | None = None,
+) -> None:
+    if not enabled:
+        return
+
+    if answer is None:
+        LOGGER.info(
+            "\n===== LLM CALL %s id=%s PROMPT =====\nStep: %s\nSystem prompt:\n%s\n\nUser prompt:\n%s",
+            call_type,
+            record_id,
+            step,
+            system_prompt,
+            prompt,
+        )
+    else:
+        LOGGER.info(
+            "\n===== LLM CALL %s id=%s ANSWER =====\nStep: %s\n%s",
+            call_type,
+            record_id,
+            step,
+            json.dumps(answer, ensure_ascii=False, indent=2)
+            if not isinstance(answer, str)
+            else answer,
+        )
 
 
 def find_offsets(
@@ -694,7 +1028,7 @@ def clean_spans(
                 "label": label,
                 "start_char": start_char,
                 "end_char": end_char,
-                "rationale": str(span.get("rationale", "")).strip(),
+                # "rationale": str(span.get("rationale", "")).strip(),
             }
         )
     return cleaned
@@ -751,7 +1085,7 @@ def clean_events_with_args(
                     "start_char": start_char,
                     "end_char": end_char,
                     "arguments": [],
-                    "rationale": str(event.get("rationale", "")).strip(),
+                    # "rationale": str(event.get("rationale", "")).strip(),
                 }
             )
 
@@ -1062,19 +1396,19 @@ def merge_self_consistency_spans(
             continue
 
         start_char, end_char, label = key
-        rationales = [
-            str(span.get("rationale", "")).strip()
-            for span in grouped[key]
-            if str(span.get("rationale", "")).strip()
-        ]
-        rationale = ""
-        if rationales:
-            counts = Counter(rationales)
-            rationale = max(
-                range(len(rationales)),
-                key=lambda index: (counts[rationales[index]], -index),
-            )
-            rationale = rationales[rationale]
+        # rationales = [
+        #     str(span.get("rationale", "")).strip()
+        #     for span in grouped[key]
+        #     if str(span.get("rationale", "")).strip()
+        # ]
+        # rationale = ""
+        # if rationales:
+        #     counts = Counter(rationales)
+        #     rationale = max(
+        #         range(len(rationales)),
+        #         key=lambda index: (counts[rationales[index]], -index),
+        #     )
+        #     rationale = rationales[rationale]
 
         merged.append(
             {
@@ -1082,7 +1416,7 @@ def merge_self_consistency_spans(
                 "label": label,
                 "start_char": start_char,
                 "end_char": end_char,
-                "rationale": rationale,
+                # "rationale": rationale,
                 "support": support,
             }
         )
@@ -1164,11 +1498,11 @@ def merge_self_consistency_events(
             continue
 
         start_char, end_char, event_type = event_key
-        rationales = [
-            str(event.get("rationale", "")).strip()
-            for event in grouped_events[event_key]
-            if str(event.get("rationale", "")).strip()
-        ]
+        # rationales = [
+        #     str(event.get("rationale", "")).strip()
+        #     for event in grouped_events[event_key]
+        #     if str(event.get("rationale", "")).strip()
+        # ]
         argument_threshold = (event_support // 2) + 1
         arguments: list[dict[str, Any]] = []
         for argument_key in sorted(grouped_arguments[event_key]):
@@ -1194,7 +1528,7 @@ def merge_self_consistency_events(
                 "start_char": start_char,
                 "end_char": end_char,
                 "arguments": arguments,
-                "rationale": most_common_first_seen(rationales),
+                # "rationale": most_common_first_seen(rationales),
                 "support": event_support,
             }
         )
@@ -1228,6 +1562,8 @@ async def generate_sample(
     argument_roles: set[str] | None = None,
     event_argument_roles: dict[str, list[str]] | None = None,
     override_settings: dict[str, Any] | None = None,
+    verbose: bool = False,
+    step: str = "extract",
 ) -> SampleResult:
     if output_mode == OUTPUT_MODE_SPANS:
         response_format = {"spans": list[ExtractedSpan]}
@@ -1238,6 +1574,14 @@ async def generate_sample(
 
     for attempt in range(max_retries + 1):
         try:
+            log_llm_call(
+                enabled=verbose,
+                record_id=record_id,
+                step=step,
+                call_type=f"extract attempt={attempt + 1}",
+                system_prompt=system_prompt,
+                prompt=prompt,
+            )
             response = None
             async for candidate in client.generate(
                 prompt=prompt,
@@ -1252,10 +1596,20 @@ async def generate_sample(
             if response is None:
                 raise RuntimeError("Gemini returned no response.")
 
+            raw_answer = (
+                response_to_dict(response.parsed) if response.parsed else response.text
+            )
+            log_llm_call(
+                enabled=verbose,
+                record_id=record_id,
+                step=step,
+                call_type=f"extract attempt={attempt + 1}",
+                system_prompt=system_prompt,
+                prompt=prompt,
+                answer=raw_answer,
+            )
             parsed = (
-                response_to_dict(response.parsed)
-                if response.parsed
-                else json.loads(response.text)
+                raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
             )
             if output_mode == OUTPUT_MODE_SPANS:
                 spans = clean_spans(parsed, text, labels, strict_offsets)
@@ -1344,6 +1698,9 @@ async def verify_events(
     events: list[dict[str, Any]],
     system_prompt: str,
     verifier_prompt_template: str,
+    verbose: bool = False,
+    record_id: str = "",
+    step: str = "verifier",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Ask the teacher model to accept/reject already validated events."""
     if not events:
@@ -1354,6 +1711,14 @@ async def verify_events(
         title=title,
         text=text,
         events_json=json.dumps(events, ensure_ascii=False, indent=2),
+    )
+    log_llm_call(
+        enabled=verbose,
+        record_id=record_id or "verifier",
+        step=step,
+        call_type="verifier",
+        system_prompt=system_prompt,
+        prompt=prompt,
     )
     response = None
     async for candidate in client.generate(
@@ -1367,8 +1732,20 @@ async def verify_events(
     if response is None:
         raise RuntimeError("Gemini returned no verifier response.")
 
+    raw_answer = (
+        response_to_dict(response.parsed) if response.parsed else response.text
+    )
+    log_llm_call(
+        enabled=verbose,
+        record_id=record_id or "verifier",
+        step=step,
+        call_type="verifier",
+        system_prompt=system_prompt,
+        prompt=prompt,
+        answer=raw_answer,
+    )
     parsed = (
-        response_to_dict(response.parsed) if response.parsed else json.loads(response.text)
+        raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
     )
     return clean_verifier_decisions(parsed, events), response.metadata
 
@@ -1417,6 +1794,7 @@ async def generate_windowed_one(
     self_consistency_min_successful_samples: int = 3,
     examples: list[dict[str, Any]] | None = None,
     example_sample_size: int | None = None,
+    verbose: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     windows = build_article_windows(
         text,
@@ -1461,7 +1839,9 @@ async def generate_windowed_one(
                         argument_roles_text=argument_roles_text,
                         event_argument_roles_text=event_argument_roles_text,
                         examples_text=format_examples(
-                            sample_examples(examples or [], example_sample_size),
+                            sample_examples(
+                                examples or [], example_sample_size, output_mode
+                            ),
                             output_mode,
                         ),
                     )
@@ -1481,6 +1861,13 @@ async def generate_windowed_one(
                             argument_roles=argument_roles,
                             event_argument_roles=event_argument_roles,
                             override_settings=override_settings,
+                            verbose=verbose,
+                            step=(
+                                "window_extraction "
+                                f"window={window.window_index + 1}/{len(windows)} "
+                                f"self_consistency_sample={sample_index + 1}/"
+                                f"{self_consistency_samples}"
+                            ),
                         )
                         sample_metadata.append(sample.metadata)
                         if output_mode == OUTPUT_MODE_SPANS:
@@ -1531,7 +1918,7 @@ async def generate_windowed_one(
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
                 examples_text=format_examples(
-                    sample_examples(examples or [], example_sample_size),
+                    sample_examples(examples or [], example_sample_size, output_mode),
                     output_mode,
                 ),
             )
@@ -1549,6 +1936,11 @@ async def generate_windowed_one(
                 output_mode=output_mode,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
+                verbose=verbose,
+                step=(
+                    "window_extraction "
+                    f"window={window.window_index + 1}/{len(windows)}"
+                ),
             )
             sample_metadata.append(sample.metadata)
             if output_mode == OUTPUT_MODE_SPANS:
@@ -1625,6 +2017,7 @@ async def generate_one(
     verifier_prompt_template: str = DEFAULT_VERIFIER_PROMPT,
     examples: list[dict[str, Any]] | None = None,
     example_sample_size: int | None = None,
+    verbose: bool = False,
 ) -> dict[str, Any]:
     if output_mode not in OUTPUT_MODES:
         raise ValueError(f"Unsupported output mode: {output_mode}")
@@ -1665,6 +2058,7 @@ async def generate_one(
                 ),
                 examples=examples,
                 example_sample_size=example_sample_size,
+                verbose=verbose,
             )
             payload_key = "spans" if output_mode == OUTPUT_MODE_SPANS else "events"
             if enable_verifier and output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
@@ -1676,6 +2070,9 @@ async def generate_one(
                     events=payload,
                     system_prompt=system_prompt,
                     verifier_prompt_template=verifier_prompt_template,
+                    verbose=verbose,
+                    record_id=record_id,
+                    step="windowed_verifier",
                 )
                 payload = adjudication.apply_verifier_decisions(payload, decisions)
                 metadata["verifier"] = {
@@ -1712,7 +2109,7 @@ async def generate_one(
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
                 examples_text=format_examples(
-                    sample_examples(examples or [], example_sample_size),
+                    sample_examples(examples or [], example_sample_size, output_mode),
                     output_mode,
                 ),
             )
@@ -1730,6 +2127,8 @@ async def generate_one(
                 output_mode=output_mode,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
+                verbose=verbose,
+                step="extraction",
             )
             payload_key = "spans" if output_mode == OUTPUT_MODE_SPANS else "events"
             payload = (
@@ -1745,6 +2144,9 @@ async def generate_one(
                     events=payload,
                     system_prompt=system_prompt,
                     verifier_prompt_template=verifier_prompt_template,
+                    verbose=verbose,
+                    record_id=record_id,
+                    step="verifier",
                 )
                 payload = adjudication.apply_verifier_decisions(payload, decisions)
                 metadata["verifier"] = {
@@ -1787,7 +2189,7 @@ async def generate_one(
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
                 examples_text=format_examples(
-                    sample_examples(examples or [], example_sample_size),
+                    sample_examples(examples or [], example_sample_size, output_mode),
                     output_mode,
                 ),
             )
@@ -1806,6 +2208,11 @@ async def generate_one(
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
                 override_settings=override_settings,
+                verbose=verbose,
+                step=(
+                    "self_consistency "
+                    f"sample={sample_index + 1}/{self_consistency_samples}"
+                ),
             )
             if output_mode == OUTPUT_MODE_SPANS:
                 sample_spans.append(sample.spans)
@@ -1868,6 +2275,9 @@ async def generate_one(
                 events=events,
                 system_prompt=system_prompt,
                 verifier_prompt_template=verifier_prompt_template,
+                verbose=verbose,
+                record_id=record_id,
+                step="self_consistency_verifier",
             )
             events = adjudication.apply_verifier_decisions(events, decisions)
             metadata["verifier"] = {
@@ -2018,7 +2428,7 @@ async def worker(
                         temperature=args.temperature,
                         max_tokens=args.max_tokens,
                         reasoning_effort=args.reasoning_effort,
-                        verbose=args.verbose,
+                        verbose=False,
                     )
                 except Exception as exc:
                     await output_queue.put(
@@ -2064,6 +2474,7 @@ async def worker(
                 enable_verifier=args.enable_verifier,
                 examples=examples,
                 example_sample_size=args.example_sample_size,
+                verbose=args.verbose,
             )
             result.setdefault("llm", {})
             result["llm"]["pipeline"] = {
@@ -2118,14 +2529,16 @@ async def run(args: argparse.Namespace) -> None:
         len(loaded_records) - len(unique_records),
         len(records),
     )
-    examples = (
+    raw_examples = (
         load_examples(args.examples)
         if args.example_sample_size is not None
         else []
     )
+    examples = compact_example_records(raw_examples, args.output_mode)
     if examples:
         LOGGER.info(
-            "loaded examples=%s sample_size=%s",
+            "loaded example_articles=%s example_windows=%s sample_size=%s",
+            len(raw_examples),
             len(examples),
             min(args.example_sample_size, len(examples)),
         )
@@ -2286,8 +2699,8 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "Sample N examples from --examples for each Gemini extraction call. "
-            "Defaults to no examples."
+            "Sample N compact labeled example windows from --examples for each "
+            "Gemini extraction call. Defaults to no examples."
         ),
     )
     parser.add_argument(
@@ -2388,7 +2801,9 @@ def parse_args() -> argparse.Namespace:
         help="Optional env file to load before constructing the Gemini client.",
     )
     parser.add_argument(
-        "--verbose", action="store_true", help="Log prompts through the LLM client."
+        "--verbose",
+        action="store_true",
+        help="Log every LLM call prompt and answer to the terminal.",
     )
     parser.add_argument(
         "--log-level",
@@ -2447,17 +2862,17 @@ def apply_pipeline_defaults(args: argparse.Namespace) -> None:
     args.window_target_chars = int(
         args.window_target_chars
         if args.window_target_chars is not None
-        else config.get("window_target_chars", 6000)
+        else config.get("window_target_chars", 1000)
     )
     args.window_max_chars = int(
         args.window_max_chars
         if args.window_max_chars is not None
-        else config.get("window_max_chars", 9000)
+        else config.get("window_max_chars", 1500)
     )
     args.window_overlap_sentences = int(
         args.window_overlap_sentences
         if args.window_overlap_sentences is not None
-        else config.get("window_overlap_sentences", 2)
+        else config.get("window_overlap_sentences", 1)
     )
 
     for field in ("model", "workers", "long_document_threshold_chars"):
@@ -2474,15 +2889,21 @@ def main() -> None:
         raise ValueError("--limit must be >= 1")
     if args.example_sample_size is not None and args.example_sample_size < 1:
         raise ValueError("--example-sample-size must be >= 1")
-    if args.self_consistency_samples < 1:
-        raise ValueError("--self-consistency-samples must be >= 1")
-    if args.self_consistency_min_successful_samples < 1:
-        raise ValueError("--self-consistency-min-successful-samples must be >= 1")
-    if args.self_consistency_min_successful_samples > args.self_consistency_samples:
-        raise ValueError(
-            "--self-consistency-min-successful-samples cannot exceed "
-            "--self-consistency-samples"
-        )
+    if args.self_consistency:
+        if args.self_consistency_samples < 1:
+            raise ValueError("--self-consistency-samples must be >= 1")
+        if args.self_consistency_min_successful_samples < 1:
+            raise ValueError(
+                "--self-consistency-min-successful-samples must be >= 1"
+            )
+        if (
+            args.self_consistency_min_successful_samples
+            > args.self_consistency_samples
+        ):
+            raise ValueError(
+                "--self-consistency-min-successful-samples cannot exceed "
+                "--self-consistency-samples"
+            )
     if args.long_document_threshold_chars < 1:
         raise ValueError("--long-document-threshold-chars must be >= 1")
     if args.window_target_chars < 1:

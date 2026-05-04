@@ -71,7 +71,7 @@ def clean_spans(
                 "label": label,
                 "start_char": start_char,
                 "end_char": end_char,
-                "rationale": str(span.get("rationale", "")).strip(),
+                # "rationale": str(span.get("rationale", "")).strip(),
             }
         )
     return cleaned
@@ -129,7 +129,7 @@ def clean_events_with_args(
                     "start_char": start_char,
                     "end_char": end_char,
                     "arguments": [],
-                    "rationale": str(event.get("rationale", "")).strip(),
+                    # "rationale": str(event.get("rationale", "")).strip(),
                 }
             )
 

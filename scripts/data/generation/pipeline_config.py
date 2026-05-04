@@ -44,7 +44,7 @@ MODE_DEFAULTS = {
     "low_cost": PipelineMode(
         output_mode="events-with-args",
         self_consistency=False,
-        self_consistency_samples=1,
+        self_consistency_samples=0,
         self_consistency_temperature=0.0,
         strict_offsets=True,
         long_document_mode=True,

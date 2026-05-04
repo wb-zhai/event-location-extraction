@@ -142,18 +142,31 @@ def prompt_description(
     argument_roles: dict[str, str],
     event_argument_roles: dict[str, list[str]],
 ) -> str:
-    return f"""Extract explicit food-insecurity and risk-factor events from the document.
+    return f"""<role>
+You are a strictly grounded data extractor for food-security news.
+</role>
 
-Rules:
+<task>
+Extract explicit food-insecurity and risk-factor events from the document.
+</task>
+
+<parameters>
+- extraction_class: exactly one event label from the schema.
+- extraction_text: the narrowest contiguous trigger phrase copied verbatim from the document.
+- attributes: exact contiguous document spans linked to the trigger, keyed by allowed argument role.
+</parameters>
+
+<rules>
 - Use only labels and roles from the schema.
-- extraction_text must be the narrowest contiguous trigger phrase copied verbatim from the document.
-- Argument values must be exact contiguous document spans linked to the trigger.
+- Use only explicit evidence in the document.
 - Do not infer, paraphrase, combine non-contiguous text, or output duplicates.
 - Keep locations, participants, dates, attribution, sources, and targets out of the trigger unless essential.
 - If no valid event is explicit, return zero extractions.
+</rules>
 
-Schema:
+<schema>
 {format_allowed_schema(events, argument_roles, event_argument_roles)}
+</schema>
 """
 
 
