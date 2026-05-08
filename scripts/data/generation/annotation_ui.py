@@ -21,9 +21,9 @@ from scripts.data.generation.gemini_event_gen import (  # noqa: E402
     load_json_tolerant,
     normalize_argument_roles,
     normalize_event_argument_roles,
+    normalize_location_types,
     normalize_ontology,
 )
-
 
 ZHAI_EVENTS_DIR = Path("dataset/zhai/events")
 DEFAULT_ONTOLOGY = "ontologies/risk-factors/risk.cluster.description.json"
@@ -139,12 +139,14 @@ class Ontology:
         self.event_argument_roles = normalize_event_argument_roles(
             raw, set(self.events), set(self.argument_roles)
         )
+        self.location_types = normalize_location_types(raw)
 
     def as_payload(self, path: str | None = None) -> dict[str, Any]:
         payload = {
             "events": self.events,
             "argument_roles": self.argument_roles,
             "event_argument_roles": self.event_argument_roles,
+            "location_types": self.location_types,
         }
         if path is not None:
             payload["path"] = path
@@ -187,7 +189,9 @@ def clean_events(
         )
         arguments = event.get("arguments") or []
         if not isinstance(arguments, list):
-            raise ValueError(f"{record_label} event {event_index} arguments must be a list.")
+            raise ValueError(
+                f"{record_label} event {event_index} arguments must be a list."
+            )
 
         clean_arguments: list[dict[str, Any]] = []
         for argument_index, argument in enumerate(arguments, start=1):
@@ -210,6 +214,31 @@ def clean_events(
             clean_argument = dict(argument)
             clean_argument["role"] = role
             clean_argument["text"] = text[arg_start:arg_end]
+            location_type_value = argument.get("location_type")
+            location_type = (
+                str(location_type_value).strip()
+                if location_type_value is not None
+                else ""
+            )
+            if role in {"location", "source_location", "target_location"}:
+                if location_type:
+                    if (
+                        ontology.location_types
+                        and location_type not in ontology.location_types
+                    ):
+                        raise ValueError(
+                            f"{record_label} event {event_index} argument {argument_index} "
+                            f"has invalid location_type {location_type!r}."
+                        )
+                elif "other" in ontology.location_types:
+                    location_type = "other"
+                if location_type:
+                    clean_argument["location_type"] = location_type
+            elif location_type:
+                raise ValueError(
+                    f"{record_label} event {event_index} argument {argument_index} "
+                    f"cannot set location_type for role {role!r}."
+                )
             clean_argument["start_char"] = arg_start
             clean_argument["end_char"] = arg_end
             clean_arguments.append(clean_argument)
@@ -387,7 +416,9 @@ class AnnotationHandler(BaseHTTPRequestHandler):
                 try:
                     index = int(raw_index)
                 except ValueError as exc:
-                    raise ValueError(f"Invalid record index in edits: {raw_index!r}") from exc
+                    raise ValueError(
+                        f"Invalid record index in edits: {raw_index!r}"
+                    ) from exc
                 if index < 0 or index >= len(output_records):
                     raise ValueError(f"Record index out of range in edits: {index}")
                 text = normalize_record(output_records[index], index)["text"]
@@ -566,7 +597,7 @@ INDEX_HTML = r"""<!doctype html>
     .list {
       display: grid;
       gap: 8px;
-      max-height: 34vh;
+      max-height: 24vh;
       overflow: auto;
       padding-right: 2px;
     }
@@ -695,7 +726,7 @@ INDEX_HTML = r"""<!doctype html>
         <h3 id="editorTitle">Editor</h3>
         <div class="meta" id="editorHint" style="margin: 8px 0 12px;">Select or add an annotation.</div>
 
-        <div id="editorFields" class="hidden">
+        <div id="editorFields" class="hidden" style="max-height: 48vh; overflow-y: auto; padding-right: 4px;">
           <div class="field">
             <label for="kindField">Kind</label>
             <input id="kindField" disabled>
@@ -711,6 +742,10 @@ INDEX_HTML = r"""<!doctype html>
           <div class="field" id="roleField">
             <label for="argumentRole">Argument label</label>
             <select id="argumentRole"></select>
+          </div>
+          <div class="field hidden" id="locationTypeField">
+            <label for="locationType">Location type</label>
+            <select id="locationType"></select>
           </div>
           <div class="split">
             <div class="field">
@@ -747,7 +782,7 @@ INDEX_HTML = r"""<!doctype html>
       currentRecord: null,
       selected: null,
       selectedRange: null,
-      ontology: {events: {}, argument_roles: {}, event_argument_roles: {}}
+      ontology: {events: {}, argument_roles: {}, event_argument_roles: {}, location_types: []}
     };
     const el = (id) => document.getElementById(id);
 
@@ -980,10 +1015,11 @@ INDEX_HTML = r"""<!doctype html>
           const argSelected = state.selected?.kind === "argument"
             && state.selected.eventIndex === eventIndex
             && state.selected.argumentIndex === argumentIndex ? " selected" : "";
+          const locStr = argument.location_type ? ` (${argument.location_type})` : "";
           return `
             <div class="card argument-card${argSelected}" data-kind="argument" data-event-index="${eventIndex}" data-argument-index="${argumentIndex}" style="border-left-color:${labelColor(`event:${eventIndex}`)}">
               <strong>ARG ${escapeHtml(argument.text || "")}</strong>
-              <div class="meta">E${eventIndex + 1} · ${escapeHtml(argument.role || "")} · ${argument.start_char}-${argument.end_char}</div>
+              <div class="meta">E${eventIndex + 1} · ${escapeHtml(argument.role || "")}${escapeHtml(locStr)} · ${argument.start_char}-${argument.end_char}</div>
             </div>
           `;
         }).join("") || '<div class="meta" style="margin-left: 16px;">No arguments for this event.</div>';
@@ -1106,6 +1142,19 @@ INDEX_HTML = r"""<!doctype html>
       const roleEventType = events[Number(el("eventLink").value)]?.event_type || event.event_type || "";
       el("argumentRole").innerHTML = optionHtml(rolesForEvent(roleEventType), argument?.role || "");
 
+      function updateLocationTypeVisibility() {
+        const isLocation = ["location", "source_location", "target_location"].includes(el("argumentRole").value);
+        el("locationTypeField").classList.toggle("hidden", !isLocation || !isArgument);
+      }
+      updateLocationTypeVisibility();
+      el("argumentRole").onchange = updateLocationTypeVisibility;
+
+      const locTypesObj = state.ontology.location_types || {};
+      const locTypes = Array.isArray(locTypesObj) ? locTypesObj : Object.keys(locTypesObj);
+      const hasOther = locTypes.includes("other");
+      const locOptions = locTypes.length > 0 ? (hasOther ? locTypes : [...locTypes, "other"]) : ["other"];
+      el("locationType").innerHTML = optionHtml(locOptions, argument?.location_type || "other");
+
       const source = isArgument ? argument : event;
       el("startChar").value = String(source?.start_char ?? "");
       el("endChar").value = String(source?.end_char ?? "");
@@ -1144,8 +1193,12 @@ INDEX_HTML = r"""<!doctype html>
         const newEventIndex = Number(el("eventLink").value);
         const newEvent = events[newEventIndex];
         const role = el("argumentRole").value;
+        const isLocation = ["location", "source_location", "target_location"].includes(role);
+        const locationType = isLocation ? el("locationType").value : undefined;
         if (!rolesForEvent(newEvent.event_type).includes(role)) throw new Error("Invalid argument label for connected event.");
         const editedArgument = {...argument, role, start_char: start, end_char: end, text};
+        if (locationType) editedArgument.location_type = locationType;
+        else delete editedArgument.location_type;
         oldEvent.arguments.splice(selected.argumentIndex, 1);
         newEvent.arguments = Array.isArray(newEvent.arguments) ? newEvent.arguments : [];
         newEvent.arguments.push(editedArgument);

@@ -13,9 +13,13 @@ def summarize_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     status_counts: Counter[str] = Counter()
     event_counts: Counter[str] = Counter()
     role_counts: Counter[str] = Counter()
+    relevance_decision_counts: Counter[str] = Counter()
     synthetic_count = 0
-    prompt_tokens = 0
-    completion_tokens = 0
+    relevance_filtered_records = 0
+    extraction_prompt_tokens = 0
+    extraction_completion_tokens = 0
+    relevance_prompt_tokens = 0
+    relevance_completion_tokens = 0
 
     for record in records:
         status_counts[str(record.get("status", "missing"))] += 1
@@ -31,19 +35,44 @@ def summarize_records(records: list[dict[str, Any]]) -> dict[str, Any]:
                 if isinstance(argument, dict):
                     role_counts[str(argument.get("role", ""))] += 1
 
-        metadata = (record.get("llm") or {}).get("metadata") or {}
-        prompt_tokens += int(metadata.get("prompt_tokens", 0) or 0)
-        completion_tokens += int(metadata.get("completion_tokens", 0) or 0)
+        llm = record.get("llm") or {}
+        metadata = llm.get("metadata") or {}
+        extraction_prompt_tokens += int(metadata.get("prompt_tokens", 0) or 0)
+        extraction_completion_tokens += int(metadata.get("completion_tokens", 0) or 0)
+
+        relevance = llm.get("relevance") or {}
+        decision = str(relevance.get("decision", "")).strip()
+        if decision:
+            relevance_decision_counts[decision] += 1
+        if bool(relevance.get("filtered")):
+            relevance_filtered_records += 1
+        relevance_metadata = relevance.get("metadata") or {}
+        relevance_prompt_tokens += int(relevance_metadata.get("prompt_tokens", 0) or 0)
+        relevance_completion_tokens += int(
+            relevance_metadata.get("completion_tokens", 0) or 0
+        )
 
     return {
         "records": len(records),
         "synthetic_records": synthetic_count,
+        "relevance_filtered_records": relevance_filtered_records,
+        "relevance_decision_counts": dict(sorted(relevance_decision_counts.items())),
         "status_counts": dict(sorted(status_counts.items())),
         "event_counts": dict(sorted(event_counts.items())),
         "role_counts": dict(sorted(role_counts.items())),
         "token_usage": {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
+            "prompt_tokens": extraction_prompt_tokens + relevance_prompt_tokens,
+            "completion_tokens": (
+                extraction_completion_tokens + relevance_completion_tokens
+            ),
+            "extraction": {
+                "prompt_tokens": extraction_prompt_tokens,
+                "completion_tokens": extraction_completion_tokens,
+            },
+            "relevance": {
+                "prompt_tokens": relevance_prompt_tokens,
+                "completion_tokens": relevance_completion_tokens,
+            },
         },
     }
 

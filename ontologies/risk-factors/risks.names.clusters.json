@@ -1,0 +1,837 @@
+[
+  {
+    "id": "673",
+    "name": "cyclone",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "687",
+    "name": "harvests are devastated",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "718",
+    "name": "rising inflation",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "786",
+    "name": "prolonged fighting",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "798",
+    "name": "air attack",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "758",
+    "name": "locusts",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "754",
+    "name": "rival warlords",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "744",
+    "name": "water distribution shortages",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "725",
+    "name": "militia groups",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "767",
+    "name": "reduced imports",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "749",
+    "name": "prolonged dry spell",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "691",
+    "name": "population crisis",
+    "cluster": "other"
+  },
+  {
+    "id": "763",
+    "name": "floods",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "711",
+    "name": "migration",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "789",
+    "name": "environmental degradation",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "682",
+    "name": "pests",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "821",
+    "name": "farmland",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "771",
+    "name": "siege",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "826",
+    "name": "gastrointestinal",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "701",
+    "name": "drought",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "761",
+    "name": "humanitarian disaster",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "752",
+    "name": "civil strife",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "715",
+    "name": "collapsing economy",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "819",
+    "name": "cholera outbreak",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "739",
+    "name": "land invasions",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "678",
+    "name": "withheld relief",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "784",
+    "name": "economic crisis",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "745",
+    "name": "cattle death",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "827",
+    "name": "terrorist",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "714",
+    "name": "bombing campaign",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "783",
+    "name": "flee",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "736",
+    "name": "police torture",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "796",
+    "name": "natural disaster",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "700",
+    "name": "increased external debt",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "753",
+    "name": "aid workers died",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "756",
+    "name": "lack of roads",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "777",
+    "name": "severe rains",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "713",
+    "name": "terrorism",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "674",
+    "name": "failed crops",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "816",
+    "name": "shortage of rains",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "770",
+    "name": "epidemics",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "712",
+    "name": "land grab",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "820",
+    "name": "international embargo",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "774",
+    "name": "blockade",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "719",
+    "name": "international terrorists",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "793",
+    "name": "internal strife",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "704",
+    "name": "makeshift camps",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "755",
+    "name": "land reform",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "684",
+    "name": "forests destroyed",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "689",
+    "name": "economic impoverishment",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "794",
+    "name": "malnourished",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "751",
+    "name": "restricted relief flights",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "733",
+    "name": "restricted humanitarian access",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "832",
+    "name": "carbon",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "800",
+    "name": "call for donations",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "669",
+    "name": "land seizures",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "686",
+    "name": "food insecurity",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "766",
+    "name": "pirates",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "699",
+    "name": "foreign troops",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "683",
+    "name": "continued deterioration",
+    "cluster": "other"
+  },
+  {
+    "id": "822",
+    "name": "totalitarian",
+    "cluster": "political instability"
+  },
+  {
+    "id": "702",
+    "name": "conflict",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "698",
+    "name": "acute hunger",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "780",
+    "name": "human rights abuses",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "716",
+    "name": "military junta",
+    "cluster": "political instability"
+  },
+  {
+    "id": "805",
+    "name": "lack of agricultural infrastructure",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "815",
+    "name": "toll on livestock",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "748",
+    "name": "without international aid",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "835",
+    "name": "mismanagement",
+    "cluster": "political instability"
+  },
+  {
+    "id": "809",
+    "name": "displaced",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "705",
+    "name": "civilians uprooted",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "738",
+    "name": "the offensive",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "703",
+    "name": "failed rains",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "787",
+    "name": "tragedy",
+    "cluster": "other"
+  },
+  {
+    "id": "759",
+    "name": "gangs of bandits",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "729",
+    "name": "continued strife",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "695",
+    "name": "rinderpest",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "680",
+    "name": "reduced national output",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "825",
+    "name": "clans",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "692",
+    "name": "aid appeal",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "831",
+    "name": "convoys",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "810",
+    "name": "food crisis",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "830",
+    "name": "overthrow",
+    "cluster": "political instability"
+  },
+  {
+    "id": "727",
+    "name": "cattle plague",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "791",
+    "name": "catastrophe",
+    "cluster": "other"
+  },
+  {
+    "id": "707",
+    "name": "foreign aid",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "679",
+    "name": "international alarm",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "801",
+    "name": "collapse of government",
+    "cluster": "political instability"
+  },
+  {
+    "id": "834",
+    "name": "dehydrated",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "760",
+    "name": "repression",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "720",
+    "name": "cycle of poverty",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "806",
+    "name": "rebel insurgency",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "693",
+    "name": "weather extremes",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "670",
+    "name": "slashed export",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "737",
+    "name": "potato blight",
+    "cluster": "pests and diseases"
+  },
+  {
+    "id": "724",
+    "name": "corrupt government",
+    "cluster": "political instability"
+  },
+  {
+    "id": "690",
+    "name": "clan battle",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "681",
+    "name": "oppressive regimes",
+    "cluster": "political instability"
+  },
+  {
+    "id": "764",
+    "name": "unable to sow",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "723",
+    "name": "price of food",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "823",
+    "name": "authoritarian",
+    "cluster": "political instability"
+  },
+  {
+    "id": "721",
+    "name": "bad harvests",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "708",
+    "name": "violent suppression",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "776",
+    "name": "brain drain",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "671",
+    "name": "price rise",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "803",
+    "name": "refugees",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "762",
+    "name": "years of warfare",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "722",
+    "name": "destructive pattern",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "743",
+    "name": "scanty rainfall",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "765",
+    "name": "transport bottleneck",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "782",
+    "name": "harvest decline",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "732",
+    "name": "rising food prices",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "688",
+    "name": "humanitarian situation",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "818",
+    "name": "self reliance",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "779",
+    "name": "land degradation",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "731",
+    "name": "hunger crises",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "795",
+    "name": "secession",
+    "cluster": "political instability"
+  },
+  {
+    "id": "672",
+    "name": "mass hunger",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "808",
+    "name": "looting",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "757",
+    "name": "pushing peasants off",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "768",
+    "name": "apathy",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "792",
+    "name": "wreaked havoc",
+    "cluster": "other"
+  },
+  {
+    "id": "813",
+    "name": "regimes were toppled",
+    "cluster": "political instability"
+  },
+  {
+    "id": "676",
+    "name": "massive starvation",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "709",
+    "name": "military dictatorship",
+    "cluster": "political instability"
+  },
+  {
+    "id": "778",
+    "name": "infrastructure damage",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "734",
+    "name": "water availability",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "812",
+    "name": "lack of alternatives",
+    "cluster": "other"
+  },
+  {
+    "id": "750",
+    "name": "rise",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "694",
+    "name": "anti-western policies",
+    "cluster": "political instability"
+  },
+  {
+    "id": "730",
+    "name": "ecological crisis",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "735",
+    "name": "alarming level",
+    "cluster": "other"
+  },
+  {
+    "id": "833",
+    "name": "mayhem",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "797",
+    "name": "life-threatening hunger",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "685",
+    "name": "man-made disaster",
+    "cluster": "other"
+  },
+  {
+    "id": "788",
+    "name": "slave trade",
+    "cluster": "other"
+  },
+  {
+    "id": "710",
+    "name": "climatic hazards",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "817",
+    "name": "devastated the economy",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "799",
+    "name": "corruption",
+    "cluster": "political instability"
+  },
+  {
+    "id": "696",
+    "name": "inadequate rainfall",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "740",
+    "name": "clan warfare",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "807",
+    "name": "brutal government",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "829",
+    "name": "d'etat",
+    "cluster": "political instability"
+  },
+  {
+    "id": "802",
+    "name": "international intervention",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "697",
+    "name": "lack of authority",
+    "cluster": "political instability"
+  },
+  {
+    "id": "781",
+    "name": "lack of cultivation",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "726",
+    "name": "poor soil quality",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "804",
+    "name": "disrupted trade",
+    "cluster": "economic issues"
+  },
+  {
+    "id": "728",
+    "name": "food assistance",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "785",
+    "name": "greenhouse gases",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "675",
+    "name": "disruption to farming",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "706",
+    "name": "dysfunction",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "772",
+    "name": "power struggle",
+    "cluster": "political instability"
+  },
+  {
+    "id": "773",
+    "name": "livestock had died",
+    "cluster": "agricultural production issues"
+  },
+  {
+    "id": "746",
+    "name": "asylum seekers",
+    "cluster": "forced displacement"
+  },
+  {
+    "id": "677",
+    "name": "abnormally low rainfall",
+    "cluster": "weather shocks"
+  },
+  {
+    "id": "769",
+    "name": "coup",
+    "cluster": "political instability"
+  },
+  {
+    "id": "717",
+    "name": "climate change",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "742",
+    "name": "politically engineered",
+    "cluster": "political instability"
+  },
+  {
+    "id": "828",
+    "name": "warlord",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "824",
+    "name": "dictators",
+    "cluster": "political instability"
+  },
+  {
+    "id": "814",
+    "name": "jihadist groups",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "790",
+    "name": "infant mortality",
+    "cluster": "food crisis"
+  },
+  {
+    "id": "775",
+    "name": "burning houses",
+    "cluster": "land-related issues"
+  },
+  {
+    "id": "747",
+    "name": "major offensive",
+    "cluster": "conflicts and violence"
+  },
+  {
+    "id": "741",
+    "name": "stolen food aid",
+    "cluster": "humanitarian aid"
+  },
+  {
+    "id": "811",
+    "name": "lack of rains",
+    "cluster": "weather shocks"
+  }
+]

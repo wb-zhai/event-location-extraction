@@ -19,6 +19,13 @@ def most_common_first_seen(values: list[str]) -> str:
     return values[value_index]
 
 
+def canonical_location_type(argument: dict[str, Any]) -> str:
+    location_type = argument.get("location_type")
+    if location_type is None:
+        return ""
+    return str(location_type).strip()
+
+
 def merge_self_consistency_spans(
     sample_spans: list[list[dict[str, Any]]], text: str
 ) -> tuple[list[dict[str, Any]], dict[tuple[int, int, str], int], int]:
@@ -143,10 +150,17 @@ def merge_self_consistency_events(
                 continue
 
             arg_start_char, arg_end_char, role = argument_key
+            location_types = [
+                canonical_location_type(argument)
+                for argument in grouped_arguments[event_key][argument_key]
+                if canonical_location_type(argument)
+            ]
+            location_type = most_common_first_seen(location_types)
             arguments.append(
                 {
                     "role": role,
                     "text": text[arg_start_char:arg_end_char],
+                    **({"location_type": location_type} if location_type else {}),
                     "start_char": arg_start_char,
                     "end_char": arg_end_char,
                     "support": argument_support,

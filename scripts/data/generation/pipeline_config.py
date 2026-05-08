@@ -18,6 +18,7 @@ class PipelineMode:
     long_document_mode: bool
     enable_verifier: bool
     enable_synthetic_gaps: bool
+    enable_relevance_filter: bool
 
 
 MODE_DEFAULTS = {
@@ -30,6 +31,7 @@ MODE_DEFAULTS = {
         long_document_mode=True,
         enable_verifier=True,
         enable_synthetic_gaps=True,
+        enable_relevance_filter=False,
     ),
     "balanced": PipelineMode(
         output_mode="events-with-args",
@@ -40,6 +42,7 @@ MODE_DEFAULTS = {
         long_document_mode=True,
         enable_verifier=False,
         enable_synthetic_gaps=False,
+        enable_relevance_filter=False,
     ),
     "low_cost": PipelineMode(
         output_mode="events-with-args",
@@ -50,6 +53,7 @@ MODE_DEFAULTS = {
         long_document_mode=True,
         enable_verifier=False,
         enable_synthetic_gaps=False,
+        enable_relevance_filter=False,
     ),
 }
 

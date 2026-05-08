@@ -89,7 +89,7 @@ Extract food-insecurity and risk-factor evidence spans from the article based st
 <extraction_rules>
 - Select only explicit evidence from article_text.
 - Use the narrowest valid span; avoid long clauses when a short core phrase is sufficient.
-- Exclude surrounding context such as location, date, attribution, source, target, participant, and background unless essential to preserve event meaning.
+- Exclude surrounding context such as location, date, attribution, sources, targets, participants, and background unless essential to preserve event meaning.
 - If an event is expressed by a non-contiguous noun plus predicate, select the contiguous trigger predicate rather than the whole clause.
 - Do not output duplicates.
 - If no valid evidence exists, return an empty spans list.
@@ -110,25 +110,29 @@ Extract food-insecurity and risk-factor evidence spans from the article based st
 """
 
 DEFAULT_EVENTS_WITH_ARGS_USER_PROMPT = """<context>
-<title usage="context_only_do_not_offset">
+<title>
 {title}
 </title>
 
-<article_text offset_source="true">
+<article_text>
 {text}
 </article_text>
 
-<ontology allowed_event_labels_only="true">
+<ontology>
 {ontology}
 </ontology>
 
-<argument_roles allowed_roles_only="true">
+<argument_roles>
 {argument_roles}
 </argument_roles>
 
-<event_argument_roles allowed_roles_by_event_label="true">
+<event_argument_roles>
 {event_argument_roles}
 </event_argument_roles>
+
+<location_types>
+{location_types}
+</location_types>
 </context>
 
 <task>
@@ -141,27 +145,24 @@ Extract food-insecurity and risk-factor events from the article, including linke
 - event start_char/end_char: zero-based offsets for trigger_text in article_text; end_char is exclusive.
 - argument text: exact contiguous substring copied from article_text and linked to the trigger.
 - argument role: exactly one allowed role for the event_type.
+- location_type: for `location`, `source_location`, or `target_location`, assign exactly one of `country`, `province`, `district`, `city`, or `other`.
 </parameters>
 
 <extraction_rules>
-- Select only explicit evidence from article_text.
+- Select only explicit events from article_text.
 - trigger_text and argument text must be exact contiguous substrings from article_text.
 - Do not include locations, participants, dates, attribution, sources, or targets inside trigger_text unless they are part of the trigger expression itself.
-- Arguments may include linked entities, locations, times, participants, affected populations, sources, or targets when explicitly stated.
+- Arguments may include linked locations, when explicitly stated.
+- Use `location_type` only on location roles.
+- If a place is a region, village, camp, facility, border area, or its level is unclear, use `other`.
 - Do not output duplicates.
 - If no valid evidence exists, return an empty events list.
 </extraction_rules>
 
-<examples>
-- "the current desert locust outbreak in the Horn of Africa" -> trigger_text "desert locust outbreak", argument "Horn of Africa" with role "location"
-- "recent drought crisis in South Africa's Cape Town region" -> trigger_text "drought crisis", argument "South Africa's Cape Town region" with role "location"
-- "missiles from Gaza again raining down on Israel" -> trigger_text "raining down", argument "Gaza" with role "source_location", argument "Israel" with role "target_location"
-</examples>
-
 <critical_constraints>
 - start_char and end_char must index article_text only, not title.
 - Offsets must match the copied text exactly.
-- Do not infer events, labels, arguments, locations, or dates.
+- Do not infer events, labels, arguments, locations not explicitly stated in article_text.
 </critical_constraints>
 """
 
@@ -199,6 +200,41 @@ Verify candidate event annotations against the article text.
 - Do not introduce external information.
 </critical_constraints>
 """
+DEFAULT_RELEVANCE_SYSTEM_PROMPT = """<role>
+You are a high-recall relevance gate for food-security risk-event extraction.
+</role>
+
+<goal>
+Decide whether the article is likely to contain explicit food-insecurity events or risk-factor evidence worth sending to the full extraction pipeline.
+</goal>
+
+<policy>
+- Favor recall over precision.
+- If the article is borderline, ambiguous, or only partially visible in the preview, mark it relevant.
+- Mark it irrelevant only when the title and preview strongly indicate the article is outside food insecurity and risk-factor event detection.
+- Use only the provided title and article preview.
+</policy>
+"""
+DEFAULT_RELEVANCE_USER_PROMPT = """<context>
+<title>
+{title}
+</title>
+
+<article_preview>
+{text}
+</article_preview>
+</context>
+
+<task>
+Return whether this article should proceed to the full food-security risk/event extraction pipeline.
+</task>
+
+<decision_rule>
+- is_relevant=true if the article likely contains explicit food-insecurity events, shocks, hazards, conflict, displacement, market disruption, pests/disease, climate/weather shocks, or other risk-factor evidence.
+- If uncertain, return is_relevant=true.
+- is_relevant=false only when the article is clearly unrelated.
+</decision_rule>
+"""
 EXAMPLES_HEADER = """<reference_examples>
 Reference examples from manually fixed annotations.
 Use these only as examples of annotation style. The target article appears after the examples.
@@ -208,6 +244,7 @@ LOGGER = logging.getLogger("gemini_event_gen")
 OUTPUT_MODE_SPANS = "spans"
 OUTPUT_MODE_EVENTS_WITH_ARGS = "events-with-args"
 OUTPUT_MODES = (OUTPUT_MODE_SPANS, OUTPUT_MODE_EVENTS_WITH_ARGS)
+LOCATION_ARGUMENT_ROLES = {"location", "source_location", "target_location"}
 
 
 class ExtractedSpan(BaseModel):
@@ -226,6 +263,12 @@ class ExtractedArgument(BaseModel):
     role: str = Field(..., description="One role from the allowed argument roles.")
     text: str = Field(
         ..., description="Verbatim argument span copied from article text."
+    )
+    location_type: str | None = Field(
+        default=None,
+        description=(
+            "For location roles only: one of country, province, district, city, or other."
+        ),
     )
     start_char: int = Field(..., description="Start character offset in article text.")
     end_char: int = Field(
@@ -261,6 +304,16 @@ class VerifierDecision(BaseModel):
     decision: str = Field(..., description="'accept' or 'reject'.")
     reason: str = Field(default="")
     confidence: float = Field(default=0.0)
+
+
+class RelevanceDecision(BaseModel):
+    is_relevant: bool = Field(
+        ..., description="True when the article should proceed to full extraction."
+    )
+    confidence: float = Field(
+        default=0.0, description="Confidence from 0.0 to 1.0 in the relevance decision."
+    )
+    reason: str = Field(default="")
 
 
 def load_env_file(path: Path) -> None:
@@ -359,6 +412,25 @@ def normalize_event_argument_roles(
     return mapping
 
 
+def normalize_location_types(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        raise ValueError("Ontology must be a JSON object to define location_types.")
+
+    raw_location_types = raw.get("location_types")
+    if raw_location_types is None:
+        return {}
+    if not isinstance(raw_location_types, dict):
+        raise ValueError("'location_types' must be a JSON object.")
+
+    location_types = {
+        str(location_type): str(description)
+        for location_type, description in raw_location_types.items()
+    }
+    if not location_types:
+        raise ValueError("'location_types' must not be empty when provided.")
+    return location_types
+
+
 def format_ontology(ontology: dict[str, str]) -> str:
     return "\n".join(
         f"- {label}: {description}" for label, description in sorted(ontology.items())
@@ -376,6 +448,15 @@ def format_event_argument_roles(event_argument_roles: dict[str, list[str]]) -> s
     return "\n".join(
         f"- {event}: {', '.join(roles) if roles else 'none'}"
         for event, roles in sorted(event_argument_roles.items())
+    )
+
+
+def format_location_types(location_types: dict[str, str]) -> str:
+    if not location_types:
+        return "No location type taxonomy provided."
+    return "\n".join(
+        f"- {location_type}: {description}"
+        for location_type, description in sorted(location_types.items())
     )
 
 
@@ -716,6 +797,7 @@ def format_example_output(
                     {
                         "role": argument.get("role", ""),
                         "text": argument.get("text", ""),
+                        "location_type": argument.get("location_type"),
                         "start_char": arg_start_char - window_start,
                         "end_char": arg_end_char - window_start,
                     }
@@ -849,6 +931,17 @@ def completed_ids(path: Path, retry_failed: bool) -> set[str]:
     return done
 
 
+def completed_ids_from_paths(
+    paths: list[Path] | None, retry_failed: bool
+) -> set[str]:
+    done: set[str] = set()
+    if not paths:
+        return done
+    for path in paths:
+        done.update(completed_ids(path, retry_failed=retry_failed))
+    return done
+
+
 def render_user_prompt(
     template: str,
     ontology_text: str,
@@ -856,12 +949,14 @@ def render_user_prompt(
     text: str,
     argument_roles_text: str = "",
     event_argument_roles_text: str = "",
+    location_types_text: str = "",
     examples_text: str = "",
 ) -> str:
     rendered = template.format(
         ontology=ontology_text,
         argument_roles=argument_roles_text,
         event_argument_roles=event_argument_roles_text,
+        location_types=location_types_text,
         title=title,
         text=text,
     )
@@ -910,6 +1005,43 @@ def log_llm_call(
             if not isinstance(answer, str)
             else answer,
         )
+
+
+def truncate_text(text: str, max_chars: int) -> str:
+    if max_chars < 1:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars].rstrip()
+
+
+def clean_relevance_decision(parsed: dict[str, Any]) -> dict[str, Any]:
+    if hasattr(parsed, "model_dump"):
+        parsed = parsed.model_dump()
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    is_relevant = bool(parsed.get("is_relevant", True))
+    try:
+        confidence = float(parsed.get("confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    confidence = max(0.0, min(confidence, 1.0))
+    reason = str(parsed.get("reason", "")).strip()
+    return {
+        "is_relevant": is_relevant,
+        "confidence": confidence,
+        "reason": reason,
+    }
+
+
+def should_filter_by_relevance(
+    decision: dict[str, Any], confidence_threshold: float
+) -> bool:
+    return (
+        not bool(decision.get("is_relevant", True))
+        and float(decision.get("confidence", 0.0) or 0.0) >= confidence_threshold
+    )
 
 
 def find_offsets(
@@ -1041,6 +1173,7 @@ def clean_events_with_args(
     strict_offsets: bool,
     argument_roles: set[str],
     event_argument_roles: dict[str, list[str]],
+    location_types: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     cleaned: list[dict[str, Any]] = []
     event_index_by_key: dict[tuple[int, int, str], int] = {}
@@ -1104,6 +1237,17 @@ def clean_events_with_args(
             allowed_roles = set(event_argument_roles.get(event_type, argument_roles))
             if role not in allowed_roles or not argument_text:
                 continue
+            location_type_value = argument.get("location_type")
+            location_type = (
+                str(location_type_value).strip() if location_type_value is not None else ""
+            )
+            if role in LOCATION_ARGUMENT_ROLES and location_types:
+                if location_type and location_type not in location_types:
+                    continue
+                if not location_type and "other" in location_types:
+                    location_type = "other"
+            elif location_type:
+                continue
 
             try:
                 arg_start_char = int(argument.get("start_char", -1))
@@ -1130,6 +1274,7 @@ def clean_events_with_args(
                 {
                     "role": role,
                     "text": argument_text,
+                    **({"location_type": location_type} if location_type else {}),
                     "start_char": arg_start_char,
                     "end_char": arg_end_char,
                 }
@@ -1145,6 +1290,13 @@ def make_source(record: dict[str, Any], title: str, text: str) -> dict[str, Any]
         "source_url": record.get("source_url"),
         "publish_date": record.get("publish_date"),
     }
+
+
+def canonical_location_type(argument: dict[str, Any]) -> str:
+    location_type = argument.get("location_type")
+    if location_type is None:
+        return ""
+    return str(location_type).strip()
 
 
 def project_local_offsets_to_article(
@@ -1325,10 +1477,12 @@ def merge_window_events(
             if argument_key in seen_arguments[event_key]:
                 continue
             seen_arguments[event_key].add(argument_key)
+            location_type = canonical_location_type(argument)
             grouped[event_key]["arguments"].append(
                 {
                     **argument,
                     "text": article_text[argument_key[0] : argument_key[1]],
+                    **({"location_type": location_type} if location_type else {}),
                     "window_indices": sorted(
                         set(argument.get("window_indices", []))
                     ),
@@ -1511,10 +1665,17 @@ def merge_self_consistency_events(
                 continue
 
             arg_start_char, arg_end_char, role = argument_key
+            location_types = [
+                canonical_location_type(argument)
+                for argument in grouped_arguments[event_key][argument_key]
+                if canonical_location_type(argument)
+            ]
+            location_type = most_common_first_seen(location_types)
             arguments.append(
                 {
                     "role": role,
                     "text": text[arg_start_char:arg_end_char],
+                    **({"location_type": location_type} if location_type else {}),
                     "start_char": arg_start_char,
                     "end_char": arg_end_char,
                     "support": argument_support,
@@ -1561,6 +1722,7 @@ async def generate_sample(
     output_mode: str = OUTPUT_MODE_SPANS,
     argument_roles: set[str] | None = None,
     event_argument_roles: dict[str, list[str]] | None = None,
+    location_types: set[str] | None = None,
     override_settings: dict[str, Any] | None = None,
     verbose: bool = False,
     step: str = "extract",
@@ -1627,6 +1789,7 @@ async def generate_sample(
                 strict_offsets,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
+                location_types=location_types,
             )
             return SampleResult(events=events, metadata=response.metadata)
         except Exception as exc:
@@ -1767,6 +1930,93 @@ def combine_metadata(sample_metadata: list[dict[str, Any]]) -> dict[str, Any]:
     return combined
 
 
+async def classify_article_relevance(
+    client: GeminiLLMClient,
+    title: str,
+    text: str,
+    record_id: str,
+    max_chars: int,
+    confidence_threshold: float,
+    system_prompt: str = DEFAULT_RELEVANCE_SYSTEM_PROMPT,
+    user_prompt_template: str = DEFAULT_RELEVANCE_USER_PROMPT,
+    verbose: bool = False,
+) -> dict[str, Any]:
+    preview_text = truncate_text(text, max_chars)
+    prompt = user_prompt_template.format(title=title, text=preview_text)
+    log_llm_call(
+        enabled=verbose,
+        record_id=record_id,
+        step="relevance_filter",
+        call_type="relevance",
+        system_prompt=system_prompt,
+        prompt=prompt,
+    )
+    response = None
+    async for candidate in client.generate(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        override_settings={"temperature": 0.0, "max_output_tokens": 256},
+        response_format={
+            "is_relevant": bool,
+            "confidence": float,
+            "reason": str,
+        },
+        add_cot_field=False,
+    ):
+        response = candidate
+        break
+    if response is None:
+        raise RuntimeError("Gemini returned no relevance response.")
+
+    raw_answer = response_to_dict(response.parsed) if response.parsed else response.text
+    log_llm_call(
+        enabled=verbose,
+        record_id=record_id,
+        step="relevance_filter",
+        call_type="relevance",
+        system_prompt=system_prompt,
+        prompt=prompt,
+        answer=raw_answer,
+    )
+    parsed = raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
+    decision = clean_relevance_decision(parsed)
+    return {
+        "decision": "relevant" if decision["is_relevant"] else "irrelevant",
+        "is_relevant": decision["is_relevant"],
+        "confidence": decision["confidence"],
+        "reason": decision["reason"],
+        "filtered": should_filter_by_relevance(decision, confidence_threshold),
+        "threshold": confidence_threshold,
+        "model": client.model_name,
+        "max_chars": max_chars,
+        "text_chars_used": len(preview_text),
+        "metadata": response.metadata,
+    }
+
+
+def build_empty_extraction_result(
+    record: dict[str, Any],
+    output_mode: str,
+    model_name: str,
+    relevance: dict[str, Any],
+) -> dict[str, Any]:
+    title = str(record.get("title") or "")
+    text = str(record.get("text") or "")
+    payload_key = "spans" if output_mode == OUTPUT_MODE_SPANS else "events"
+    return {
+        "id": str(record.get("id")),
+        "status": "ok",
+        "source": make_source(record, title, text),
+        payload_key: [],
+        "llm": {
+            "model": model_name,
+            "metadata": {},
+            "output_mode": output_mode,
+            "relevance": relevance,
+        },
+    }
+
+
 async def generate_windowed_one(
     client: GeminiLLMClient,
     record_id: str,
@@ -1785,6 +2035,8 @@ async def generate_windowed_one(
     event_argument_roles: dict[str, list[str]] | None,
     argument_roles_text: str,
     event_argument_roles_text: str,
+    location_types_text: str,
+    location_types: set[str] | None,
     window_target_chars: int,
     window_max_chars: int,
     window_overlap_sentences: int,
@@ -1838,6 +2090,7 @@ async def generate_windowed_one(
                         window.text,
                         argument_roles_text=argument_roles_text,
                         event_argument_roles_text=event_argument_roles_text,
+                        location_types_text=location_types_text,
                         examples_text=format_examples(
                             sample_examples(
                                 examples or [], example_sample_size, output_mode
@@ -1860,6 +2113,7 @@ async def generate_windowed_one(
                             output_mode=output_mode,
                             argument_roles=argument_roles,
                             event_argument_roles=event_argument_roles,
+                            location_types=location_types,
                             override_settings=override_settings,
                             verbose=verbose,
                             step=(
@@ -1917,6 +2171,7 @@ async def generate_windowed_one(
                 window.text,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
+                location_types_text=location_types_text,
                 examples_text=format_examples(
                     sample_examples(examples or [], example_sample_size, output_mode),
                     output_mode,
@@ -1936,6 +2191,7 @@ async def generate_windowed_one(
                 output_mode=output_mode,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
+                location_types=location_types,
                 verbose=verbose,
                 step=(
                     "window_extraction "
@@ -2008,6 +2264,8 @@ async def generate_one(
     event_argument_roles: dict[str, list[str]] | None = None,
     argument_roles_text: str = "",
     event_argument_roles_text: str = "",
+    location_types_text: str = "",
+    location_types: set[str] | None = None,
     long_document_mode: bool = False,
     long_document_threshold_chars: int = 12000,
     window_target_chars: int = 6000,
@@ -2047,6 +2305,8 @@ async def generate_one(
                 event_argument_roles=event_argument_roles,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
+                location_types_text=location_types_text,
+                location_types=location_types,
                 window_target_chars=window_target_chars,
                 window_max_chars=window_max_chars,
                 window_overlap_sentences=window_overlap_sentences,
@@ -2108,6 +2368,7 @@ async def generate_one(
                 text,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
+                location_types_text=location_types_text,
                 examples_text=format_examples(
                     sample_examples(examples or [], example_sample_size, output_mode),
                     output_mode,
@@ -2127,6 +2388,7 @@ async def generate_one(
                 output_mode=output_mode,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
+                location_types=location_types,
                 verbose=verbose,
                 step="extraction",
             )
@@ -2188,6 +2450,7 @@ async def generate_one(
                 text,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
+                location_types_text=location_types_text,
                 examples_text=format_examples(
                     sample_examples(examples or [], example_sample_size, output_mode),
                     output_mode,
@@ -2207,6 +2470,7 @@ async def generate_one(
                 output_mode=output_mode,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
+                location_types=location_types,
                 override_settings=override_settings,
                 verbose=verbose,
                 step=(
@@ -2410,16 +2674,78 @@ async def worker(
     event_argument_roles: dict[str, list[str]],
     argument_roles_text: str,
     event_argument_roles_text: str,
-    user_prompt_template: str,
-    examples: list[dict[str, Any]],
+    location_types: set[str] | None = None,
+    location_types_text: str = "",
+    user_prompt_template: str = "",
+    examples: list[dict[str, Any]] | None = None,
 ) -> None:
     client: GeminiLLMClient | None = None
+    relevance_client: GeminiLLMClient | None = None
 
     while True:
         record = await input_queue.get()
         try:
             if record is None:
                 return
+            relevance_info: dict[str, Any] | None = None
+            if args.enable_relevance_filter:
+                try:
+                    if relevance_client is None:
+                        relevance_client = GeminiLLMClient(
+                            model_name=args.relevance_model or args.model,
+                            system_prompt=None,
+                            temperature=0.0,
+                            max_tokens=256,
+                            reasoning_effort="disable",
+                            verbose=False,
+                        )
+                    relevance_info = await classify_article_relevance(
+                        client=relevance_client,
+                        title=str(record.get("title") or ""),
+                        text=str(record.get("text") or ""),
+                        record_id=str(record.get("id")),
+                        max_chars=args.relevance_max_chars,
+                        confidence_threshold=args.relevance_confidence_threshold,
+                        verbose=args.verbose,
+                    )
+                    if relevance_info["filtered"]:
+                        result = build_empty_extraction_result(
+                            record=record,
+                            output_mode=args.output_mode,
+                            model_name=relevance_client.model_name,
+                            relevance=relevance_info,
+                        )
+                        result["llm"]["pipeline"] = {
+                            "mode": args.mode,
+                            "enable_verifier": args.enable_verifier,
+                            "enable_synthetic_gaps": args.enable_synthetic_gaps,
+                            "enable_relevance_filter": args.enable_relevance_filter,
+                            "window_strategy": "sentence_adaptive_overlap",
+                        }
+                        await output_queue.put(result)
+                        LOGGER.info(
+                            "worker=%s id=%s status=%s filtered_by_relevance=true",
+                            worker_id,
+                            result["id"],
+                            result["status"],
+                        )
+                        continue
+                except Exception as exc:
+                    relevance_info = {
+                        "decision": "error",
+                        "filtered": False,
+                        "reason": "",
+                        "confidence": 0.0,
+                        "threshold": args.relevance_confidence_threshold,
+                        "model": (args.relevance_model or args.model),
+                        "max_chars": args.relevance_max_chars,
+                        "text_chars_used": min(
+                            len(str(record.get("text") or "")), args.relevance_max_chars
+                        ),
+                        "metadata": {},
+                        "error": str(exc),
+                    }
+
             if client is None:
                 try:
                     client = GeminiLLMClient(
@@ -2466,6 +2792,8 @@ async def worker(
                 event_argument_roles=event_argument_roles,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
+                location_types=location_types,
+                location_types_text=location_types_text,
                 long_document_mode=args.long_document_mode,
                 long_document_threshold_chars=args.long_document_threshold_chars,
                 window_target_chars=args.window_target_chars,
@@ -2477,10 +2805,13 @@ async def worker(
                 verbose=args.verbose,
             )
             result.setdefault("llm", {})
+            if relevance_info is not None:
+                result["llm"]["relevance"] = relevance_info
             result["llm"]["pipeline"] = {
                 "mode": args.mode,
                 "enable_verifier": args.enable_verifier,
                 "enable_synthetic_gaps": args.enable_synthetic_gaps,
+                "enable_relevance_filter": args.enable_relevance_filter,
                 "window_strategy": "sentence_adaptive_overlap",
             }
             await output_queue.put(result)
@@ -2507,8 +2838,11 @@ async def run(args: argparse.Namespace) -> None:
     event_argument_roles = normalize_event_argument_roles(
         raw_ontology, labels, argument_roles
     )
+    location_type_descriptions = normalize_location_types(raw_ontology)
+    location_types = set(location_type_descriptions)
     argument_roles_text = format_argument_roles(argument_role_descriptions)
     event_argument_roles_text = format_event_argument_roles(event_argument_roles)
+    location_types_text = format_location_types(location_type_descriptions)
     system_prompt = load_prompt(args.system_prompt_file, DEFAULT_SYSTEM_PROMPT)
     default_user_prompt = (
         DEFAULT_EVENTS_WITH_ARGS_USER_PROMPT
@@ -2549,9 +2883,17 @@ async def run(args: argparse.Namespace) -> None:
         done = set()
     else:
         done = completed_ids(args.output, retry_failed=args.retry_failed)
+    skip_done = completed_ids_from_paths(
+        args.skip_completed_from, retry_failed=args.retry_failed
+    )
+    done.update(skip_done)
     pending = [record for record in records if str(record.get("id")) not in done]
     LOGGER.info(
-        "loaded=%s completed=%s pending=%s", len(records), len(done), len(pending)
+        "loaded=%s completed=%s skip_completed=%s pending=%s",
+        len(records),
+        len(done) - len(skip_done),
+        len(skip_done),
+        len(pending),
     )
     if not pending:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -2582,6 +2924,8 @@ async def run(args: argparse.Namespace) -> None:
                 event_argument_roles=event_argument_roles,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
+                location_types=location_types,
+                location_types_text=location_types_text,
                 user_prompt_template=user_prompt_template,
                 examples=examples,
             )
@@ -2715,6 +3059,16 @@ def parse_args() -> argparse.Namespace:
         help="Do not treat previous status=error records as completed.",
     )
     parser.add_argument(
+        "--skip-completed-from",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Additional output JSONL file to read completed IDs from. "
+            "May be provided multiple times."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Replace the output file and process selected input records from scratch.",
@@ -2775,6 +3129,29 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Write synthetic gap requests in the report when enabled.",
+    )
+    parser.add_argument(
+        "--enable-relevance-filter",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Run a cheap article-level LLM relevance gate before full extraction.",
+    )
+    parser.add_argument(
+        "--relevance-model",
+        default="gemini-2.5-flash",
+        help="Optional Gemini model name for the relevance gate. Defaults to --model.",
+    )
+    parser.add_argument(
+        "--relevance-max-chars",
+        type=int,
+        default=1000,
+        help="Maximum article text characters to send to the relevance gate.",
+    )
+    parser.add_argument(
+        "--relevance-confidence-threshold",
+        type=float,
+        default=0.8,
+        help="Only filter irrelevant articles at or above this confidence.",
     )
     parser.add_argument(
         "--report",
@@ -2858,6 +3235,11 @@ def apply_pipeline_defaults(args: argparse.Namespace) -> None:
         if args.enable_synthetic_gaps is not None
         else config.get("enable_synthetic_gaps", mode.enable_synthetic_gaps)
     )
+    args.enable_relevance_filter = bool(
+        args.enable_relevance_filter
+        if args.enable_relevance_filter is not None
+        else config.get("enable_relevance_filter", mode.enable_relevance_filter)
+    )
 
     args.window_target_chars = int(
         args.window_target_chars
@@ -2878,6 +3260,14 @@ def apply_pipeline_defaults(args: argparse.Namespace) -> None:
     for field in ("model", "workers", "long_document_threshold_chars"):
         if field in config:
             setattr(args, field, config[field])
+    if "relevance_model" in config and args.relevance_model is None:
+        args.relevance_model = config["relevance_model"]
+    if "relevance_max_chars" in config:
+        args.relevance_max_chars = int(config["relevance_max_chars"])
+    if "relevance_confidence_threshold" in config:
+        args.relevance_confidence_threshold = float(
+            config["relevance_confidence_threshold"]
+        )
 
 
 def main() -> None:
@@ -2912,6 +3302,10 @@ def main() -> None:
         raise ValueError("--window-max-chars must be >= --window-target-chars")
     if args.window_overlap_sentences < 0:
         raise ValueError("--window-overlap-sentences must be >= 0")
+    if args.relevance_max_chars < 1:
+        raise ValueError("--relevance-max-chars must be >= 1")
+    if not 0.0 <= args.relevance_confidence_threshold <= 1.0:
+        raise ValueError("--relevance-confidence-threshold must be between 0 and 1")
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",

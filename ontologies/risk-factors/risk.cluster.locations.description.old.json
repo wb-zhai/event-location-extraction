@@ -14,16 +14,16 @@
         "weather shocks": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
     },
     "argument_roles": {
-        "location": "Place where the event or risk occurs, exists, is observed, or affects people, livelihoods, markets, crops, livestock, or resources. When possible, classify the linked place as country, province, district, city, or other.",
-        "source_location": "Place an action, movement, hazard, people, goods, aid, or pressure originates from. When possible, classify the linked place as country, province, district, city, or other.",
-        "target_location": "Place an action, movement, hazard, people, goods, aid, or pressure is directed to or ends in. When possible, classify the linked place as country, province, district, city, or other.",
+        "location": "Place where the event or risk occurs, exists, is observed, or affects people, livelihoods, markets, crops, livestock, or resources. When possible, classify the linked place as country, state, county, or city.",
+        "source_location": "Place an action, movement, hazard, people, goods, aid, or pressure originates from. When possible, classify the linked place as country, state, county, or city.",
+        "target_location": "Place an action, movement, hazard, people, goods, aid, or pressure is directed to or ends in. When possible, classify the linked place as country, state, county, or city."
     },
     "location_types": {
         "country": "A sovereign country or nationally scoped place mention.",
-        "province": "A first-order administrative division such as a province, state, governorate, or equivalent.",
-        "district": "A second-order administrative division such as a district, county, prefecture, municipality, taluk, or equivalent.",
-        "city": "A city, town, or other clearly city-level populated place.",
-        "other": "Any other place mention, including regions, villages, camps, facilities, border areas, cross-border zones, or ambiguous locations.",
+        "state": "A first-order administrative division such as a state, province, governorate, or equivalent.",
+        "county": "A second-order administrative division such as a county, district, prefecture, municipality, taluk, or equivalent.",
+        "city": "A city, town, village, or other populated place.",
+        "other": "Any other place mention, including regions, villages, camps, facilities, border areas, cross-border zones, or ambiguous locations."
     },
     "event_argument_roles": {
         "agricultural production issues": ["location"],

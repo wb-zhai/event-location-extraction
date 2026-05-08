@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+LOCATION_ARGUMENT_ROLES = {"location", "source_location", "target_location"}
+
 
 def find_offsets(
     span_text: str, text: str, start_char: int, end_char: int
@@ -71,7 +73,7 @@ def clean_spans(
                 "label": label,
                 "start_char": start_char,
                 "end_char": end_char,
-                # "rationale": str(span.get("rationale", "")).strip(),
+                "rationale": str(span.get("rationale", "")).strip(),
             }
         )
     return cleaned
@@ -84,6 +86,7 @@ def clean_events_with_args(
     strict_offsets: bool,
     argument_roles: set[str],
     event_argument_roles: dict[str, list[str]],
+    location_types: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Validate event trigger and linked argument outputs."""
     cleaned: list[dict[str, Any]] = []
@@ -129,7 +132,7 @@ def clean_events_with_args(
                     "start_char": start_char,
                     "end_char": end_char,
                     "arguments": [],
-                    # "rationale": str(event.get("rationale", "")).strip(),
+                    "rationale": str(event.get("rationale", "")).strip(),
                 }
             )
 
@@ -147,6 +150,17 @@ def clean_events_with_args(
             argument_text = str(argument.get("text", "")).strip()
             allowed_roles = set(event_argument_roles.get(event_type, argument_roles))
             if role not in allowed_roles or not argument_text:
+                continue
+            location_type_value = argument.get("location_type")
+            location_type = (
+                str(location_type_value).strip() if location_type_value is not None else ""
+            )
+            if role in LOCATION_ARGUMENT_ROLES and location_types:
+                if location_type and location_type not in location_types:
+                    continue
+                if not location_type and "other" in location_types:
+                    location_type = "other"
+            elif location_type:
                 continue
 
             try:
@@ -174,6 +188,7 @@ def clean_events_with_args(
                 {
                     "role": role,
                     "text": argument_text,
+                    **({"location_type": location_type} if location_type else {}),
                     "start_char": arg_start_char,
                     "end_char": arg_end_char,
                 }

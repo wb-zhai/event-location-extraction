@@ -22,6 +22,21 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_rows(path: Path) -> list[dict[str, Any]]:
+    if path.suffix.lower() == ".jsonl":
+        rows: list[dict[str, Any]] = []
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                    if isinstance(row, dict):
+                        rows.append(row)
+                except json.JSONDecodeError:
+                    continue
+        return rows
+    
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, list):
         raise ValueError(f"Expected a JSON list in {path}.")
