@@ -20,10 +20,10 @@
     },
     "location_types": {
         "country": "A sovereign country or nationally scoped place mention.",
-        "province": "A first-order administrative division such as a province, state, governorate, or equivalent.",
-        "district": "A second-order administrative division such as a district, county, prefecture, municipality, taluk, or equivalent.",
-        "city": "A city, town, or other clearly city-level populated place.",
-        "other": "Any other place mention, including regions, villages, camps, facilities, border areas, cross-border zones, or ambiguous locations.",
+        "state": "A first-order administrative division such as a state, province, governorate, or equivalent.",
+        "county": "A second-order administrative division such as a county, district, prefecture, municipality, taluk, or equivalent.",
+        "city": "A city, town, village, or other populated place.",
+        "other": "Any other place mention, including regions, villages, camps, facilities, border areas, cross-border zones, or ambiguous locations."
     },
     "event_argument_roles": {
         "agricultural production issues": ["location"],
