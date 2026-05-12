@@ -26,7 +26,7 @@ from scripts.data.generation.gemini_event_gen import (  # noqa: E402
 )
 
 ZHAI_EVENTS_DIR = Path("dataset/zhai/events")
-DEFAULT_ONTOLOGY = "ontologies/risk-factors/risk.cluster.description.json"
+DEFAULT_ONTOLOGY = "ontologies/risk-factors/risk.label.description.json"
 LOGGER = logging.getLogger("event_annotation_ui")
 
 
@@ -260,6 +260,7 @@ class AppState:
         path = resolve_local_path(path_text)
         ontology = Ontology(load_json_tolerant(path))
         self.ontology_path = str(path)
+        self.ontology = ontology
         return ontology
 
 

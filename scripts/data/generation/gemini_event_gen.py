@@ -24,7 +24,7 @@ from scripts.data.generation.windowing import ArticleWindow
 from scripts.data.generation.windowing import build_article_windows as build_windows
 
 DEFAULT_MODEL = "gemini-2.5-flash"
-DEFAULT_EXAMPLES = REPO_ROOT / "dataset/manual/manual_fixes.jsonl"
+DEFAULT_EXAMPLES = REPO_ROOT / "dataset/manual/manual_fixes.v2.jsonl"
 DEFAULT_SYSTEM_PROMPT = """<role>
 You are a strictly grounded data extractor for food-security news.
 </role>
@@ -91,15 +91,11 @@ Extract food-insecurity and risk-factor evidence spans from the article based st
 - Use the narrowest valid span; avoid long clauses when a short core phrase is sufficient.
 - Exclude surrounding context such as location, date, attribution, sources, targets, participants, and background unless essential to preserve event meaning.
 - If an event is expressed by a non-contiguous noun plus predicate, select the contiguous trigger predicate rather than the whole clause.
+- Do not extract overlapping or nested spans for the same event (e.g., extract "car bombing" but not also "bombing").
+- Extracted spans must be complete words, not partial words (e.g., do not extract "Yemen" from the word "Yemeni").
 - Do not output duplicates.
 - If no valid evidence exists, return an empty spans list.
 </extraction_rules>
-
-<examples>
-- "the current desert locust outbreak in the Horn of Africa" -> "desert locust outbreak"
-- "recent drought crisis in South Africa's Cape Town region" -> "drought crisis"
-- "missiles from Gaza again raining down on Israel" -> "raining down"
-</examples>
 
 <critical_constraints>
 - start_char and end_char must index article_text only, not title.
@@ -153,8 +149,11 @@ Extract food-insecurity and risk-factor events from the article, including linke
 - trigger_text and argument text must be exact contiguous substrings from article_text.
 - Do not include locations, participants, dates, attribution, sources, or targets inside trigger_text unless they are part of the trigger expression itself.
 - Arguments may include linked locations, when explicitly stated.
+- Link the closest explicit argument span to the trigger when multiple candidates exist.
 - Use `location_type` only on location roles.
 - If a place is a region, village, camp, facility, border area, or its level is unclear, use `other`.
+- Do not extract overlapping or nested spans for the same event (e.g., extract "car bombing" but not also "bombing").
+- Extracted spans must be complete words, not partial words (e.g., do not extract "Yemen" from the word "Yemeni").
 - Do not output duplicates.
 - If no valid evidence exists, return an empty events list.
 </extraction_rules>
@@ -199,41 +198,6 @@ Verify candidate event annotations against the article text.
 - Use only article_text as evidence.
 - Do not introduce external information.
 </critical_constraints>
-"""
-DEFAULT_RELEVANCE_SYSTEM_PROMPT = """<role>
-You are a high-recall relevance gate for food-security risk-event extraction.
-</role>
-
-<goal>
-Decide whether the article is likely to contain explicit food-insecurity events or risk-factor evidence worth sending to the full extraction pipeline.
-</goal>
-
-<policy>
-- Favor recall over precision.
-- If the article is borderline, ambiguous, or only partially visible in the preview, mark it relevant.
-- Mark it irrelevant only when the title and preview strongly indicate the article is outside food insecurity and risk-factor event detection.
-- Use only the provided title and article preview.
-</policy>
-"""
-DEFAULT_RELEVANCE_USER_PROMPT = """<context>
-<title>
-{title}
-</title>
-
-<article_preview>
-{text}
-</article_preview>
-</context>
-
-<task>
-Return whether this article should proceed to the full food-security risk/event extraction pipeline.
-</task>
-
-<decision_rule>
-- is_relevant=true if the article likely contains explicit food-insecurity events, shocks, hazards, conflict, displacement, market disruption, pests/disease, climate/weather shocks, or other risk-factor evidence.
-- If uncertain, return is_relevant=true.
-- is_relevant=false only when the article is clearly unrelated.
-</decision_rule>
 """
 EXAMPLES_HEADER = """<reference_examples>
 Reference examples from manually fixed annotations.
@@ -306,14 +270,6 @@ class VerifierDecision(BaseModel):
     confidence: float = Field(default=0.0)
 
 
-class RelevanceDecision(BaseModel):
-    is_relevant: bool = Field(
-        ..., description="True when the article should proceed to full extraction."
-    )
-    confidence: float = Field(
-        default=0.0, description="Confidence from 0.0 to 1.0 in the relevance decision."
-    )
-    reason: str = Field(default="")
 
 
 def load_env_file(path: Path) -> None:
@@ -1014,34 +970,6 @@ def truncate_text(text: str, max_chars: int) -> str:
         return text
     return text[:max_chars].rstrip()
 
-
-def clean_relevance_decision(parsed: dict[str, Any]) -> dict[str, Any]:
-    if hasattr(parsed, "model_dump"):
-        parsed = parsed.model_dump()
-    if not isinstance(parsed, dict):
-        parsed = {}
-
-    is_relevant = bool(parsed.get("is_relevant", True))
-    try:
-        confidence = float(parsed.get("confidence", 0.0) or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-    confidence = max(0.0, min(confidence, 1.0))
-    reason = str(parsed.get("reason", "")).strip()
-    return {
-        "is_relevant": is_relevant,
-        "confidence": confidence,
-        "reason": reason,
-    }
-
-
-def should_filter_by_relevance(
-    decision: dict[str, Any], confidence_threshold: float
-) -> bool:
-    return (
-        not bool(decision.get("is_relevant", True))
-        and float(decision.get("confidence", 0.0) or 0.0) >= confidence_threshold
-    )
 
 
 def find_offsets(
@@ -1930,68 +1858,6 @@ def combine_metadata(sample_metadata: list[dict[str, Any]]) -> dict[str, Any]:
     return combined
 
 
-async def classify_article_relevance(
-    client: GeminiLLMClient,
-    title: str,
-    text: str,
-    record_id: str,
-    max_chars: int,
-    confidence_threshold: float,
-    system_prompt: str = DEFAULT_RELEVANCE_SYSTEM_PROMPT,
-    user_prompt_template: str = DEFAULT_RELEVANCE_USER_PROMPT,
-    verbose: bool = False,
-) -> dict[str, Any]:
-    preview_text = truncate_text(text, max_chars)
-    prompt = user_prompt_template.format(title=title, text=preview_text)
-    log_llm_call(
-        enabled=verbose,
-        record_id=record_id,
-        step="relevance_filter",
-        call_type="relevance",
-        system_prompt=system_prompt,
-        prompt=prompt,
-    )
-    response = None
-    async for candidate in client.generate(
-        prompt=prompt,
-        system_prompt=system_prompt,
-        override_settings={"temperature": 0.0, "max_output_tokens": 256},
-        response_format={
-            "is_relevant": bool,
-            "confidence": float,
-            "reason": str,
-        },
-        add_cot_field=False,
-    ):
-        response = candidate
-        break
-    if response is None:
-        raise RuntimeError("Gemini returned no relevance response.")
-
-    raw_answer = response_to_dict(response.parsed) if response.parsed else response.text
-    log_llm_call(
-        enabled=verbose,
-        record_id=record_id,
-        step="relevance_filter",
-        call_type="relevance",
-        system_prompt=system_prompt,
-        prompt=prompt,
-        answer=raw_answer,
-    )
-    parsed = raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
-    decision = clean_relevance_decision(parsed)
-    return {
-        "decision": "relevant" if decision["is_relevant"] else "irrelevant",
-        "is_relevant": decision["is_relevant"],
-        "confidence": decision["confidence"],
-        "reason": decision["reason"],
-        "filtered": should_filter_by_relevance(decision, confidence_threshold),
-        "threshold": confidence_threshold,
-        "model": client.model_name,
-        "max_chars": max_chars,
-        "text_chars_used": len(preview_text),
-        "metadata": response.metadata,
-    }
 
 
 def build_empty_extraction_result(

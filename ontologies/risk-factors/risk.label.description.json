@@ -1,172 +1,164 @@
 {
     "events": {
-        "cyclone": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "harvests are devastated": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "rising inflation": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "prolonged fighting": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "air attack": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "locusts": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
-        "rival warlords": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "water distribution shortages": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "militia groups": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "reduced imports": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "prolonged dry spell": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "population crisis": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "floods": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "migration": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
-        "environmental degradation": "Mentions of environmental degradation or ecological problems, such as soil degradation, deforestation, desertification, pollution, water scarcity, or damage to natural resources.",
-        "pests": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
-        "farmland": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "siege": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "gastrointestinal": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "drought": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "humanitarian disaster": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "civil strife": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "collapsing economy": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "cholera outbreak": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
-        "land invasions": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "withheld relief": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "economic crisis": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "cattle death": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "terrorist": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "bombing campaign": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "flee": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
-        "police torture": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "natural disaster": "Mentions of environmental degradation or ecological problems, such as soil degradation, deforestation, desertification, pollution, water scarcity, or damage to natural resources.",
-        "increased external debt": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "aid workers died": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "lack of roads": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "severe rains": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "terrorism": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "failed crops": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "shortage of rains": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "epidemics": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
-        "land grab": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "international embargo": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "blockade": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "international terrorists": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "internal strife": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "makeshift camps": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
-        "land reform": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "forests destroyed": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "economic impoverishment": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "malnourished": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "restricted relief flights": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "restricted humanitarian access": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "carbon": "Mentions of environmental degradation or ecological problems, such as soil degradation, deforestation, desertification, pollution, water scarcity, or damage to natural resources.",
-        "call for donations": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "land seizures": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "food insecurity": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "pirates": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "foreign troops": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "continued deterioration": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "totalitarian": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "conflict": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "acute hunger": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "human rights abuses": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "military junta": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "lack of agricultural infrastructure": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "toll on livestock": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "without international aid": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "mismanagement": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "displaced": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
-        "civilians uprooted": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
-        "the offensive": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "failed rains": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "tragedy": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "gangs of bandits": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "continued strife": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "rinderpest": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
-        "reduced national output": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "clans": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "aid appeal": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "convoys": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "food crisis": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "overthrow": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "cattle plague": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
-        "catastrophe": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "foreign aid": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "international alarm": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "collapse of government": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "dehydrated": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "repression": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "cycle of poverty": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "rebel insurgency": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "weather extremes": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "slashed export": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "potato blight": "Mentions of crop pests, plant diseases, livestock diseases, infestations, epidemics affecting animals or crops, or biological threats to agricultural production.",
-        "corrupt government": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "clan battle": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "oppressive regimes": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "unable to sow": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "price of food": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "authoritarian": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "bad harvests": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "violent suppression": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "brain drain": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "price rise": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "refugees": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
-        "years of warfare": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "destructive pattern": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "scanty rainfall": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "transport bottleneck": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "harvest decline": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "rising food prices": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "humanitarian situation": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "self reliance": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "land degradation": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "hunger crises": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "secession": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "mass hunger": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "looting": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "pushing peasants off": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "apathy": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "wreaked havoc": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "regimes were toppled": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "massive starvation": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "military dictatorship": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "infrastructure damage": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "water availability": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "lack of alternatives": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "rise": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "anti-western policies": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "ecological crisis": "Mentions of environmental degradation or ecological problems, such as soil degradation, deforestation, desertification, pollution, water scarcity, or damage to natural resources.",
-        "alarming level": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "mayhem": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "life-threatening hunger": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "man-made disaster": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "slave trade": "Mentions of relevant adverse conditions that do not fit clearly into the other categories.",
-        "climatic hazards": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "devastated the economy": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "corruption": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "inadequate rainfall": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "clan warfare": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "brutal government": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "d'etat": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "international intervention": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "lack of authority": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "lack of cultivation": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "poor soil quality": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "disrupted trade": "Mentions of financial or market-related stress, such as inflation, high food prices, currency depreciation, unemployment, income loss, trade disruption, or reduced purchasing power.",
-        "food assistance": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "greenhouse gases": "Mentions of environmental degradation or ecological problems, such as soil degradation, deforestation, desertification, pollution, water scarcity, or damage to natural resources.",
-        "disruption to farming": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "dysfunction": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "power struggle": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "livestock had died": "Mentions of problems affecting farming, livestock, harvests, yields, planting, agricultural inputs, or the availability of locally produced food.",
-        "asylum seekers": "Mentions of people being forced to leave their homes, including refugees, internally displaced people, evacuations, migration due to crisis, or communities fleeing violence, disaster, or hardship.",
-        "abnormally low rainfall": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions.",
-        "coup": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "climate change": "Mentions of environmental degradation or ecological problems, such as soil degradation, deforestation, desertification, pollution, water scarcity, or damage to natural resources.",
-        "politically engineered": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "warlord": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "dictators": "Mentions of political disruption, coups, contested elections, protests, government collapse, sanctions, policy uncertainty, or governance problems.",
-        "jihadist groups": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "infant mortality": "Mentions of hunger, famine, acute food insecurity, food shortages, malnutrition, starvation, or populations lacking enough food.",
-        "burning houses": "Mentions of land disputes, land access, tenure problems, evictions, land grabbing, grazing conflicts, loss of farmland, or restrictions on land use.",
-        "major offensive": "Mentions of fighting, armed conflict, attacks, insecurity, unrest, war, terrorism, or violence affecting people, livelihoods, markets, or access to resources.",
-        "stolen food aid": "Mentions of emergency assistance or relief efforts, including food aid, cash assistance, nutrition support, humanitarian access, aid delivery, appeals, or funding gaps.",
-        "lack of rains": "Mentions of extreme or harmful weather events, such as droughts, floods, storms, heatwaves, cold spells, cyclones, irregular rainfall, or other damaging weather conditions."
+        "cyclone": "Mentions cyclones, hurricanes, typhoons, or tropical storms causing damaging wind, rain, storm surge, or destruction.",
+        "harvest devastation": "Mentions harvests, yields, or crop output being severely damaged, lost, or destroyed.",
+        "rising inflation": "Mentions inflation, rapidly rising prices, or declining purchasing power affecting households or food access.",
+        "prolonged fighting": "Mentions sustained or long-running fighting, conflict, or violence over an extended period.",
+        "air attack": "Mentions attacks carried out from the air, including airstrikes, aerial bombardment, or drone strikes.",
+        "locusts": "Mentions locust infestations or swarms damaging crops, pasture, or agricultural production.",
+        "rival warlords": "Mentions competing warlords or faction leaders fighting for territory, authority, or resources.",
+        "water distribution shortages": "Mentions shortages or failures in water delivery, irrigation supply, or distribution systems affecting people, farming, or livestock.",
+        "militia groups": "Mentions militias, paramilitary groups, or irregular armed groups involved in violence or insecurity.",
+        "reduced imports": "Mentions a reduction in imports or imported goods that constrains supply, markets, or food availability.",
+        "prolonged dry spell": "Mentions an extended period of unusually dry weather with little rain, especially when it harms crops, pasture, or water access.",
+        "population crisis": "Mentions large-scale population distress or demographic strain not better captured by a more specific label.",
+        "floods": "Mentions flooding, inundation, overflowing rivers, flash floods, or submerged land causing damage or displacement.",
+        "migration": "Mentions crisis-driven migration or movement of people away from affected areas.",
+        "environmental degradation": "Mentions deterioration of the natural environment, such as degraded ecosystems, damaged soils, depleted water sources, or declining ecological conditions.",
+        "pests": "Mentions agricultural pests or infestations harming crops, seeds, stored food, or pasture, excluding labels that name a specific pest.",
+        "farmland loss or access": "Mentions loss of farmland, restricted access to farmland, or disputes specifically centered on cultivated agricultural land.",
+        "siege": "Mentions siege conditions, encirclement, or the blocking of movement, supplies, or access to pressure a town, city, or population.",
+        "gastrointestinal distress": "Mentions severe gastrointestinal suffering linked to hunger, starvation, or inability to retain food, rather than general disease discussion.",
+        "drought": "Mentions drought or severe seasonal rainfall deficit causing water stress, crop failure, or livelihood damage.",
+        "humanitarian disaster": "Mentions a major humanitarian emergency marked by large-scale suffering and unmet survival needs.",
+        "civil strife": "Mentions internal unrest, violent disorder, or instability within a society or state.",
+        "economic collapse": "Mentions severe economic breakdown, collapse of markets, collapse of national income, or systemic financial failure.",
+        "cholera outbreak": "Mentions an outbreak or epidemic of cholera.",
+        "land invasions": "Mentions forcible occupation or takeover of land by groups, settlers, armed actors, or political supporters.",
+        "withheld relief": "Mentions aid or relief being delayed, blocked, denied, diverted, or intentionally not delivered.",
+        "economic crisis": "Mentions broad economic crisis, instability, recession, currency stress, or widespread financial hardship.",
+        "cattle death": "Mentions cattle dying in significant numbers due to drought, disease, starvation, lack of water, or related shocks.",
+        "terrorism": "Mentions terrorist actors, terrorist attacks, or violence explicitly described as terrorism.",
+        "bombing campaign": "Mentions repeated or organized bombing over time, including strategic bombardment or a sustained explosives campaign.",
+        "flee": "Mentions people fleeing, escaping, or running from violence, disaster, persecution, or hunger.",
+        "police torture": "Mentions torture or severe mistreatment carried out by police or security forces.",
+        "natural disaster": "Mentions a destructive natural hazard in general terms when no more specific hazard label is clearly stated.",
+        "increased external debt": "Mentions rising foreign debt, external borrowing burdens, or debt obligations to international creditors.",
+        "aid worker deaths": "Mentions aid workers being killed or dying while engaged in humanitarian work.",
+        "lack of roads": "Mentions inadequate roads, impassable routes, or road scarcity limiting transport, farming, or market access.",
+        "severe rains": "Mentions unusually heavy or intense rainfall causing damage, disruption, erosion, flooding, or crop loss.",
+        "failed crops": "Mentions crops failing, not maturing, producing poorly, or being lost before harvest.",
+        "insufficient rainfall": "Mentions rainfall being absent, below normal, late, scanty, or insufficient for seasonal or agricultural needs.",
+        "epidemics affecting agriculture": "Mentions widespread outbreaks or epidemics affecting crops or livestock, excluding labels that name a specific disease.",
+        "land grab": "Mentions land grabbing or acquisition of land through coercive, elite-driven, or unjust means.",
+        "international embargo": "Mentions externally imposed embargoes or trade restrictions limiting access to goods, markets, or supplies.",
+        "blockade": "Mentions blockades preventing movement of goods, aid, people, or commercial traffic.",
+        "international terrorists": "Mentions transnational terrorist groups, foreign terrorist networks, or cross-border extremist actors.",
+        "internal strife": "Mentions domestic conflict or internal instability within a country.",
+        "makeshift camps": "Mentions temporary camps, improvised shelters, or informal settlements housing displaced people.",
+        "land reform": "Mentions land reform policies, redistribution, or restructuring of land ownership or access.",
+        "forests destroyed": "Mentions forests being destroyed, cleared, burned, or heavily degraded.",
+        "economic impoverishment": "Mentions deepening poverty, impoverishment, or chronic decline in economic well-being.",
+        "malnourished": "Mentions people being malnourished, undernourished, wasted, or clinically affected by poor nutrition.",
+        "restricted relief flights": "Mentions relief flights being blocked, limited, suspended, or unable to reach affected areas.",
+        "restricted humanitarian access": "Mentions denial or obstruction of humanitarian access, including blocked corridors or bureaucratic restrictions.",
+        "carbon emissions": "Mentions carbon emissions, carbon release, or carbon-related environmental harm.",
+        "call for donations": "Mentions public appeals for donations, fundraising, or support for relief efforts.",
+        "land seizures": "Mentions land being confiscated, expropriated, or forcibly taken from owners or users.",
+        "food insecurity": "Mentions inadequate access to sufficient, safe, or stable food, including acute or chronic food insecurity.",
+        "pirates": "Mentions piracy, pirate attacks, or armed robbery at sea affecting trade, aid, or livelihoods.",
+        "foreign troops": "Mentions troops from another country deployed in conflict, occupation, intervention, or security operations.",
+        "continued deterioration": "Mentions worsening conditions over time without a single dominant cause.",
+        "totalitarian rule": "Mentions totalitarian rule or near-total political domination by a repressive state.",
+        "conflict": "Mentions armed conflict, violent clashes, or warfare in general when no more specific violence label applies.",
+        "acute hunger": "Mentions severe and immediate hunger at emergency levels requiring urgent assistance.",
+        "human rights abuses": "Mentions killings, torture, disappearances, arbitrary detention, or other serious rights violations.",
+        "military junta": "Mentions rule by a governing military council or military leaders after seizure of power.",
+        "lack of agricultural infrastructure": "Mentions missing or inadequate agricultural infrastructure such as storage, irrigation, machinery, or farm support systems.",
+        "toll on livestock": "Mentions severe negative effects on livestock, including weakness, losses, reduced productivity, or mortality.",
+        "dependence on international aid": "Mentions survival, recovery, or basic needs being impossible without external aid.",
+        "mismanagement": "Mentions poor governance, bad administration, or policy failure contributing to crisis outcomes.",
+        "displacement": "Mentions people being displaced from their homes, including internal displacement and forced relocation.",
+        "the offensive": "Mentions a military offensive, assault, or major push by armed forces to seize territory or defeat opponents.",
+        "tragedy": "Mentions a grave human disaster in broad terms when no clearer label applies.",
+        "gangs of bandits": "Mentions organized bandit groups carrying out raids, theft, or violent predation.",
+        "continued strife": "Mentions ongoing unrest, violence, or instability persisting over time.",
+        "rinderpest": "Mentions rinderpest specifically, including outbreaks or effects on cattle and pastoral livelihoods.",
+        "reduced national output": "Mentions decline in a country's total production, output, or economic activity.",
+        "clans": "Mentions clans as organized social or armed groups involved in rivalry, control, or conflict dynamics.",
+        "aid appeal": "Mentions formal humanitarian appeals for emergency assistance or funding.",
+        "convoys": "Mentions aid or supply convoys, especially when they are blocked, attacked, or required for access.",
+        "food crisis": "Mentions a serious food crisis marked by widespread shortages, hunger, or inability to meet food needs.",
+        "overthrow": "Mentions the removal or toppling of a government, ruler, or regime by force or political action.",
+        "cattle plague": "Mentions cattle plague, especially disease-related references affecting herds and livestock survival.",
+        "catastrophe": "Mentions catastrophe or disaster in severe but nonspecific terms when no more precise label fits.",
+        "foreign aid": "Mentions external assistance provided by foreign governments, international organizations, or donors.",
+        "international alarm": "Mentions strong international concern, warning, or alarm over a worsening situation.",
+        "collapse of government": "Mentions state collapse or breakdown of governing institutions.",
+        "dehydrated": "Mentions dehydration or severe bodily water loss associated with hunger or survival crisis.",
+        "repression": "Mentions systematic repression by authorities, including crackdowns, intimidation, arrests, or coercion.",
+        "cycle of poverty": "Mentions persistent or self-reinforcing poverty trapping households or communities over time.",
+        "rebel insurgency": "Mentions sustained armed insurgency by rebel groups against the state or other authorities.",
+        "weather extremes": "Mentions unusually severe or extreme weather conditions in broad terms without naming a specific hazard.",
+        "slashed export": "Mentions sharp reductions in exports or export earnings affecting the economy.",
+        "potato blight": "Mentions potato blight specifically, including disease damaging potato crops.",
+        "corrupt government": "Mentions a government characterized as corrupt, predatory, or abusing public office.",
+        "clan battle": "Mentions fighting or violent clashes between clans.",
+        "oppressive regimes": "Mentions oppressive governments marked by coercion, repression, denial of rights, or authoritarian control.",
+        "unable to sow": "Mentions farmers being unable to plant or sow due to insecurity, drought, lack of inputs, or displacement.",
+        "price of food": "Mentions food prices, especially when unusually high cost or affordability is highlighted.",
+        "authoritarian rule": "Mentions authoritarian governance, concentrated political control, or restricted political freedoms.",
+        "bad harvests": "Mentions poor harvest outcomes or below-normal seasonal agricultural production.",
+        "violent suppression": "Mentions authorities or armed actors suppressing dissent, protest, or communities through force.",
+        "brain drain": "Mentions loss of skilled workers or educated people leaving a country, harming institutions or the economy.",
+        "price rise": "Mentions rising prices in general, especially when linked to essential goods or household stress.",
+        "refugees": "Mentions refugees who crossed borders or are explicitly described as refugees.",
+        "years of warfare": "Mentions warfare continuing over many years, emphasizing long duration and cumulative damage.",
+        "destructive pattern": "Mentions a recurring harmful pattern of shocks, violence, or disruption.",
+        "transport bottleneck": "Mentions logistical choke points or transport constraints affecting movement of goods or agricultural supply.",
+        "harvest decline": "Mentions harvest quantity declining compared with normal levels or previous periods.",
+        "rising food prices": "Mentions food prices increasing over time and worsening affordability or access.",
+        "humanitarian situation": "Mentions the overall humanitarian condition, especially severity of needs and suffering.",
+        "self reliance": "Mentions efforts or expectations for affected populations to become self-reliant rather than dependent on aid.",
+        "land degradation": "Mentions deterioration of land quality, such as erosion, salinization, nutrient loss, or declining productivity.",
+        "hunger crises": "Mentions repeated or multiple hunger emergencies affecting populations or regions.",
+        "secession": "Mentions secessionist efforts, breakaway movements, or attempts to separate from an existing state.",
+        "mass hunger": "Mentions hunger affecting very large populations at scale.",
+        "looting": "Mentions looting, pillaging, or theft of homes, goods, warehouses, or aid supplies during unrest or conflict.",
+        "forced eviction from land": "Mentions peasants or rural communities being forced off land by elites, violence, or policy.",
+        "apathy from starvation": "Mentions severe weakness, lethargy, or loss of responsiveness associated with starvation or extreme deprivation.",
+        "wreaked havoc": "Mentions a destructive event causing widespread damage or disruption without enough detail for a narrower label.",
+        "regimes toppled": "Mentions regimes being overthrown, brought down, or removed from power.",
+        "massive starvation": "Mentions starvation on a very large scale, including widespread deaths or extreme deprivation.",
+        "military dictatorship": "Mentions dictatorship under military rule with civilian political authority suppressed.",
+        "infrastructure damage": "Mentions damage to roads, bridges, irrigation, markets, storage, or other infrastructure affecting livelihoods or food systems.",
+        "water availability": "Mentions reduced, limited, or stressed water availability for people, livestock, or agriculture.",
+        "lack of alternatives": "Mentions absence of viable coping options, livelihood substitutes, or escape routes.",
+        "economic rise": "Mentions an increase in an adverse economic variable when context indicates prices, costs, or market stress.",
+        "anti-western policies": "Mentions state policies framed as anti-Western, especially when tied to isolation, sanctions, or political rupture.",
+        "ecological crisis": "Mentions broad ecological crisis involving ecosystem collapse, biodiversity loss, or resource depletion.",
+        "alarming level": "Mentions a problem reaching an alarming or critical threshold without enough specificity for a narrower label.",
+        "mayhem": "Mentions chaotic violence, lawlessness, or disorder causing insecurity and disruption.",
+        "life-threatening hunger": "Mentions hunger severe enough to endanger life or immediate physical survival.",
+        "man-made disaster": "Mentions disaster caused primarily by human action, policy, conflict, or negligence.",
+        "slave trade": "Mentions enslavement, slave trading, or trafficking in persons.",
+        "climatic hazards": "Mentions climate-related hazards broadly, including droughts, floods, storms, and temperature extremes.",
+        "devastated the economy": "Mentions a shock severely damaging the economy, markets, employment, or national income.",
+        "corruption": "Mentions bribery, embezzlement, patronage, theft of public resources, or corrupt practices.",
+        "clan warfare": "Mentions organized warfare or sustained violent conflict between clans.",
+        "brutal government": "Mentions a government using extreme violence, cruelty, or abusive force against populations.",
+        "coup": "Mentions a coup or sudden unconstitutional seizure of power, including coup d'etat.",
+        "international intervention": "Mentions military, diplomatic, peacekeeping, or humanitarian intervention by external states or international bodies.",
+        "lack of authority": "Mentions absence of effective governing authority, weak state control, or administrative vacuum.",
+        "lack of cultivation": "Mentions farmland not being cultivated, left unplanted, or underused during crisis conditions.",
+        "poor soil quality": "Mentions infertile, degraded, eroded, or low-quality soil limiting agricultural production.",
+        "disrupted trade": "Mentions trade flows being interrupted, reduced, blocked, or made unreliable.",
+        "food assistance": "Mentions food aid, ration distribution, feeding programs, or direct food support.",
+        "greenhouse gases": "Mentions greenhouse gas emissions or atmospheric pollutants driving climate or environmental harm.",
+        "disruption to farming": "Mentions farming activities being interrupted by insecurity, weather, displacement, labor shortages, or lack of inputs.",
+        "dysfunction": "Mentions severe breakdown or dysfunction in systems supporting survival, services, or food access.",
+        "power struggle": "Mentions political or military competition for state control, leadership, or authority.",
+        "livestock deaths": "Mentions livestock dying, having died, or suffering mass mortality due to drought, disease, starvation, or neglect.",
+        "asylum seekers": "Mentions people seeking asylum or applying for protection in another country.",
+        "climate change": "Mentions long-term climate change, global warming, or climate-driven shifts affecting risk or livelihoods.",
+        "politically engineered": "Mentions a crisis or harmful condition described as intentionally created, manipulated, or worsened by political actors.",
+        "warlord": "Mentions a warlord as an armed local power holder controlling territory, fighters, or resources outside normal state authority.",
+        "dictators": "Mentions dictators or personalist rulers exercising unchecked political control.",
+        "jihadist groups": "Mentions jihadist or Islamist militant groups involved in insurgency, attacks, or territorial control.",
+        "infant mortality": "Mentions deaths of infants, especially when elevated mortality is linked to hunger, deprivation, or crisis.",
+        "burning houses": "Mentions homes or settlements being burned, often during raids, forced displacement, or land-related violence.",
+        "major offensive": "Mentions a large-scale military offensive involving major troop movement, territorial aims, or intensified combat.",
+        "stolen food aid": "Mentions food aid being looted, diverted, stolen, or seized before reaching intended recipients."
     },
     "argument_roles": {
         "location": "Place where the event or risk occurs, exists, is observed, or affects people, livelihoods, markets, crops, livestock, or resources. When possible, classify the linked place as country, province, district, city, or other.",
@@ -181,668 +173,164 @@
         "other": "Any other place mention, including regions, villages, camps, facilities, border areas, cross-border zones, or ambiguous locations."
     },
     "event_argument_roles": {
-        "cyclone": [
-            "location"
-        ],
-        "harvests are devastated": [
-            "location"
-        ],
-        "rising inflation": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "prolonged fighting": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "air attack": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "locusts": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "rival warlords": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "water distribution shortages": [
-            "location"
-        ],
-        "militia groups": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "reduced imports": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "prolonged dry spell": [
-            "location"
-        ],
-        "population crisis": [
-            "location"
-        ],
-        "floods": [
-            "location"
-        ],
-        "migration": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "environmental degradation": [
-            "location"
-        ],
-        "pests": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "farmland": [
-            "location"
-        ],
-        "siege": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "gastrointestinal": [
-            "location"
-        ],
-        "drought": [
-            "location"
-        ],
-        "humanitarian disaster": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "civil strife": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "collapsing economy": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "cholera outbreak": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "land invasions": [
-            "location"
-        ],
-        "withheld relief": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "economic crisis": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "cattle death": [
-            "location"
-        ],
-        "terrorist": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "bombing campaign": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "flee": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "police torture": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "natural disaster": [
-            "location"
-        ],
-        "increased external debt": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "aid workers died": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "lack of roads": [
-            "location"
-        ],
-        "severe rains": [
-            "location"
-        ],
-        "terrorism": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "failed crops": [
-            "location"
-        ],
-        "shortage of rains": [
-            "location"
-        ],
-        "epidemics": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "land grab": [
-            "location"
-        ],
-        "international embargo": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "blockade": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "international terrorists": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "internal strife": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "makeshift camps": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "land reform": [
-            "location"
-        ],
-        "forests destroyed": [
-            "location"
-        ],
-        "economic impoverishment": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "malnourished": [
-            "location"
-        ],
-        "restricted relief flights": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "restricted humanitarian access": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "carbon": [
-            "location"
-        ],
-        "call for donations": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "land seizures": [
-            "location"
-        ],
-        "food insecurity": [
-            "location"
-        ],
-        "pirates": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "foreign troops": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "continued deterioration": [
-            "location"
-        ],
-        "totalitarian": [
-            "location"
-        ],
-        "conflict": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "acute hunger": [
-            "location"
-        ],
-        "human rights abuses": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "military junta": [
-            "location"
-        ],
-        "lack of agricultural infrastructure": [
-            "location"
-        ],
-        "toll on livestock": [
-            "location"
-        ],
-        "without international aid": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "mismanagement": [
-            "location"
-        ],
-        "displaced": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "civilians uprooted": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "the offensive": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "failed rains": [
-            "location"
-        ],
-        "tragedy": [
-            "location"
-        ],
-        "gangs of bandits": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "continued strife": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "rinderpest": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "reduced national output": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "clans": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "aid appeal": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "convoys": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "food crisis": [
-            "location"
-        ],
-        "overthrow": [
-            "location"
-        ],
-        "cattle plague": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "catastrophe": [
-            "location"
-        ],
-        "foreign aid": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "international alarm": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "collapse of government": [
-            "location"
-        ],
-        "dehydrated": [
-            "location"
-        ],
-        "repression": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "cycle of poverty": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "rebel insurgency": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "weather extremes": [
-            "location"
-        ],
-        "slashed export": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "potato blight": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "corrupt government": [
-            "location"
-        ],
-        "clan battle": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "oppressive regimes": [
-            "location"
-        ],
-        "unable to sow": [
-            "location"
-        ],
-        "price of food": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "authoritarian": [
-            "location"
-        ],
-        "bad harvests": [
-            "location"
-        ],
-        "violent suppression": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "brain drain": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "price rise": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "refugees": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "years of warfare": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "destructive pattern": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "scanty rainfall": [
-            "location"
-        ],
-        "transport bottleneck": [
-            "location"
-        ],
-        "harvest decline": [
-            "location"
-        ],
-        "rising food prices": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "humanitarian situation": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "self reliance": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "land degradation": [
-            "location"
-        ],
-        "hunger crises": [
-            "location"
-        ],
-        "secession": [
-            "location"
-        ],
-        "mass hunger": [
-            "location"
-        ],
-        "looting": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "pushing peasants off": [
-            "location"
-        ],
-        "apathy": [
-            "location"
-        ],
-        "wreaked havoc": [
-            "location"
-        ],
-        "regimes were toppled": [
-            "location"
-        ],
-        "massive starvation": [
-            "location"
-        ],
-        "military dictatorship": [
-            "location"
-        ],
-        "infrastructure damage": [
-            "location"
-        ],
-        "water availability": [
-            "location"
-        ],
-        "lack of alternatives": [
-            "location"
-        ],
-        "rise": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "anti-western policies": [
-            "location"
-        ],
-        "ecological crisis": [
-            "location"
-        ],
-        "alarming level": [
-            "location"
-        ],
-        "mayhem": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "life-threatening hunger": [
-            "location"
-        ],
-        "man-made disaster": [
-            "location"
-        ],
-        "slave trade": [
-            "location"
-        ],
-        "climatic hazards": [
-            "location"
-        ],
-        "devastated the economy": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "corruption": [
-            "location"
-        ],
-        "inadequate rainfall": [
-            "location"
-        ],
-        "clan warfare": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "brutal government": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "d'etat": [
-            "location"
-        ],
-        "international intervention": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "lack of authority": [
-            "location"
-        ],
-        "lack of cultivation": [
-            "location"
-        ],
-        "poor soil quality": [
-            "location"
-        ],
-        "disrupted trade": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "food assistance": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "greenhouse gases": [
-            "location"
-        ],
-        "disruption to farming": [
-            "location"
-        ],
-        "dysfunction": [
-            "location"
-        ],
-        "power struggle": [
-            "location"
-        ],
-        "livestock had died": [
-            "location"
-        ],
-        "asylum seekers": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "abnormally low rainfall": [
-            "location"
-        ],
-        "coup": [
-            "location"
-        ],
-        "climate change": [
-            "location"
-        ],
-        "politically engineered": [
-            "location"
-        ],
-        "warlord": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "dictators": [
-            "location"
-        ],
-        "jihadist groups": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "infant mortality": [
-            "location"
-        ],
-        "burning houses": [
-            "location"
-        ],
-        "major offensive": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "stolen food aid": [
-            "location",
-            "source_location",
-            "target_location"
-        ],
-        "lack of rains": [
-            "location"
-        ]
-    }
+    "cyclone": ["location"],
+    "harvest devastation": ["location"],
+    "rising inflation": ["location"],
+    "prolonged fighting": ["location"],
+    "air attack": ["location", "source_location", "target_location"],
+    "locusts": ["location"],
+    "rival warlords": ["location"],
+    "water distribution shortages": ["location"],
+    "militia groups": ["location"],
+    "reduced imports": ["location", "source_location", "target_location"],
+    "prolonged dry spell": ["location"],
+    "population crisis": ["location"],
+    "floods": ["location"],
+    "migration": ["location", "source_location", "target_location"],
+    "environmental degradation": ["location"],
+    "pests": ["location"],
+    "farmland loss or access": ["location"],
+    "siege": ["location"],
+    "gastrointestinal distress": ["location"],
+    "drought": ["location"],
+    "humanitarian disaster": ["location"],
+    "civil strife": ["location"],
+    "economic collapse": ["location"],
+    "cholera outbreak": ["location"],
+    "land invasions": ["location"],
+    "withheld relief": ["location", "source_location", "target_location"],
+    "economic crisis": ["location"],
+    "cattle death": ["location"],
+    "terrorism": ["location"],
+    "bombing campaign": ["location"],
+    "flee": ["location", "source_location", "target_location"],
+    "police torture": ["location"],
+    "natural disaster": ["location"],
+    "increased external debt": ["location"],
+    "aid worker deaths": ["location"],
+    "lack of roads": ["location"],
+    "severe rains": ["location"],
+    "failed crops": ["location"],
+    "insufficient rainfall": ["location"],
+    "epidemics affecting agriculture": ["location"],
+    "land grab": ["location"],
+    "international embargo": ["location", "source_location", "target_location"],
+    "blockade": ["location", "source_location", "target_location"],
+    "international terrorists": ["location"],
+    "internal strife": ["location"],
+    "makeshift camps": ["location"],
+    "land reform": ["location"],
+    "forests destroyed": ["location"],
+    "economic impoverishment": ["location"],
+    "malnourished": ["location"],
+    "restricted relief flights": ["location", "source_location", "target_location"],
+    "restricted humanitarian access": ["location"],
+    "carbon emissions": ["location"],
+    "call for donations": ["location"],
+    "land seizures": ["location"],
+    "food insecurity": ["location"],
+    "pirates": ["location"],
+    "foreign troops": ["location", "source_location", "target_location"],
+    "continued deterioration": ["location"],
+    "totalitarian rule": ["location"],
+    "conflict": ["location"],
+    "acute hunger": ["location"],
+    "human rights abuses": ["location"],
+    "military junta": ["location"],
+    "lack of agricultural infrastructure": ["location"],
+    "toll on livestock": ["location"],
+    "dependence on international aid": ["location"],
+    "mismanagement": ["location"],
+    "displacement": ["location", "source_location", "target_location"],
+    "the offensive": ["location", "source_location", "target_location"],
+    "tragedy": ["location"],
+    "gangs of bandits": ["location"],
+    "continued strife": ["location"],
+    "rinderpest": ["location"],
+    "reduced national output": ["location"],
+    "clans": ["location"],
+    "aid appeal": ["location"],
+    "convoys": ["location", "source_location", "target_location"],
+    "food crisis": ["location"],
+    "overthrow": ["location"],
+    "cattle plague": ["location"],
+    "catastrophe": ["location"],
+    "foreign aid": ["location", "source_location", "target_location"],
+    "international alarm": ["location"],
+    "collapse of government": ["location"],
+    "dehydrated": ["location"],
+    "repression": ["location"],
+    "cycle of poverty": ["location"],
+    "rebel insurgency": ["location"],
+    "weather extremes": ["location"],
+    "slashed export": ["location", "source_location", "target_location"],
+    "potato blight": ["location"],
+    "corrupt government": ["location"],
+    "clan battle": ["location"],
+    "oppressive regimes": ["location"],
+    "unable to sow": ["location"],
+    "price of food": ["location"],
+    "authoritarian rule": ["location"],
+    "bad harvests": ["location"],
+    "violent suppression": ["location"],
+    "brain drain": ["location", "source_location", "target_location"],
+    "price rise": ["location"],
+    "refugees": ["location", "source_location", "target_location"],
+    "years of warfare": ["location"],
+    "destructive pattern": ["location"],
+    "transport bottleneck": ["location"],
+    "harvest decline": ["location"],
+    "rising food prices": ["location"],
+    "humanitarian situation": ["location"],
+    "self reliance": ["location"],
+    "land degradation": ["location"],
+    "hunger crises": ["location"],
+    "secession": ["location"],
+    "mass hunger": ["location"],
+    "looting": ["location"],
+    "forced eviction from land": ["location", "source_location", "target_location"],
+    "apathy from starvation": ["location"],
+    "wreaked havoc": ["location"],
+    "regimes toppled": ["location"],
+    "massive starvation": ["location"],
+    "military dictatorship": ["location"],
+    "infrastructure damage": ["location"],
+    "water availability": ["location"],
+    "lack of alternatives": ["location"],
+    "economic rise": ["location"],
+    "anti-western policies": ["location"],
+    "ecological crisis": ["location"],
+    "alarming level": ["location"],
+    "mayhem": ["location"],
+    "life-threatening hunger": ["location"],
+    "man-made disaster": ["location"],
+    "slave trade": ["location", "source_location", "target_location"],
+    "climatic hazards": ["location"],
+    "devastated the economy": ["location"],
+    "corruption": ["location"],
+    "clan warfare": ["location"],
+    "brutal government": ["location"],
+    "coup": ["location"],
+    "international intervention": ["location", "source_location", "target_location"],
+    "lack of authority": ["location"],
+    "lack of cultivation": ["location"],
+    "poor soil quality": ["location"],
+    "disrupted trade": ["location", "source_location", "target_location"],
+    "food assistance": ["location", "source_location", "target_location"],
+    "greenhouse gases": ["location"],
+    "disruption to farming": ["location"],
+    "dysfunction": ["location"],
+    "power struggle": ["location"],
+    "livestock deaths": ["location"],
+    "asylum seekers": ["location", "source_location", "target_location"],
+    "climate change": ["location"],
+    "politically engineered": ["location"],
+    "warlord": ["location"],
+    "dictators": ["location"],
+    "jihadist groups": ["location"],
+    "infant mortality": ["location"],
+    "burning houses": ["location"],
+    "major offensive": ["location", "source_location", "target_location"],
+    "stolen food aid": ["location", "source_location", "target_location"]
+  }
 }

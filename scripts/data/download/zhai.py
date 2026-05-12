@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
@@ -78,60 +79,57 @@ def resolve_path(path: Path) -> Path:
     return REPO_ROOT / path
 
 
-def build_selected_articles_cte(limit: int) -> str:
+def build_selected_articles_cte(
+    limit: int, excluded_uris: set[str] | None = None
+) -> str:
     limit_clause = "" if limit == 0 else f"\n    LIMIT {limit}"
+    exclude_clause = ""
+    if excluded_uris:
+        uris_str = ", ".join(f"'{u}'" for u in excluded_uris)
+        exclude_clause = f" AND article_uri NOT IN ({uris_str})"
     return f"""
 WITH selected_articles AS (
     SELECT DISTINCT article_uri
     FROM article_risk_factor_tags
-    WHERE tag_method_id = 1
+    WHERE tag_method_id = 1{exclude_clause}
     {limit_clause}
 )"""
 
 
-def build_stratified_selected_articles_cte(limit: int) -> str:
-    stratified_filter = "TRUE"
-    final_limit_clause = ""
-    if limit > 0:
-        stratified_filter = """
-    ra.risk_factor_rank <= CEIL(
-        CAST({limit} AS NUMERIC) / NULLIF(rfc.risk_factor_count, 0)
-    )""".format(limit=limit)
-        final_limit_clause = f"\n    LIMIT {limit}"
-
+def build_stratified_selected_articles_cte(
+    limit: int, per_factor_limit: int, excluded_uris: set[str] | None = None
+) -> str:
+    final_limit_clause = f"\n    LIMIT {limit}" if limit > 0 else ""
+    exclude_clause = ""
+    if excluded_uris:
+        uris_str = ", ".join(f"'{u}'" for u in excluded_uris)
+        exclude_clause = f" AND t.article_uri NOT IN ({uris_str})"
     return f"""
-WITH risk_factor_articles AS (
-    SELECT DISTINCT article_uri, risk_factor
+WITH distinct_risk_factors AS (
+    SELECT DISTINCT risk_factor
     FROM article_risk_factor_tags
     WHERE tag_method_id = 1
 ),
-risk_factor_counts AS (
-    SELECT COUNT(DISTINCT risk_factor) AS risk_factor_count
-    FROM risk_factor_articles
-),
-ranked_articles AS (
-    SELECT
-        rfa.article_uri,
-        rfa.risk_factor,
-        ROW_NUMBER() OVER (
-            PARTITION BY rfa.risk_factor
-            ORDER BY md5(rfa.article_uri)
-        ) AS risk_factor_rank
-    FROM risk_factor_articles rfa
+selected_articles_raw AS (
+    SELECT a.article_uri
+    FROM distinct_risk_factors r
+    CROSS JOIN LATERAL (
+        SELECT article_uri
+        FROM article_risk_factor_tags t
+        WHERE t.tag_method_id = 1 AND t.risk_factor = r.risk_factor{exclude_clause}
+        LIMIT {per_factor_limit}
+    ) a
 ),
 selected_articles AS (
-    SELECT DISTINCT ra.article_uri
-    FROM ranked_articles ra
-    CROSS JOIN risk_factor_counts rfc
-    WHERE {stratified_filter}
-    ORDER BY ra.article_uri
+    SELECT DISTINCT article_uri
+    FROM selected_articles_raw
     {final_limit_clause}
 )"""
 
 
-def build_query(limit: int) -> str:
+def build_query(limit: int, excluded_uris: set[str] | None = None) -> str:
     return f"""
-{build_selected_articles_cte(limit)}
+{build_selected_articles_cte(limit, excluded_uris)}
 SELECT
     ad.uri,
     ad.title,
@@ -164,9 +162,11 @@ ORDER BY
 """
 
 
-def build_stratified_query(limit: int) -> str:
+def build_stratified_query(
+    limit: int, per_factor_limit: int, excluded_uris: set[str] | None = None
+) -> str:
     return f"""
-{build_stratified_selected_articles_cte(limit)}
+{build_stratified_selected_articles_cte(limit, per_factor_limit, excluded_uris)}
 SELECT
     ad.uri,
     ad.title,
@@ -199,17 +199,27 @@ ORDER BY
 """
 
 
-def build_article_query(limit: int, stratified: bool) -> str:
+def build_article_query(
+    limit: int,
+    stratified: bool,
+    per_factor_limit: int = 0,
+    excluded_uris: set[str] | None = None,
+) -> str:
     if stratified:
-        return build_stratified_query(limit)
-    return build_query(limit)
+        return build_stratified_query(limit, per_factor_limit, excluded_uris)
+    return build_query(limit, excluded_uris)
 
 
-def build_selected_articles_count_query(limit: int, stratified: bool) -> str:
+def build_selected_articles_count_query(
+    limit: int,
+    stratified: bool,
+    per_factor_limit: int = 0,
+    excluded_uris: set[str] | None = None,
+) -> str:
     selected_articles_cte = (
-        build_stratified_selected_articles_cte(limit)
+        build_stratified_selected_articles_cte(limit, per_factor_limit, excluded_uris)
         if stratified
-        else build_selected_articles_cte(limit)
+        else build_selected_articles_cte(limit, excluded_uris)
     )
     return f"""
 {selected_articles_cte}
@@ -222,8 +232,17 @@ def iter_rows(
     limit: int,
     chunk_size: int,
     stratified: bool = False,
+    per_factor_limit: int = 0,
+    excluded_uris: set[str] | None = None,
 ) -> Iterator[Mapping[str, Any]]:
-    statement = text(build_article_query(limit, stratified=stratified))
+    statement = text(
+        build_article_query(
+            limit,
+            stratified=stratified,
+            per_factor_limit=per_factor_limit,
+            excluded_uris=excluded_uris,
+        )
+    )
     with engine.connect().execution_options(
         stream_results=True,
         yield_per=chunk_size,
@@ -237,8 +256,17 @@ def count_selected_articles(
     engine: Any,
     limit: int,
     stratified: bool = False,
+    per_factor_limit: int = 0,
+    excluded_uris: set[str] | None = None,
 ) -> int:
-    statement = text(build_selected_articles_count_query(limit, stratified=stratified))
+    statement = text(
+        build_selected_articles_count_query(
+            limit,
+            stratified=stratified,
+            per_factor_limit=per_factor_limit,
+            excluded_uris=excluded_uris,
+        )
+    )
     with engine.connect() as connection:
         return int(connection.execute(statement).scalar_one())
 
@@ -331,12 +359,14 @@ def write_jsonl(
     articles: Iterator[dict[str, Any]],
     output_path: Path,
     article_total: int,
+    offset: int = 0,
 ) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    mode = "a" if offset > 0 else "w"
     count = 0
-    with output_path.open("w", encoding="utf-8") as output_file:
-        for count, article in enumerate(articles, start=1):
+    with output_path.open(mode, encoding="utf-8") as output_file:
+        for count, article in enumerate(articles, start=offset + 1):
             print_progress("[ARTICLES]", count, article_total)
             output_file.write(
                 json.dumps(
@@ -354,6 +384,23 @@ def write_jsonl(
     return count
 
 
+def get_existing_uris(path: Path) -> set[str]:
+    uris = set()
+    if not path.exists():
+        return uris
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                data = json.loads(line)
+                if "id" in data:
+                    uris.add(data["id"])
+            except json.JSONDecodeError:
+                pass
+    return uris
+
+
 def main() -> int:
     args = parse_args()
     if args.limit < 0:
@@ -368,20 +415,50 @@ def main() -> int:
     # gcloud compute ssh zhai-bastion --project=zerohungerai --zone=us-east4-a --tunnel-through-iap --ssh-flag="-L 5439:localhost:5432"
     engine = create_engine(db_conn_string)
     output_path = resolve_path(args.output)
+
+    existing_uris = get_existing_uris(output_path)
+    offset = len(existing_uris)
+
+    if args.limit > 0 and offset >= args.limit:
+        print(f"Already downloaded {offset} articles. Skipping.")
+        return 0
+
+    remaining_limit = args.limit - offset if args.limit > 0 else 0
+
+    per_factor_limit = 0
+    if args.stratified and remaining_limit > 0:
+        with engine.connect() as conn:
+            risk_factor_count = conn.execute(
+                text(
+                    "SELECT COUNT(DISTINCT risk_factor) FROM article_risk_factor_tags WHERE tag_method_id = 1"
+                )
+            ).scalar_one()
+            per_factor_limit = int(
+                math.ceil(remaining_limit / max(risk_factor_count, 1))
+            )
+
     article_total = count_selected_articles(
         engine,
-        limit=args.limit,
+        limit=remaining_limit,
         stratified=args.stratified,
+        per_factor_limit=per_factor_limit,
+        excluded_uris=existing_uris,
     )
     rows = iter_rows(
         engine,
-        limit=args.limit,
+        limit=remaining_limit,
         chunk_size=args.chunk_size,
         stratified=args.stratified,
+        per_factor_limit=per_factor_limit,
+        excluded_uris=existing_uris,
     )
     articles = iter_articles(rows)
-    count = write_jsonl(articles, output_path, article_total)
-    print(f"Wrote {count} articles to {output_path}", file=sys.stderr)
+    count = write_jsonl(articles, output_path, article_total, offset=offset)
+    total_written = offset + count if count else offset
+    print(
+        f"Total appended: {count}. Total entries in {output_path}: {total_written}",
+        file=sys.stderr,
+    )
     return 0
 
 
