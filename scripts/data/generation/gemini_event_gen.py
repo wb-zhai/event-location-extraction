@@ -20,6 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.llms.llm_client import GeminiLLMClient
 from scripts.data.generation import adjudication, pipeline_config, reports, validation
+from scripts.data.generation.relevance_filter import classify_article_relevance
 from scripts.data.generation.windowing import ArticleWindow
 from scripts.data.generation.windowing import build_article_windows as build_windows
 
@@ -520,6 +521,18 @@ def select_limited_records(
     if not random_sample:
         return records[:limit]
     return random.sample(records, k=min(limit, len(records)))
+
+
+def select_pending_records(
+    records: list[dict[str, Any]],
+    completed_record_ids: set[str],
+    limit: int | None,
+    random_sample: bool,
+) -> list[dict[str, Any]]:
+    pending_records = [
+        record for record in records if str(record.get("id")) not in completed_record_ids
+    ]
+    return select_limited_records(pending_records, limit, random_sample)
 
 
 def load_examples(path: Path) -> list[dict[str, Any]]:
@@ -2597,6 +2610,12 @@ async def worker(
                         )
                         continue
                 except Exception as exc:
+                    LOGGER.exception(
+                        "worker=%s id=%s relevance_filter_failed=true error=%s",
+                        worker_id,
+                        str(record.get("id")),
+                        exc,
+                    )
                     relevance_info = {
                         "decision": "error",
                         "filtered": False,
@@ -2719,16 +2738,6 @@ async def run(args: argparse.Namespace) -> None:
 
     loaded_records = load_records(args.input)
     unique_records = dedupe_records(loaded_records)
-    records = select_limited_records(
-        unique_records, args.limit, args.random_sample
-    )
-    LOGGER.info(
-        "input loaded=%s unique=%s duplicates_skipped=%s selected=%s",
-        len(loaded_records),
-        len(unique_records),
-        len(loaded_records) - len(unique_records),
-        len(records),
-    )
     raw_examples = (
         load_examples(args.examples)
         if args.example_sample_size is not None
@@ -2753,10 +2762,25 @@ async def run(args: argparse.Namespace) -> None:
         args.skip_completed_from, retry_failed=args.retry_failed
     )
     done.update(skip_done)
-    pending = [record for record in records if str(record.get("id")) not in done]
+    pending = select_pending_records(
+        unique_records,
+        completed_record_ids=done,
+        limit=args.limit,
+        random_sample=args.random_sample,
+    )
+    selected_total = len(unique_records) if args.limit is None else min(
+        args.limit, len(unique_records)
+    )
     LOGGER.info(
-        "loaded=%s completed=%s skip_completed=%s pending=%s",
-        len(records),
+        "input loaded=%s unique=%s duplicates_skipped=%s selected_before_completed=%s",
+        len(loaded_records),
+        len(unique_records),
+        len(loaded_records) - len(unique_records),
+        selected_total,
+    )
+    LOGGER.info(
+        "loaded=%s completed=%s skip_completed=%s pending=%s limit_applied_after_completed=true",
+        len(unique_records),
         len(done) - len(skip_done),
         len(skip_done),
         len(pending),

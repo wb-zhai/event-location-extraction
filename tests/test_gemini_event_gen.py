@@ -900,6 +900,24 @@ def test_dedupe_records_removes_duplicate_title_text_before_limit() -> None:
     assert [record["id"] for record in selected] == ["1", "3"]
 
 
+def test_select_pending_records_applies_limit_after_completed_exclusions() -> None:
+    records = [
+        {"id": "1", "title": "A", "text": "one"},
+        {"id": "2", "title": "B", "text": "two"},
+        {"id": "3", "title": "C", "text": "three"},
+        {"id": "4", "title": "D", "text": "four"},
+    ]
+
+    selected = gemini_event_gen.select_pending_records(
+        records,
+        completed_record_ids={"1", "2"},
+        limit=2,
+        random_sample=False,
+    )
+
+    assert [record["id"] for record in selected] == ["3", "4"]
+
+
 def test_build_article_windows_packs_sentence_units_by_budget() -> None:
     text = "Drought hit Somalia.\n\nMarkets reopened.\n\nLocusts spread quickly."
 

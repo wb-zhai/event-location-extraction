@@ -1,5 +1,6 @@
 # Custom
-
+.github/hooks/*
+.github/copilot-instructions.md
 dataset/*
 experiments/*
 .agents
