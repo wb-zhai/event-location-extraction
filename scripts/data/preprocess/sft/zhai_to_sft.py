@@ -125,12 +125,16 @@ def convert_argument(document: str, argument: dict[str, Any]) -> dict[str, Any] 
     if not isinstance(role, str) or not role.strip():
         return None
 
-    return {
+    converted_argument = {
         "role": normalize_label(role),
         "start": start,
         "end": end,
         "text": text,
     }
+    location_type = argument.get("location_type")
+    if isinstance(location_type, str) and location_type.strip():
+        converted_argument["location_type"] = location_type.strip()
+    return converted_argument
 
 
 def convert_event(
@@ -270,6 +274,8 @@ def slice_window(
                         "text": argument["text"],
                     }
                 )
+                if "location_type" in argument:
+                    arguments[-1]["location_type"] = argument["location_type"]
             windowed_event["arguments"] = arguments
 
         events.append(windowed_event)
