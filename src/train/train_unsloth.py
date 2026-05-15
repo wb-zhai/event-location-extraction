@@ -84,10 +84,13 @@ def _normalize_candidate_count(name: str, value: int | None) -> int | None:
 def _select_label_descriptions(
     labels: list[str],
     descriptions: dict[str, str] | None,
-) -> dict[str, str]:
+    *,
+    include_descriptions: bool,
+) -> list[str] | dict[str, str]:
+    if not include_descriptions or descriptions is None:
+        return labels
     return {
-        label: descriptions.get(label, "") if descriptions is not None else ""
-        for label in labels
+        label: descriptions.get(label, "") for label in labels
     }
 
 
@@ -359,6 +362,7 @@ def _chat_text(
     location_type_labels: list[str],
     *,
     ontology: SftCandidateOntology | None,
+    include_descriptions: bool,
     answer_obj: dict[str, Any],
 ) -> str:
     return render_chat(
@@ -367,6 +371,7 @@ def _chat_text(
         _select_label_descriptions(
             event_labels,
             ontology.event_descriptions if ontology is not None else None,
+            include_descriptions=include_descriptions,
         ),
         _select_label_descriptions(
             argument_role_labels,
@@ -375,6 +380,7 @@ def _chat_text(
                 if ontology is not None
                 else None
             ),
+            include_descriptions=include_descriptions,
         ),
         _select_label_descriptions(
             location_type_labels,
@@ -383,6 +389,7 @@ def _chat_text(
                 if ontology is not None
                 else None
             ),
+            include_descriptions=include_descriptions,
         ),
         answer_obj=answer_obj,
         add_generation_prompt=False,
@@ -397,6 +404,7 @@ def _chat_parts(
     location_type_labels: list[str],
     *,
     ontology: SftCandidateOntology | None,
+    include_descriptions: bool,
     answer_obj: dict[str, Any],
 ) -> tuple[str, str]:
     prompt_text = render_chat(
@@ -405,6 +413,7 @@ def _chat_parts(
         _select_label_descriptions(
             event_labels,
             ontology.event_descriptions if ontology is not None else None,
+            include_descriptions=include_descriptions,
         ),
         _select_label_descriptions(
             argument_role_labels,
@@ -413,6 +422,7 @@ def _chat_parts(
                 if ontology is not None
                 else None
             ),
+            include_descriptions=include_descriptions,
         ),
         _select_label_descriptions(
             location_type_labels,
@@ -421,6 +431,7 @@ def _chat_parts(
                 if ontology is not None
                 else None
             ),
+            include_descriptions=include_descriptions,
         ),
         add_generation_prompt=True,
     )
@@ -439,6 +450,7 @@ def _format_row(
     candidate_shuffle_probability: float = 0.0,
     gold_candidate_dropout_probability: float = 0.0,
     random_seed: int = DEFAULT_CANDIDATE_SAMPLING_SEED,
+    include_descriptions: bool = False,
     candidate_rng: random.Random | None = None,
     index: int = 0,
 ) -> dict[str, str]:
@@ -466,6 +478,7 @@ def _format_row(
         argument_role_labels,
         location_type_labels,
         ontology=ontology,
+        include_descriptions=include_descriptions,
         answer_obj=answer_obj,
     )
     return {"text": text, "row_index": index}
@@ -481,6 +494,7 @@ def _build_map_fn(
     candidate_shuffle_probability: float,
     gold_candidate_dropout_probability: float,
     random_seed: int,
+    include_descriptions: bool,
 ):
     candidate_rng = random.Random(random_seed)
 
@@ -495,6 +509,7 @@ def _build_map_fn(
             candidate_shuffle_probability=candidate_shuffle_probability,
             gold_candidate_dropout_probability=gold_candidate_dropout_probability,
             random_seed=random_seed,
+            include_descriptions=include_descriptions,
             candidate_rng=candidate_rng,
             index=index,
         )
@@ -513,6 +528,7 @@ def _build_sample_preview(
     candidate_shuffle_probability: float,
     gold_candidate_dropout_probability: float,
     random_seed: int,
+    include_descriptions: bool,
     index: int,
 ) -> tuple[str, str]:
     document = row["question"]
@@ -537,6 +553,7 @@ def _build_sample_preview(
         argument_role_labels,
         location_type_labels,
         ontology=ontology,
+        include_descriptions=include_descriptions,
         answer_obj=answer_obj,
     )
 
@@ -600,6 +617,7 @@ def _print_train_dataset_preview(
     candidate_shuffle_probability: float,
     gold_candidate_dropout_probability: float,
     random_seed: int,
+    include_descriptions: bool,
 ) -> None:
     if len(train_ds) == 0:
         print("Training dataset is empty; no preview available.")
@@ -629,6 +647,7 @@ def _print_train_dataset_preview(
         candidate_shuffle_probability=candidate_shuffle_probability,
         gold_candidate_dropout_probability=gold_candidate_dropout_probability,
         random_seed=random_seed,
+        include_descriptions=include_descriptions,
         index=raw_sample_index,
     )
 
@@ -663,6 +682,7 @@ def _print_dataset_max_sequence_length_before_filtering(
         return
     max_length = max(_get_sequence_length(tokenizer, text) for text in dataset["text"])
     print(f"{split_name} max sequence length before filtering (tokens): {max_length}")
+
 
 def _response_only(trainer: SFTTrainer, model_name: str) -> SFTTrainer:
     if "lfm" in model_name.lower():
@@ -721,6 +741,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=str,
         default=None,
         help="Ontology JSON with 'events', 'argument_roles', and 'location_types' used for prompt context and candidate sampling.",
+    )
+    parser.add_argument(
+        "--description",
+        action="store_true",
+        help="Include ontology label descriptions in prompts in addition to label keys.",
     )
     parser.add_argument(
         "--num_event_candidates",
@@ -841,6 +866,7 @@ def main(argv: list[str] | None = None) -> None:
             candidate_shuffle_probability=args.train_candidate_shuffle_prob,
             gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
             random_seed=args.candidate_sampling_seed,
+            include_descriptions=args.description,
         ),
         with_indices=True,
         num_proc=4,
@@ -865,6 +891,7 @@ def main(argv: list[str] | None = None) -> None:
                 candidate_shuffle_probability=args.train_candidate_shuffle_prob,
                 gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
                 random_seed=args.candidate_sampling_seed,
+                include_descriptions=args.description,
             ),
             with_indices=True,
             num_proc=4,
@@ -923,6 +950,7 @@ def main(argv: list[str] | None = None) -> None:
         candidate_shuffle_probability=args.train_candidate_shuffle_prob,
         gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
         random_seed=args.candidate_sampling_seed,
+        include_descriptions=args.description,
     )
 
     trainer.train()

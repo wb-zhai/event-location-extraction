@@ -28,9 +28,9 @@ USER_TEMPLATE = (
 
 def build_user_prompt(
     document: str,
-    event_labels: dict[str, str],
-    argument_roles: dict[str, str],
-    location_types: dict[str, str],
+    event_labels: list[str] | dict[str, str],
+    argument_roles: list[str] | dict[str, str],
+    location_types: list[str] | dict[str, str],
 ) -> str:
     return USER_TEMPLATE.format(
         document=document,
@@ -42,9 +42,9 @@ def build_user_prompt(
 
 def build_messages(
     document: str,
-    event_labels: dict[str, str],
-    argument_roles: dict[str, str],
-    location_types: dict[str, str],
+    event_labels: list[str] | dict[str, str],
+    argument_roles: list[str] | dict[str, str],
+    location_types: list[str] | dict[str, str],
     *,
     answer_obj: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
@@ -70,9 +70,9 @@ def build_messages(
 def render_chat(
     tokenizer,
     document: str,
-    event_labels: dict[str, str],
-    argument_roles: dict[str, str],
-    location_types: dict[str, str],
+    event_labels: list[str] | dict[str, str],
+    argument_roles: list[str] | dict[str, str],
+    location_types: list[str] | dict[str, str],
     *,
     answer_obj: dict[str, Any] | None = None,
     add_generation_prompt: bool,
