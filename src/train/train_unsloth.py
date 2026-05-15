@@ -652,6 +652,18 @@ def _print_dataset_max_sequence_length(dataset, tokenizer, split_name: str) -> N
     max_length = max(_get_sequence_length(tokenizer, text) for text in dataset["text"])
     print(f"{split_name} max sequence length (tokens): {max_length}")
 
+
+def _print_dataset_max_sequence_length_before_filtering(
+    dataset,
+    tokenizer,
+    split_name: str,
+) -> None:
+    if len(dataset) == 0:
+        print(f"{split_name} max sequence length before filtering (tokens): dataset is empty")
+        return
+    max_length = max(_get_sequence_length(tokenizer, text) for text in dataset["text"])
+    print(f"{split_name} max sequence length before filtering (tokens): {max_length}")
+
 def _response_only(trainer: SFTTrainer, model_name: str) -> SFTTrainer:
     if "lfm" in model_name.lower():
         print("Applying response-only training template for LFM model")
@@ -833,6 +845,7 @@ def main(argv: list[str] | None = None) -> None:
         with_indices=True,
         num_proc=4,
     )
+    _print_dataset_max_sequence_length_before_filtering(train_ds, tokenizer, "Train")
     if args.filter_overlong_samples:
         train_ds = _filter_overlong_samples(
             train_ds, tokenizer, args.max_seq_length, "Train"
@@ -856,6 +869,7 @@ def main(argv: list[str] | None = None) -> None:
             with_indices=True,
             num_proc=4,
         )
+        _print_dataset_max_sequence_length_before_filtering(eval_ds, tokenizer, "Eval")
         if args.filter_overlong_samples:
             eval_ds = _filter_overlong_samples(
                 eval_ds, tokenizer, args.max_seq_length, "Eval"
