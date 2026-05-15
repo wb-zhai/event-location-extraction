@@ -10,7 +10,7 @@ TOKEN_PATTERN = re.compile(r"\S+")
 
 
 def normalize_label(label: str) -> str:
-    return label.strip().lower().replace("-", "_").replace(" ", "_")
+    return label.strip().lower()
 
 
 def load_samples(input_path: Path) -> list[tuple[Path, dict[str, Any]]]:
@@ -126,7 +126,7 @@ def convert_argument(document: str, argument: dict[str, Any]) -> dict[str, Any] 
         return None
 
     converted_argument = {
-        "role": normalize_label(role),
+        "role": role.strip(),
         "start": start,
         "end": end,
         "text": text,
@@ -153,7 +153,7 @@ def convert_event(
         return None
 
     converted = {
-        "event_type": normalize_label(event_type),
+        "event_type": event_type.strip(),
         "start": start,
         "end": end,
         "text": text,
