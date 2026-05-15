@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,12 +15,29 @@ from trl import SFTConfig, SFTTrainer
 
 from src.data.dataset import (
     DEFAULT_CANDIDATE_SAMPLING_SEED,
-    CandidateOntology,
     _apply_training_candidate_transform,
     _build_candidate_labels,
-    load_candidate_ontology,
 )
 from src.sft_prompt import render_chat
+
+
+@dataclass(frozen=True)
+class SftCandidateOntology:
+    event_descriptions: dict[str, str]
+    argument_role_descriptions: dict[str, str]
+    location_type_descriptions: dict[str, str]
+
+    @property
+    def event_labels(self) -> list[str]:
+        return list(self.event_descriptions)
+
+    @property
+    def argument_role_labels(self) -> list[str]:
+        return list(self.argument_role_descriptions)
+
+    @property
+    def location_type_labels(self) -> list[str]:
+        return list(self.location_type_descriptions)
 
 
 def _safe_substring(text: str, start: Any, end: Any) -> str:
@@ -28,6 +46,49 @@ def _safe_substring(text: str, start: Any, end: Any) -> str:
     if start < 0 or end <= start or end > len(text):
         return ""
     return text[start:end]
+
+
+def _load_sft_candidate_ontology(path: str | Path) -> SftCandidateOntology:
+    with open(path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"Ontology file '{path}' must contain a JSON object")
+
+    def _require_description_map(field_name: str) -> dict[str, str]:
+        value = payload.get(field_name)
+        if not isinstance(value, dict) or not all(
+            isinstance(key, str) and isinstance(description, str)
+            for key, description in value.items()
+        ):
+            raise ValueError(
+                f"Ontology file '{path}' must define '{field_name}' as an object[str, str]"
+            )
+        return dict(value)
+
+    return SftCandidateOntology(
+        event_descriptions=_require_description_map("events"),
+        argument_role_descriptions=_require_description_map("argument_roles"),
+        location_type_descriptions=_require_description_map("location_types"),
+    )
+
+
+def _normalize_candidate_count(name: str, value: int | None) -> int | None:
+    if value in (None, -1):
+        return None
+    if value < 0:
+        raise ValueError(f"{name} must be -1, 0, or a positive integer, got {value}")
+    return value
+
+
+def _select_label_descriptions(
+    labels: list[str],
+    descriptions: dict[str, str] | None,
+) -> dict[str, str]:
+    return {
+        label: descriptions.get(label, "") if descriptions is not None else ""
+        for label in labels
+    }
 
 
 def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -51,6 +112,7 @@ def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str
                     "start": a_start,
                     "end": a_end,
                     "text": _safe_substring(document, a_start, a_end),
+                    "location_type": arg.get("location_type", ""),
                 }
             )
         out_event["arguments"].sort(
@@ -58,10 +120,9 @@ def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str
                 x.get("start", 10**9),
                 x.get("end", 10**9),
                 x.get("role", ""),
+                x.get("location_type", ""),
             )
         )
-
-        out_event.pop("arguments")
 
         enriched.append(out_event)
 
@@ -77,11 +138,13 @@ def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str
 
 def _extract_required_labels(
     events: list[dict[str, Any]],
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     event_labels: list[str] = []
-    argument_labels: list[str] = []
+    argument_role_labels: list[str] = []
+    location_type_labels: list[str] = []
     seen_event_labels: set[str] = set()
-    seen_argument_labels: set[str] = set()
+    seen_argument_role_labels: set[str] = set()
+    seen_location_type_labels: set[str] = set()
 
     for event in events:
         event_type = event.get("event_type")
@@ -95,11 +158,24 @@ def _extract_required_labels(
 
         for argument in event.get("arguments", []):
             role = argument.get("role")
-            if isinstance(role, str) and role and role not in seen_argument_labels:
-                seen_argument_labels.add(role)
-                argument_labels.append(role)
+            if (
+                isinstance(role, str)
+                and role
+                and role not in seen_argument_role_labels
+            ):
+                seen_argument_role_labels.add(role)
+                argument_role_labels.append(role)
 
-    return event_labels, argument_labels
+            location_type = argument.get("location_type")
+            if (
+                isinstance(location_type, str)
+                and location_type
+                and location_type not in seen_location_type_labels
+            ):
+                seen_location_type_labels.add(location_type)
+                location_type_labels.append(location_type)
+
+    return event_labels, argument_role_labels, location_type_labels
 
 
 def _require_label_list(
@@ -133,7 +209,7 @@ def _item_rng(random_seed: int, index: int, sample_id: str) -> random.Random:
 def _resolve_candidate_labels(
     row: dict[str, Any],
     *,
-    ontology: CandidateOntology | None,
+    ontology: SftCandidateOntology | None,
     num_event_candidates: int | None,
     num_relation_candidates: int | None,
     is_training: bool,
@@ -142,11 +218,13 @@ def _resolve_candidate_labels(
     random_seed: int,
     candidate_rng: random.Random,
     index: int,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     raw_events = row["answer"]["events"]
-    required_event_labels, required_argument_labels = _extract_required_labels(
-        raw_events
-    )
+    (
+        required_event_labels,
+        required_argument_role_labels,
+        required_location_type_labels,
+    ) = _extract_required_labels(raw_events)
     document = row.get("question", "")
     sample_id = row.get("id")
     if not isinstance(sample_id, str) or not sample_id:
@@ -155,13 +233,27 @@ def _resolve_candidate_labels(
     document_event_labels = _require_label_list(
         row,
         "event_labels",
-        fallback_labels=required_event_labels if ontology is not None else None,
+        fallback_labels=required_event_labels,
     )
-    document_argument_labels = _require_label_list(
+    document_argument_role_labels = _require_label_list(
         row,
         "argument_labels",
-        fallback_labels=required_argument_labels if ontology is not None else None,
+        fallback_labels=required_argument_role_labels,
     )
+    document_location_type_labels = _require_label_list(
+        row,
+        "location_types",
+        fallback_labels=required_location_type_labels,
+    )
+    requested_event_total = num_event_candidates
+    if requested_event_total is None and ontology is not None:
+        requested_event_total = len(ontology.event_labels)
+    requested_relation_total = num_relation_candidates
+    if requested_relation_total is None and ontology is not None:
+        requested_relation_total = len(ontology.argument_role_labels)
+    requested_location_type_total = num_relation_candidates
+    if requested_location_type_total is None and ontology is not None:
+        requested_location_type_total = len(ontology.location_type_labels)
 
     event_labels = _build_candidate_labels(
         sample_id=sample_id,
@@ -169,16 +261,29 @@ def _resolve_candidate_labels(
         required_labels=required_event_labels,
         document_labels=document_event_labels,
         ontology_labels=ontology.event_labels if ontology is not None else None,
-        requested_total=num_event_candidates,
+        requested_total=requested_event_total,
         rng=candidate_rng,
     )
-    argument_labels = _build_candidate_labels(
+    argument_role_labels = _build_candidate_labels(
         sample_id=sample_id,
-        label_kind="relation",
-        required_labels=required_argument_labels,
-        document_labels=document_argument_labels,
-        ontology_labels=ontology.argument_labels if ontology is not None else None,
-        requested_total=num_relation_candidates,
+        label_kind="argument role",
+        required_labels=required_argument_role_labels,
+        document_labels=document_argument_role_labels,
+        ontology_labels=(
+            ontology.argument_role_labels if ontology is not None else None
+        ),
+        requested_total=requested_relation_total,
+        rng=candidate_rng,
+    )
+    location_type_labels = _build_candidate_labels(
+        sample_id=sample_id,
+        label_kind="location type",
+        required_labels=required_location_type_labels,
+        document_labels=document_location_type_labels,
+        ontology_labels=(
+            ontology.location_type_labels if ontology is not None else None
+        ),
+        requested_total=requested_location_type_total,
         rng=candidate_rng,
     )
 
@@ -202,11 +307,31 @@ def _resolve_candidate_labels(
             ),
             rng=rng,
         )
-        argument_labels = _apply_training_candidate_transform(
-            labels=argument_labels,
-            required_labels=required_argument_labels,
+        argument_role_labels = _apply_training_candidate_transform(
+            labels=argument_role_labels,
+            required_labels=required_argument_role_labels,
             ontology_labels=(
-                ontology.argument_labels
+                ontology.argument_role_labels
+                if num_relation_candidates is not None
+                else None
+            ),
+            shuffle_probability=(
+                candidate_shuffle_probability
+                if num_relation_candidates is not None
+                else 0.0
+            ),
+            gold_dropout_probability=(
+                gold_candidate_dropout_probability
+                if num_relation_candidates is not None
+                else 0.0
+            ),
+            rng=rng,
+        )
+        location_type_labels = _apply_training_candidate_transform(
+            labels=location_type_labels,
+            required_labels=required_location_type_labels,
+            ontology_labels=(
+                ontology.location_type_labels
                 if num_relation_candidates is not None
                 else None
             ),
@@ -223,21 +348,42 @@ def _resolve_candidate_labels(
             rng=rng,
         )
 
-    return event_labels, argument_labels
+    return event_labels, argument_role_labels, location_type_labels
 
 
 def _chat_text(
     tokenizer,
     document: str,
     event_labels: list[str],
-    argument_labels: list[str],
+    argument_role_labels: list[str],
+    location_type_labels: list[str],
+    *,
+    ontology: SftCandidateOntology | None,
     answer_obj: dict[str, Any],
 ) -> str:
-    del argument_labels
     return render_chat(
         tokenizer,
         document,
-        event_labels,
+        _select_label_descriptions(
+            event_labels,
+            ontology.event_descriptions if ontology is not None else None,
+        ),
+        _select_label_descriptions(
+            argument_role_labels,
+            (
+                ontology.argument_role_descriptions
+                if ontology is not None
+                else None
+            ),
+        ),
+        _select_label_descriptions(
+            location_type_labels,
+            (
+                ontology.location_type_descriptions
+                if ontology is not None
+                else None
+            ),
+        ),
         answer_obj=answer_obj,
         add_generation_prompt=False,
     )
@@ -247,14 +393,35 @@ def _chat_parts(
     tokenizer,
     document: str,
     event_labels: list[str],
-    argument_labels: list[str],
+    argument_role_labels: list[str],
+    location_type_labels: list[str],
+    *,
+    ontology: SftCandidateOntology | None,
     answer_obj: dict[str, Any],
 ) -> tuple[str, str]:
-    del argument_labels
     prompt_text = render_chat(
         tokenizer,
         document,
-        event_labels,
+        _select_label_descriptions(
+            event_labels,
+            ontology.event_descriptions if ontology is not None else None,
+        ),
+        _select_label_descriptions(
+            argument_role_labels,
+            (
+                ontology.argument_role_descriptions
+                if ontology is not None
+                else None
+            ),
+        ),
+        _select_label_descriptions(
+            location_type_labels,
+            (
+                ontology.location_type_descriptions
+                if ontology is not None
+                else None
+            ),
+        ),
         add_generation_prompt=True,
     )
     label_text = json.dumps(answer_obj, ensure_ascii=False)
@@ -265,7 +432,7 @@ def _format_row(
     row: dict[str, Any],
     tokenizer,
     *,
-    ontology: CandidateOntology | None = None,
+    ontology: SftCandidateOntology | None = None,
     num_event_candidates: int | None = None,
     num_relation_candidates: int | None = None,
     is_training: bool = False,
@@ -278,7 +445,7 @@ def _format_row(
     document = row["question"]
     raw_events = row["answer"]["events"]
     answer_obj = {"events": _enrich_events(document, raw_events)}
-    event_labels, argument_labels = _resolve_candidate_labels(
+    event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
         row,
         ontology=ontology,
         num_event_candidates=num_event_candidates,
@@ -292,14 +459,22 @@ def _format_row(
         ),
         index=index,
     )
-    text = _chat_text(tokenizer, document, event_labels, argument_labels, answer_obj)
+    text = _chat_text(
+        tokenizer,
+        document,
+        event_labels,
+        argument_role_labels,
+        location_type_labels,
+        ontology=ontology,
+        answer_obj=answer_obj,
+    )
     return {"text": text, "row_index": index}
 
 
 def _build_map_fn(
     tokenizer,
     *,
-    ontology: CandidateOntology | None,
+    ontology: SftCandidateOntology | None,
     num_event_candidates: int | None,
     num_relation_candidates: int | None,
     is_training: bool,
@@ -331,7 +506,7 @@ def _build_sample_preview(
     row: dict[str, Any],
     tokenizer,
     *,
-    ontology: CandidateOntology | None,
+    ontology: SftCandidateOntology | None,
     num_event_candidates: int | None,
     num_relation_candidates: int | None,
     is_training: bool,
@@ -343,7 +518,7 @@ def _build_sample_preview(
     document = row["question"]
     raw_events = row["answer"]["events"]
     answer_obj = {"events": _enrich_events(document, raw_events)}
-    event_labels, argument_labels = _resolve_candidate_labels(
+    event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
         row,
         ontology=ontology,
         num_event_candidates=num_event_candidates,
@@ -359,8 +534,10 @@ def _build_sample_preview(
         tokenizer,
         document,
         event_labels,
-        argument_labels,
-        answer_obj,
+        argument_role_labels,
+        location_type_labels,
+        ontology=ontology,
+        answer_obj=answer_obj,
     )
 
 
@@ -417,7 +594,7 @@ def _print_train_dataset_preview(
     raw_train_ds,
     tokenizer,
     *,
-    ontology: CandidateOntology | None,
+    ontology: SftCandidateOntology | None,
     num_event_candidates: int | None,
     num_relation_candidates: int | None,
     candidate_shuffle_probability: float,
@@ -427,6 +604,14 @@ def _print_train_dataset_preview(
     if len(train_ds) == 0:
         print("Training dataset is empty; no preview available.")
         return
+
+    first_raw_row = raw_train_ds[0]
+    first_document = first_raw_row["question"]
+    first_answer = {"events": _enrich_events(first_document, first_raw_row["answer"]["events"])}
+    print("First training sample question:")
+    print(first_document)
+    print("First training sample answer:")
+    print(json.dumps(first_answer, ensure_ascii=False))
 
     sequence_lengths: list[int] = []
     for text in train_ds["text"]:
@@ -458,6 +643,14 @@ def _print_train_dataset_preview(
     print(prompt_text)
     print("Sample label:")
     print(label_text)
+
+
+def _print_dataset_max_sequence_length(dataset, tokenizer, split_name: str) -> None:
+    if len(dataset) == 0:
+        print(f"{split_name} max sequence length (tokens): dataset is empty")
+        return
+    max_length = max(_get_sequence_length(tokenizer, text) for text in dataset["text"])
+    print(f"{split_name} max sequence length (tokens): {max_length}")
 
 def _response_only(trainer: SFTTrainer, model_name: str) -> SFTTrainer:
     if "lfm" in model_name.lower():
@@ -515,19 +708,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--ontology_file",
         type=str,
         default=None,
-        help="Ontology JSON with 'event_labels' and 'argument_labels' used for candidate sampling.",
+        help="Ontology JSON with 'events', 'argument_roles', and 'location_types' used for prompt context and candidate sampling.",
     )
     parser.add_argument(
         "--num_event_candidates",
         type=int,
         default=None,
-        help="Total number of event candidates per sample, including gold labels.",
+        help="Total number of event candidates per sample, including gold labels. Use -1 for all candidates.",
     )
     parser.add_argument(
         "--num_relation_candidates",
         type=int,
         default=None,
-        help="Total number of relation candidates per sample, including gold labels.",
+        help="Total number of argument-role and location-type candidates per sample, including gold labels. Use -1 for all candidates.",
     )
     parser.add_argument(
         "--train_candidate_shuffle_prob",
@@ -552,6 +745,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    args.num_event_candidates = _normalize_candidate_count(
+        "--num_event_candidates",
+        args.num_event_candidates,
+    )
+    args.num_relation_candidates = _normalize_candidate_count(
+        "--num_relation_candidates",
+        args.num_relation_candidates,
+    )
 
     candidate_sampling_enabled = (
         args.num_event_candidates is not None
@@ -562,8 +763,8 @@ def main(argv: list[str] | None = None) -> None:
             "--ontology_file is required when candidate sampling is enabled"
         )
     ontology = (
-        load_candidate_ontology(args.ontology_file)
-        if candidate_sampling_enabled and args.ontology_file is not None
+        _load_sft_candidate_ontology(args.ontology_file)
+        if args.ontology_file is not None
         else None
     )
 
@@ -636,6 +837,7 @@ def main(argv: list[str] | None = None) -> None:
         train_ds = _filter_overlong_samples(
             train_ds, tokenizer, args.max_seq_length, "Train"
         )
+    _print_dataset_max_sequence_length(train_ds, tokenizer, "Train")
 
     eval_ds = None
     if args.eval_file:
@@ -658,6 +860,7 @@ def main(argv: list[str] | None = None) -> None:
             eval_ds = _filter_overlong_samples(
                 eval_ds, tokenizer, args.max_seq_length, "Eval"
             )
+        _print_dataset_max_sequence_length(eval_ds, tokenizer, "Eval")
 
     use_bf16 = torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8
 
