@@ -210,7 +210,7 @@ def convert_document(
         events.append(converted_event)
 
     events.sort(key=lambda item: (item["start"], item["end"], item["event_type"]))
-    return {"question": document, "answer": {"events": events}}
+    return {"question": document.strip(), "answer": {"events": events}}
 
 
 def build_windows(
