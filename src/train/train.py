@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
+import sys
 from typing import Any
 
 import torch
@@ -402,6 +403,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_CANDIDATE_SAMPLING_SEED,
         help="Random seed used for deterministic candidate sampling.",
     )
+    parser.add_argument(
+        "--only-event",
+        action="store_true",
+        help="Only build and train event-specific layers.",
+    )
 
     return parser.parse_args(argv)
 
@@ -452,7 +458,9 @@ def main(argv: list[str] | None = None) -> None:
         device_label,
     )
     if args.resume_from_checkpoint is not None:
-        LOGGER.info("Resuming training from checkpoint: %s", args.resume_from_checkpoint)
+        LOGGER.info(
+            "Resuming training from checkpoint: %s", args.resume_from_checkpoint
+        )
 
     train_samples = load_normalized_jsonl(args.train_file)
     eval_samples = load_normalized_jsonl(args.eval_file)
@@ -483,6 +491,7 @@ def main(argv: list[str] | None = None) -> None:
         gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
         random_seed=args.candidate_sampling_seed,
         expected_tokenizer_name=tokenizer_name,
+        only_event=args.only_event,
     )
     eval_dataset = EventReaderDataset(
         eval_samples,
@@ -494,12 +503,43 @@ def main(argv: list[str] | None = None) -> None:
         is_training=False,
         random_seed=args.candidate_sampling_seed,
         expected_tokenizer_name=tokenizer_name,
+        only_event=args.only_event,
     )
 
+    if len(train_dataset) > 0:
+        first_sample = train_dataset[0]
+        LOGGER.info("=== DEBUG: FIRST TRAINING SAMPLE ===")
+        LOGGER.info(
+            "Decoded input_ids with special tokens: %s",
+            tokenizer.decode(first_sample["input_ids"], skip_special_tokens=False),
+        )
+        debug_sample = {}
+        for k, v in first_sample.items():
+            if isinstance(v, torch.Tensor):
+                if v.numel() <= 20:
+                    debug_sample[k] = v.tolist()
+                else:
+                    debug_sample[k] = f"<Tensor of shape {list(v.shape)}>"
+            elif (
+                isinstance(v, list)
+                and len(v) > 20
+                and all(isinstance(i, int) for i in v[:5])
+            ):
+                debug_sample[k] = f"<List of {len(v)} token ids/ints>"
+            else:
+                debug_sample[k] = v
+        LOGGER.info(
+            "Sample labels and contents: %s",
+            json.dumps(debug_sample, indent=2, ensure_ascii=False),
+        )
+        LOGGER.info("=====================================")
+
+    # sys.exit(0)
     config = EventReaderConfig(
         model_name=args.model_name,
         relation_threshold=args.relation_threshold,
         relation_loss_weight=args.relation_loss_weight,
+        only_event=args.only_event,
     )
     encoder = AutoModel.from_pretrained(args.model_name, dtype=torch.float32)
     model = EventReader(config, encoder)

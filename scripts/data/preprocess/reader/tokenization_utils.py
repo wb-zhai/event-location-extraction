@@ -21,6 +21,8 @@ def build_fast_tokenizer(tokenizer_name: str) -> PreTrainedTokenizerFast:
         raise ValueError(
             f"Tokenizer '{tokenizer_name}' must be a fast tokenizer for offset mapping"
         )
+    # Suppress length warnings since we window the tokens later
+    tokenizer.model_max_length = int(1e9)
     return tokenizer
 
 
@@ -29,6 +31,7 @@ def tokenize_text(tokenizer: PreTrainedTokenizerFast, text: str) -> TokenizedDoc
         text,
         add_special_tokens=False,
         return_offsets_mapping=True,
+        truncation=False,
     )
     input_ids = encoding["input_ids"]
     offsets = [tuple(offset) for offset in encoding["offset_mapping"]]
@@ -73,7 +76,12 @@ def char_span_to_piece_span(
     end: Any,
     offsets: list[tuple[int, int]],
 ) -> tuple[int, int] | None:
-    if not isinstance(start, int) or not isinstance(end, int) or start < 0 or end <= start:
+    if (
+        not isinstance(start, int)
+        or not isinstance(end, int)
+        or start < 0
+        or end <= start
+    ):
         return None
 
     token_start: int | None = None

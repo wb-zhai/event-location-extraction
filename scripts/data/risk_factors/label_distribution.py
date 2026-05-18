@@ -4,8 +4,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CLUSTER_PATH = REPO_ROOT / "ontologies/risk-factors/risks.names.clusters.json"
+DEFAULT_CLUSTER_PATH = REPO_ROOT / "ontologies/risk-factors/risks.names.clusters.training.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +25,16 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_CLUSTER_PATH,
         help="Path to the ontology JSON mapping event names to clusters.",
     )
+    parser.add_argument(
+        "--plot-cluster",
+        type=Path,
+        help="Optional path to save a bar chart of the cluster distribution (e.g., cluster_dist.png).",
+    )
+    parser.add_argument(
+        "--unknown-path",
+        type=Path,
+        help="Optional path to save the list of unknown event roles.",
+    )
     return parser.parse_args()
 
 
@@ -36,7 +48,9 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
             try:
                 item = json.loads(line)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON on line {line_number} of {path}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid JSON on line {line_number} of {path}: {exc}"
+                ) from exc
             if isinstance(item, dict):
                 records.append(item)
     return records
@@ -118,6 +132,25 @@ def print_distribution(title: str, counts: Counter[str], total: int) -> None:
         print(f"  {label}: {count} ({pct:.2f}%)")
 
 
+def plot_distribution(title: str, counts: Counter[str], output_path: Path) -> None:
+    if not counts:
+        print(f"No data to plot for {title}")
+        return
+
+    labels, values = zip(*counts.most_common())
+
+    plt.figure(figsize=(10, 8))
+    plt.barh(range(len(labels)), values, align="center")
+    plt.yticks(range(len(labels)), labels)
+    plt.gca().invert_yaxis()  # Highest counts at the top
+    plt.xlabel("Count")
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(output_path)
+    print(f"Saved {title} plot to {output_path}")
+    plt.close()
+
+
 def main() -> None:
     args = parse_args()
     records = load_jsonl(args.input_path)
@@ -131,15 +164,33 @@ def main() -> None:
         cluster_total,
     ) = count_roles(records, cluster_map)
 
+    articles_no_events = sum(1 for r in records if not r.get("events"))
+    avg_events = event_total / len(records) if records else 0.0
+
     print(f"file: {args.input_path}")
     print(f"cluster map: {args.cluster_path}")
     print(f"records: {len(records)}")
+    print(f"average events per article: {avg_events:.2f}")
+    print(f"articles without events: {articles_no_events}")
     print()
     print_distribution("Event role distribution", event_roles, event_total)
     print()
     print_distribution("Cluster distribution", cluster_roles, cluster_total)
     print()
     print_distribution("Argument role distribution", argument_roles, argument_total)
+
+    if args.plot_cluster:
+        plot_distribution("Cluster distribution", cluster_roles, args.plot_cluster)
+
+    if args.unknown_path:
+        unknowns = [role for role in event_roles if role not in cluster_map]
+        if unknowns:
+            with args.unknown_path.open("w", encoding="utf-8") as f:
+                for u in sorted(unknowns):
+                    f.write(f"{u}\n")
+            print(f"Saved {len(unknowns)} unknown event roles to {args.unknown_path}")
+        else:
+            print("No unknown event roles found.")
 
 
 if __name__ == "__main__":

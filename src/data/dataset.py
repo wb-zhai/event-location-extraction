@@ -196,9 +196,7 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     if not isinstance(sample_id, str) or not sample_id:
         raise ValueError("Normalized record 'id' must be a non-empty string")
 
-    input_ids = _validate_int_list(
-        "input_ids", record["input_ids"], sample_id
-    )
+    input_ids = _validate_int_list("input_ids", record["input_ids"], sample_id)
     tokenizer_tokens = _validate_string_list(
         "tokenizer_tokens",
         record["tokenizer_tokens"],
@@ -299,7 +297,9 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
         raise ValueError(f"{sample_id}: 'metadata' must be an object")
     tokenizer_name = metadata.get("tokenizer_name")
     if not isinstance(tokenizer_name, str) or not tokenizer_name:
-        raise ValueError(f"{sample_id}: metadata.tokenizer_name must be a non-empty string")
+        raise ValueError(
+            f"{sample_id}: metadata.tokenizer_name must be a non-empty string"
+        )
     if metadata.get("tokenizer_tokens_are_model_pieces") is not True:
         raise ValueError(
             f"{sample_id}: metadata.tokenizer_tokens_are_model_pieces must be true"
@@ -390,7 +390,9 @@ def _build_candidate_labels(
     requested_total: int | None,
     rng: random.Random,
 ) -> list[str]:
-    if requested_total is None:
+    if requested_total is None or requested_total == -1:
+        if ontology_labels is not None:
+            return list(ontology_labels)
         return list(document_labels)
 
     required_set = set(required_labels)
@@ -471,7 +473,9 @@ def _apply_training_candidate_transform(
             if label not in required_set and label not in transformed_labels
         ]
         dropped_required_labels = [
-            label for label in required_labels if rng.random() < gold_dropout_probability
+            label
+            for label in required_labels
+            if rng.random() < gold_dropout_probability
         ]
         max_required_drops = min(
             len(refillable_negatives),
@@ -484,7 +488,9 @@ def _apply_training_candidate_transform(
         if dropped_required_labels:
             dropped_required_set = set(dropped_required_labels)
             transformed_labels = [
-                label for label in transformed_labels if label not in dropped_required_set
+                label
+                for label in transformed_labels
+                if label not in dropped_required_set
             ]
             transformed_labels.extend(
                 rng.sample(refillable_negatives, len(dropped_required_labels))
@@ -588,10 +594,12 @@ def _fit_sample_to_max_length(
     max_length: int,
 ) -> NormalizedSample:
     event_bank_length = sum(
-        1 + len(_tokenize_label(tokenizer, label)) for label in sample.event_labels
+        1 + len(_tokenize_label(tokenizer, label))
+        for label in sample.event_labels
     )
     argument_bank_length = sum(
-        1 + len(_tokenize_label(tokenizer, label)) for label in sample.argument_labels
+        1 + len(_tokenize_label(tokenizer, label))
+        for label in sample.argument_labels
     )
     reserved_length = 4 + event_bank_length + argument_bank_length
     if reserved_length >= max_length:
@@ -660,27 +668,29 @@ def encode_sample(
         input_ids.extend(label_piece_ids)
         attention_mask.extend([1] * len(label_piece_ids))
         document_token_mask.extend([0] * len(label_piece_ids))
-        event_label_token_ends.append(len(input_ids) - 1)
-
-    input_ids.append(sep_token_id)
-    attention_mask.append(1)
-    document_token_mask.append(0)
+        event_label_token_ends.append(label_start + 1)
 
     argument_marker_positions: list[int] = []
     argument_label_token_starts: list[int] = []
     argument_label_token_ends: list[int] = []
-    for label in sample.argument_labels:
-        label_start = len(input_ids)
-        argument_marker_positions.append(label_start)
-        argument_label_token_starts.append(label_start)
-        input_ids.append(argument_marker_id)
+
+    if sample.argument_labels:
+        input_ids.append(sep_token_id)
         attention_mask.append(1)
         document_token_mask.append(0)
-        label_piece_ids = _tokenize_label(tokenizer, label)
-        input_ids.extend(label_piece_ids)
-        attention_mask.extend([1] * len(label_piece_ids))
-        document_token_mask.extend([0] * len(label_piece_ids))
-        argument_label_token_ends.append(len(input_ids) - 1)
+
+        for label in sample.argument_labels:
+            label_start = len(input_ids)
+            argument_marker_positions.append(label_start)
+            argument_label_token_starts.append(label_start)
+            input_ids.append(argument_marker_id)
+            attention_mask.append(1)
+            document_token_mask.append(0)
+            label_piece_ids = _tokenize_label(tokenizer, label)
+            input_ids.extend(label_piece_ids)
+            attention_mask.extend([1] * len(label_piece_ids))
+            document_token_mask.extend([0] * len(label_piece_ids))
+            argument_label_token_ends.append(label_start + 1)
 
     input_ids.append(sep_token_id)
     attention_mask.append(1)
@@ -776,6 +786,7 @@ class EventReaderDataset(Dataset):
         gold_candidate_dropout_probability: float = 0.0,
         random_seed: int = DEFAULT_CANDIDATE_SAMPLING_SEED,
         expected_tokenizer_name: str | None = None,
+        only_event: bool = False,
     ):
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -787,6 +798,7 @@ class EventReaderDataset(Dataset):
         self.gold_candidate_dropout_probability = gold_candidate_dropout_probability
         self.random_seed = random_seed
         self.expected_tokenizer_name = expected_tokenizer_name
+        self.only_event = only_event
 
         if expected_tokenizer_name is not None:
             for sample in samples:
@@ -814,24 +826,30 @@ class EventReaderDataset(Dataset):
                     requested_total=num_event_candidates,
                     rng=candidate_rng,
                 ),
-                _build_candidate_labels(
-                    sample_id=sample.sample_id,
-                    label_kind="relation",
-                    required_labels=_extract_required_argument_labels(sample),
-                    document_labels=sample.argument_labels,
-                    ontology_labels=ontology_argument_labels,
-                    requested_total=num_relation_candidates,
-                    rng=candidate_rng,
+                (
+                    []
+                    if only_event
+                    else _build_candidate_labels(
+                        sample_id=sample.sample_id,
+                        label_kind="relation",
+                        required_labels=_extract_required_argument_labels(sample),
+                        document_labels=sample.argument_labels,
+                        ontology_labels=ontology_argument_labels,
+                        requested_total=num_relation_candidates,
+                        rng=candidate_rng,
+                    )
                 ),
                 _extract_required_event_labels(sample),
-                _extract_required_argument_labels(sample),
+                [] if only_event else _extract_required_argument_labels(sample),
             )
             for sample in samples
         ]
 
     def _item_rng(self, index: int) -> random.Random:
         worker_info = get_worker_info()
-        worker_seed = worker_info.seed if worker_info is not None else torch.initial_seed()
+        worker_seed = (
+            worker_info.seed if worker_info is not None else torch.initial_seed()
+        )
         return random.Random(
             f"{self.random_seed}:{worker_seed}:{index}:{self.samples[index].sample.sample_id}"
         )
