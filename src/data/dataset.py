@@ -1,8 +1,4 @@
-"""Dataset utilities for event/argument reader.
-
-Assumption: normalized span indices use inclusive word boundaries, so a span with
-``start=2`` and ``end=4`` covers ``tokens[2:5]``.
-"""
+"""Dataset utilities for tokenizer-piece-native event/argument reader data."""
 
 from __future__ import annotations
 
@@ -40,7 +36,8 @@ class RelationAnnotation:
 @dataclass(frozen=True)
 class NormalizedSample:
     sample_id: str
-    tokens: list[str]
+    input_ids: list[int]
+    tokenizer_tokens: list[str]
     event_labels: list[str]
     argument_labels: list[str]
     events: list[SpanAnnotation]
@@ -51,7 +48,8 @@ class NormalizedSample:
     def to_reference(self) -> dict[str, Any]:
         return {
             "id": self.sample_id,
-            "tokens": list(self.tokens),
+            "input_ids": list(self.input_ids),
+            "tokenizer_tokens": list(self.tokenizer_tokens),
             "events": [
                 {"start": span.start, "end": span.end, "label": span.label}
                 for span in self.events
@@ -116,6 +114,16 @@ def _validate_string_list(
     return value
 
 
+def _validate_int_list(
+    name: str,
+    value: Any,
+    sample_id: str,
+) -> list[int]:
+    if not isinstance(value, list) or not all(isinstance(item, int) for item in value):
+        raise ValueError(f"{sample_id}: '{name}' must be a list[int]")
+    return value
+
+
 def _validate_span(
     span: Any,
     sample_id: str,
@@ -170,7 +178,8 @@ def _canonicalize_arguments(
 def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     required_fields = {
         "id",
-        "tokens",
+        "input_ids",
+        "tokenizer_tokens",
         "event_labels",
         "argument_labels",
         "events",
@@ -187,11 +196,21 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     if not isinstance(sample_id, str) or not sample_id:
         raise ValueError("Normalized record 'id' must be a non-empty string")
 
-    tokens = _validate_string_list(
-        "tokens", record["tokens"], sample_id, require_unique=False
+    input_ids = _validate_int_list(
+        "input_ids", record["input_ids"], sample_id
     )
-    if not tokens:
-        raise ValueError(f"{sample_id}: 'tokens' must not be empty")
+    tokenizer_tokens = _validate_string_list(
+        "tokenizer_tokens",
+        record["tokenizer_tokens"],
+        sample_id,
+        require_unique=False,
+    )
+    if not input_ids:
+        raise ValueError(f"{sample_id}: 'input_ids' must not be empty")
+    if len(input_ids) != len(tokenizer_tokens):
+        raise ValueError(
+            f"{sample_id}: 'input_ids' and 'tokenizer_tokens' must have the same length"
+        )
 
     event_labels = _validate_string_list(
         "event_labels", record["event_labels"], sample_id
@@ -205,7 +224,7 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     if not isinstance(record["events"], list):
         raise ValueError(f"{sample_id}: 'events' must be a list")
     events = [
-        _validate_span(span, sample_id, "events", len(tokens), require_label=True)
+        _validate_span(span, sample_id, "events", len(input_ids), require_label=True)
         for span in record["events"]
     ]
     for event in events:
@@ -217,7 +236,13 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     if not isinstance(record["arguments"], list):
         raise ValueError(f"{sample_id}: 'arguments' must be a list")
     arguments = [
-        _validate_span(span, sample_id, "arguments", len(tokens), require_label=False)
+        _validate_span(
+            span,
+            sample_id,
+            "arguments",
+            len(input_ids),
+            require_label=False,
+        )
         for span in record["arguments"]
     ]
     arguments, argument_index_map = _canonicalize_arguments(arguments)
@@ -272,10 +297,18 @@ def normalize_record(record: dict[str, Any]) -> NormalizedSample:
     metadata = record["metadata"]
     if not isinstance(metadata, dict):
         raise ValueError(f"{sample_id}: 'metadata' must be an object")
+    tokenizer_name = metadata.get("tokenizer_name")
+    if not isinstance(tokenizer_name, str) or not tokenizer_name:
+        raise ValueError(f"{sample_id}: metadata.tokenizer_name must be a non-empty string")
+    if metadata.get("tokenizer_tokens_are_model_pieces") is not True:
+        raise ValueError(
+            f"{sample_id}: metadata.tokenizer_tokens_are_model_pieces must be true"
+        )
 
     return NormalizedSample(
         sample_id=sample_id,
-        tokens=tokens,
+        input_ids=input_ids,
+        tokenizer_tokens=tokenizer_tokens,
         event_labels=event_labels,
         argument_labels=argument_labels,
         events=events,
@@ -295,21 +328,29 @@ def load_candidate_ontology(path: str | Path) -> CandidateOntology:
 
     if not isinstance(payload, dict):
         raise ValueError(f"Candidate ontology file '{path}' must contain a JSON object")
-    if "event_labels" not in payload or "argument_labels" not in payload:
-        raise ValueError(
-            f"Candidate ontology file '{path}' must define both 'event_labels' and 'argument_labels'"
-        )
 
-    event_labels = _validate_string_list(
-        "event_labels",
-        payload.get("event_labels", []),
-        str(path),
-    )
-    argument_labels = _validate_string_list(
-        "argument_labels",
-        payload.get("argument_labels", []),
-        str(path),
-    )
+    def _labels_from_payload(
+        primary_key: str,
+        fallback_key: str,
+    ) -> list[str]:
+        value = payload.get(primary_key)
+        label_source = primary_key
+        if value is None:
+            value = payload.get(fallback_key)
+            label_source = fallback_key
+        if isinstance(value, dict):
+            labels = list(value.keys())
+        else:
+            labels = value
+        if labels is None:
+            raise ValueError(
+                f"Candidate ontology file '{path}' must define either "
+                f"'{primary_key}' or '{fallback_key}'"
+            )
+        return _validate_string_list(label_source, labels, str(path))
+
+    event_labels = _labels_from_payload("event_labels", "events")
+    argument_labels = _labels_from_payload("argument_labels", "argument_roles")
     return CandidateOntology(
         event_labels=event_labels,
         argument_labels=argument_labels,
@@ -481,86 +522,6 @@ def _materialize_candidate_sample(
     )
 
 
-def _tokenize_words_with_alignment(
-    tokenizer: Any,
-    words: list[str],
-    sample_id: str,
-) -> tuple[list[int], list[int], list[int], list[int], list[int], list[int]]:
-    if not getattr(tokenizer, "is_fast", False):
-        raise ValueError(
-            f"{sample_id}: reader encoding requires a fast tokenizer with word_ids() support"
-        )
-
-    encoding = tokenizer(
-        words,
-        is_split_into_words=True,
-        add_special_tokens=False,
-    )
-    if not hasattr(encoding, "word_ids"):
-        raise ValueError(
-            f"{sample_id}: tokenizer output does not expose word_ids() alignment"
-        )
-
-    piece_ids = encoding["input_ids"]
-    word_ids = encoding.word_ids()
-    if not isinstance(piece_ids, list) or not isinstance(word_ids, list):
-        raise ValueError(f"{sample_id}: tokenizer alignment returned an invalid shape")
-    if len(piece_ids) != len(word_ids):
-        raise ValueError(
-            f"{sample_id}: tokenizer alignment length mismatch between pieces and word ids"
-        )
-    if not piece_ids:
-        raise ValueError(f"{sample_id}: tokenizer produced no document pieces")
-
-    word_to_token_start = [-1] * len(words)
-    word_to_token_end = [-1] * len(words)
-    token_to_word: list[int] = []
-    word_start_mask: list[int] = []
-    word_end_mask: list[int] = []
-
-    for token_idx, word_idx in enumerate(word_ids):
-        if word_idx is None or not isinstance(word_idx, int):
-            raise ValueError(
-                f"{sample_id}: tokenizer alignment produced an unexpected non-word token"
-            )
-        if word_idx < 0 or word_idx >= len(words):
-            raise ValueError(
-                f"{sample_id}: tokenizer alignment produced an out-of-range word index"
-            )
-        token_to_word.append(word_idx)
-        if word_to_token_start[word_idx] == -1:
-            word_to_token_start[word_idx] = token_idx
-            word_start_mask.append(1)
-        else:
-            word_start_mask.append(0)
-        next_word_idx = word_ids[token_idx + 1] if token_idx + 1 < len(word_ids) else None
-        is_word_end = next_word_idx != word_idx
-        word_end_mask.append(1 if is_word_end else 0)
-        if is_word_end:
-            word_to_token_end[word_idx] = token_idx
-
-    missing_words = [
-        str(word_idx)
-        for word_idx, (start, end) in enumerate(
-            zip(word_to_token_start, word_to_token_end, strict=True)
-        )
-        if start == -1 or end == -1
-    ]
-    if missing_words:
-        raise ValueError(
-            f"{sample_id}: tokenizer failed to align words at indices {', '.join(missing_words)}"
-        )
-
-    return (
-        piece_ids,
-        word_to_token_start,
-        word_to_token_end,
-        token_to_word,
-        word_start_mask,
-        word_end_mask,
-    )
-
-
 def _tokenize_label(tokenizer: Any, label: str) -> list[int]:
     pieces = tokenizer(label, add_special_tokens=False)["input_ids"]
     if pieces:
@@ -570,29 +531,29 @@ def _tokenize_label(tokenizer: Any, label: str) -> list[int]:
     return [tokenizer.unk_token_id]
 
 
-def _trim_sample_to_word_count(
-    sample: NormalizedSample, keep_words: int
+def _trim_sample_to_token_count(
+    sample: NormalizedSample, keep_tokens: int
 ) -> NormalizedSample:
     events = [
         SpanAnnotation(start=span.start, end=span.end, label=span.label)
         for span in sample.events
-        if span.end < keep_words
+        if span.end < keep_tokens
     ]
     arguments = [
         SpanAnnotation(start=span.start, end=span.end, label=None)
         for span in sample.arguments
-        if span.end < keep_words
+        if span.end < keep_tokens
     ]
     valid_event_indices = {
         old_idx: new_idx
         for new_idx, old_idx in enumerate(
-            idx for idx, span in enumerate(sample.events) if span.end < keep_words
+            idx for idx, span in enumerate(sample.events) if span.end < keep_tokens
         )
     }
     valid_argument_indices = {
         old_idx: new_idx
         for new_idx, old_idx in enumerate(
-            idx for idx, span in enumerate(sample.arguments) if span.end < keep_words
+            idx for idx, span in enumerate(sample.arguments) if span.end < keep_tokens
         )
     }
     relations = [
@@ -606,11 +567,12 @@ def _trim_sample_to_word_count(
         and relation.argument_idx in valid_argument_indices
     ]
     metadata = dict(sample.metadata)
-    metadata["truncated"] = keep_words < len(sample.tokens)
-    metadata["original_token_count"] = len(sample.tokens)
+    metadata["truncated"] = keep_tokens < len(sample.input_ids)
+    metadata["original_token_count"] = len(sample.input_ids)
     return NormalizedSample(
         sample_id=sample.sample_id,
-        tokens=sample.tokens[:keep_words],
+        input_ids=sample.input_ids[:keep_tokens],
+        tokenizer_tokens=sample.tokenizer_tokens[:keep_tokens],
         event_labels=list(sample.event_labels),
         argument_labels=list(sample.argument_labels),
         events=events,
@@ -638,21 +600,12 @@ def _fit_sample_to_max_length(
         )
 
     available_doc_pieces = max_length - reserved_length
-    _, _, word_to_token_end, _, _, _ = _tokenize_words_with_alignment(
-        tokenizer, sample.tokens, sample.sample_id
-    )
-    kept_word_count = 0
-    for word_end in word_to_token_end:
-        if word_end >= available_doc_pieces:
-            break
-        kept_word_count += 1
-
-    if kept_word_count == 0:
+    kept_token_count = min(len(sample.input_ids), available_doc_pieces)
+    if kept_token_count == 0:
         raise ValueError(
             f"{sample.sample_id}: no document tokens fit within max_length={max_length}"
         )
-
-    return _trim_sample_to_word_count(sample, kept_word_count)
+    return _trim_sample_to_token_count(sample, kept_token_count)
 
 
 def encode_sample(
@@ -677,34 +630,21 @@ def encode_sample(
     ):
         raise ValueError("Tokenizer is missing reader marker tokens")
 
-    (
-        document_piece_ids,
-        word_to_token_start,
-        word_to_token_end,
-        document_token_to_word,
-        document_word_start_mask,
-        document_word_end_mask,
-    ) = _tokenize_words_with_alignment(tokenizer, sample.tokens, sample.sample_id)
+    document_piece_ids = list(sample.input_ids)
+    if not document_piece_ids:
+        raise ValueError(f"{sample.sample_id}: sample contains no document input_ids")
 
     input_ids = [cls_token_id]
     attention_mask = [1]
-    token_to_word = [-1]
-    word_start_mask = [0]
-    word_end_mask = [0]
+    document_token_mask = [0]
     input_ids.extend(document_piece_ids)
     attention_mask.extend([1] * len(document_piece_ids))
-    token_to_word.extend(document_token_to_word)
-    word_start_mask.extend(document_word_start_mask)
-    word_end_mask.extend(document_word_end_mask)
+    document_token_mask.extend([1] * len(document_piece_ids))
     input_ids.append(sep_token_id)
     attention_mask.append(1)
-    token_to_word.append(-1)
-    word_start_mask.append(0)
-    word_end_mask.append(0)
+    document_token_mask.append(0)
 
     document_offset = 1
-    token_word_starts = [document_offset + index for index in word_to_token_start]
-    token_word_ends = [document_offset + index for index in word_to_token_end]
 
     event_marker_positions: list[int] = []
     event_label_token_starts: list[int] = []
@@ -715,22 +655,16 @@ def encode_sample(
         event_label_token_starts.append(label_start)
         input_ids.append(event_marker_id)
         attention_mask.append(1)
-        token_to_word.append(-1)
-        word_start_mask.append(0)
-        word_end_mask.append(0)
+        document_token_mask.append(0)
         label_piece_ids = _tokenize_label(tokenizer, label)
         input_ids.extend(label_piece_ids)
         attention_mask.extend([1] * len(label_piece_ids))
-        token_to_word.extend([-1] * len(label_piece_ids))
-        word_start_mask.extend([0] * len(label_piece_ids))
-        word_end_mask.extend([0] * len(label_piece_ids))
+        document_token_mask.extend([0] * len(label_piece_ids))
         event_label_token_ends.append(len(input_ids) - 1)
 
     input_ids.append(sep_token_id)
     attention_mask.append(1)
-    token_to_word.append(-1)
-    word_start_mask.append(0)
-    word_end_mask.append(0)
+    document_token_mask.append(0)
 
     argument_marker_positions: list[int] = []
     argument_label_token_starts: list[int] = []
@@ -741,33 +675,25 @@ def encode_sample(
         argument_label_token_starts.append(label_start)
         input_ids.append(argument_marker_id)
         attention_mask.append(1)
-        token_to_word.append(-1)
-        word_start_mask.append(0)
-        word_end_mask.append(0)
+        document_token_mask.append(0)
         label_piece_ids = _tokenize_label(tokenizer, label)
         input_ids.extend(label_piece_ids)
         attention_mask.extend([1] * len(label_piece_ids))
-        token_to_word.extend([-1] * len(label_piece_ids))
-        word_start_mask.extend([0] * len(label_piece_ids))
-        word_end_mask.extend([0] * len(label_piece_ids))
+        document_token_mask.extend([0] * len(label_piece_ids))
         argument_label_token_ends.append(len(input_ids) - 1)
 
     input_ids.append(sep_token_id)
     attention_mask.append(1)
-    token_to_word.append(-1)
-    word_start_mask.append(0)
-    word_end_mask.append(0)
+    document_token_mask.append(0)
 
     event_start_labels = [-100] * len(input_ids)
     event_end_labels = [-100] * len(input_ids)
     argument_start_labels = [-100] * len(input_ids)
     argument_end_labels = [-100] * len(input_ids)
-    for token_index, is_word_start in enumerate(word_start_mask):
-        if is_word_start:
+    for token_index, is_document_token in enumerate(document_token_mask):
+        if is_document_token:
             event_start_labels[token_index] = 0
             argument_start_labels[token_index] = 0
-    for token_index, is_word_end in enumerate(word_end_mask):
-        if is_word_end:
             event_end_labels[token_index] = 0
             argument_end_labels[token_index] = 0
 
@@ -780,8 +706,8 @@ def encode_sample(
     gold_event_token_ends: list[int] = []
     gold_event_type_labels: list[int] = []
     for span in sample.events:
-        start_token = token_word_starts[span.start]
-        end_token = token_word_ends[span.end]
+        start_token = document_offset + span.start
+        end_token = document_offset + span.end
         event_start_labels[start_token] = 1
         event_end_labels[end_token] = 1
         gold_event_token_starts.append(start_token)
@@ -791,8 +717,8 @@ def encode_sample(
     gold_argument_token_starts: list[int] = []
     gold_argument_token_ends: list[int] = []
     for span in sample.arguments:
-        start_token = token_word_starts[span.start]
-        end_token = token_word_ends[span.end]
+        start_token = document_offset + span.start
+        end_token = document_offset + span.end
         argument_start_labels[start_token] = 1
         argument_end_labels[end_token] = 1
         gold_argument_token_starts.append(start_token)
@@ -812,9 +738,7 @@ def encode_sample(
         "sample_id": sample.sample_id,
         "input_ids": input_ids,
         "attention_mask": attention_mask,
-        "token_to_word": token_to_word,
-        "word_start_mask": word_start_mask,
-        "word_end_mask": word_end_mask,
+        "document_token_mask": document_token_mask,
         "event_marker_positions": event_marker_positions,
         "argument_marker_positions": argument_marker_positions,
         "event_label_token_starts": event_label_token_starts,
@@ -851,6 +775,7 @@ class EventReaderDataset(Dataset):
         candidate_shuffle_probability: float = 0.0,
         gold_candidate_dropout_probability: float = 0.0,
         random_seed: int = DEFAULT_CANDIDATE_SAMPLING_SEED,
+        expected_tokenizer_name: str | None = None,
     ):
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -861,6 +786,16 @@ class EventReaderDataset(Dataset):
         self.candidate_shuffle_probability = candidate_shuffle_probability
         self.gold_candidate_dropout_probability = gold_candidate_dropout_probability
         self.random_seed = random_seed
+        self.expected_tokenizer_name = expected_tokenizer_name
+
+        if expected_tokenizer_name is not None:
+            for sample in samples:
+                sample_tokenizer_name = sample.metadata.get("tokenizer_name")
+                if sample_tokenizer_name != expected_tokenizer_name:
+                    raise ValueError(
+                        f"{sample.sample_id}: dataset tokenizer '{sample_tokenizer_name}' "
+                        f"does not match requested tokenizer '{expected_tokenizer_name}'"
+                    )
 
         candidate_rng = random.Random(random_seed)
         ontology_event_labels = ontology.event_labels if ontology is not None else None
@@ -987,14 +922,8 @@ class EventReaderCollator:
             "attention_mask": self._pad_1d(
                 [item["attention_mask"] for item in features], 0
             ),
-            "token_to_word": self._pad_1d(
-                [item["token_to_word"] for item in features], -1
-            ),
-            "word_start_mask": self._pad_1d(
-                [item["word_start_mask"] for item in features], 0
-            ),
-            "word_end_mask": self._pad_1d(
-                [item["word_end_mask"] for item in features], 0
+            "document_token_mask": self._pad_1d(
+                [item["document_token_mask"] for item in features], 0
             ),
             "event_marker_positions": self._pad_1d(
                 [item["event_marker_positions"] for item in features], -1

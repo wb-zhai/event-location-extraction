@@ -452,10 +452,10 @@ class EventReader(PreTrainedModel):
         self,
         start_positions: torch.Tensor,
         end_positions: torch.Tensor,
-        word_end_mask: torch.Tensor,
+        document_token_mask: torch.Tensor,
     ) -> torch.Tensor:
         batch_size, span_count = start_positions.shape
-        sequence_length = word_end_mask.shape[1]
+        sequence_length = document_token_mask.shape[1]
         labels = torch.full(
             (batch_size, span_count, sequence_length),
             -100,
@@ -464,7 +464,7 @@ class EventReader(PreTrainedModel):
         )
         token_indices = torch.arange(sequence_length, device=start_positions.device)
         valid_starts = start_positions >= 0
-        valid_ends = word_end_mask.unsqueeze(1).bool()
+        valid_ends = document_token_mask.unsqueeze(1).bool()
         end_after_start = token_indices.view(1, 1, -1) >= start_positions.unsqueeze(-1)
         valid_positions = valid_starts.unsqueeze(-1) & valid_ends & end_after_start
         labels = labels.masked_fill(valid_positions, 0)
@@ -529,20 +529,22 @@ class EventReader(PreTrainedModel):
         start_scores: torch.Tensor,
         start_logits: torch.Tensor,
         end_head: nn.Module,
-        word_start_mask: torch.Tensor,
-        word_end_mask: torch.Tensor,
-        token_to_word: torch.Tensor,
+        document_token_mask: torch.Tensor,
     ) -> list[dict[str, Any]]:
         start_predictions = start_logits.argmax(dim=-1)
         candidate_starts = [
             index
             for index, prediction in enumerate(start_predictions.tolist())
-            if prediction == 1 and int(word_start_mask[index].item()) == 1
+            if prediction == 1 and int(document_token_mask[index].item()) == 1
         ]
         decoded: list[dict[str, Any]] = []
-        seen_word_spans: set[tuple[int, int]] = set()
+        seen_token_spans: set[tuple[int, int]] = set()
         if not candidate_starts:
             return decoded
+        document_indices = document_token_mask.nonzero(as_tuple=True)[0]
+        if document_indices.numel() == 0:
+            return decoded
+        document_offset = int(document_indices[0].item())
 
         start_positions = torch.tensor(
             [candidate_starts],
@@ -559,8 +561,11 @@ class EventReader(PreTrainedModel):
         for start_idx in candidate_starts:
             start_offset = candidate_starts.index(start_idx)
             end_scores = conditioned_end_scores[start_offset]
-            valid_end_mask = word_end_mask.bool() & (
-                torch.arange(word_end_mask.shape[0], device=word_end_mask.device)
+            valid_end_mask = document_token_mask.bool() & (
+                torch.arange(
+                    document_token_mask.shape[0],
+                    device=document_token_mask.device,
+                )
                 >= start_idx
             )
             if not valid_end_mask.any():
@@ -569,20 +574,20 @@ class EventReader(PreTrainedModel):
                 ~valid_end_mask, torch.finfo(end_scores.dtype).min
             )
             end_idx = int(masked_end_scores.argmax().item())
-            start_word = int(token_to_word[start_idx].item())
-            end_word = int(token_to_word[end_idx].item())
-            if start_word < 0 or end_word < start_word:
+            start_token = start_idx - document_offset
+            end_token = end_idx - document_offset
+            if start_token < 0 or end_token < start_token:
                 continue
-            word_span = (start_word, end_word)
-            if word_span in seen_word_spans:
+            token_span = (start_token, end_token)
+            if token_span in seen_token_spans:
                 continue
-            seen_word_spans.add(word_span)
+            seen_token_spans.add(token_span)
             decoded.append(
                 {
                     "token_start": start_idx,
                     "token_end": end_idx,
-                    "start": start_word,
-                    "end": end_word,
+                    "start": start_token,
+                    "end": end_token,
                     "score": math.sqrt(
                         float(start_scores[start_idx].item())
                         * float(end_scores[end_idx].item())
@@ -596,9 +601,7 @@ class EventReader(PreTrainedModel):
         hidden_states: torch.Tensor,
         event_start_logits: torch.Tensor,
         argument_start_logits: torch.Tensor,
-        word_start_mask: torch.Tensor,
-        word_end_mask: torch.Tensor,
-        token_to_word: torch.Tensor,
+        document_token_mask: torch.Tensor,
         event_marker_positions: torch.Tensor,
         argument_marker_positions: torch.Tensor,
         event_label_token_starts: torch.Tensor,
@@ -617,18 +620,14 @@ class EventReader(PreTrainedModel):
             event_start_probs,
             event_start_logits,
             self.event_end_head,
-            word_start_mask,
-            word_end_mask,
-            token_to_word,
+            document_token_mask,
         )
         argument_predictions = self._decode_spans(
             hidden_states,
             argument_start_probs,
             argument_start_logits,
             self.argument_end_head,
-            word_start_mask,
-            word_end_mask,
-            token_to_word,
+            document_token_mask,
         )
 
         if event_predictions and event_label_texts:
@@ -777,9 +776,7 @@ class EventReader(PreTrainedModel):
         event_label_token_ends: torch.Tensor | None = None,
         argument_label_token_starts: torch.Tensor | None = None,
         argument_label_token_ends: torch.Tensor | None = None,
-        word_start_mask: torch.Tensor | None = None,
-        word_end_mask: torch.Tensor | None = None,
-        token_to_word: torch.Tensor | None = None,
+        document_token_mask: torch.Tensor | None = None,
         event_start_labels: torch.Tensor | None = None,
         event_end_labels: torch.Tensor | None = None,
         argument_start_labels: torch.Tensor | None = None,
@@ -830,7 +827,9 @@ class EventReader(PreTrainedModel):
             conditioned_event_end_labels = self._build_conditioned_end_labels(
                 gold_event_token_starts,
                 gold_event_token_ends,
-                word_end_mask if word_end_mask is not None else (event_end_labels != -100),
+                document_token_mask
+                if document_token_mask is not None
+                else (event_end_labels != -100),
             )
             outputs["event_end_logits"] = conditioned_event_end_logits
             event_end_loss = self._loss_or_zero(
@@ -857,8 +856,8 @@ class EventReader(PreTrainedModel):
             conditioned_argument_end_labels = self._build_conditioned_end_labels(
                 gold_argument_token_starts,
                 gold_argument_token_ends,
-                word_end_mask
-                if word_end_mask is not None
+                document_token_mask
+                if document_token_mask is not None
                 else (argument_end_labels != -100),
             )
             outputs["argument_end_logits"] = conditioned_argument_end_logits
@@ -944,23 +943,19 @@ class EventReader(PreTrainedModel):
 
         if decode_predictions:
             if (
-                word_start_mask is None
-                or word_end_mask is None
-                or token_to_word is None
+                document_token_mask is None
                 or event_label_texts is None
                 or argument_label_texts is None
             ):
                 raise ValueError(
-                    "Decoding requires word masks, token-to-word map, and label texts"
+                    "Decoding requires document token mask and label texts"
                 )
             outputs["decoded_predictions"] = [
                 self._decode_document(
                     hidden_states=aligned_hidden_states[batch_index],
                     event_start_logits=event_start_logits[batch_index],
                     argument_start_logits=argument_start_logits[batch_index],
-                    word_start_mask=word_start_mask[batch_index],
-                    word_end_mask=word_end_mask[batch_index],
-                    token_to_word=token_to_word[batch_index],
+                    document_token_mask=document_token_mask[batch_index],
                     event_marker_positions=event_marker_positions[batch_index],
                     argument_marker_positions=argument_marker_positions[batch_index],
                     event_label_token_starts=event_label_token_starts[batch_index],

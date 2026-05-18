@@ -9,7 +9,7 @@ from tokenization_utils import build_fast_tokenizer, char_span_to_piece_span, to
 
 
 def normalize_label(label: str) -> str:
-    return label.strip().lower().replace("-", "_").replace(" ", "_")
+    return label.strip().lower()
 
 
 def load_samples(input_path: Path) -> list[tuple[Path, dict[str, Any]]]:
@@ -31,35 +31,6 @@ def load_samples(input_path: Path) -> list[tuple[Path, dict[str, Any]]]:
                 continue
             samples.append((input_path, json.loads(line)))
     return samples
-
-
-def char_offset_to_piece_span(
-    offset: Any,
-    token_offsets: list[tuple[int, int]],
-) -> tuple[int, int] | None:
-    if not isinstance(offset, list) or len(offset) != 2:
-        return None
-
-    start, end = offset
-    if (
-        not isinstance(start, int)
-        or not isinstance(end, int)
-        or start < 0
-        or end <= start
-    ):
-        return None
-    return char_span_to_piece_span(start, end, token_offsets)
-
-
-def dedupe_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    deduped: list[tuple[int, int]] = []
-    seen: set[tuple[int, int]] = set()
-    for span in spans:
-        if span in seen:
-            continue
-        seen.add(span)
-        deduped.append(span)
-    return deduped
 
 
 def canonicalize_argument_spans(
@@ -101,155 +72,103 @@ def canonicalize_argument_spans(
     return canonical_arguments, canonical_relations
 
 
-def build_entity_mentions(
+def build_document_annotations(
     data: dict[str, Any],
-    token_offsets: list[tuple[int, int]],
-) -> dict[str, list[tuple[int, int]]]:
-    entity_mentions_by_id: dict[str, list[tuple[int, int]]] = {}
+    tokenizer: Any,
+) -> dict[str, Any] | None:
+    source = data.get("source")
+    if not isinstance(source, dict):
+        return None
 
-    for entity in data.get("entities", []):
-        entity_id = entity.get("id")
-        if not entity_id:
-            continue
-
-        mentions: list[tuple[int, int]] = []
-        for mention in entity.get("mention", []):
-            span = char_offset_to_piece_span(
-                mention.get("offset"),
-                token_offsets,
-            )
-            if span is None:
-                continue
-            mentions.append(span)
-
-        if mentions:
-            entity_mentions_by_id[entity_id] = dedupe_spans(mentions)
-
-    return entity_mentions_by_id
-
-
-def collect_argument_spans(
-    argument_values: Any,
-    entity_mentions_by_id: dict[str, list[tuple[int, int]]],
-    token_offsets: list[tuple[int, int]],
-) -> list[tuple[int, int]]:
-    if not isinstance(argument_values, list):
-        return []
-
-    spans: list[tuple[int, int]] = []
-    for argument_value in argument_values:
-        if not isinstance(argument_value, dict):
-            continue
-
-        entity_id = argument_value.get("entity_id")
-        if isinstance(entity_id, str) and entity_id:
-            spans.extend(entity_mentions_by_id.get(entity_id, []))
-            continue
-
-        span = char_offset_to_piece_span(
-            argument_value.get("offset"),
-            token_offsets,
-        )
-        if span is None:
-            continue
-        spans.append(span)
-
-    return dedupe_spans(spans)
-
-
-def build_document_annotations(data: dict[str, Any], tokenizer: Any) -> dict[str, Any] | None:
-    document = data.get("document", "")
-    if not isinstance(document, str):
+    document = source.get("text")
+    if not isinstance(document, str) or not document.strip():
         return None
 
     tokenized = tokenize_text(tokenizer, document)
-
-    entity_mentions_by_id = build_entity_mentions(
-        data,
-        tokenized.offsets,
-    )
 
     events: list[dict[str, Any]] = []
     arguments: list[dict[str, Any]] = []
     relations: list[dict[str, Any]] = []
     event_labels: set[str] = set()
     argument_labels: set[str] = set()
-
     argument_index_by_span: dict[tuple[int, int], int] = {}
     seen_relations: set[tuple[int, int, str]] = set()
 
     for event in data.get("events", []):
-        event_type = event.get("type")
-        if not isinstance(event_type, str) or not event_type:
+        if not isinstance(event, dict):
+            continue
+
+        event_type = event.get("event_type")
+        if not isinstance(event_type, str) or not event_type.strip():
+            continue
+
+        event_span = char_span_to_piece_span(
+            event.get("start_char"),
+            event.get("end_char"),
+            tokenized.offsets,
+        )
+        if event_span is None:
             continue
 
         normalized_event_type = normalize_label(event_type)
-        event_indices: list[int] = []
-        for mention in event.get("mention", []):
-            span = char_offset_to_piece_span(
-                mention.get("offset"),
+        event_idx = len(events)
+        events.append(
+            {
+                "start": event_span[0],
+                "end": event_span[1],
+                "label": normalized_event_type,
+            }
+        )
+        event_labels.add(normalized_event_type)
+
+        for argument in event.get("arguments", []):
+            if not isinstance(argument, dict):
+                continue
+
+            role = argument.get("role")
+            if not isinstance(role, str) or not role.strip():
+                continue
+
+            argument_span = char_span_to_piece_span(
+                argument.get("start_char"),
+                argument.get("end_char"),
                 tokenized.offsets,
             )
-            if span is None:
+            if argument_span is None:
                 continue
 
-            event_indices.append(len(events))
-            events.append(
-                {
-                    "start": span[0],
-                    "end": span[1],
-                    "label": normalized_event_type,
-                }
-            )
-            event_labels.add(normalized_event_type)
-
-        if not event_indices:
-            continue
-
-        for role, argument_values in event.get("argument", {}).items():
-            if not isinstance(role, str) or not role:
-                continue
+            argument_idx = argument_index_by_span.get(argument_span)
+            if argument_idx is None:
+                argument_idx = len(arguments)
+                argument_index_by_span[argument_span] = argument_idx
+                arguments.append(
+                    {
+                        "start": argument_span[0],
+                        "end": argument_span[1],
+                    }
+                )
 
             relation_label = normalize_label(role)
-            argument_spans = collect_argument_spans(
-                argument_values,
-                entity_mentions_by_id,
-                tokenized.offsets,
-            )
-            if not argument_spans:
+            relation_key = (event_idx, argument_idx, relation_label)
+            if relation_key in seen_relations:
                 continue
-
-            for argument_span in argument_spans:
-                argument_index = argument_index_by_span.get(argument_span)
-                if argument_index is None:
-                    argument_index = len(arguments)
-                    argument_index_by_span[argument_span] = argument_index
-                    arguments.append(
-                        {
-                            "start": argument_span[0],
-                            "end": argument_span[1],
-                        }
-                    )
-
-                for event_index in event_indices:
-                    relation_key = (event_index, argument_index, relation_label)
-                    if relation_key in seen_relations:
-                        continue
-                    seen_relations.add(relation_key)
-                    relations.append(
-                        {
-                            "event_idx": event_index,
-                            "argument_idx": argument_index,
-                            "label": relation_label,
-                        }
-                    )
-                    argument_labels.add(relation_label)
+            seen_relations.add(relation_key)
+            relations.append(
+                {
+                    "event_idx": event_idx,
+                    "argument_idx": argument_idx,
+                    "label": relation_label,
+                }
+            )
+            argument_labels.add(relation_label)
 
     if not events:
         return None
 
+    arguments, relations = canonicalize_argument_spans(arguments, relations)
+
     return {
-        "id": data["id"],
+        "id": str(data.get("id", "")),
         "input_ids": list(tokenized.input_ids),
         "tokenizer_tokens": list(tokenized.tokenizer_tokens),
         "event_labels": sorted(event_labels),
@@ -258,12 +177,13 @@ def build_document_annotations(data: dict[str, Any], tokenizer: Any) -> dict[str
         "arguments": arguments,
         "relations": relations,
         "metadata": {
-            "dataset": "MAVEN-Arg",
-            "doc_id": data["id"],
-            "title": data.get("title", ""),
+            "dataset": "risk-factor-zhai",
+            "doc_id": data.get("id", ""),
+            "title": source.get("title", ""),
             "event_count": len(events),
             "argument_count": len(arguments),
             "relation_count": len(relations),
+            "source_status": data.get("status", ""),
             "tokenizer_name": tokenizer.name_or_path,
             "tokenizer_tokens_are_model_pieces": True,
         },
@@ -299,13 +219,9 @@ def slice_window(
     window_size: int,
     window_stride: int,
 ) -> dict[str, Any] | None:
-    events = sample["events"]
-    arguments = sample["arguments"]
-    relations = sample["relations"]
-
     windowed_events: list[dict[str, Any]] = []
     event_index_map: dict[int, int] = {}
-    for old_idx, event in enumerate(events):
+    for old_idx, event in enumerate(sample["events"]):
         if window_start <= event["start"] and event["end"] < window_end:
             event_index_map[old_idx] = len(windowed_events)
             windowed_events.append(
@@ -321,7 +237,7 @@ def slice_window(
 
     windowed_arguments: list[dict[str, Any]] = []
     argument_index_map: dict[int, int] = {}
-    for old_idx, argument in enumerate(arguments):
+    for old_idx, argument in enumerate(sample["arguments"]):
         if window_start <= argument["start"] and argument["end"] < window_end:
             argument_index_map[old_idx] = len(windowed_arguments)
             windowed_arguments.append(
@@ -333,7 +249,7 @@ def slice_window(
 
     windowed_relations: list[dict[str, Any]] = []
     seen_relations: set[tuple[int, int, str]] = set()
-    for relation in relations:
+    for relation in sample["relations"]:
         old_event_idx = relation["event_idx"]
         old_argument_idx = relation["argument_idx"]
         if (
@@ -341,7 +257,6 @@ def slice_window(
             or old_argument_idx not in argument_index_map
         ):
             continue
-
         relation_key = (
             event_index_map[old_event_idx],
             argument_index_map[old_argument_idx],
@@ -457,7 +372,7 @@ def build_ontology(source_files: list[Path], tokenizer: Any) -> dict[str, Any]:
                 argument_label_counts[label] = argument_label_counts.get(label, 0) + 1
 
     return {
-        "dataset": "MAVEN-Arg",
+        "dataset": "risk-factor-zhai",
         "event_labels": sorted(event_label_counts),
         "argument_labels": sorted(argument_label_counts),
         "event_label_counts": dict(sorted(event_label_counts.items())),
@@ -474,12 +389,12 @@ def default_ontology_output_path(input_path: Path, output_path: Path) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Convert MAVEN-Arg dataset to reader-normalized JSONL format"
+        description="Convert risk-factor raw JSONL to reader-normalized JSONL format"
     )
     parser.add_argument(
         "input_path",
         type=str,
-        help="Path to a MAVEN-Arg JSONL file or directory of JSONL split files",
+        help="Path to a risk-factor raw JSONL file or directory of JSONL split files",
     )
     parser.add_argument(
         "output_path",
@@ -542,26 +457,35 @@ def main() -> None:
 
     if input_path.is_dir():
         output_path.mkdir(parents=True, exist_ok=True)
+        for source_path, samples in samples_by_source.items():
+            target_path = output_path_for(source_path, input_path, output_path)
+            with open(target_path, "w", encoding="utf-8") as handle:
+                for sample in samples:
+                    handle.write(json.dumps(sample, ensure_ascii=False) + "\n")
     else:
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as handle:
+            for sample in samples_by_source.get(input_path, []):
+                handle.write(json.dumps(sample, ensure_ascii=False) + "\n")
 
-    for source_path, records in samples_by_source.items():
-        destination = output_path_for(source_path, input_path, output_path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with open(destination, "w", encoding="utf-8") as handle:
-            for record in records:
-                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    source_files = ontology_source_files(input_path)
+    ontology = build_ontology(source_files, tokenizer)
+    ontology_output = (
+        Path(args.ontology_output)
+        if args.ontology_output is not None
+        else default_ontology_output_path(input_path, output_path)
+    )
+    ontology_output.parent.mkdir(parents=True, exist_ok=True)
+    with open(ontology_output, "w", encoding="utf-8") as handle:
+        json.dump(ontology, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
 
-    if args.ontology_output:
-        ontology_output = Path(args.ontology_output)
-        ontology_output.parent.mkdir(parents=True, exist_ok=True)
-        ontology = build_ontology(ontology_source_files(input_path), tokenizer)
-        with open(ontology_output, "w", encoding="utf-8") as handle:
-            json.dump(ontology, handle, indent=2, ensure_ascii=False)
-            print(f"Wrote ontology to {ontology_output}")
-
-    print(f"Processed {processed} samples")
-    print(f"Wrote {written} normalized samples")
+    print(f"Processed documents: {processed}")
+    print(f"Written samples: {written}")
+    print(
+        f"Ontology labels: {len(ontology['event_labels'])} events, "
+        f"{len(ontology['argument_labels'])} argument roles"
+    )
 
 
 if __name__ == "__main__":

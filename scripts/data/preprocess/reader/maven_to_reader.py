@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tokenization_utils import build_fast_tokenizer, tokenize_words, word_span_to_piece_span
+
 
 def normalize_label(label: str) -> str:
     return label.strip().lower().replace("-", "_").replace(" ", "_")
@@ -65,10 +67,13 @@ def relation_label_sets(data: dict[str, Any]) -> set[str]:
     return labels
 
 
-def build_document_annotations(data: dict[str, Any]) -> dict[str, Any] | None:
+def build_document_annotations(data: dict[str, Any], tokenizer: Any) -> dict[str, Any] | None:
     token_sentences = data.get("tokens", [])
     flat_tokens = [token for sentence in token_sentences for token in sentence]
     sentence_offsets = build_sentence_offsets(token_sentences)
+    if not flat_tokens:
+        return None
+    tokenized = tokenize_words(tokenizer, flat_tokens)
 
     events: list[dict[str, Any]] = []
     arguments: list[dict[str, Any]] = []
@@ -104,10 +109,19 @@ def build_document_annotations(data: dict[str, Any]) -> dict[str, Any] | None:
             ):
                 continue
             start, end = globalize_span(sentence_offsets, sent_id, offset)
+            piece_span = word_span_to_piece_span(start, end, tokenized)
+            if piece_span is None:
+                continue
             mention_indices.append(len(events))
-            events.append({"start": start, "end": end, "label": normalized_type})
+            events.append(
+                {
+                    "start": piece_span[0],
+                    "end": piece_span[1],
+                    "label": normalized_type,
+                }
+            )
             mirrored_argument_indices.append(len(arguments))
-            arguments.append({"start": start, "end": end})
+            arguments.append({"start": piece_span[0], "end": piece_span[1]})
         if mention_indices:
             event_mentions_by_id[event["id"]] = mention_indices
             argument_mentions_by_id[event["id"]] = mirrored_argument_indices
@@ -129,8 +143,11 @@ def build_document_annotations(data: dict[str, Any]) -> dict[str, Any] | None:
         ):
             continue
         start, end = globalize_span(sentence_offsets, sent_id, offset)
+        piece_span = word_span_to_piece_span(start, end, tokenized)
+        if piece_span is None:
+            continue
         argument_mentions_by_id[timex_id] = [len(arguments)]
-        arguments.append({"start": start, "end": end})
+        arguments.append({"start": piece_span[0], "end": piece_span[1]})
 
     seen_relations: set[tuple[int, int, str]] = set()
 
@@ -165,7 +182,8 @@ def build_document_annotations(data: dict[str, Any]) -> dict[str, Any] | None:
 
     return {
         "id": data["id"],
-        "tokens": flat_tokens,
+        "input_ids": list(tokenized.input_ids),
+        "tokenizer_tokens": list(tokenized.tokenizer_tokens),
         "event_labels": event_labels,
         "argument_labels": argument_labels,
         "events": events,
@@ -178,6 +196,8 @@ def build_document_annotations(data: dict[str, Any]) -> dict[str, Any] | None:
             "event_count": len(events),
             "argument_count": len(arguments),
             "relation_count": len(relations),
+            "tokenizer_name": tokenizer.name_or_path,
+            "tokenizer_tokens_are_model_pieces": True,
         },
     }
 
@@ -283,7 +303,8 @@ def slice_window(
 
     return {
         "id": f"{sample['id']}__w{window_index}",
-        "tokens": sample["tokens"][window_start:window_end],
+        "input_ids": sample["input_ids"][window_start:window_end],
+        "tokenizer_tokens": sample["tokenizer_tokens"][window_start:window_end],
         "event_labels": list(sample["event_labels"]),
         "argument_labels": list(sample["argument_labels"]),
         "events": windowed_events,
@@ -295,10 +316,11 @@ def slice_window(
 
 def convert_document(
     data: dict[str, Any],
+    tokenizer: Any,
     window_size: int | None = None,
     window_stride: int | None = None,
 ) -> list[dict[str, Any]]:
-    sample = build_document_annotations(data)
+    sample = build_document_annotations(data, tokenizer)
     if sample is None:
         return []
 
@@ -306,7 +328,7 @@ def convert_document(
         return [sample]
 
     stride = window_stride if window_stride is not None else window_size
-    windows = build_windows(len(sample["tokens"]), window_size, stride)
+    windows = build_windows(len(sample["input_ids"]), window_size, stride)
     return [
         windowed
         for window_index, (window_start, window_end) in enumerate(windows)
@@ -378,13 +400,19 @@ def main() -> None:
         "--window-size",
         type=int,
         default=None,
-        help="Optional document window size in tokens",
+        help="Optional document window size in tokenizer pieces",
     )
     parser.add_argument(
         "--window-stride",
         type=int,
         default=None,
-        help="Optional document window stride in tokens; defaults to --window-size",
+        help="Optional document window stride in tokenizer pieces; defaults to --window-size",
+    )
+    parser.add_argument(
+        "--tokenizer_name",
+        type=str,
+        required=True,
+        help="Fast Hugging Face tokenizer used to build token-piece reader data.",
     )
     args = parser.parse_args()
 
@@ -397,6 +425,7 @@ def main() -> None:
 
     input_path = Path(args.input_path)
     output_path = Path(args.output_path)
+    tokenizer = build_fast_tokenizer(args.tokenizer_name)
     samples_by_source: dict[Path, list[dict[str, Any]]] = {}
     processed = 0
     written = 0
@@ -410,6 +439,7 @@ def main() -> None:
         processed += 1
         converted_samples = convert_document(
             data,
+            tokenizer=tokenizer,
             window_size=args.window_size,
             window_stride=args.window_stride,
         )

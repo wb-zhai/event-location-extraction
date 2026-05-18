@@ -267,8 +267,8 @@ class EventArgumentTrainer(Trainer):
         }
 
 
-def build_tokenizer(model_name: str) -> Any:
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+def build_tokenizer(tokenizer_name: str) -> Any:
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
     tokenizer.add_special_tokens(
         {"additional_special_tokens": [EVENT_MARKER, ARGUMENT_MARKER]}
     )
@@ -285,6 +285,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Train an event/argument reader with Hugging Face Trainer."
     )
     parser.add_argument("--model_name", default=DEFAULT_MODEL_NAME, type=str)
+    parser.add_argument(
+        "--tokenizer_name",
+        default=None,
+        type=str,
+        help="Tokenizer used for token-piece-native supervision. Defaults to --model_name.",
+    )
     parser.add_argument("--train_file", required=True, type=str)
     parser.add_argument("--eval_file", required=True, type=str)
     parser.add_argument("--output_dir", required=True, type=str)
@@ -360,7 +366,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--ontology_file",
         type=str,
         default=None,
-        help="Ontology JSON with 'event_labels' and 'argument_labels' used for candidate sampling.",
+        help=(
+            "Ontology JSON used for candidate sampling. Supports either "
+            "'event_labels'/'argument_labels' or "
+            "'events'/'argument_roles'."
+        ),
     )
     parser.add_argument(
         "--num_event_candidates",
@@ -427,6 +437,7 @@ def main(argv: list[str] | None = None) -> None:
         level=logging.INFO,
     )
     args = parse_args(argv)
+    tokenizer_name = args.tokenizer_name or args.model_name
 
     resolved_precision, fp16_enabled, bf16_enabled = resolve_precision_flags(
         args.precision
@@ -459,7 +470,7 @@ def main(argv: list[str] | None = None) -> None:
         else None
     )
 
-    tokenizer = build_tokenizer(args.model_name)
+    tokenizer = build_tokenizer(tokenizer_name)
     train_dataset = EventReaderDataset(
         train_samples,
         tokenizer,
@@ -471,6 +482,7 @@ def main(argv: list[str] | None = None) -> None:
         candidate_shuffle_probability=args.train_candidate_shuffle_prob,
         gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
         random_seed=args.candidate_sampling_seed,
+        expected_tokenizer_name=tokenizer_name,
     )
     eval_dataset = EventReaderDataset(
         eval_samples,
@@ -481,6 +493,7 @@ def main(argv: list[str] | None = None) -> None:
         num_relation_candidates=args.num_relation_candidates,
         is_training=False,
         random_seed=args.candidate_sampling_seed,
+        expected_tokenizer_name=tokenizer_name,
     )
 
     config = EventReaderConfig(
