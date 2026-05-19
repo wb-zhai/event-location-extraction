@@ -431,15 +431,15 @@ class EventReader(PreTrainedModel):
         outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
         return outputs.last_hidden_state
 
-    def _align_custom_head_dtype(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        target_dtype = hidden_states.dtype
-        for module in self.event_start_head.modules():
-            if isinstance(module, nn.Linear):
-                target_dtype = module.weight.dtype
-                break
-        if hidden_states.dtype == target_dtype:
-            return hidden_states
-        return hidden_states.to(target_dtype)
+    # def _align_custom_head_dtype(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    #     target_dtype = hidden_states.dtype
+    #     for module in self.event_start_head.modules():
+    #         if isinstance(module, nn.Linear):
+    #             target_dtype = module.weight.dtype
+    #             break
+    #     if hidden_states.dtype == target_dtype:
+    #         return hidden_states
+    #     return hidden_states.to(target_dtype)
 
     def _compute_conditioned_end_logits(
         self,
@@ -825,7 +825,7 @@ class EventReader(PreTrainedModel):
         **_: Any,
     ) -> dict[str, Any]:
         hidden_states = self._encode(input_ids=input_ids, attention_mask=attention_mask)
-        hidden_states = self._align_custom_head_dtype(hidden_states)
+        # hidden_states = self._align_custom_head_dtype(hidden_states)
 
         event_start_logits = self.event_start_head(hidden_states)
         argument_start_logits = (
