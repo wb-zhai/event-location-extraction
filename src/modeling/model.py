@@ -177,7 +177,7 @@ class EventReaderConfig(PretrainedConfig):
         self,
         model_name: str = DEFAULT_MODEL_NAME,
         encoder_vocab_size: int | None = None,
-        projection_dim: int = 256,
+        projection_dim: int = 512,
         hidden_dropout_prob: float = 0.1,
         relation_threshold: float = DEFAULT_RELATION_THRESHOLD,
         relation_pair_budget: int = INTERNAL_RELATION_PAIR_BUDGET,
@@ -226,9 +226,12 @@ class EventReader(PreTrainedModel):
             else (
                 encoder_from_config
                 if encoder_from_config is not None
-                else AutoModel.from_pretrained(config.model_name, dtype=torch.float32)
+                else AutoModel.from_pretrained(
+                    config.model_name
+                )  # , dtype=torch.float32)
             )
         )
+
         input_embeddings = self.get_input_embeddings()
         if input_embeddings is None:
             raise ValueError("EventReader encoder must define input embeddings")
@@ -237,32 +240,36 @@ class EventReader(PreTrainedModel):
             config.encoder_vocab_size = current_vocab_size
         elif current_vocab_size != config.encoder_vocab_size:
             self.resize_token_embeddings(config.encoder_vocab_size)
+
         hidden_size = self.encoder.config.hidden_size
         projection_dim = config.projection_dim
 
-        self.event_start_head = self._make_classifier(
-            hidden_size, 2, config.hidden_dropout_prob
-        )
-        self.event_end_head = self._make_classifier(
-            hidden_size * 2, 2, config.hidden_dropout_prob
-        )
-        self.event_span_projector = self._make_mlp(
-            hidden_size * 2,
-            projection_dim,
-            config.hidden_dropout_prob,
-        )
-        self.event_label_projector = self._make_mlp(
+        self.event_start_head = self._make_projection_head(
             hidden_size,
             projection_dim,
+            2,
+            config.hidden_dropout_prob,
+            layer_norm=False,
+        )
+        self.event_end_head = self._make_projection_head(
+            hidden_size * 2,
+            projection_dim,
+            2,
+            config.hidden_dropout_prob,
+            layer_norm=False,
+        )
+        self.event_type_start_projector = self._make_projection_head(
+            hidden_size,
+            projection_dim,
+            projection_dim,
             config.hidden_dropout_prob,
         )
-
-        modules_to_init = [
-            self.event_start_head,
-            self.event_end_head,
-            self.event_span_projector,
-            self.event_label_projector,
-        ]
+        self.event_type_end_projector = self._make_projection_head(
+            hidden_size,
+            projection_dim,
+            projection_dim,
+            config.hidden_dropout_prob,
+        )
 
         if not getattr(config, "only_event", False):
             self.argument_start_head = self._make_classifier(
@@ -296,30 +303,6 @@ class EventReader(PreTrainedModel):
                 2,
                 config.hidden_dropout_prob,
             )
-            modules_to_init.extend(
-                [
-                    self.argument_start_head,
-                    self.argument_end_head,
-                    self.argument_span_projector,
-                    self.relation_event_projector,
-                    self.relation_argument_projector,
-                    self.relation_role_projector,
-                    self.relation_classifier,
-                ]
-            )
-
-        self._init_linear_layers(modules_to_init)
-
-    def _init_linear_layers(self, modules: list[nn.Module]) -> None:
-        for parent_module in modules:
-            for module in parent_module.modules():
-                if isinstance(module, nn.Linear):
-                    nn.init.xavier_uniform_(module.weight)
-                    if module.bias is not None:
-                        nn.init.zeros_(module.bias)
-                elif isinstance(module, nn.LayerNorm):
-                    nn.init.ones_(module.weight)
-                    nn.init.zeros_(module.bias)
 
     @staticmethod
     def _make_mlp(input_dim: int, output_dim: int, dropout: float) -> nn.Sequential:
@@ -343,6 +326,25 @@ class EventReader(PreTrainedModel):
             nn.Dropout(dropout),
             nn.Linear(input_dim, output_dim),
         )
+
+    @staticmethod
+    def _make_projection_head(
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        dropout: float,
+        layer_norm: bool = True,
+    ) -> nn.Sequential:
+        layers: list[nn.Module] = [
+            nn.Dropout(dropout),
+            nn.Linear(input_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, output_dim),
+        ]
+        if layer_norm:
+            layers.append(nn.LayerNorm(output_dim))
+        return nn.Sequential(*layers)
 
     def resize_token_embeddings(
         self,
@@ -487,6 +489,25 @@ class EventReader(PreTrainedModel):
             ] = 1
         return labels
 
+    def _compute_event_type_logits(
+        self,
+        start_representations: torch.Tensor,
+        end_representations: torch.Tensor,
+        label_representations: torch.Tensor,
+        label_positions: torch.Tensor,
+    ) -> torch.Tensor:
+        span_start_features = self.event_type_start_projector(start_representations)
+        span_end_features = self.event_type_end_projector(end_representations)
+        label_start_features = self.event_type_start_projector(label_representations)
+        label_end_features = self.event_type_end_projector(label_representations)
+        span_features = torch.cat([span_start_features, span_end_features], dim=-1)
+        label_features = torch.cat([label_start_features, label_end_features], dim=-1)
+        logits = torch.bmm(
+            span_features,
+            label_features.transpose(1, 2),
+        )
+        return self._mask_invalid_columns(logits, label_positions)
+
     def _build_span_features(
         self,
         hidden_states: torch.Tensor,
@@ -496,18 +517,6 @@ class EventReader(PreTrainedModel):
         start_states = self._gather_positions(hidden_states, starts)
         end_states = self._gather_positions(hidden_states, ends)
         return torch.cat([start_states, end_states], dim=-1)
-
-    def _compute_event_type_logits(
-        self,
-        span_representations: torch.Tensor,
-        label_representations: torch.Tensor,
-        label_positions: torch.Tensor,
-    ) -> torch.Tensor:
-        logits = torch.bmm(
-            span_representations,
-            label_representations.transpose(1, 2),
-        )
-        return self._mask_invalid_columns(logits, label_positions)
 
     def compute_relation_logits(
         self,
@@ -529,6 +538,7 @@ class EventReader(PreTrainedModel):
     def _loss_or_zero(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         if logits.numel() == 0:
             return logits.new_zeros(())
+
         return F.cross_entropy(
             logits.reshape(-1, logits.shape[-1]),
             labels.reshape(-1),
@@ -659,21 +669,21 @@ class EventReader(PreTrainedModel):
                 [[item["token_end"] for item in event_predictions]],
                 device=hidden_states.device,
             )
-            event_span_features = self._build_span_features(
+            event_start_features = self._gather_positions(
                 hidden_states.unsqueeze(0),
                 event_starts,
+            )
+            event_end_features = self._gather_positions(
+                hidden_states.unsqueeze(0),
                 event_ends,
             )
-            event_label_repr = self.event_label_projector(
-                self._build_label_representations(
-                    hidden_states.unsqueeze(0),
-                    event_marker_positions.unsqueeze(0),
-                    event_label_token_starts.unsqueeze(0),
-                    event_label_token_ends.unsqueeze(0),
-                )
+            event_label_repr = self._gather_positions(
+                hidden_states.unsqueeze(0),
+                event_marker_positions.unsqueeze(0),
             )
             type_logits = self._compute_event_type_logits(
-                self.event_span_projector(event_span_features),
+                event_start_features,
+                event_end_features,
                 event_label_repr,
                 event_marker_positions.unsqueeze(0),
             )[0]
@@ -813,11 +823,11 @@ class EventReader(PreTrainedModel):
         **_: Any,
     ) -> dict[str, Any]:
         hidden_states = self._encode(input_ids=input_ids, attention_mask=attention_mask)
-        aligned_hidden_states = self._align_custom_head_dtype(hidden_states)
+        # aligned_hidden_states = self._align_custom_head_dtype(hidden_states)
 
-        event_start_logits = self.event_start_head(aligned_hidden_states)
+        event_start_logits = self.event_start_head(hidden_states)
         argument_start_logits = (
-            self.argument_start_head(aligned_hidden_states)
+            self.argument_start_head(hidden_states)
             if not getattr(self.config, "only_event", False)
             else None
         )
@@ -832,19 +842,21 @@ class EventReader(PreTrainedModel):
         }
 
         losses: list[tuple[torch.Tensor, float]] = []
+
         if event_start_labels is not None:
             event_start_loss = self._loss_or_zero(
                 event_start_logits, event_start_labels
             )
             outputs["loss_event_start"] = event_start_loss
             losses.append((event_start_loss, 1.0))
+
         if event_end_labels is not None:
             if gold_event_token_starts is None or gold_event_token_ends is None:
                 raise ValueError(
                     "Conditioned event end loss requires gold start and end positions"
                 )
             conditioned_event_end_logits = self._compute_conditioned_end_logits(
-                aligned_hidden_states,
+                hidden_states,
                 gold_event_token_starts,
                 self.event_end_head,
             )
@@ -863,6 +875,8 @@ class EventReader(PreTrainedModel):
             )
             outputs["loss_event_end"] = event_end_loss
             losses.append((event_end_loss, 1.0))
+
+        # Argument section
         if argument_start_labels is not None and not getattr(
             self.config, "only_event", False
         ):
@@ -871,6 +885,7 @@ class EventReader(PreTrainedModel):
             )
             outputs["loss_argument_start"] = argument_start_loss
             losses.append((argument_start_loss, 1.0))
+
         if argument_end_labels is not None and not getattr(
             self.config, "only_event", False
         ):
@@ -879,7 +894,7 @@ class EventReader(PreTrainedModel):
                     "Conditioned argument end loss requires gold start and end positions"
                 )
             conditioned_argument_end_logits = self._compute_conditioned_end_logits(
-                aligned_hidden_states,
+                hidden_states,
                 gold_argument_token_starts,
                 self.argument_end_head,
             )
@@ -899,15 +914,13 @@ class EventReader(PreTrainedModel):
             outputs["loss_argument_end"] = argument_end_loss
             losses.append((argument_end_loss, 1.0))
 
-        event_label_states = self._build_label_representations(
-            aligned_hidden_states,
+        event_label_states = self._gather_positions(
+            hidden_states,
             event_marker_positions,
-            event_label_token_starts,
-            event_label_token_ends,
         )
         argument_label_states = (
             self._build_label_representations(
-                aligned_hidden_states,
+                hidden_states,
                 argument_marker_positions,
                 argument_label_token_starts,
                 argument_label_token_ends,
@@ -922,14 +935,18 @@ class EventReader(PreTrainedModel):
             and gold_event_type_labels is not None
             and gold_event_token_starts.shape[1] > 0
         ):
-            gold_event_features = self._build_span_features(
-                aligned_hidden_states,
+            gold_event_start_features = self._gather_positions(
+                hidden_states,
                 gold_event_token_starts,
+            )
+            gold_event_end_features = self._gather_positions(
+                hidden_states,
                 gold_event_token_ends,
             )
             event_type_logits = self._compute_event_type_logits(
-                self.event_span_projector(gold_event_features),
-                self.event_label_projector(event_label_states),
+                gold_event_start_features,
+                gold_event_end_features,
+                event_label_states,
                 event_marker_positions,
             )
             outputs["event_type_logits"] = event_type_logits
@@ -939,7 +956,7 @@ class EventReader(PreTrainedModel):
             outputs["loss_event_type"] = event_type_loss
             losses.append((event_type_loss, 1.0))
         else:
-            gold_event_features = None
+            gold_event_start_features = None
 
         if (
             gold_argument_token_starts is not None
@@ -947,7 +964,7 @@ class EventReader(PreTrainedModel):
             and gold_argument_token_starts.shape[1] > 0
         ):
             gold_argument_features = self._build_span_features(
-                aligned_hidden_states,
+                hidden_states,
                 gold_argument_token_starts,
                 gold_argument_token_ends,
             )
@@ -958,12 +975,16 @@ class EventReader(PreTrainedModel):
             gold_event_token_starts is not None
             and gold_argument_token_starts is not None
             and relation_labels is not None
-            and gold_event_features is not None
+            and gold_event_start_features is not None
             and gold_argument_features is not None
             and argument_marker_positions.shape[1] > 0
         ):
             relation_logits = self.compute_relation_logits(
-                gold_event_features,
+                self._build_span_features(
+                    hidden_states,
+                    gold_event_token_starts,
+                    gold_event_token_ends,
+                ),
                 gold_argument_features,
                 argument_label_states,
             )
@@ -988,7 +1009,7 @@ class EventReader(PreTrainedModel):
                 )
             outputs["decoded_predictions"] = [
                 self._decode_document(
-                    hidden_states=aligned_hidden_states[batch_index],
+                    hidden_states=hidden_states[batch_index],
                     event_start_logits=event_start_logits[batch_index],
                     argument_start_logits=(
                         argument_start_logits[batch_index]

@@ -541,10 +541,10 @@ def main(argv: list[str] | None = None) -> None:
         relation_loss_weight=args.relation_loss_weight,
         only_event=args.only_event,
     )
-    encoder = AutoModel.from_pretrained(args.model_name, dtype=torch.float32)
+    encoder = AutoModel.from_pretrained(args.model_name) #, dtype=torch.float32)
     model = EventReader(config, encoder)
     model.resize_token_embeddings(len(tokenizer))
-    model = model.float()
+    # model = model.float()
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,
@@ -581,14 +581,18 @@ def main(argv: list[str] | None = None) -> None:
         data_collator=EventReaderCollator(tokenizer.pad_token_id),
     )
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
+    
     metrics = trainer.evaluate()
+    
     final_output_dir = Path(args.output_dir) / "final"
     best_relation_threshold = metrics.get("eval_best_relation_threshold")
     if best_relation_threshold is not None:
         model.config.relation_threshold = float(best_relation_threshold)
     model.config.encoder_vocab_size = len(tokenizer)
+    
     trainer.save_model(str(final_output_dir))
     tokenizer.save_pretrained(final_output_dir)
+    
     with open(
         Path(args.output_dir) / "eval_metrics.json", "w", encoding="utf-8"
     ) as handle:
