@@ -668,7 +668,7 @@ def encode_sample(
         input_ids.extend(label_piece_ids)
         attention_mask.extend([1] * len(label_piece_ids))
         document_token_mask.extend([0] * len(label_piece_ids))
-        event_label_token_ends.append(label_start + 1)
+        event_label_token_ends.append(label_start + len(label_piece_ids))
 
     argument_marker_positions: list[int] = []
     argument_label_token_starts: list[int] = []
@@ -690,7 +690,7 @@ def encode_sample(
             input_ids.extend(label_piece_ids)
             attention_mask.extend([1] * len(label_piece_ids))
             document_token_mask.extend([0] * len(label_piece_ids))
-            argument_label_token_ends.append(label_start + 1)
+            argument_label_token_ends.append(label_start + len(label_piece_ids))
 
     input_ids.append(sep_token_id)
     attention_mask.append(1)

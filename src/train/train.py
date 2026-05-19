@@ -43,6 +43,22 @@ DEFAULT_RELATION_LOSS_WEIGHT = 1.0
 RELATION_THRESHOLD_GRID = [step / 20 for step in range(1, 20)]
 
 
+def _log_dataset_candidate_stats(name: str, dataset: EventReaderDataset) -> None:
+    if not dataset.samples:
+        LOGGER.info("%s dataset is empty.", name)
+        return
+
+    event_candidate_total = sum(
+        len(candidate_sample.event_labels) for candidate_sample in dataset.samples
+    )
+    LOGGER.info(
+        "%s dataset candidate stats: samples=%s avg_event_candidates=%.2f",
+        name,
+        len(dataset.samples),
+        event_candidate_total / len(dataset.samples),
+    )
+
+
 def _prediction_with_relation_threshold(
     prediction: dict[str, Any], threshold: float
 ) -> dict[str, Any]:
@@ -505,6 +521,8 @@ def main(argv: list[str] | None = None) -> None:
         expected_tokenizer_name=tokenizer_name,
         only_event=args.only_event,
     )
+    _log_dataset_candidate_stats("train", train_dataset)
+    _log_dataset_candidate_stats("eval", eval_dataset)
 
     if len(train_dataset) > 0:
         first_sample = train_dataset[0]

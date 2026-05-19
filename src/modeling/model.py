@@ -677,9 +677,11 @@ class EventReader(PreTrainedModel):
                 hidden_states.unsqueeze(0),
                 event_ends,
             )
-            event_label_repr = self._gather_positions(
+            event_label_repr = self._build_label_representations(
                 hidden_states.unsqueeze(0),
                 event_marker_positions.unsqueeze(0),
+                event_label_token_starts.unsqueeze(0),
+                event_label_token_ends.unsqueeze(0),
             )
             type_logits = self._compute_event_type_logits(
                 event_start_features,
@@ -823,7 +825,7 @@ class EventReader(PreTrainedModel):
         **_: Any,
     ) -> dict[str, Any]:
         hidden_states = self._encode(input_ids=input_ids, attention_mask=attention_mask)
-        # aligned_hidden_states = self._align_custom_head_dtype(hidden_states)
+        hidden_states = self._align_custom_head_dtype(hidden_states)
 
         event_start_logits = self.event_start_head(hidden_states)
         argument_start_logits = (
