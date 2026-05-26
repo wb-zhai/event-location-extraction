@@ -1,19 +1,19 @@
-# unsloth==2026.4.6
-torch>=2.10.0
-transformers>=5.5,<5.6
-accelerate>=1.1.0
-datasets>=4.1,<4.9
-gliner2>=1.2.6,<1.3.0
-wandb
-pytest
-tqdm
-dotenv
-# llm inference
-google-genai
-langextract
-jinja2
-openai
-anthropic[vertex]
-trafilatura
-# db
-sqlalchemy
+unsloth==2026.4.6
+# torch>=2.10.0
+# transformers>=5.5,<5.6
+# accelerate>=1.1.0
+# datasets>=4.1,<4.9
+# gliner2>=1.2.6,<1.3.0
+# wandb
+# pytest
+# tqdm
+# dotenv
+# # llm inference
+# google-genai
+# langextract
+# jinja2
+# openai
+# anthropic[vertex]
+# trafilatura
+# # db
+# sqlalchemy
