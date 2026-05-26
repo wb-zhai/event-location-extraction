@@ -7,6 +7,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_CLUSTER_PATH = REPO_ROOT / "ontologies/risk-factors/risks.names.clusters.training.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,10 +20,10 @@ def parse_args() -> argparse.Namespace:
         help="Path to a JSONL file like dataset/zhai/raw/sample_1000_with_tags.jsonl",
     )
     parser.add_argument(
-        "--ontology-path",
+        "--cluster-path",
         type=Path,
-        default=REPO_ROOT / "ontologies" / "zhai" / "ontology.json",
-        help="Path to the ontology JSON.",
+        default=DEFAULT_CLUSTER_PATH,
+        help="Path to the ontology JSON mapping event names to clusters.",
     )
     parser.add_argument(
         "--plot-cluster",
@@ -33,12 +34,6 @@ def parse_args() -> argparse.Namespace:
         "--unknown-path",
         type=Path,
         help="Optional path to save the list of unknown event roles.",
-    )
-    parser.add_argument(
-        "--most-common",
-        type=int,
-        default=None,
-        help="Number of most common labels to include in the plot (default: all).",
     )
     return parser.parse_args()
 
@@ -61,20 +56,31 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def load_ontology(path: Path) -> dict[str, str]:
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+def load_cluster_map(path: Path) -> dict[str, str]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        raise ValueError(f"Expected a JSON list in {path}.")
 
-    return data["events"]
+    cluster_map: dict[str, str] = {}
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        cluster = str(item.get("cluster") or "").strip()
+        if name and cluster:
+            cluster_map[name] = cluster
+    return cluster_map
 
 
 def count_roles(
     records: list[dict[str, Any]], cluster_map: dict[str, str]
-) -> tuple[Counter[str], Counter[str], int, int]:
+) -> tuple[Counter[str], Counter[str], Counter[str], int, int, int]:
     event_roles: Counter[str] = Counter()
     argument_roles: Counter[str] = Counter()
+    cluster_roles: Counter[str] = Counter()
     event_total = 0
     argument_total = 0
+    cluster_total = 0
 
     for record in records:
         events = record.get("events", [])
@@ -89,6 +95,8 @@ def count_roles(
             if event_role:
                 event_roles[event_role] += 1
                 event_total += 1
+                cluster_roles[cluster_map.get(event_role, "unknown")] += 1
+                cluster_total += 1
 
             arguments = event.get("arguments", [])
             if not isinstance(arguments, list):
@@ -105,8 +113,10 @@ def count_roles(
     return (
         event_roles,
         argument_roles,
+        cluster_roles,
         event_total,
         argument_total,
+        cluster_total,
     )
 
 
@@ -122,16 +132,14 @@ def print_distribution(title: str, counts: Counter[str], total: int) -> None:
         print(f"  {label}: {count} ({pct:.2f}%)")
 
 
-def plot_distribution(
-    title: str, counts: Counter[str], output_path: Path, most_common: int | None = None
-) -> None:
+def plot_distribution(title: str, counts: Counter[str], output_path: Path) -> None:
     if not counts:
         print(f"No data to plot for {title}")
         return
 
-    labels, values = zip(*counts.most_common(n=most_common))
+    labels, values = zip(*counts.most_common())
 
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(10, 8))
     plt.barh(range(len(labels)), values, align="center")
     plt.yticks(range(len(labels)), labels)
     plt.gca().invert_yaxis()  # Highest counts at the top
@@ -146,34 +154,33 @@ def plot_distribution(
 def main() -> None:
     args = parse_args()
     records = load_jsonl(args.input_path)
-    cluster_map = load_ontology(args.ontology_path)
+    cluster_map = load_cluster_map(args.cluster_path)
     (
         event_roles,
         argument_roles,
+        cluster_roles,
         event_total,
         argument_total,
+        cluster_total,
     ) = count_roles(records, cluster_map)
 
     articles_no_events = sum(1 for r in records if not r.get("events"))
     avg_events = event_total / len(records) if records else 0.0
 
     print(f"file: {args.input_path}")
+    print(f"cluster map: {args.cluster_path}")
     print(f"records: {len(records)}")
     print(f"average events per article: {avg_events:.2f}")
     print(f"articles without events: {articles_no_events}")
     print()
     print_distribution("Event role distribution", event_roles, event_total)
     print()
+    print_distribution("Cluster distribution", cluster_roles, cluster_total)
     print()
     print_distribution("Argument role distribution", argument_roles, argument_total)
 
     if args.plot_cluster:
-        plot_distribution(
-            f"Top-{args.most_common} Event Role distribution" if args.most_common else "Event Role distribution",
-            event_roles,
-            args.plot_cluster,
-            most_common=args.most_common,
-        )
+        plot_distribution("Cluster distribution", cluster_roles, args.plot_cluster)
 
     if args.unknown_path:
         unknowns = [role for role in event_roles if role not in cluster_map]

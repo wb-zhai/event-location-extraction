@@ -19,6 +19,11 @@ def parse_args() -> argparse.Namespace:
         help="Path to a JSONL file like dataset/zhai/raw/sample_1000_with_tags.jsonl",
     )
     parser.add_argument(
+        "filter_file_path",
+        type=Path,
+        help="Path to a text file containing event roles to filter out (one per line)."
+    )
+    parser.add_argument(
         "--ontology-path",
         type=Path,
         default=REPO_ROOT / "ontologies" / "zhai" / "ontology.json",
@@ -131,7 +136,7 @@ def plot_distribution(
 
     labels, values = zip(*counts.most_common(n=most_common))
 
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(10, 8))
     plt.barh(range(len(labels)), values, align="center")
     plt.yticks(range(len(labels)), labels)
     plt.gca().invert_yaxis()  # Highest counts at the top
@@ -146,19 +151,30 @@ def plot_distribution(
 def main() -> None:
     args = parse_args()
     records = load_jsonl(args.input_path)
+    filter_records = load_jsonl(args.filter_file_path)
+
+    filter_records_ids = {
+        r.get("id") for r in filter_records if isinstance(r, dict) and "id" in r
+    }
+
+    filtered = []
+    for r in records:
+        if r.get("id") in filter_records_ids:
+            filtered.append(r)
+
     cluster_map = load_ontology(args.ontology_path)
     (
         event_roles,
         argument_roles,
         event_total,
         argument_total,
-    ) = count_roles(records, cluster_map)
+    ) = count_roles(filtered, cluster_map)
 
-    articles_no_events = sum(1 for r in records if not r.get("events"))
-    avg_events = event_total / len(records) if records else 0.0
+    articles_no_events = sum(1 for r in filtered if not r.get("events"))
+    avg_events = event_total / len(filtered) if filtered else 0.0
 
     print(f"file: {args.input_path}")
-    print(f"records: {len(records)}")
+    print(f"records: {len(filtered)} (filtered out {len(records) - len(filtered)})")
     print(f"average events per article: {avg_events:.2f}")
     print(f"articles without events: {articles_no_events}")
     print()

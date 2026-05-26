@@ -134,6 +134,46 @@ def make_worker_args(**overrides: Any) -> argparse.Namespace:
         "example_sample_size": None,
         "verbose": False,
         "mode": "quality_first",
+        "batch_size": 1000,
+        "batch_api": False,
+        "batch_display_name": None,
+        "batch_poll_interval_seconds": 1,
+    }
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
+
+
+def make_batch_args(**overrides: Any) -> argparse.Namespace:
+    defaults = {
+        "model": "extract-model",
+        "temperature": 0.0,
+        "max_tokens": 1024,
+        "reasoning_effort": "disable",
+        "strict_offsets": True,
+        "self_consistency": False,
+        "self_consistency_samples": 1,
+        "self_consistency_temperature": 0.7,
+        "self_consistency_min_successful_samples": 1,
+        "output_mode": gemini_event_gen.OUTPUT_MODE_SPANS,
+        "long_document_mode": False,
+        "long_document_threshold_chars": 1000,
+        "window_target_chars": 1000,
+        "window_max_chars": 1500,
+        "window_overlap_sentences": 1,
+        "enable_verifier": False,
+        "enable_synthetic_gaps": False,
+        "enable_relevance_filter": False,
+        "relevance_model": None,
+        "relevance_max_chars": 3000,
+        "relevance_confidence_threshold": 0.8,
+        "example_sample_size": None,
+        "verbose": False,
+        "mode": "quality_first",
+        "batch_size": 1000,
+        "workers": 2,
+        "batch_api": True,
+        "batch_display_name": None,
+        "batch_poll_interval_seconds": 1,
     }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -1949,3 +1989,299 @@ def test_apply_pipeline_defaults_applies_relevance_config(tmp_path: Path) -> Non
     assert args.relevance_model == "gemini-2.5-flash-lite"
     assert args.relevance_max_chars == 2222
     assert args.relevance_confidence_threshold == 0.9
+
+
+def test_build_extraction_tasks_expands_long_document_self_consistency() -> None:
+    text = "Sentence one. Sentence two.\n\nSentence three. Sentence four."
+    args = make_batch_args(
+        long_document_mode=True,
+        long_document_threshold_chars=1,
+        self_consistency=True,
+        self_consistency_samples=3,
+        window_target_chars=20,
+        window_max_chars=40,
+        window_overlap_sentences=0,
+    )
+
+    tasks = gemini_event_gen.build_extraction_tasks(
+        [{"id": "r1", "title": "Title", "text": text}],
+        args=args,
+        ontology_text="- weather shocks: weather",
+        user_prompt_template="{ontology}\n{title}\n{text}",
+        argument_roles_text="",
+        event_argument_roles_text="",
+        location_types_text="",
+        examples=[],
+    )
+
+    windows = gemini_event_gen.build_article_windows(
+        text,
+        target_chars=args.window_target_chars,
+        max_chars=args.window_max_chars,
+        overlap_sentences=args.window_overlap_sentences,
+    )
+    assert len(tasks) == len(windows) * 3
+    assert {task.sample_index for task in tasks} == {0, 1, 2}
+    assert {task.window.window_index for task in tasks if task.window is not None} == {
+        window.window_index for window in windows
+    }
+
+
+def test_build_batch_chunks_assigns_chunk_indexes() -> None:
+    request_config = {"response_mime_type": "application/json"}
+    tasks = [
+        gemini_event_gen.ExtractionBatchTask(
+            batch_key=f"r{i}",
+            record_id="r",
+            prompt=f"prompt-{i}",
+            text="body",
+        )
+        for i in range(5)
+    ]
+
+    chunks = gemini_event_gen.build_batch_chunks(
+        tasks=tasks,
+        stage="extraction",
+        batch_size=2,
+        request_config=request_config,
+    )
+
+    assert [len(chunk.request_lines) for chunk in chunks] == [2, 2, 1]
+    assert [task.chunk_index for task in tasks] == [1, 1, 2, 2, 3]
+    assert chunks[0].request_lines[0]["key"] == "r0"
+
+
+def test_batch_request_config_uses_batch_api_field_names() -> None:
+    args = make_batch_args(
+        model="gemini-3.1-pro-preview",
+        max_tokens=123,
+        temperature=0.5,
+        reasoning_effort="low",
+    )
+
+    config = gemini_event_gen.batch_request_config(
+        args,
+        "system prompt",
+        gemini_event_gen.BatchEventsPayload,
+    )
+    request = gemini_event_gen.build_batch_request(
+        {"id": "r1"},
+        "prompt",
+        config,
+    )["request"]
+
+    assert "systemInstruction" in request
+    assert "generationConfig" in request
+    assert "system_instruction" not in request
+    assert "generation_config" not in request
+    assert request["generationConfig"]["responseMimeType"] == "application/json"
+    assert request["generationConfig"]["maxOutputTokens"] == 123
+    assert request["generationConfig"]["temperature"] == 0.5
+
+
+def test_execute_batch_stage_respects_workers(monkeypatch: Any, tmp_path: Path) -> None:
+    in_flight = 0
+    max_in_flight = 0
+
+    async def fake_execute_batch_chunk(**kwargs: Any) -> dict[str, Any]:
+        nonlocal in_flight, max_in_flight
+        in_flight += 1
+        max_in_flight = max(max_in_flight, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        chunk = kwargs["chunk"]
+        return {
+            "stage": chunk.stage,
+            "chunk_index": chunk.chunk_index,
+            "status": "ok",
+            "task_keys": chunk.task_keys,
+        }
+
+    monkeypatch.setattr(gemini_event_gen, "execute_batch_chunk", fake_execute_batch_chunk)
+
+    chunks = [
+        gemini_event_gen.BatchChunk(
+            stage="extraction",
+            chunk_index=index,
+            request_lines=[],
+            task_keys=[f"r{index}"],
+        )
+        for index in range(1, 6)
+    ]
+
+    results = asyncio.run(
+        gemini_event_gen.execute_batch_stage(
+            client=object(),
+            chunks=chunks,
+            output_path=tmp_path / "out.jsonl",
+            model_name="gemini",
+            batch_display_name=None,
+            poll_interval_seconds=1,
+            workers=2,
+        )
+    )
+
+    assert len(results) == 5
+    assert max_in_flight == 2
+
+
+def test_aggregate_extraction_record_windowed_self_consistency() -> None:
+    text = "Alpha drought.\n\nBeta flood."
+    args = make_batch_args(
+        long_document_mode=True,
+        long_document_threshold_chars=1,
+        self_consistency=True,
+        self_consistency_samples=3,
+        self_consistency_min_successful_samples=2,
+        window_target_chars=20,
+        window_max_chars=40,
+        window_overlap_sentences=0,
+        output_mode=gemini_event_gen.OUTPUT_MODE_SPANS,
+    )
+    record = {"id": "r1", "title": "Title", "text": text}
+    tasks = gemini_event_gen.build_extraction_tasks(
+        [record],
+        args=args,
+        ontology_text="- weather shocks: weather",
+        user_prompt_template="{ontology}\n{title}\n{text}",
+        argument_roles_text="",
+        event_argument_roles_text="",
+        location_types_text="",
+        examples=[],
+    )
+
+    task_results = {}
+    for task in tasks:
+        if task.window is None:
+            continue
+        if task.window.window_index == 0:
+            task_results[task.batch_key] = {
+                "status": "ok",
+                "payload": [span("drought", "weather shocks", 6, 13)],
+                "metadata": {"prompt_tokens": 1},
+            }
+        elif task.sample_index == 0:
+            task_results[task.batch_key] = {
+                "status": "error",
+                "error": "sample failed",
+            }
+        else:
+            task_results[task.batch_key] = {
+                "status": "ok",
+                "payload": [span("flood", "weather shocks", 5, 10)],
+                "metadata": {"prompt_tokens": 1},
+            }
+
+    result = gemini_event_gen.aggregate_extraction_record(
+        record=record,
+        tasks=tasks,
+        task_results=task_results,
+        args=args,
+        model_name="gemini",
+    )
+
+    assert result["status"] == "ok"
+    assert [item["span_text"] for item in result["spans"]] == ["drought", "flood"]
+    long_document = result["llm"]["metadata"]["long_document"]
+    assert long_document["enabled"] is True
+    assert long_document["window_count"] == 2
+    assert long_document["window_errors"] == []
+
+
+def test_aggregate_extraction_record_self_consistency_error() -> None:
+    args = make_batch_args(
+        self_consistency=True,
+        self_consistency_samples=3,
+        self_consistency_min_successful_samples=2,
+        output_mode=gemini_event_gen.OUTPUT_MODE_SPANS,
+    )
+    record = {"id": "r1", "title": "Title", "text": "drought"}
+    tasks = gemini_event_gen.build_extraction_tasks(
+        [record],
+        args=args,
+        ontology_text="- weather shocks: weather",
+        user_prompt_template="{ontology}\n{title}\n{text}",
+        argument_roles_text="",
+        event_argument_roles_text="",
+        location_types_text="",
+        examples=[],
+    )
+    task_results = {
+        tasks[0].batch_key: {
+            "status": "ok",
+            "payload": [span("drought", "weather shocks", 0, 7)],
+            "metadata": {"prompt_tokens": 1},
+        },
+        tasks[1].batch_key: {"status": "error", "error": "boom"},
+        tasks[2].batch_key: {"status": "error", "error": "boom"},
+    }
+
+    result = gemini_event_gen.aggregate_extraction_record(
+        record=record,
+        tasks=tasks,
+        task_results=task_results,
+        args=args,
+        model_name="gemini",
+    )
+
+    assert result["status"] == "error"
+    assert "Self-consistency failed" in result["error"]
+
+
+def test_apply_pipeline_defaults_applies_batch_size_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("batch_size: 77\n", encoding="utf-8")
+
+    args = argparse.Namespace(
+        input=Path("in.jsonl"),
+        output=Path("out.jsonl"),
+        config=config_path,
+        mode="quality_first",
+        ontology=Path("ontology.json"),
+        model="gemini-2.5-flash",
+        batch_api=True,
+        batch_size=1000,
+        batch_poll_interval_seconds=1,
+        batch_display_name=None,
+        workers=1,
+        temperature=0.0,
+        max_tokens=4096,
+        reasoning_effort="disable",
+        output_mode=None,
+        max_retries=0,
+        initial_backoff=0.0,
+        max_backoff=0.0,
+        limit=None,
+        random_sample=False,
+        examples=Path("examples.jsonl"),
+        example_sample_size=None,
+        progress=False,
+        retry_failed=False,
+        overwrite=False,
+        strict_offsets=None,
+        self_consistency=None,
+        self_consistency_samples=None,
+        self_consistency_temperature=None,
+        self_consistency_min_successful_samples=3,
+        long_document_mode=None,
+        long_document_threshold_chars=1000,
+        window_target_chars=None,
+        window_max_chars=None,
+        window_overlap_sentences=None,
+        enable_verifier=None,
+        enable_synthetic_gaps=None,
+        enable_relevance_filter=None,
+        relevance_model=None,
+        relevance_max_chars=3000,
+        relevance_confidence_threshold=0.8,
+        report=None,
+        system_prompt_file=None,
+        user_prompt_file=None,
+        env_file=Path(".env"),
+        verbose=False,
+        log_level="INFO",
+    )
+
+    gemini_event_gen.apply_pipeline_defaults(args)
+
+    assert args.batch_size == 77

@@ -9,6 +9,11 @@ from src.inference.text_anchor import AnchorStatus, TextAnchorResolver
 
 
 _ANCHOR_RESOLVER = TextAnchorResolver()
+_WEAK_MATCH_THRESHOLD = 0.5
+EventAnnotation = tuple[str, int, int]
+ArgumentAnnotation = tuple[str, int, int, str, int, int]
+EventSpanAnnotation = tuple[int, int]
+ArgumentSpanAnnotation = tuple[int, int, int, int]
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -19,6 +24,24 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
             if line:
                 rows.append(json.loads(line))
     return rows
+
+
+def _prediction_events(row: dict[str, Any]) -> list[dict[str, Any]]:
+    prediction = row.get("prediction")
+    if isinstance(prediction, dict):
+        events = prediction.get("events")
+        if isinstance(events, list):
+            return events
+
+    answer = row.get("answer")
+    if isinstance(answer, dict):
+        nested_prediction = answer.get("prediction")
+        if isinstance(nested_prediction, dict):
+            events = nested_prediction.get("events")
+            if isinstance(events, list):
+                return events
+
+    return []
 
 
 def _prf(tp: int, fp: int, fn: int) -> tuple[float, float, float]:
@@ -54,15 +77,15 @@ def _resolve_span(text: str, obj: dict[str, Any]) -> tuple[tuple[int, int] | Non
     return None, AnchorStatus.NOT_FOUND
 
 
-def _normalize(doc_text: str, events: list[dict[str, Any]]) -> tuple[
-    set[tuple[str, int, int]],
-    set[tuple[str, int, int, str, int, int]],
+def _collect_annotations(doc_text: str, events: list[dict[str, Any]]) -> tuple[
+    set[EventAnnotation],
+    set[ArgumentAnnotation],
     int,
     int,
     dict[str, int],
 ]:
-    event_set: set[tuple[str, int, int]] = set()
-    arg_set: set[tuple[str, int, int, str, int, int]] = set()
+    event_set: set[EventAnnotation] = set()
+    arg_set: set[ArgumentAnnotation] = set()
     grounded = 0
     total = 0
     status_counts = {
@@ -97,6 +120,198 @@ def _normalize(doc_text: str, events: list[dict[str, Any]]) -> tuple[
     return event_set, arg_set, grounded, total, status_counts
 
 
+def _event_spans(events: set[EventAnnotation]) -> set[EventSpanAnnotation]:
+    return {(start, end) for _, start, end in events}
+
+
+def _argument_spans(args: set[ArgumentAnnotation]) -> set[ArgumentSpanAnnotation]:
+    return {
+        (event_start, event_end, arg_start, arg_end)
+        for _, event_start, event_end, _, arg_start, arg_end in args
+    }
+
+
+def _merge_status_counts(
+    totals: dict[str, int], counts: dict[str, int]
+) -> dict[str, int]:
+    for status, count in counts.items():
+        totals[status] = totals.get(status, 0) + count
+    return totals
+
+
+def _score_annotation_sets(
+    gold: set[tuple[Any, ...]], pred: set[tuple[Any, ...]]
+) -> tuple[int, int, int]:
+    return len(gold & pred), len(pred - gold), len(gold - pred)
+
+
+def _span_overlap_ratio(
+    first_span: tuple[int, int], second_span: tuple[int, int]
+) -> float:
+    first_start, first_end = first_span
+    second_start, second_end = second_span
+    overlap = max(0, min(first_end, second_end) - max(first_start, second_start))
+    if overlap == 0:
+        return 0.0
+    first_length = max(0, first_end - first_start)
+    second_length = max(0, second_end - second_start)
+    denominator = max(first_length, second_length)
+    return overlap / denominator if denominator else 0.0
+
+
+def _match_weak_events(
+    gold: set[EventAnnotation], pred: set[EventAnnotation]
+) -> tuple[int, int, int]:
+    available_gold = set(gold)
+    matched = 0
+
+    for pred_event in pred:
+        pred_label, pred_start, pred_end = pred_event
+        best_gold = None
+        best_overlap = 0.0
+
+        for gold_event in available_gold:
+            gold_label, gold_start, gold_end = gold_event
+            if pred_label != gold_label:
+                continue
+            overlap_ratio = _span_overlap_ratio(
+                (pred_start, pred_end), (gold_start, gold_end)
+            )
+            if (
+                overlap_ratio >= _WEAK_MATCH_THRESHOLD
+                and overlap_ratio > best_overlap
+            ):
+                best_overlap = overlap_ratio
+                best_gold = gold_event
+
+        if best_gold is None:
+            continue
+
+        available_gold.remove(best_gold)
+        matched += 1
+
+    return matched, len(pred) - matched, len(gold) - matched
+
+
+def _match_weak_event_spans(
+    gold: set[EventSpanAnnotation], pred: set[EventSpanAnnotation]
+) -> tuple[int, int, int]:
+    available_gold = set(gold)
+    matched = 0
+
+    for pred_start, pred_end in pred:
+        best_gold = None
+        best_overlap = 0.0
+
+        for gold_start, gold_end in available_gold:
+            overlap_ratio = _span_overlap_ratio(
+                (pred_start, pred_end), (gold_start, gold_end)
+            )
+            if (
+                overlap_ratio >= _WEAK_MATCH_THRESHOLD
+                and overlap_ratio > best_overlap
+            ):
+                best_overlap = overlap_ratio
+                best_gold = (gold_start, gold_end)
+
+        if best_gold is None:
+            continue
+
+        available_gold.remove(best_gold)
+        matched += 1
+
+    return matched, len(pred) - matched, len(gold) - matched
+
+
+def _match_weak_arguments(
+    gold: set[ArgumentAnnotation], pred: set[ArgumentAnnotation]
+) -> tuple[int, int, int]:
+    available_gold = set(gold)
+    matched = 0
+
+    for pred_arg in pred:
+        (
+            pred_event_type,
+            pred_event_start,
+            pred_event_end,
+            pred_role,
+            pred_arg_start,
+            pred_arg_end,
+        ) = pred_arg
+        best_gold = None
+        best_overlap = 0.0
+
+        for gold_arg in available_gold:
+            (
+                gold_event_type,
+                gold_event_start,
+                gold_event_end,
+                gold_role,
+                gold_arg_start,
+                gold_arg_end,
+            ) = gold_arg
+            if pred_event_type != gold_event_type:
+                continue
+            if pred_event_start != gold_event_start or pred_event_end != gold_event_end:
+                continue
+            if pred_role != gold_role:
+                continue
+            overlap_ratio = _span_overlap_ratio(
+                (pred_arg_start, pred_arg_end), (gold_arg_start, gold_arg_end)
+            )
+            if (
+                overlap_ratio >= _WEAK_MATCH_THRESHOLD
+                and overlap_ratio > best_overlap
+            ):
+                best_overlap = overlap_ratio
+                best_gold = gold_arg
+
+        if best_gold is None:
+            continue
+
+        available_gold.remove(best_gold)
+        matched += 1
+
+    return matched, len(pred) - matched, len(gold) - matched
+
+
+def _match_weak_argument_spans(
+    gold: set[ArgumentSpanAnnotation], pred: set[ArgumentSpanAnnotation]
+) -> tuple[int, int, int]:
+    available_gold = set(gold)
+    matched = 0
+
+    for pred_event_start, pred_event_end, pred_arg_start, pred_arg_end in pred:
+        best_gold = None
+        best_overlap = 0.0
+
+        for gold_event_start, gold_event_end, gold_arg_start, gold_arg_end in available_gold:
+            if pred_event_start != gold_event_start or pred_event_end != gold_event_end:
+                continue
+            overlap_ratio = _span_overlap_ratio(
+                (pred_arg_start, pred_arg_end), (gold_arg_start, gold_arg_end)
+            )
+            if (
+                overlap_ratio >= _WEAK_MATCH_THRESHOLD
+                and overlap_ratio > best_overlap
+            ):
+                best_overlap = overlap_ratio
+                best_gold = (
+                    gold_event_start,
+                    gold_event_end,
+                    gold_arg_start,
+                    gold_arg_end,
+                )
+
+        if best_gold is None:
+            continue
+
+        available_gold.remove(best_gold)
+        matched += 1
+
+    return matched, len(pred) - matched, len(gold) - matched
+
+
 def evaluate(
     gold_rows: list[dict[str, Any]], pred_rows: list[dict[str, Any]]
 ) -> dict[str, float]:
@@ -106,7 +321,13 @@ def evaluate(
         )
 
     ev_tp = ev_fp = ev_fn = 0
+    ev_span_tp = ev_span_fp = ev_span_fn = 0
     arg_tp = arg_fp = arg_fn = 0
+    arg_span_tp = arg_span_fp = arg_span_fn = 0
+    weak_ev_tp = weak_ev_fp = weak_ev_fn = 0
+    weak_ev_span_tp = weak_ev_span_fp = weak_ev_span_fn = 0
+    weak_arg_tp = weak_arg_fp = weak_arg_fn = 0
+    weak_arg_span_tp = weak_arg_span_fp = weak_arg_span_fn = 0
     grounded_total = predicted_total = 0
     em_docs = 0
     status_totals = {
@@ -119,29 +340,92 @@ def evaluate(
     for g, p in zip(gold_rows, pred_rows):
         text = g["question"]
         g_events = g["answer"]["events"]
-        p_events = p.get("answer", {}).get("prediction", {}).get("events", [])
+        p_events = _prediction_events(p)
 
-        g_ev, g_arg, _, _, _ = _normalize(text, g_events)
-        p_ev, p_arg, grounded, total, status_counts = _normalize(text, p_events)
+        g_ev, g_arg, _, _, _ = _collect_annotations(text, g_events)
+        p_ev, p_arg, grounded, total, status_counts = _collect_annotations(text, p_events)
+        g_ev_spans = _event_spans(g_ev)
+        p_ev_spans = _event_spans(p_ev)
+        g_arg_spans = _argument_spans(g_arg)
+        p_arg_spans = _argument_spans(p_arg)
 
         grounded_total += grounded
         predicted_total += total
-        for status, count in status_counts.items():
-            status_totals[status] = status_totals.get(status, 0) + count
+        _merge_status_counts(status_totals, status_counts)
 
-        ev_tp += len(g_ev & p_ev)
-        ev_fp += len(p_ev - g_ev)
-        ev_fn += len(g_ev - p_ev)
+        doc_ev_tp, doc_ev_fp, doc_ev_fn = _score_annotation_sets(g_ev, p_ev)
+        ev_tp += doc_ev_tp
+        ev_fp += doc_ev_fp
+        ev_fn += doc_ev_fn
 
-        arg_tp += len(g_arg & p_arg)
-        arg_fp += len(p_arg - g_arg)
-        arg_fn += len(g_arg - p_arg)
+        doc_ev_span_tp, doc_ev_span_fp, doc_ev_span_fn = _score_annotation_sets(
+            g_ev_spans, p_ev_spans
+        )
+        ev_span_tp += doc_ev_span_tp
+        ev_span_fp += doc_ev_span_fp
+        ev_span_fn += doc_ev_span_fn
+
+        doc_arg_tp, doc_arg_fp, doc_arg_fn = _score_annotation_sets(g_arg, p_arg)
+        arg_tp += doc_arg_tp
+        arg_fp += doc_arg_fp
+        arg_fn += doc_arg_fn
+
+        doc_arg_span_tp, doc_arg_span_fp, doc_arg_span_fn = _score_annotation_sets(
+            g_arg_spans, p_arg_spans
+        )
+        arg_span_tp += doc_arg_span_tp
+        arg_span_fp += doc_arg_span_fp
+        arg_span_fn += doc_arg_span_fn
+
+        doc_weak_ev_tp, doc_weak_ev_fp, doc_weak_ev_fn = _match_weak_events(g_ev, p_ev)
+        weak_ev_tp += doc_weak_ev_tp
+        weak_ev_fp += doc_weak_ev_fp
+        weak_ev_fn += doc_weak_ev_fn
+
+        (
+            doc_weak_ev_span_tp,
+            doc_weak_ev_span_fp,
+            doc_weak_ev_span_fn,
+        ) = _match_weak_event_spans(g_ev_spans, p_ev_spans)
+        weak_ev_span_tp += doc_weak_ev_span_tp
+        weak_ev_span_fp += doc_weak_ev_span_fp
+        weak_ev_span_fn += doc_weak_ev_span_fn
+
+        doc_weak_arg_tp, doc_weak_arg_fp, doc_weak_arg_fn = _match_weak_arguments(
+            g_arg, p_arg
+        )
+        weak_arg_tp += doc_weak_arg_tp
+        weak_arg_fp += doc_weak_arg_fp
+        weak_arg_fn += doc_weak_arg_fn
+
+        (
+            doc_weak_arg_span_tp,
+            doc_weak_arg_span_fp,
+            doc_weak_arg_span_fn,
+        ) = _match_weak_argument_spans(g_arg_spans, p_arg_spans)
+        weak_arg_span_tp += doc_weak_arg_span_tp
+        weak_arg_span_fp += doc_weak_arg_span_fp
+        weak_arg_span_fn += doc_weak_arg_span_fn
 
         if g_ev == p_ev and g_arg == p_arg:
             em_docs += 1
 
     ev_p, ev_r, ev_f1 = _prf(ev_tp, ev_fp, ev_fn)
+    ev_span_p, ev_span_r, ev_span_f1 = _prf(ev_span_tp, ev_span_fp, ev_span_fn)
     arg_p, arg_r, arg_f1 = _prf(arg_tp, arg_fp, arg_fn)
+    arg_span_p, arg_span_r, arg_span_f1 = _prf(
+        arg_span_tp, arg_span_fp, arg_span_fn
+    )
+    weak_ev_p, weak_ev_r, weak_ev_f1 = _prf(weak_ev_tp, weak_ev_fp, weak_ev_fn)
+    weak_ev_span_p, weak_ev_span_r, weak_ev_span_f1 = _prf(
+        weak_ev_span_tp, weak_ev_span_fp, weak_ev_span_fn
+    )
+    weak_arg_p, weak_arg_r, weak_arg_f1 = _prf(
+        weak_arg_tp, weak_arg_fp, weak_arg_fn
+    )
+    weak_arg_span_p, weak_arg_span_r, weak_arg_span_f1 = _prf(
+        weak_arg_span_tp, weak_arg_span_fp, weak_arg_span_fn
+    )
 
     grounding_rate = grounded_total / predicted_total if predicted_total else 0.0
     hallucinated_span_rate = 1.0 - grounding_rate
@@ -171,9 +455,27 @@ def evaluate(
         "event_precision": ev_p,
         "event_recall": ev_r,
         "event_f1": ev_f1,
+        "event_span_precision": ev_span_p,
+        "event_span_recall": ev_span_r,
+        "event_span_f1": ev_span_f1,
+        "event_weak_precision": weak_ev_p,
+        "event_weak_recall": weak_ev_r,
+        "event_weak_f1": weak_ev_f1,
+        "event_span_weak_precision": weak_ev_span_p,
+        "event_span_weak_recall": weak_ev_span_r,
+        "event_span_weak_f1": weak_ev_span_f1,
         "argument_precision": arg_p,
         "argument_recall": arg_r,
         "argument_f1": arg_f1,
+        "argument_span_precision": arg_span_p,
+        "argument_span_recall": arg_span_r,
+        "argument_span_f1": arg_span_f1,
+        "argument_weak_precision": weak_arg_p,
+        "argument_weak_recall": weak_arg_r,
+        "argument_weak_f1": weak_arg_f1,
+        "argument_span_weak_precision": weak_arg_span_p,
+        "argument_span_weak_recall": weak_arg_span_r,
+        "argument_span_weak_f1": weak_arg_span_f1,
         "grounding_rate": grounding_rate,
         "hallucinated_span_rate": hallucinated_span_rate,
         "doc_exact_match": doc_em,
