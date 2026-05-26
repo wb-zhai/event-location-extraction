@@ -64,6 +64,33 @@ food_insecurity_regex = re.compile(
     re.IGNORECASE,
 )
 
+exhaustive_food_insecurity_regex = re.compile(
+    r"\b(?:"
+    r"food insecurity|acute food insecurity|chronic food insecurity|severe food insecurity|"
+    r"food security|food security crisis|food crisis|nutrition crisis|"
+    r"hunger crisis|acute hunger|chronic hunger|hunger|famine|near famine|"
+    r"malnutrition|acute malnutrition|severe acute malnutrition|child malnutrition|"
+    r"undernourishment|undernutrition|stunting|wasting|"
+    r"food scarcity|food shortage(?:s)?|grain shortage(?:s)?|lack of food|"
+    r"food access|food availability|food affordability|food consumption|"
+    r"food aid|food assistance|emergency food aid|humanitarian food assistance|"
+    r"cash assistance|nutrition assistance|school feeding|"
+    r"rising food prices|high food prices|food price inflation|food inflation|"
+    r"cereal prices|wheat prices|maize prices|rice prices|bread prices|"
+    r"fertilizer shortage|fertilizer prices|input costs|"
+    r"crop failure|harvest failure|poor harvest|failed harvest|yield loss(?:es)?|"
+    r"livestock deaths|pasture shortage|water shortage(?:s)?|"
+    r"drought|dry spell(?:s)?|heatwave(?:s)?|flood(?:ing)?|flash flood(?:s)?|"
+    r"storm(?:s)?|cyclone(?:s)?|hurricane(?:s)?|typhoon(?:s)?|landslide(?:s)?|"
+    r"climate shock(?:s)?|weather shock(?:s)?|el nino|la nina|"
+    r"conflict|armed conflict|violence|insecurity|displacement|forced displacement|"
+    r"refugee(?:s)?|internally displaced|idp(?:s)?|"
+    r"locust(?:s)?|desert locust(?:s)?|fall armyworm|crop pest(?:s)?|livestock disease(?:s)?|"
+    r"cholera outbreak(?:s)?|market disruption(?:s)?|supply chain disruption(?:s)?"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 class RelevanceDecision(BaseModel):
     is_relevant: bool = Field(

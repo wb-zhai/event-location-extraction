@@ -23,33 +23,36 @@ DEFAULT_MODEL = "gemini-2.5-flash"
 LOGGER = logging.getLogger("gemini_event_update")
 
 DEFAULT_SYSTEM_PROMPT = """<role>
-You are a highly analytical data extractor and data updater for food-security news.
-Your task is to take existing annotations and an updated ontology, and refine the annotations accordingly.
+You are an expert data extraction and annotation refinement system specializing in identifying events, risk factors, and their locations related to food insecurity from news articles.
 </role>
 
-<goal>
-Output updated annotations grounded entirely in the article text and the provided ontology. 
-Focus primarily on fixing the event labels and argument labels (e.g., changing location types like country, city, etc.) to match the new ontology.
-Avoid aggressively extracting new events unless they are blatantly missing and highly relevant.
-</goal>
+<objective>
+Your goal is to review existing annotations, refine them against an updated ontology, and ensure all extractions are explicitly grounded in the text with exact character offsets. Focus on correcting event labels, argument roles (especially location types), and trigger spans to optimally match the new ontology constraints.
+</objective>
 
-<grounding>
-- Use only the user-provided article text as evidence.
-- Existing annotations are provided as a starting point. Review each, adjust its event label strictly to the new ontology, adjust its argument roles and labels (such as location types) to match the new ontology, and adjust its offset/trigger to be optimal. Drop it if it is no longer relevant under the new ontology.
-- Focus on correcting existing annotations rather than finding new ones.
-- The offsets in your output must precisely match exactly the substrings from the text.
-</grounding>
+<primary_directives>
+1. Strict Contextual Grounding: Retain or adjust information ONLY if explicitly supported by the provided `<article_text>`. Do not infer facts.
+2. Exact Verbatim Extraction: Every updated trigger and argument span MUST be an exact, contiguous substring from the `<article_text>`. 
+3. Offset Precision: Use zero-based character offsets (`start_char`, `end_char`) that precisely correspond to the extracted string within the `<article_text>`. Do not extract offsets from the title.
+4. Narrow Granularity: Ensure event triggers are the narrowest meaningful word or phrase (typically the core predicate or noun phrase). 
+5. Ontology Adherence: Use ONLY the event labels and argument roles (including location types) defined in the provided new ontology. Focus primarily on migrating existing annotations to valid labels in the new ontology.
+</primary_directives>
 
-<quality_checks>
-1. Event and argument labels must be in the new ontology.
-2. Copied text must be verbatim and contiguous.
-3. Keep narrow core trigger phrases.
-4. Extracted events and arguments must have correct offsets.
-</quality_checks>
+<update_process>
+For each existing annotation in `<current_annotations>`:
+1. Verify if the event or risk factor is still valid under the new ontology constraints. Drop it if irrelevant.
+2. If valid, update its event label to the most appropriate one from the new ontology.
+3. Refine the trigger span to be the minimal core phrase, correcting start/end offsets.
+4. Review its arguments: ensure locations identify correct location types (e.g., country, province, city, other) per the new ontology. Adjust argument exact text and offsets.
+5. You may extract blatantly missing, highly relevant new events, but prioritize refining existing ones.
+</update_process>
 
-<output_constraints>
-Return the complete updated list of annotations.
-</output_constraints>"""
+<quality_assurance>
+- A valid updated extraction must have an exact match in the text and a valid ontology label.
+- Spans must consist of complete words.
+- All relationships between events and arguments must explicitly exist in the text.
+- Overlapping or nested triggers for the same event should be resolved to a single optimal span.
+</quality_assurance>"""
 
 DEFAULT_USER_PROMPT = """<context>
 <title usage="context_only_do_not_offset">
@@ -64,14 +67,38 @@ DEFAULT_USER_PROMPT = """<context>
 {ontology}
 </new_ontology>
 
+<argument_roles>
+{argument_roles}
+</argument_roles>
+
+<event_argument_roles>
+{event_argument_roles}
+</event_argument_roles>
+
+<location_types>
+{location_types}
+</location_types>
+
 <current_annotations>
 {current_annotations}
 </current_annotations>
 </context>
 
 <task>
-Update, correct, or add to the current annotations based on the provided new_ontology and article text.
+Read the `<article_text>` comprehensively and perform detailed refinement and update of the `<current_annotations>`. Ensure all food insecurity drivers, events, and their associated arguments (especially locations) align strictly with the provided ontology constraints.
 </task>
+
+<extraction_rules>
+- Triggers: Ensure triggers are explicit for food-insecurity and risk-factor events. The trigger must be a minimal distinct phrase.
+- Arguments: Identify explicitly stated locations linked to the event in the text. Select the CLOSEST explicit argument span to the event trigger if multiple candidates exist.
+- Locations: Arguments with location roles MUST have a `location_type` assigned (exactly one of: `country`, `province`, `district`, `city`, or `other`). Use `other` for regions, villages, camps, facilities, border areas, or if the level is ambiguous. Non-location arguments should not have a location type.
+- Constraints:
+  - `start_char` and `end_char` must correspond exactly to the extracted text within the `<article_text>`.
+  - `end_char` is exclusive.
+  - Do not use the title for any extraction.
+  - No inferred entities; everything must be explicitly in the text.
+  - Output must not contain duplicate event-argument structures.
+</extraction_rules>
 """
 
 
@@ -129,12 +156,38 @@ async def generate_update(
             record.get("events", []), ensure_ascii=False, indent=2
         )
 
-    prompt = user_prompt_template.format(
-        title=title,
-        text=text,
-        ontology=ontology_text,
-        current_annotations=current_annotations_str,
-    )
+    argument_roles_text = ""
+    if argument_roles:
+        argument_roles_text = gemini_event_gen.format_argument_roles(
+            {r: "" for r in argument_roles}
+        )
+
+    event_argument_roles_text = ""
+    if event_argument_roles:
+        event_argument_roles_text = gemini_event_gen.format_event_argument_roles(
+            event_argument_roles
+        )
+
+    location_types_text = ""
+    if location_types:
+        location_types_text = gemini_event_gen.format_location_types(
+            {t: "" for t in location_types}
+        )
+
+    # Use dict to allow format to ignore missing keys if user prompt doesn't have them
+    format_kwargs = {
+        "title": title,
+        "text": text,
+        "ontology": ontology_text,
+        "current_annotations": current_annotations_str,
+        "argument_roles": argument_roles_text,
+        "event_argument_roles": event_argument_roles_text,
+        "location_types": location_types_text,
+    }
+
+    # We do a simple fallback if the template doesn't use all kwargs, though we could just pass them.
+    # Python's str.format() might raise KeyError if a key is in template but not provided, but it allows extra kwargs.
+    prompt = user_prompt_template.format(**format_kwargs)
 
     response_format = (
         {"spans": list[UpdatedSpan]}
@@ -353,8 +406,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Gemini model name.")
     parser.add_argument("--workers", type=int, default=4, help="Parallel workers.")
     parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--top-p", type=float, default=0.95)
-    parser.add_argument("--max-tokens", type=int, default=4096)
+    # parser.add_argument("--top-p", type=float, default=0.95)
+    parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument(
         "--output-mode",
         choices=gemini_event_gen.OUTPUT_MODES,

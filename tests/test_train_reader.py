@@ -344,6 +344,44 @@ def test_preprocessing_preserves_token_spans_and_marker_positions(
     assert encoded["gold_argument_token_ends"] == [3, 5]
 
 
+def test_preprocessing_keeps_marker_and_full_label_span_for_multi_piece_labels(
+    tmp_path: Path,
+) -> None:
+    tokenizer = build_subword_test_tokenizer(tmp_path)
+    label_piece_ids = tokenizer("can't injured", add_special_tokens=False)["input_ids"]
+    sample = normalize_record(
+        {
+            "id": "doc-multi-piece-labels",
+            "input_ids": tokenizer("injured", add_special_tokens=False)["input_ids"],
+            "tokenizer_tokens": ["injured"],
+            "event_labels": ["can't injured"],
+            "argument_labels": ["can't injured"],
+            "events": [{"start": 0, "end": 0, "label": "can't injured"}],
+            "arguments": [{"start": 0, "end": 0}],
+            "relations": [{"event_idx": 0, "argument_idx": 0, "label": "can't injured"}],
+            "metadata": {
+                "source": "synthetic",
+                "tokenizer_name": "synthetic-tokenizer",
+                "tokenizer_tokens_are_model_pieces": True,
+            },
+        }
+    )
+
+    encoded = encode_sample(sample, tokenizer, max_length=64)
+
+    event_start = encoded["event_label_token_starts"][0]
+    event_end = encoded["event_label_token_ends"][0]
+    argument_start = encoded["argument_label_token_starts"][0]
+    argument_end = encoded["argument_label_token_ends"][0]
+
+    assert event_start == encoded["event_marker_positions"][0]
+    assert argument_start == encoded["argument_marker_positions"][0]
+    assert event_end == event_start + len(label_piece_ids)
+    assert argument_end == argument_start + len(label_piece_ids)
+    assert event_end - event_start + 1 == 1 + len(label_piece_ids)
+    assert argument_end - argument_start + 1 == 1 + len(label_piece_ids)
+
+
 def test_preprocessing_supports_zero_role_samples(tmp_path: Path) -> None:
     tokenizer = build_test_tokenizer(tmp_path)
     sample = normalize_record(build_zero_role_record())
@@ -613,10 +651,18 @@ def test_marker_state_extraction() -> None:
 
 def test_event_label_dot_product_typing() -> None:
     model = build_test_model(build_test_tokenizer(Path("/tmp")))
-    span_repr = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
+    span_start_repr = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
+    span_end_repr = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
     label_repr = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
     positions = torch.tensor([[0, 1]])
-    logits = model._compute_event_type_logits(span_repr, label_repr, positions)
+    model.event_type_start_projector = torch.nn.Identity()
+    model.event_type_end_projector = torch.nn.Identity()
+    logits = model._compute_event_type_logits(
+        span_start_repr,
+        span_end_repr,
+        label_repr,
+        positions,
+    )
     assert logits.argmax(dim=-1).tolist() == [[0, 1]]
 
 
@@ -848,6 +894,58 @@ def test_relation_budgeting_does_not_trim_returned_spans(tmp_path: Path) -> None
 
     assert len(decoded["events"]) == 3
     assert len(decoded["arguments"]) == 3
+
+
+def test_decode_document_uses_pooled_event_label_representations(tmp_path: Path) -> None:
+    tokenizer = build_test_tokenizer(tmp_path)
+    model = build_test_model(tokenizer)
+    hidden_states = torch.randn(5, model.encoder.config.hidden_size)
+
+    model._decode_spans = lambda *args, **kwargs: [  # type: ignore[assignment]
+        {"token_start": 1, "token_end": 1, "start": 0, "end": 0, "score": 0.9}
+    ]
+
+    captured: dict[str, torch.Tensor] = {}
+
+    def fake_build_label_representations(
+        hidden_states: torch.Tensor,
+        marker_positions: torch.Tensor,
+        label_token_starts: torch.Tensor | None,
+        label_token_ends: torch.Tensor | None,
+    ) -> torch.Tensor:
+        captured["marker_positions"] = marker_positions.clone()
+        captured["label_token_starts"] = label_token_starts.clone()
+        captured["label_token_ends"] = label_token_ends.clone()
+        return torch.ones(
+            hidden_states.shape[0],
+            marker_positions.shape[1],
+            model.config.projection_dim,
+        )
+
+    model._build_label_representations = fake_build_label_representations  # type: ignore[assignment]
+    model._compute_event_type_logits = lambda *args, **kwargs: torch.tensor([[[1.0, 2.0]]])  # type: ignore[assignment]
+
+    decoded = model._decode_document(
+        hidden_states=hidden_states,
+        event_start_logits=torch.zeros(5, 2),
+        argument_start_logits=None,
+        document_token_mask=torch.tensor([0, 1, 1, 1, 0], dtype=torch.long),
+        event_marker_positions=torch.tensor([3, 4], dtype=torch.long),
+        argument_marker_positions=torch.tensor([], dtype=torch.long),
+        event_label_token_starts=torch.tensor([3, 4], dtype=torch.long),
+        event_label_token_ends=torch.tensor([4, 4], dtype=torch.long),
+        argument_label_token_starts=torch.tensor([], dtype=torch.long),
+        argument_label_token_ends=torch.tensor([], dtype=torch.long),
+        event_label_texts=["attack", "injure"],
+        argument_label_texts=[],
+        relation_threshold=0.5,
+        relation_pair_budget=4,
+    )
+
+    assert captured["marker_positions"].tolist() == [[3, 4]]
+    assert captured["label_token_starts"].tolist() == [[3, 4]]
+    assert captured["label_token_ends"].tolist() == [[4, 4]]
+    assert decoded["events"][0]["label"] == "injure"
 
 
 def test_event_reader_save_load_round_trip_preserves_resized_embeddings(

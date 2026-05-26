@@ -8,9 +8,12 @@ import re
 import sys
 import time
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from google.genai import _transformers as genai_transformers
+from google.genai import types as genai_types
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
@@ -20,47 +23,46 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.llms.llm_client import GeminiLLMClient
 from scripts.data.generation import adjudication, pipeline_config, reports, validation
-from scripts.data.generation.relevance_filter import classify_article_relevance
+from scripts.data.generation.relevance_filter import (
+    classify_article_relevance,
+    clean_relevance_decision,
+)
 from scripts.data.generation.windowing import ArticleWindow
 from scripts.data.generation.windowing import build_article_windows as build_windows
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_EXAMPLES = REPO_ROOT / "dataset/manual/manual_fixes.v2.jsonl"
 DEFAULT_SYSTEM_PROMPT = """<role>
-You are a strictly grounded data extractor for food-security news.
+You are an expert data extraction system specializing in identifying events and risk factors related to food insecurity from news articles.
 </role>
 
-<goal>
-Extract only explicit food-insecurity event or risk-factor evidence from the article text using the provided ontology labels.
-</goal>
+<objective>
+Your goal is to extract explicit evidence of food insecurity events and risk factors, along with their exact locations, using a provided ontology.
+</objective>
 
-<grounding>
-- Use only the user-provided article text as evidence.
-- Do not use outside knowledge, common sense, assumptions, or inferred facts.
-- Do not clarify, explain, normalize, paraphrase, or expand terms.
-- Copy evidence text exactly as it appears in the article body.
-- Do not use the title for offsets.
-</grounding>
+<primary_directives>
+1. Strict Contextual Grounding: Extract information ONLY from the provided `<article_text>`. Do not use outside knowledge, make assumptions, or infer facts not explicitly stated.
+2. Exact Verbatim Extraction: Every extracted trigger and argument span MUST be an exact, contiguous substring from the `<article_text>`. Do not paraphrase, normalize, or expand.
+3. Offset Precision: Use zero-based character offsets (`start_char`, `end_char`) that precisely correspond to the extracted string within the `<article_text>`. The `<title>` is for context only; do not extract offsets from the title.
+4. Narrow Granularity: For event triggers, select the narrowest meaningful word or phrase (typically the core predicate or noun phrase). Do not extract full clauses or sentences. Exclude locations, times, participants, or background context from the trigger span itself, unless intrinsically part of the event name.
+5. Ontology Adherence: Use ONLY the event labels and argument roles defined in the provided `<ontology>`, `<argument_roles>`, and `<event_argument_roles>`.
+</primary_directives>
 
-<span_granularity>
-- Prefer the narrowest meaningful event/risk phrase, not full clauses.
-- Keep only the core trigger phrase and essential modifiers.
-- Remove location, time, attribution, source, target, participant, and background words unless required to preserve event meaning.
-- If an event is expressed by a non-contiguous noun plus predicate, select the contiguous trigger predicate rather than the whole clause.
-</span_granularity>
+<extraction_process>
+For every food insecurity event or driver encountered in the text:
+1. Identify the minimal trigger word/phrase.
+2. Assign the appropriate event label from the ontology.
+3. Identify relevant arguments (especially locations) linked to this event within the text.
+4. If an argument is a location, categorize its type (e.g., country, province, city).
+5. Record the exact text and correct character offsets for both trigger and arguments.
+</extraction_process>
 
-<quality_checks>
-Before finalizing each annotation, verify:
-1. The label is in the ontology.
-2. The copied text is verbatim and contiguous in the article text.
-3. The copied text is the narrowest phrase that preserves event/risk meaning.
-4. start_char and end_char exactly match the copied text in article text.
-</quality_checks>
-
-<output_constraints>
-- Return only annotations that satisfy every quality check.
-- If evidence is absent, return an empty list.
-</output_constraints>"""
+<quality_assurance>
+- A valid extraction must have an exact match in the text and a valid ontology label.
+- Avoid extracting overlapping or nested spans for the same event (e.g., if "car bombing" is an event, do not separately extract "bombing" for the exact same event instance).
+- Spans must consist of complete words.
+- If no events meet these criteria, return an empty list.
+</quality_assurance>"""
 
 DEFAULT_USER_PROMPT = """<context>
 <title usage="context_only_do_not_offset">
@@ -92,6 +94,7 @@ Extract food-insecurity and risk-factor evidence spans from the article based st
 - Use the narrowest valid span; avoid long clauses when a short core phrase is sufficient.
 - Exclude surrounding context such as location, date, attribution, sources, targets, participants, and background unless essential to preserve event meaning.
 - If an event is expressed by a non-contiguous noun plus predicate, select the contiguous trigger predicate rather than the whole clause.
+- Example: "missiles from Gaza again raining down on Israel" -> "raining down".
 - Do not extract overlapping or nested spans for the same event (e.g., extract "car bombing" but not also "bombing").
 - Extracted spans must be complete words, not partial words (e.g., do not extract "Yemen" from the word "Yemeni").
 - Do not output duplicates.
@@ -133,37 +136,22 @@ DEFAULT_EVENTS_WITH_ARGS_USER_PROMPT = """<context>
 </context>
 
 <task>
-Extract food-insecurity and risk-factor events from the article, including linked argument spans.
+Read the `<article_text>` comprehensively and perform detailed span extraction of food insecurity drivers, events, and their associated arguments (especially locations).
 </task>
 
-<parameters>
-- event_type: exactly one allowed ontology event label.
-- trigger_text: minimal contiguous word or phrase that explicitly evokes the event/risk.
-- event start_char/end_char: zero-based offsets for trigger_text in article_text; end_char is exclusive.
-- argument text: exact contiguous substring copied from article_text and linked to the trigger.
-- argument role: exactly one allowed role for the event_type.
-- location_type: for `location`, `source_location`, or `target_location`, assign exactly one of `country`, `province`, `district`, `city`, or `other`.
-</parameters>
-
 <extraction_rules>
-- Select only explicit events from article_text.
-- trigger_text and argument text must be exact contiguous substrings from article_text.
-- Do not include locations, participants, dates, attribution, sources, or targets inside trigger_text unless they are part of the trigger expression itself.
-- Arguments may include linked locations, when explicitly stated.
-- Link the closest explicit argument span to the trigger when multiple candidates exist.
-- Use `location_type` only on location roles.
-- If a place is a region, village, camp, facility, border area, or its level is unclear, use `other`.
-- Do not extract overlapping or nested spans for the same event (e.g., extract "car bombing" but not also "bombing").
-- Extracted spans must be complete words, not partial words (e.g., do not extract "Yemen" from the word "Yemeni").
-- Do not output duplicates.
-- If no valid evidence exists, return an empty events list.
+- Triggers: Find explicit triggers for food-insecurity and risk-factor events. The `trigger_text` must be a minimal distinct phrase.
+- Arguments: Identify explicitly stated locations linked to the event in the text. Select the CLOSTEST explicit argument span to the event trigger if multiple candidates exist.
+- Locations: Arguments with location roles (`location`, `source_location`, `target_location`) MUST have a `location_type` assigned (exactly one of: `country`, `province`, `district`, `city`, or `other`). Use `other` for regions, villages, camps, facilities, border areas, or if the level is ambiguous. Non-location arguments should not have a location type.
+- Constraints:
+  - `start_char` and `end_char` must correspond exactly to the extracted text within the `<article_text>`.
+  - `end_char` is exclusive.
+  - Do not use the title for any extraction.
+  - No inferred entities; everything must be explicitly in the text.
+  - Output must not contain duplicate event-argument structures.
 </extraction_rules>
 
-<critical_constraints>
-- start_char and end_char must index article_text only, not title.
-- Offsets must match the copied text exactly.
-- Do not infer events, labels, arguments, locations not explicitly stated in article_text.
-</critical_constraints>
+Take into account the few-shot examples provided to guide your extraction style, but apply the rules strictly to the current `<article_text>`.
 """
 
 DEFAULT_VERIFIER_PROMPT = """<context>
@@ -262,6 +250,14 @@ class SampleResult(BaseModel):
     metadata: dict[str, Any]
 
 
+class BatchSpansPayload(BaseModel):
+    spans: list[ExtractedSpan] = Field(default_factory=list)
+
+
+class BatchEventsPayload(BaseModel):
+    events: list[ExtractedEvent] = Field(default_factory=list)
+
+
 class VerifierDecision(BaseModel):
     event_type: str
     start_char: int
@@ -271,6 +267,39 @@ class VerifierDecision(BaseModel):
     confidence: float = Field(default=0.0)
 
 
+class BatchVerifierPayload(BaseModel):
+    decisions: list[VerifierDecision] = Field(default_factory=list)
+
+
+@dataclass
+class ExtractionBatchTask:
+    batch_key: str
+    record_id: str
+    prompt: str
+    text: str
+    window: ArticleWindow | None = None
+    sample_index: int | None = None
+    chunk_index: int = -1
+
+
+@dataclass
+class VerifierBatchTask:
+    batch_key: str
+    record_id: str
+    prompt: str
+    events: list[dict[str, Any]]
+    chunk_index: int = -1
+
+
+@dataclass
+class BatchChunk:
+    stage: str
+    chunk_index: int
+    request_lines: list[dict[str, Any]]
+    task_keys: list[str]
+
+
+BATCH_CHUNK_MAX_RETRIES = 3
 
 
 def load_env_file(path: Path) -> None:
@@ -383,6 +412,11 @@ def normalize_location_types(raw: Any) -> dict[str, str]:
         str(location_type): str(description)
         for location_type, description in raw_location_types.items()
     }
+    aliases = {"state": "province", "county": "district"}
+    for source_key, target_key in aliases.items():
+        if source_key in location_types and target_key not in location_types:
+            location_types[target_key] = location_types[source_key]
+        location_types.pop(source_key, None)
     if not location_types:
         raise ValueError("'location_types' must not be empty when provided.")
     return location_types
@@ -460,9 +494,7 @@ def normalize_input_record(record: dict[str, Any], index: int) -> dict[str, Any]
         or source_url
     )
     normalized["publish_date"] = (
-        record.get("publish_date")
-        or record.get("published_at")
-        or source_publish_date
+        record.get("publish_date") or record.get("published_at") or source_publish_date
     )
     return normalized
 
@@ -530,7 +562,9 @@ def select_pending_records(
     random_sample: bool,
 ) -> list[dict[str, Any]]:
     pending_records = [
-        record for record in records if str(record.get("id")) not in completed_record_ids
+        record
+        for record in records
+        if str(record.get("id")) not in completed_record_ids
     ]
     return select_limited_records(pending_records, limit, random_sample)
 
@@ -584,9 +618,10 @@ def _sentence_window_bounds(
 ) -> tuple[int, int]:
     window_start = start_char
     window_end = end_char
-    stripped_start, stripped_end = trim_span_to_non_whitespace(
-        text, 0, len(text)
-    ) or (0, len(text))
+    stripped_start, stripped_end = trim_span_to_non_whitespace(text, 0, len(text)) or (
+        0,
+        len(text),
+    )
 
     def is_allowed_expansion(candidate_start: int, candidate_end: int) -> bool:
         if candidate_end - candidate_start > max_chars:
@@ -758,9 +793,7 @@ def format_example_output(
                 if argument_range is None:
                     continue
                 arg_start_char, arg_end_char = argument_range
-                if not (
-                    window_start <= arg_start_char < arg_end_char <= window_end
-                ):
+                if not (window_start <= arg_start_char < arg_end_char <= window_end):
                     continue
                 arguments.append(
                     {
@@ -834,9 +867,7 @@ def compact_example_records(
     return records
 
 
-def format_examples(
-    examples: list[dict[str, Any]], output_mode: str
-) -> str:
+def format_examples(examples: list[dict[str, Any]], output_mode: str) -> str:
     if not examples:
         return ""
 
@@ -900,9 +931,7 @@ def completed_ids(path: Path, retry_failed: bool) -> set[str]:
     return done
 
 
-def completed_ids_from_paths(
-    paths: list[Path] | None, retry_failed: bool
-) -> set[str]:
+def completed_ids_from_paths(paths: list[Path] | None, retry_failed: bool) -> set[str]:
     done: set[str] = set()
     if not paths:
         return done
@@ -970,9 +999,11 @@ def log_llm_call(
             call_type,
             record_id,
             step,
-            json.dumps(answer, ensure_ascii=False, indent=2)
-            if not isinstance(answer, str)
-            else answer,
+            (
+                json.dumps(answer, ensure_ascii=False, indent=2)
+                if not isinstance(answer, str)
+                else answer
+            ),
         )
 
 
@@ -982,7 +1013,6 @@ def truncate_text(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars].rstrip()
-
 
 
 def find_offsets(
@@ -1180,7 +1210,9 @@ def clean_events_with_args(
                 continue
             location_type_value = argument.get("location_type")
             location_type = (
-                str(location_type_value).strip() if location_type_value is not None else ""
+                str(location_type_value).strip()
+                if location_type_value is not None
+                else ""
             )
             if role in LOCATION_ARGUMENT_ROLES and location_types:
                 if location_type and location_type not in location_types:
@@ -1291,7 +1323,10 @@ def project_window_spans(
                 "end_char": end_char,
                 "window_indices": [window.window_index],
                 "trigger_in_core": (
-                    window.core_start_char <= start_char < end_char <= window.core_end_char
+                    window.core_start_char
+                    <= start_char
+                    < end_char
+                    <= window.core_end_char
                 ),
             }
         )
@@ -1343,7 +1378,10 @@ def project_window_events(
                 "arguments": arguments,
                 "window_indices": [window.window_index],
                 "trigger_in_core": (
-                    window.core_start_char <= start_char < end_char <= window.core_end_char
+                    window.core_start_char
+                    <= start_char
+                    < end_char
+                    <= window.core_end_char
                 ),
             }
         )
@@ -1385,9 +1423,9 @@ def merge_window_events(
     events: list[dict[str, Any]], article_text: str
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[int, int, str], dict[str, Any]] = {}
-    seen_arguments: dict[
-        tuple[int, int, str], set[tuple[int, int, str]]
-    ] = defaultdict(set)
+    seen_arguments: dict[tuple[int, int, str], set[tuple[int, int, str]]] = defaultdict(
+        set
+    )
 
     for event in events:
         event_key = (
@@ -1424,9 +1462,7 @@ def merge_window_events(
                     **argument,
                     "text": article_text[argument_key[0] : argument_key[1]],
                     **({"location_type": location_type} if location_type else {}),
-                    "window_indices": sorted(
-                        set(argument.get("window_indices", []))
-                    ),
+                    "window_indices": sorted(set(argument.get("window_indices", []))),
                 }
             )
 
@@ -1541,9 +1577,7 @@ def merge_self_consistency_events(
 ]:
     successful_samples = len(sample_events)
     threshold = (successful_samples // 2) + 1
-    grouped_events: dict[tuple[int, int, str], list[dict[str, Any]]] = defaultdict(
-        list
-    )
+    grouped_events: dict[tuple[int, int, str], list[dict[str, Any]]] = defaultdict(list)
     grouped_arguments: dict[
         tuple[int, int, str], dict[tuple[int, int, str], list[dict[str, Any]]]
     ] = defaultdict(lambda: defaultdict(list))
@@ -1836,9 +1870,7 @@ async def verify_events(
     if response is None:
         raise RuntimeError("Gemini returned no verifier response.")
 
-    raw_answer = (
-        response_to_dict(response.parsed) if response.parsed else response.text
-    )
+    raw_answer = response_to_dict(response.parsed) if response.parsed else response.text
     log_llm_call(
         enabled=verbose,
         record_id=record_id or "verifier",
@@ -1848,9 +1880,7 @@ async def verify_events(
         prompt=prompt,
         answer=raw_answer,
     )
-    parsed = (
-        raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
-    )
+    parsed = raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
     return clean_verifier_decisions(parsed, events), response.metadata
 
 
@@ -1871,6 +1901,40 @@ def combine_metadata(sample_metadata: list[dict[str, Any]]) -> dict[str, Any]:
     return combined
 
 
+def init_self_consistency_sample_summaries(
+    sample_count: int, *, chunk_count: int = 1
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "sample": sample_index,
+            "chunk_count": chunk_count,
+            "successful_chunks": 0,
+            "failed_calls": [],
+        }
+        for sample_index in range(sample_count)
+    ]
+
+
+def record_self_consistency_sample_success(
+    sample_summaries: list[dict[str, Any]], sample_index: int
+) -> None:
+    if 0 <= sample_index < len(sample_summaries):
+        sample_summaries[sample_index]["successful_chunks"] += 1
+
+
+def record_self_consistency_sample_failure(
+    sample_summaries: list[dict[str, Any]],
+    sample_index: int,
+    error: str,
+    *,
+    window_index: int | None = None,
+) -> None:
+    if not (0 <= sample_index < len(sample_summaries)):
+        return
+    failure: dict[str, Any] = {"error": str(error)}
+    if window_index is not None:
+        failure["window_index"] = window_index
+    sample_summaries[sample_index]["failed_calls"].append(failure)
 
 
 def build_empty_extraction_result(
@@ -1952,6 +2016,13 @@ async def generate_windowed_one(
     projected_spans: list[dict[str, Any]] = []
     projected_events: list[dict[str, Any]] = []
     window_errors: list[dict[str, Any]] = []
+    sample_summaries = (
+        init_self_consistency_sample_summaries(
+            self_consistency_samples, chunk_count=len(windows)
+        )
+        if self_consistency
+        else []
+    )
 
     for window in windows:
         try:
@@ -2003,19 +2074,26 @@ async def generate_windowed_one(
                             ),
                         )
                         sample_metadata.append(sample.metadata)
+                        record_self_consistency_sample_success(
+                            sample_summaries, sample_index
+                        )
                         if output_mode == OUTPUT_MODE_SPANS:
                             sample_spans.append(sample.spans)
                         else:
                             sample_events.append(sample.events)
                     except Exception as exc:
+                        record_self_consistency_sample_failure(
+                            sample_summaries,
+                            sample_index,
+                            str(exc),
+                            window_index=window.window_index,
+                        )
                         window_sample_errors.append(
                             {"sample": sample_index, "error": str(exc)}
                         )
 
                 samples_succeeded = len(
-                    sample_spans
-                    if output_mode == OUTPUT_MODE_SPANS
-                    else sample_events
+                    sample_spans if output_mode == OUTPUT_MODE_SPANS else sample_events
                 )
                 if samples_succeeded < self_consistency_min_successful_samples:
                     raise RuntimeError(
@@ -2079,9 +2157,7 @@ async def generate_windowed_one(
             )
             sample_metadata.append(sample.metadata)
             if output_mode == OUTPUT_MODE_SPANS:
-                projected_spans.extend(
-                    project_window_spans(sample.spans, window, text)
-                )
+                projected_spans.extend(project_window_spans(sample.spans, window, text))
             else:
                 projected_events.extend(
                     project_window_events(sample.events, window, text)
@@ -2109,15 +2185,12 @@ async def generate_windowed_one(
         "window_errors": window_errors,
         "self_consistency": {
             "enabled": self_consistency,
-            "samples_requested": self_consistency_samples
-            if self_consistency
-            else None,
-            "temperature": self_consistency_temperature
-            if self_consistency
-            else None,
-            "min_successful_samples": self_consistency_min_successful_samples
-            if self_consistency
-            else None,
+            "samples_requested": self_consistency_samples if self_consistency else None,
+            "temperature": self_consistency_temperature if self_consistency else None,
+            "min_successful_samples": (
+                self_consistency_min_successful_samples if self_consistency else None
+            ),
+            "samples": sample_summaries if self_consistency else None,
         },
     }
     return payload, metadata
@@ -2318,6 +2391,9 @@ async def generate_one(
     sample_events: list[list[dict[str, Any]]] = []
     sample_metadata: list[dict[str, Any]] = []
     sample_errors: list[dict[str, Any]] = []
+    sample_summaries = init_self_consistency_sample_summaries(
+        self_consistency_samples
+    )
     override_settings = {"temperature": self_consistency_temperature}
 
     for sample_index in range(self_consistency_samples):
@@ -2362,7 +2438,11 @@ async def generate_one(
             else:
                 sample_events.append(sample.events)
             sample_metadata.append(sample.metadata)
+            record_self_consistency_sample_success(sample_summaries, sample_index)
         except Exception as exc:
+            record_self_consistency_sample_failure(
+                sample_summaries, sample_index, str(exc)
+            )
             sample_errors.append({"sample": sample_index, "error": str(exc)})
 
     samples_succeeded = len(
@@ -2370,9 +2450,7 @@ async def generate_one(
     )
     if samples_succeeded < self_consistency_min_successful_samples:
         support_key = (
-            "span_support"
-            if output_mode == OUTPUT_MODE_SPANS
-            else "event_support"
+            "span_support" if output_mode == OUTPUT_MODE_SPANS else "event_support"
         )
         return {
             "id": record_id,
@@ -2394,6 +2472,7 @@ async def generate_one(
                     "threshold": None,
                     "temperature": self_consistency_temperature,
                     "sample_errors": sample_errors,
+                    "samples": sample_summaries,
                     support_key: [],
                     **(
                         {"argument_support": []}
@@ -2482,6 +2561,7 @@ async def generate_one(
                     "threshold": threshold,
                     "temperature": self_consistency_temperature,
                     "sample_errors": sample_errors,
+                    "samples": sample_summaries,
                     "event_support": event_support,
                     "argument_support": argument_support,
                 },
@@ -2515,6 +2595,7 @@ async def generate_one(
                 "threshold": threshold,
                 "temperature": self_consistency_temperature,
                 "sample_errors": sample_errors,
+                "samples": sample_summaries,
                 "span_support": span_support,
             },
         },
@@ -2707,6 +2788,990 @@ async def worker(
             input_queue.task_done()
 
 
+def batch_response_schema(output_mode: str) -> type[BaseModel]:
+    if output_mode == OUTPUT_MODE_SPANS:
+        return BatchSpansPayload
+    if output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+        return BatchEventsPayload
+    raise ValueError(f"Unsupported output mode: {output_mode}")
+
+
+def batch_request_config(
+    args: argparse.Namespace,
+    system_prompt: str,
+    response_schema: type[BaseModel],
+    *,
+    temperature: float | None = None,
+) -> dict[str, Any]:
+    generation_config: dict[str, Any] = {
+        "responseMimeType": "application/json",
+        "responseSchema": genai_transformers.t_schema(
+            None, response_schema
+        ).model_dump(exclude_none=True),
+        "maxOutputTokens": args.max_tokens,
+    }
+    config: dict[str, Any] = {"generationConfig": generation_config}
+    if system_prompt:
+        config["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+    if temperature is None:
+        temperature = args.temperature
+    if temperature is not None:
+        generation_config["temperature"] = temperature
+
+    reasoning_effort = args.reasoning_effort
+    thinking_budget: int | None = None
+    if reasoning_effort is None:
+        thinking_budget = 0
+    elif isinstance(reasoning_effort, str):
+        try:
+            thinking_budget = int(reasoning_effort)
+        except ValueError:
+            mapping = {"disable": 0, "low": 1024, "medium": 2048, "high": 4096}
+            if reasoning_effort not in mapping:
+                raise ValueError(
+                    "Invalid --reasoning-effort for batch mode. "
+                    "Expected integer or one of: disable, low, medium, high."
+                )
+            thinking_budget = mapping[reasoning_effort]
+    else:
+        thinking_budget = int(reasoning_effort)
+
+    if "2.5" in args.model and "gemini" in args.model:
+        generation_config["thinkingConfig"] = {"thinkingBudget": thinking_budget}
+    elif "3" in args.model and "gemini" in args.model:
+        generation_config["thinkingConfig"] = {
+            "thinkingLevel": "low" if thinking_budget <= 1024 else "high"
+        }
+
+    return config
+
+
+def build_batch_request(
+    record: dict[str, Any] | None,
+    prompt: str,
+    request_config: dict[str, Any],
+    *,
+    key: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "key": key or str(record.get("id") if record is not None else ""),
+        "request": {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}],
+                }
+            ],
+            **request_config,
+        },
+    }
+
+
+def batch_response_text(response: dict[str, Any]) -> str:
+    text = response.get("text")
+    if isinstance(text, str) and text.strip():
+        return text
+
+    candidates = response.get("candidates") or []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        content = candidate.get("content") or {}
+        parts = content.get("parts") or []
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            candidate_text = part.get("text")
+            if isinstance(candidate_text, str) and candidate_text.strip():
+                return candidate_text
+
+    raise ValueError("Batch response does not contain generated text.")
+
+
+def batch_usage_metadata(response: dict[str, Any]) -> dict[str, Any]:
+    usage = response.get("usage_metadata") or response.get("usageMetadata") or {}
+    if not isinstance(usage, dict):
+        return {}
+    return {
+        "prompt_tokens": int(
+            usage.get("prompt_token_count") or usage.get("promptTokenCount") or 0
+        ),
+        "completion_tokens": int(
+            usage.get("candidates_token_count")
+            or usage.get("candidatesTokenCount")
+            or 0
+        ),
+        "cached_tokens": int(
+            usage.get("cached_content_token_count")
+            or usage.get("cachedContentTokenCount")
+            or 0
+        ),
+        "thoughts_token_count": int(
+            usage.get("thoughts_token_count") or usage.get("thoughtsTokenCount") or 0
+        ),
+    }
+
+
+def batch_result_key(line: dict[str, Any]) -> str:
+    key = line.get("key")
+    if key is not None:
+        return str(key)
+    metadata = line.get("metadata") or {}
+    if isinstance(metadata, dict) and metadata.get("key") is not None:
+        return str(metadata.get("key"))
+    return ""
+
+
+def chunked(items: list[Any], chunk_size: int) -> list[list[Any]]:
+    return [items[index : index + chunk_size] for index in range(0, len(items), chunk_size)]
+
+
+def batch_artifact_path(
+    output_path: Path, stage: str, chunk_index: int, kind: str
+) -> Path:
+    return output_path.with_suffix(
+        f".batch.{stage}.part-{chunk_index:04d}.{kind}.jsonl"
+    )
+
+
+def task_batch_key(
+    record_id: str, window_index: int | None = None, sample_index: int | None = None
+) -> str:
+    parts = [record_id]
+    if window_index is not None:
+        parts.append(f"w{window_index}")
+    if sample_index is not None:
+        parts.append(f"s{sample_index}")
+    return "__".join(parts)
+
+
+def make_stage_pipeline_metadata(
+    *,
+    args: argparse.Namespace,
+    extraction_chunks: list[dict[str, Any]],
+    verifier_chunks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    metadata = {
+        "mode": args.mode,
+        "enable_verifier": args.enable_verifier,
+        "enable_synthetic_gaps": args.enable_synthetic_gaps,
+        "enable_relevance_filter": args.enable_relevance_filter,
+        "window_strategy": "sentence_adaptive_overlap",
+        "batch_api": True,
+        "batch_size": args.batch_size,
+        "workers": args.workers,
+        "extraction_chunks": extraction_chunks,
+    }
+    if verifier_chunks is not None:
+        metadata["verifier_chunks"] = verifier_chunks
+    return metadata
+
+
+def batch_response_schema_for_stage(
+    output_mode: str, stage: str
+) -> type[BaseModel]:
+    if stage == "verifier":
+        return BatchVerifierPayload
+    return batch_response_schema(output_mode)
+
+
+def parse_batch_payload(
+    *,
+    line: dict[str, Any],
+    output_mode: str,
+    text: str,
+    labels: set[str],
+    strict_offsets: bool,
+    argument_roles: set[str],
+    event_argument_roles: dict[str, list[str]],
+    location_types: set[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    response = line.get("response")
+    if not isinstance(response, dict):
+        error = line.get("error") or line.get("status") or "Missing batch response."
+        raise ValueError(str(error))
+
+    raw_answer = batch_response_text(response)
+    parsed = json.loads(raw_answer)
+    metadata = batch_usage_metadata(response)
+    if output_mode == OUTPUT_MODE_SPANS:
+        return clean_spans(parsed, text, labels, strict_offsets), metadata
+
+    return (
+        clean_events_with_args(
+            parsed,
+            text,
+            labels,
+            strict_offsets,
+            argument_roles=argument_roles,
+            event_argument_roles=event_argument_roles,
+            location_types=location_types,
+        ),
+        metadata,
+    )
+
+
+def parse_batch_verifier_payload(
+    line: dict[str, Any], events: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    response = line.get("response")
+    if not isinstance(response, dict):
+        error = line.get("error") or line.get("status") or "Missing batch response."
+        raise ValueError(str(error))
+
+    raw_answer = batch_response_text(response)
+    parsed = json.loads(raw_answer)
+    return clean_verifier_decisions(parsed, events), batch_usage_metadata(response)
+
+
+def parse_batch_result_record(
+    *,
+    line: dict[str, Any],
+    record: dict[str, Any],
+    output_mode: str,
+    labels: set[str],
+    strict_offsets: bool,
+    model_name: str,
+    argument_roles: set[str],
+    event_argument_roles: dict[str, list[str]],
+    location_types: set[str],
+) -> dict[str, Any]:
+    source = make_source(
+        record,
+        str(record.get("title") or ""),
+        str(record.get("text") or ""),
+    )
+    response = line.get("response")
+    if not isinstance(response, dict):
+        error = line.get("error") or line.get("status") or "Missing batch response."
+        return {
+            "id": str(record.get("id")),
+            "status": "error",
+            "error": str(error),
+            "source": source,
+        }
+
+    raw_answer = batch_response_text(response)
+    parsed = json.loads(raw_answer)
+    metadata = batch_usage_metadata(response)
+
+    if output_mode == OUTPUT_MODE_SPANS:
+        spans = clean_spans(parsed, str(record.get("text") or ""), labels, strict_offsets)
+        return {
+            "id": str(record.get("id")),
+            "status": "ok",
+            "source": source,
+            "spans": spans,
+            "llm": {
+                "model": model_name,
+                "metadata": metadata,
+                "output_mode": output_mode,
+                "batch": {
+                    "enabled": True,
+                    "key": batch_result_key(line) or str(record.get("id")),
+                },
+            },
+        }
+
+    events = clean_events_with_args(
+        parsed,
+        str(record.get("text") or ""),
+        labels,
+        strict_offsets,
+        argument_roles=argument_roles,
+        event_argument_roles=event_argument_roles,
+        location_types=location_types,
+    )
+    return {
+        "id": str(record.get("id")),
+        "status": "ok",
+        "source": source,
+        "events": events,
+        "llm": {
+            "model": model_name,
+            "metadata": metadata,
+            "output_mode": output_mode,
+            "batch": {
+                "enabled": True,
+                "key": batch_result_key(line) or str(record.get("id")),
+            },
+        },
+    }
+
+
+def build_extraction_tasks(
+    records: list[dict[str, Any]],
+    *,
+    args: argparse.Namespace,
+    ontology_text: str,
+    user_prompt_template: str,
+    argument_roles_text: str,
+    event_argument_roles_text: str,
+    location_types_text: str,
+    examples: list[dict[str, Any]],
+) -> list[ExtractionBatchTask]:
+    tasks: list[ExtractionBatchTask] = []
+    for record in records:
+        record_id = str(record.get("id"))
+        title = str(record.get("title") or "")
+        text = str(record.get("text") or "")
+        windows: list[ArticleWindow | None]
+        if args.long_document_mode and len(text) >= args.long_document_threshold_chars:
+            windows = build_article_windows(
+                text,
+                target_chars=args.window_target_chars,
+                max_chars=args.window_max_chars,
+                overlap_sentences=args.window_overlap_sentences,
+            )
+            if not windows:
+                windows = [
+                    ArticleWindow(
+                        window_index=0,
+                        window_count=1,
+                        start_char=0,
+                        end_char=len(text),
+                        text=text,
+                        overlap_prev=False,
+                        overlap_next=False,
+                        core_start_char=0,
+                        core_end_char=len(text),
+                    )
+                ]
+        else:
+            windows = [None]
+
+        sample_count = args.self_consistency_samples if args.self_consistency else 1
+        for window in windows:
+            task_text = window.text if window is not None else text
+            for sample_index in range(sample_count):
+                prompt = render_user_prompt(
+                    user_prompt_template,
+                    ontology_text,
+                    title,
+                    task_text,
+                    argument_roles_text=argument_roles_text,
+                    event_argument_roles_text=event_argument_roles_text,
+                    location_types_text=location_types_text,
+                    examples_text=format_examples(
+                        sample_examples(
+                            examples or [], args.example_sample_size, args.output_mode
+                        ),
+                        args.output_mode,
+                    ),
+                )
+                tasks.append(
+                    ExtractionBatchTask(
+                        batch_key=task_batch_key(
+                            record_id,
+                            window_index=(
+                                None if window is None else int(window.window_index)
+                            ),
+                            sample_index=sample_index if args.self_consistency else None,
+                        ),
+                        record_id=record_id,
+                        prompt=prompt,
+                        text=task_text,
+                        window=window,
+                        sample_index=sample_index if args.self_consistency else None,
+                    )
+                )
+    return tasks
+
+
+def build_verifier_tasks(
+    results: list[dict[str, Any]],
+    *,
+    args: argparse.Namespace,
+    ontology_text: str,
+    verifier_prompt_template: str,
+) -> list[VerifierBatchTask]:
+    tasks: list[VerifierBatchTask] = []
+    for result in results:
+        if result.get("status") != "ok":
+            continue
+        events = result.get("events") or []
+        if not events:
+            continue
+        source = result.get("source") or {}
+        prompt = verifier_prompt_template.format(
+            ontology=ontology_text,
+            title=str(source.get("title") or ""),
+            text=str(source.get("text") or ""),
+            events_json=json.dumps(events, ensure_ascii=False, indent=2),
+        )
+        tasks.append(
+            VerifierBatchTask(
+                batch_key=str(result.get("id")),
+                record_id=str(result.get("id")),
+                prompt=prompt,
+                events=events,
+            )
+        )
+    return tasks
+
+
+def build_batch_chunks(
+    *,
+    tasks: list[ExtractionBatchTask | VerifierBatchTask],
+    stage: str,
+    batch_size: int,
+    request_config: dict[str, Any],
+) -> list[BatchChunk]:
+    chunks: list[BatchChunk] = []
+    for chunk_index, task_group in enumerate(chunked(tasks, batch_size), start=1):
+        request_lines: list[dict[str, Any]] = []
+        task_keys: list[str] = []
+        for task in task_group:
+            task.chunk_index = chunk_index
+            request_lines.append(
+                build_batch_request(
+                    None,
+                    task.prompt,
+                    request_config,
+                    key=task.batch_key,
+                )
+            )
+            task_keys.append(task.batch_key)
+        chunks.append(
+            BatchChunk(
+                stage=stage,
+                chunk_index=chunk_index,
+                request_lines=request_lines,
+                task_keys=task_keys,
+            )
+        )
+    return chunks
+
+
+async def execute_batch_chunk(
+    *,
+    client: GeminiLLMClient,
+    chunk: BatchChunk,
+    output_path: Path,
+    model_name: str,
+    batch_display_name: str | None,
+    poll_interval_seconds: int,
+    max_retries: int = BATCH_CHUNK_MAX_RETRIES,
+) -> dict[str, Any]:
+    request_path = batch_artifact_path(
+        output_path, chunk.stage, chunk.chunk_index, "requests"
+    )
+    result_path = batch_artifact_path(output_path, chunk.stage, chunk.chunk_index, "results")
+    request_path.write_text(
+        "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in chunk.request_lines),
+        encoding="utf-8",
+    )
+
+    last_error = "unknown batch error"
+    for attempt in range(max_retries + 1):
+        try:
+            uploaded_file = await asyncio.to_thread(
+                client.client.files.upload,
+                file=str(request_path),
+                config=genai_types.UploadFileConfig(
+                    display_name=request_path.stem,
+                    mime_type="jsonl",
+                ),
+            )
+            display_name_base = batch_display_name or output_path.stem
+            batch_job = await asyncio.to_thread(
+                client.client.batches.create,
+                model=model_name,
+                src=uploaded_file.name,
+                config={
+                    "display_name": (
+                        f"{display_name_base}-{chunk.stage}-part-{chunk.chunk_index:04d}"
+                    )
+                },
+            )
+            batch_job = await poll_batch_job(
+                client, batch_job.name, poll_interval_seconds
+            )
+            if batch_job.state.name != "JOB_STATE_SUCCEEDED":
+                raise RuntimeError(
+                    f"Batch job {batch_job.name} finished with state "
+                    f"{batch_job.state.name}: {getattr(batch_job, 'error', None)}"
+                )
+            if not batch_job.dest or not batch_job.dest.file_name:
+                raise RuntimeError(
+                    f"Batch job {batch_job.name} succeeded without a result file."
+                )
+            batch_result_bytes = await asyncio.to_thread(
+                client.client.files.download,
+                file=batch_job.dest.file_name,
+            )
+            result_path.write_bytes(batch_result_bytes)
+            return {
+                "stage": chunk.stage,
+                "chunk_index": chunk.chunk_index,
+                "status": "ok",
+                "request_path": str(request_path),
+                "result_path": str(result_path),
+                "uploaded_file": uploaded_file.name,
+                "batch_job_name": batch_job.name,
+                "batch_output_file": batch_job.dest.file_name,
+                "attempts": attempt + 1,
+                "task_keys": list(chunk.task_keys),
+            }
+        except Exception as exc:
+            last_error = str(exc)
+            LOGGER.warning(
+                "Retrying batch stage=%s chunk=%s attempt=%s/%s error=%s",
+                chunk.stage,
+                chunk.chunk_index,
+                attempt + 1,
+                max_retries + 1,
+                exc,
+            )
+            if attempt >= max_retries:
+                break
+            delay = min(60.0, 2.0 * (2**attempt))
+            delay = delay * (0.5 + random.random())
+            await asyncio.sleep(delay)
+
+    return {
+        "stage": chunk.stage,
+        "chunk_index": chunk.chunk_index,
+        "status": "error",
+        "request_path": str(request_path),
+        "result_path": str(result_path),
+        "error": last_error,
+        "attempts": max_retries + 1,
+        "task_keys": list(chunk.task_keys),
+    }
+
+
+async def execute_batch_stage(
+    *,
+    client: GeminiLLMClient,
+    chunks: list[BatchChunk],
+    output_path: Path,
+    model_name: str,
+    batch_display_name: str | None,
+    poll_interval_seconds: int,
+    workers: int,
+) -> list[dict[str, Any]]:
+    semaphore = asyncio.Semaphore(workers)
+
+    async def guarded_run(chunk: BatchChunk) -> dict[str, Any]:
+        async with semaphore:
+            return await execute_batch_chunk(
+                client=client,
+                chunk=chunk,
+                output_path=output_path,
+                model_name=model_name,
+                batch_display_name=batch_display_name,
+                poll_interval_seconds=poll_interval_seconds,
+            )
+
+    return await asyncio.gather(*(guarded_run(chunk) for chunk in chunks))
+
+
+async def classify_relevance_for_batch_record(
+    *,
+    record: dict[str, Any],
+    args: argparse.Namespace,
+    relevance_client: GeminiLLMClient | None,
+) -> tuple[dict[str, Any], GeminiLLMClient]:
+    client = relevance_client
+    if client is None:
+        client = GeminiLLMClient(
+            model_name=args.relevance_model or args.model,
+            system_prompt=None,
+            temperature=0.0,
+            max_tokens=256,
+            reasoning_effort="disable",
+            verbose=False,
+        )
+    relevance = await classify_article_relevance(
+        client=client,
+        title=str(record.get("title") or ""),
+        text=str(record.get("text") or ""),
+        record_id=str(record.get("id")),
+        max_chars=args.relevance_max_chars,
+        confidence_threshold=args.relevance_confidence_threshold,
+        verbose=args.verbose,
+    )
+    return relevance, client
+
+
+def aggregate_extraction_record(
+    *,
+    record: dict[str, Any],
+    tasks: list[ExtractionBatchTask],
+    task_results: dict[str, dict[str, Any]],
+    args: argparse.Namespace,
+    model_name: str,
+) -> dict[str, Any]:
+    record_id = str(record.get("id"))
+    title = str(record.get("title") or "")
+    text = str(record.get("text") or "")
+    source = make_source(record, title, text)
+    payload_key = "spans" if args.output_mode == OUTPUT_MODE_SPANS else "events"
+    is_windowed = any(task.window is not None for task in tasks)
+
+    if not is_windowed:
+        if not args.self_consistency:
+            task_result = task_results.get(tasks[0].batch_key)
+            if task_result is None or task_result.get("status") != "ok":
+                return {
+                    "id": record_id,
+                    "status": "error",
+                    "error": (
+                        "Batch result did not include a response for this record."
+                        if task_result is None
+                        else str(task_result.get("error"))
+                    ),
+                    "source": source,
+                }
+            return {
+                "id": record_id,
+                "status": "ok",
+                "source": source,
+                payload_key: task_result["payload"],
+                "llm": {
+                    "model": model_name,
+                    "metadata": dict(task_result["metadata"]),
+                    "output_mode": args.output_mode,
+                },
+            }
+
+        sample_payloads: list[list[dict[str, Any]]] = []
+        sample_metadata: list[dict[str, Any]] = []
+        sample_errors: list[dict[str, Any]] = []
+        sample_summaries = init_self_consistency_sample_summaries(
+            args.self_consistency_samples
+        )
+        for task in sorted(tasks, key=lambda item: int(item.sample_index or 0)):
+            sample_index = int(task.sample_index or 0)
+            task_result = task_results.get(task.batch_key)
+            if task_result is None or task_result.get("status") != "ok":
+                error = (
+                    "Batch result did not include a response for this sample."
+                    if task_result is None
+                    else str(task_result.get("error"))
+                )
+                record_self_consistency_sample_failure(
+                    sample_summaries, sample_index, error
+                )
+                sample_errors.append(
+                    {
+                        "sample": sample_index,
+                        "error": error,
+                    }
+                )
+                continue
+            sample_payloads.append(task_result["payload"])
+            sample_metadata.append(task_result["metadata"])
+            record_self_consistency_sample_success(sample_summaries, sample_index)
+
+        samples_succeeded = len(sample_payloads)
+        support_key = (
+            "span_support" if args.output_mode == OUTPUT_MODE_SPANS else "event_support"
+        )
+        if samples_succeeded < args.self_consistency_min_successful_samples:
+            return {
+                "id": record_id,
+                "status": "error",
+                "error": (
+                    "Self-consistency failed: "
+                    f"{samples_succeeded}/{args.self_consistency_samples} samples "
+                    "succeeded; minimum required is "
+                    f"{args.self_consistency_min_successful_samples}."
+                ),
+                "source": source,
+                "llm": {
+                    "model": model_name,
+                    "metadata": combine_metadata(sample_metadata),
+                    "output_mode": args.output_mode,
+                    "self_consistency": {
+                        "enabled": True,
+                        "samples_requested": args.self_consistency_samples,
+                        "samples_succeeded": samples_succeeded,
+                        "threshold": None,
+                        "temperature": args.self_consistency_temperature,
+                        "sample_errors": sample_errors,
+                        "samples": sample_summaries,
+                        support_key: [],
+                        **(
+                            {"argument_support": []}
+                            if args.output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS
+                            else {}
+                        ),
+                    },
+                },
+            }
+
+        if args.output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+            events, event_support_by_key, argument_support_by_event_key, threshold = (
+                merge_self_consistency_events(sample_payloads, text)
+            )
+            event_support = [
+                {
+                    "start_char": start_char,
+                    "end_char": end_char,
+                    "event_type": event_type,
+                    "support": support,
+                }
+                for (start_char, end_char, event_type), support in sorted(
+                    event_support_by_key.items()
+                )
+                if support >= threshold
+            ]
+            argument_support = []
+            for event_key, arguments_by_key in sorted(
+                argument_support_by_event_key.items()
+            ):
+                event_support_count = event_support_by_key.get(event_key, 0)
+                if event_support_count < threshold:
+                    continue
+                argument_threshold = (event_support_count // 2) + 1
+                event_start_char, event_end_char, event_type = event_key
+                for (start_char, end_char, role), support in sorted(
+                    arguments_by_key.items()
+                ):
+                    if support < argument_threshold:
+                        continue
+                    argument_support.append(
+                        {
+                            "event_start_char": event_start_char,
+                            "event_end_char": event_end_char,
+                            "event_type": event_type,
+                            "start_char": start_char,
+                            "end_char": end_char,
+                            "role": role,
+                            "support": support,
+                            "threshold": argument_threshold,
+                        }
+                    )
+            return {
+                "id": record_id,
+                "status": "ok",
+                "source": source,
+                "events": events,
+                "llm": {
+                    "model": model_name,
+                    "metadata": combine_metadata(sample_metadata),
+                    "output_mode": args.output_mode,
+                    "self_consistency": {
+                        "enabled": True,
+                        "samples_requested": args.self_consistency_samples,
+                        "samples_succeeded": samples_succeeded,
+                        "threshold": threshold,
+                        "temperature": args.self_consistency_temperature,
+                        "sample_errors": sample_errors,
+                        "samples": sample_summaries,
+                        "event_support": event_support,
+                        "argument_support": argument_support,
+                    },
+                },
+            }
+
+        spans, support_by_key, threshold = merge_self_consistency_spans(
+            sample_payloads, text
+        )
+        span_support = [
+            {
+                "start_char": start_char,
+                "end_char": end_char,
+                "label": label,
+                "support": support,
+            }
+            for (start_char, end_char, label), support in sorted(support_by_key.items())
+            if support >= threshold
+        ]
+        return {
+            "id": record_id,
+            "status": "ok",
+            "source": source,
+            "spans": spans,
+            "llm": {
+                "model": model_name,
+                "metadata": combine_metadata(sample_metadata),
+                "output_mode": args.output_mode,
+                "self_consistency": {
+                    "enabled": True,
+                    "samples_requested": args.self_consistency_samples,
+                    "samples_succeeded": samples_succeeded,
+                    "threshold": threshold,
+                    "temperature": args.self_consistency_temperature,
+                    "sample_errors": sample_errors,
+                    "samples": sample_summaries,
+                    "span_support": span_support,
+                },
+            },
+        }
+
+    windows: dict[int, ArticleWindow] = {}
+    grouped_tasks: dict[int, list[ExtractionBatchTask]] = defaultdict(list)
+    for task in tasks:
+        if task.window is None:
+            continue
+        windows[int(task.window.window_index)] = task.window
+        grouped_tasks[int(task.window.window_index)].append(task)
+
+    projected_spans: list[dict[str, Any]] = []
+    projected_events: list[dict[str, Any]] = []
+    sample_metadata: list[dict[str, Any]] = []
+    window_errors: list[dict[str, Any]] = []
+    long_document_sample_summaries = (
+        init_self_consistency_sample_summaries(
+            args.self_consistency_samples, chunk_count=len(windows)
+        )
+        if args.self_consistency
+        else []
+    )
+
+    for window_index in sorted(grouped_tasks):
+        window = windows[window_index]
+        window_tasks = grouped_tasks[window_index]
+        if args.self_consistency:
+            sample_payloads: list[list[dict[str, Any]]] = []
+            sample_errors: list[dict[str, Any]] = []
+            for task in sorted(window_tasks, key=lambda item: int(item.sample_index or 0)):
+                sample_index = int(task.sample_index or 0)
+                task_result = task_results.get(task.batch_key)
+                if task_result is None or task_result.get("status") != "ok":
+                    error = (
+                        "Batch result did not include a response for this sample."
+                        if task_result is None
+                        else str(task_result.get("error"))
+                    )
+                    record_self_consistency_sample_failure(
+                        long_document_sample_summaries,
+                        sample_index,
+                        error,
+                        window_index=window_index,
+                    )
+                    sample_errors.append(
+                        {
+                            "sample": sample_index,
+                            "error": error,
+                        }
+                    )
+                    continue
+                sample_payloads.append(task_result["payload"])
+                sample_metadata.append(task_result["metadata"])
+                record_self_consistency_sample_success(
+                    long_document_sample_summaries, sample_index
+                )
+
+            if len(sample_payloads) < args.self_consistency_min_successful_samples:
+                window_errors.append(
+                    {
+                        "window_index": window_index,
+                        "error": (
+                            "Self-consistency failed for window "
+                            f"{window_index}: "
+                            f"{len(sample_payloads)}/{args.self_consistency_samples} "
+                            "samples succeeded; minimum required is "
+                            f"{args.self_consistency_min_successful_samples}; "
+                            f"errors={sample_errors}"
+                        ),
+                    }
+                )
+                continue
+
+            if args.output_mode == OUTPUT_MODE_SPANS:
+                local_spans, _, _ = merge_self_consistency_spans(
+                    sample_payloads, window.text
+                )
+                projected_spans.extend(project_window_spans(local_spans, window, text))
+            else:
+                local_events, _, _, _ = merge_self_consistency_events(
+                    sample_payloads, window.text
+                )
+                projected_events.extend(project_window_events(local_events, window, text))
+            continue
+
+        task_result = task_results.get(window_tasks[0].batch_key)
+        if task_result is None or task_result.get("status") != "ok":
+            window_errors.append(
+                {
+                    "window_index": window_index,
+                    "error": (
+                        "Batch result did not include a response for this window."
+                        if task_result is None
+                        else str(task_result.get("error"))
+                    ),
+                }
+            )
+            continue
+        sample_metadata.append(task_result["metadata"])
+        if args.output_mode == OUTPUT_MODE_SPANS:
+            projected_spans.extend(
+                project_window_spans(task_result["payload"], window, text)
+            )
+        else:
+            projected_events.extend(
+                project_window_events(task_result["payload"], window, text)
+            )
+
+    payload = (
+        merge_window_spans(projected_spans, text)
+        if args.output_mode == OUTPUT_MODE_SPANS
+        else merge_window_events(projected_events, text)
+    )
+    metadata = combine_metadata(sample_metadata)
+    metadata["long_document"] = {
+        "enabled": True,
+        "threshold_triggered": True,
+        "window_boundary": "sentence_adaptive_overlap",
+        "window_target_chars": args.window_target_chars,
+        "window_max_chars": args.window_max_chars,
+        "window_overlap_sentences": args.window_overlap_sentences,
+        "window_count": len(windows),
+        "windows": format_window_metadata([windows[index] for index in sorted(windows)]),
+        "window_errors": window_errors,
+        "self_consistency": {
+            "enabled": args.self_consistency,
+            "samples_requested": (
+                args.self_consistency_samples if args.self_consistency else None
+            ),
+            "temperature": (
+                args.self_consistency_temperature if args.self_consistency else None
+            ),
+            "min_successful_samples": (
+                args.self_consistency_min_successful_samples
+                if args.self_consistency
+                else None
+            ),
+            "samples": long_document_sample_summaries if args.self_consistency else None,
+        },
+    }
+    return {
+        "id": record_id,
+        "status": "ok",
+        "source": source,
+        payload_key: payload,
+        "llm": {
+            "model": model_name,
+            "metadata": metadata,
+            "output_mode": args.output_mode,
+        },
+    }
+
+
+async def poll_batch_job(
+    client: GeminiLLMClient,
+    batch_job_name: str,
+    poll_interval_seconds: int,
+) -> Any:
+    completed_states = {
+        "JOB_STATE_SUCCEEDED",
+        "JOB_STATE_FAILED",
+        "JOB_STATE_CANCELLED",
+        "JOB_STATE_EXPIRED",
+    }
+
+    batch_job = await asyncio.to_thread(client.client.batches.get, name=batch_job_name)
+    while batch_job.state.name not in completed_states:
+        LOGGER.info("batch=%s state=%s", batch_job_name, batch_job.state.name)
+        await asyncio.sleep(poll_interval_seconds)
+        batch_job = await asyncio.to_thread(client.client.batches.get, name=batch_job_name)
+    return batch_job
+
+
 async def run(args: argparse.Namespace) -> None:
     if args.env_file:
         load_env_file(args.env_file)
@@ -2739,9 +3804,7 @@ async def run(args: argparse.Namespace) -> None:
     loaded_records = load_records(args.input)
     unique_records = dedupe_records(loaded_records)
     raw_examples = (
-        load_examples(args.examples)
-        if args.example_sample_size is not None
-        else []
+        load_examples(args.examples) if args.example_sample_size is not None else []
     )
     examples = compact_example_records(raw_examples, args.output_mode)
     if examples:
@@ -2768,8 +3831,10 @@ async def run(args: argparse.Namespace) -> None:
         limit=args.limit,
         random_sample=args.random_sample,
     )
-    selected_total = len(unique_records) if args.limit is None else min(
-        args.limit, len(unique_records)
+    selected_total = (
+        len(unique_records)
+        if args.limit is None
+        else min(args.limit, len(unique_records))
     )
     LOGGER.info(
         "input loaded=%s unique=%s duplicates_skipped=%s selected_before_completed=%s",
@@ -2788,6 +3853,364 @@ async def run(args: argparse.Namespace) -> None:
     if not pending:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.touch(exist_ok=True)
+        return
+
+    if args.batch_api:
+        client = GeminiLLMClient(
+            model_name=args.model,
+            system_prompt=None,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            reasoning_effort=args.reasoning_effort,
+            verbose=False,
+        )
+        extraction_request_config = batch_request_config(
+            args,
+            system_prompt,
+            batch_response_schema_for_stage(args.output_mode, "extraction"),
+            temperature=(
+                args.self_consistency_temperature
+                if args.self_consistency
+                else args.temperature
+            ),
+        )
+        final_results: dict[str, dict[str, Any]] = {}
+        pending_for_extraction: list[dict[str, Any]] = []
+        relevance_by_id: dict[str, dict[str, Any]] = {}
+        relevance_client: GeminiLLMClient | None = None
+
+        for record in pending:
+            record_id = str(record.get("id"))
+            text = str(record.get("text") or "")
+            if not text.strip():
+                final_results[record_id] = {
+                    "id": record_id,
+                    "status": "error",
+                    "error": "Input record is missing required article text/body.",
+                    "source": make_source(record, str(record.get("title") or ""), text),
+                }
+                continue
+
+            if args.enable_relevance_filter:
+                try:
+                    relevance_info, relevance_client = await classify_relevance_for_batch_record(
+                        record=record,
+                        args=args,
+                        relevance_client=relevance_client,
+                    )
+                except Exception as exc:
+                    LOGGER.exception(
+                        "batch relevance_filter_failed=true id=%s error=%s",
+                        record_id,
+                        exc,
+                    )
+                    relevance_info = {
+                        "decision": "error",
+                        "filtered": False,
+                        "reason": "",
+                        "confidence": 0.0,
+                        "threshold": args.relevance_confidence_threshold,
+                        "model": (args.relevance_model or args.model),
+                        "max_chars": args.relevance_max_chars,
+                        "text_chars_used": min(len(text), args.relevance_max_chars),
+                        "metadata": {},
+                        "error": str(exc),
+                    }
+                relevance_by_id[record_id] = relevance_info
+                if relevance_info.get("filtered"):
+                    final_results[record_id] = build_empty_extraction_result(
+                        record=record,
+                        output_mode=args.output_mode,
+                        model_name=str(relevance_client.model_name),
+                        relevance=relevance_info,
+                    )
+                    continue
+
+            pending_for_extraction.append(record)
+
+        extraction_tasks = build_extraction_tasks(
+            pending_for_extraction,
+            args=args,
+            ontology_text=ontology_text,
+            user_prompt_template=user_prompt_template,
+            argument_roles_text=argument_roles_text,
+            event_argument_roles_text=event_argument_roles_text,
+            location_types_text=location_types_text,
+            examples=examples,
+        )
+        extraction_task_by_key = {
+            task.batch_key: task for task in extraction_tasks
+        }
+        extraction_tasks_by_record: dict[str, list[ExtractionBatchTask]] = defaultdict(list)
+        for task in extraction_tasks:
+            extraction_tasks_by_record[task.record_id].append(task)
+        extraction_chunks = build_batch_chunks(
+            tasks=extraction_tasks,
+            stage="extraction",
+            batch_size=args.batch_size,
+            request_config=extraction_request_config,
+        )
+        extraction_chunk_results: list[dict[str, Any]] = []
+        extraction_task_results: dict[str, dict[str, Any]] = {}
+        if extraction_chunks:
+            extraction_chunk_results = await execute_batch_stage(
+                client=client,
+                chunks=extraction_chunks,
+                output_path=args.output,
+                model_name=args.model,
+                batch_display_name=args.batch_display_name,
+                poll_interval_seconds=args.batch_poll_interval_seconds,
+                workers=args.workers,
+            )
+            for chunk_result in extraction_chunk_results:
+                chunk_keys = set(chunk_result["task_keys"])
+                if chunk_result["status"] != "ok":
+                    for batch_key in chunk_keys:
+                        extraction_task_results[batch_key] = {
+                            "status": "error",
+                            "error": str(chunk_result.get("error")),
+                        }
+                    continue
+
+                seen: set[str] = set()
+                for line in iter_jsonl(Path(chunk_result["result_path"])):
+                    batch_key = batch_result_key(line)
+                    if batch_key not in chunk_keys:
+                        LOGGER.warning(
+                            "Skipping unexpected batch result stage=extraction key=%s",
+                            batch_key,
+                        )
+                        continue
+                    task = extraction_task_by_key[batch_key]
+                    try:
+                        payload, metadata = parse_batch_payload(
+                            line=line,
+                            output_mode=args.output_mode,
+                            text=task.text,
+                            labels=labels,
+                            strict_offsets=args.strict_offsets,
+                            argument_roles=argument_roles,
+                            event_argument_roles=event_argument_roles,
+                            location_types=location_types,
+                        )
+                        extraction_task_results[batch_key] = {
+                            "status": "ok",
+                            "payload": payload,
+                            "metadata": metadata,
+                        }
+                    except Exception as exc:
+                        extraction_task_results[batch_key] = {
+                            "status": "error",
+                            "error": f"Failed to parse batch response: {exc}",
+                        }
+                    seen.add(batch_key)
+                for batch_key in chunk_keys - seen:
+                    extraction_task_results[batch_key] = {
+                        "status": "error",
+                        "error": "Batch result did not include a response for this task.",
+                    }
+
+        aggregated_results: list[dict[str, Any]] = []
+        for record in pending_for_extraction:
+            record_id = str(record.get("id"))
+            result = aggregate_extraction_record(
+                record=record,
+                tasks=extraction_tasks_by_record.get(record_id, []),
+                task_results=extraction_task_results,
+                args=args,
+                model_name=args.model,
+            )
+            if record_id in relevance_by_id:
+                result.setdefault("llm", {})
+                result["llm"]["relevance"] = relevance_by_id[record_id]
+            aggregated_results.append(result)
+            final_results[record_id] = result
+
+        verifier_chunk_results: list[dict[str, Any]] = []
+        if args.enable_verifier and args.output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+            verifier_request_config = batch_request_config(
+                args,
+                system_prompt,
+                batch_response_schema_for_stage(args.output_mode, "verifier"),
+            )
+            verifier_tasks = build_verifier_tasks(
+                aggregated_results,
+                args=args,
+                ontology_text=ontology_text,
+                verifier_prompt_template=DEFAULT_VERIFIER_PROMPT,
+            )
+            verifier_task_by_key = {task.batch_key: task for task in verifier_tasks}
+            verifier_chunks = build_batch_chunks(
+                tasks=verifier_tasks,
+                stage="verifier",
+                batch_size=args.batch_size,
+                request_config=verifier_request_config,
+            )
+            verifier_task_results: dict[str, dict[str, Any]] = {}
+            if verifier_chunks:
+                verifier_chunk_results = await execute_batch_stage(
+                    client=client,
+                    chunks=verifier_chunks,
+                    output_path=args.output,
+                    model_name=args.model,
+                    batch_display_name=args.batch_display_name,
+                    poll_interval_seconds=args.batch_poll_interval_seconds,
+                    workers=args.workers,
+                )
+                for chunk_result in verifier_chunk_results:
+                    chunk_keys = set(chunk_result["task_keys"])
+                    if chunk_result["status"] != "ok":
+                        for batch_key in chunk_keys:
+                            verifier_task_results[batch_key] = {
+                                "status": "error",
+                                "error": str(chunk_result.get("error")),
+                            }
+                        continue
+                    seen: set[str] = set()
+                    for line in iter_jsonl(Path(chunk_result["result_path"])):
+                        batch_key = batch_result_key(line)
+                        if batch_key not in chunk_keys:
+                            LOGGER.warning(
+                                "Skipping unexpected batch result stage=verifier key=%s",
+                                batch_key,
+                            )
+                            continue
+                        task = verifier_task_by_key[batch_key]
+                        try:
+                            decisions, metadata = parse_batch_verifier_payload(
+                                line, task.events
+                            )
+                            verifier_task_results[batch_key] = {
+                                "status": "ok",
+                                "decisions": decisions,
+                                "metadata": metadata,
+                            }
+                        except Exception as exc:
+                            verifier_task_results[batch_key] = {
+                                "status": "error",
+                                "error": f"Failed to parse verifier batch response: {exc}",
+                            }
+                        seen.add(batch_key)
+                    for batch_key in chunk_keys - seen:
+                        verifier_task_results[batch_key] = {
+                            "status": "error",
+                            "error": "Batch result did not include a verifier response.",
+                        }
+
+            for result in aggregated_results:
+                if result.get("status") != "ok":
+                    continue
+                result.setdefault("llm", {})
+                metadata = result["llm"].setdefault("metadata", {})
+                result_id = str(result.get("id"))
+                events = result.get("events") or []
+                if not events:
+                    metadata["verifier"] = {
+                        "enabled": True,
+                        "decisions": [],
+                        "metadata": {},
+                    }
+                    continue
+                verifier_result = verifier_task_results.get(result_id)
+                if verifier_result is None or verifier_result.get("status") != "ok":
+                    final_results[result_id] = {
+                        "id": result_id,
+                        "status": "error",
+                        "error": (
+                            "Batch result did not include a verifier response."
+                            if verifier_result is None
+                            else str(verifier_result.get("error"))
+                        ),
+                        "source": result.get("source"),
+                        "llm": result.get("llm"),
+                    }
+                    continue
+                decisions = verifier_result["decisions"]
+                result["events"] = adjudication.apply_verifier_decisions(
+                    events, decisions
+                )
+                metadata["verifier"] = {
+                    "enabled": True,
+                    "decisions": decisions,
+                    "metadata": verifier_result["metadata"],
+                }
+                final_results[result_id] = result
+
+        extraction_chunk_metadata = [
+            {
+                key: chunk_result.get(key)
+                for key in (
+                    "stage",
+                    "chunk_index",
+                    "status",
+                    "request_path",
+                    "result_path",
+                    "uploaded_file",
+                    "batch_job_name",
+                    "batch_output_file",
+                    "attempts",
+                )
+                if key in chunk_result
+            }
+            | {"task_count": len(chunk_result.get("task_keys", []))}
+            for chunk_result in extraction_chunk_results
+        ]
+        verifier_chunk_metadata = [
+            {
+                key: chunk_result.get(key)
+                for key in (
+                    "stage",
+                    "chunk_index",
+                    "status",
+                    "request_path",
+                    "result_path",
+                    "uploaded_file",
+                    "batch_job_name",
+                    "batch_output_file",
+                    "attempts",
+                )
+                if key in chunk_result
+            }
+            | {"task_count": len(chunk_result.get("task_keys", []))}
+            for chunk_result in verifier_chunk_results
+        ]
+        pipeline_metadata = make_stage_pipeline_metadata(
+            args=args,
+            extraction_chunks=extraction_chunk_metadata,
+            verifier_chunks=verifier_chunk_metadata if verifier_chunk_metadata else None,
+        )
+        for result in final_results.values():
+            result.setdefault("llm", {})
+            result["llm"]["pipeline"] = dict(pipeline_metadata)
+
+        output_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        progress = tqdm(
+            total=len(pending),
+            desc="Progress",
+            unit="record",
+            disable=not args.progress,
+        )
+        writer_task = asyncio.create_task(writer(args.output, output_queue, progress))
+        for record in pending:
+            await output_queue.put(
+                final_results[str(record.get("id"))]
+            )
+        await output_queue.put(None)
+        await output_queue.join()
+        await writer_task
+        progress.close()
+
+        report_path = args.report or args.output.with_suffix(".report.json")
+        report = reports.write_report(args.output, report_path)
+        if args.enable_synthetic_gaps:
+            report["synthetic_gap_requests"] = reports.synthetic_gap_requests(
+                report, ontology
+            )
+            report_path.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        LOGGER.info("wrote report: %s", report_path)
         return
 
     input_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
@@ -2892,6 +4315,33 @@ def parse_args() -> argparse.Namespace:
         help="Ontology JSON file containing label descriptions.",
     )
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Gemini model name.")
+    parser.add_argument(
+        "--batch-api",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Submit extraction and optional verifier requests through Gemini Batch "
+            "API. Relevance filtering stays synchronous; batch stages are chunked "
+            "by --batch-size and submitted in parallel up to --workers."
+        ),
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1000,
+        help="Maximum number of requests per Gemini batch JSONL file.",
+    )
+    parser.add_argument(
+        "--batch-poll-interval-seconds",
+        type=int,
+        default=30,
+        help="Polling interval for --batch-api jobs.",
+    )
+    parser.add_argument(
+        "--batch-display-name",
+        default=None,
+        help="Optional display name for the Gemini batch job.",
+    )
     parser.add_argument(
         "--workers", type=int, default=4, help="Parallel Gemini workers."
     )
@@ -3147,7 +4597,7 @@ def apply_pipeline_defaults(args: argparse.Namespace) -> None:
         else config.get("window_overlap_sentences", 1)
     )
 
-    for field in ("model", "workers", "long_document_threshold_chars"):
+    for field in ("model", "workers", "long_document_threshold_chars", "batch_size"):
         if field in config:
             setattr(args, field, config[field])
     if "relevance_model" in config and args.relevance_model is None:
@@ -3165,6 +4615,10 @@ def main() -> None:
     apply_pipeline_defaults(args)
     if args.workers < 1:
         raise ValueError("--workers must be >= 1")
+    if args.batch_poll_interval_seconds < 1:
+        raise ValueError("--batch-poll-interval-seconds must be >= 1")
+    if args.batch_size < 1:
+        raise ValueError("--batch-size must be >= 1")
     if args.limit is not None and args.limit < 1:
         raise ValueError("--limit must be >= 1")
     if args.example_sample_size is not None and args.example_sample_size < 1:
@@ -3173,13 +4627,8 @@ def main() -> None:
         if args.self_consistency_samples < 1:
             raise ValueError("--self-consistency-samples must be >= 1")
         if args.self_consistency_min_successful_samples < 1:
-            raise ValueError(
-                "--self-consistency-min-successful-samples must be >= 1"
-            )
-        if (
-            args.self_consistency_min_successful_samples
-            > args.self_consistency_samples
-        ):
+            raise ValueError("--self-consistency-min-successful-samples must be >= 1")
+        if args.self_consistency_min_successful_samples > args.self_consistency_samples:
             raise ValueError(
                 "--self-consistency-min-successful-samples cannot exceed "
                 "--self-consistency-samples"

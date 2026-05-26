@@ -17,23 +17,32 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.data.generation.gemini_event_gen import (  # noqa: E402
+    DEFAULT_EVENTS_WITH_ARGS_USER_PROMPT,
     DEFAULT_MODEL,
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_USER_PROMPT,
     GeminiLLMClient,
+    OUTPUT_MODE_EVENTS_WITH_ARGS,
+    OUTPUT_MODE_SPANS,
     format_ontology,
+    format_argument_roles,
+    format_event_argument_roles,
+    format_location_types,
     generate_one,
     iter_jsonl,
     load_env_file,
     load_json_tolerant,
+    normalize_argument_roles,
+    normalize_event_argument_roles,
+    normalize_location_types,
     normalize_ontology,
 )
 
 
 DEFAULT_JSONL = (
-    "dataset/gdelt/events/food_security_2020_2025_100.gemini2.5_flash.jsonl"
+    "dataset/manual/manual_fixes.v2.bona.jsonl"
 )
-DEFAULT_ONTOLOGY = Path("ontologies/risk-factors/risk.cluster.description.json")
+DEFAULT_ONTOLOGY = Path("ontologies/zhai/ontology.json")
 LOGGER = logging.getLogger("span_annotation_ui")
 
 
@@ -111,9 +120,37 @@ class AppState:
         self.compare_records: list[dict[str, Any]] = []
         self.loaded_path: str | None = None
         self.loaded_compare_path: str | None = None
-        self.ontology = normalize_ontology(load_json_tolerant(args.ontology))
+        raw_ontology = load_json_tolerant(args.ontology)
+        self.ontology = normalize_ontology(raw_ontology)
         self.ontology_text = format_ontology(self.ontology)
         self.labels = set(self.ontology)
+        self.output_mode = OUTPUT_MODE_SPANS
+        self.user_prompt_template = DEFAULT_USER_PROMPT
+        self.argument_roles: set[str] | None = None
+        self.event_argument_roles: dict[str, list[str]] | None = None
+        self.argument_roles_text = ""
+        self.event_argument_roles_text = ""
+        self.location_types: set[str] | None = None
+        self.location_types_text = ""
+        if isinstance(raw_ontology, dict) and raw_ontology.get("event_argument_roles"):
+            argument_role_descriptions = normalize_argument_roles(raw_ontology)
+            self.argument_roles = set(argument_role_descriptions)
+            self.event_argument_roles = normalize_event_argument_roles(
+                raw_ontology, self.labels, self.argument_roles
+            )
+            location_type_descriptions = normalize_location_types(raw_ontology)
+            self.location_types = set(location_type_descriptions)
+            self.argument_roles_text = format_argument_roles(
+                argument_role_descriptions
+            )
+            self.event_argument_roles_text = format_event_argument_roles(
+                self.event_argument_roles
+            )
+            self.location_types_text = format_location_types(
+                location_type_descriptions
+            )
+            self.output_mode = OUTPUT_MODE_EVENTS_WITH_ARGS
+            self.user_prompt_template = DEFAULT_EVENTS_WITH_ARGS_USER_PROMPT
         if args.env_file:
             load_env_file(args.env_file)
 
@@ -290,11 +327,18 @@ class SpanUIHandler(BaseHTTPRequestHandler):
                     ontology_text=state.ontology_text,
                     labels=state.labels,
                     system_prompt=DEFAULT_SYSTEM_PROMPT,
-                    user_prompt_template=DEFAULT_USER_PROMPT,
+                    user_prompt_template=state.user_prompt_template,
                     max_retries=state.args.max_retries,
                     initial_backoff=state.args.initial_backoff,
                     max_backoff=state.args.max_backoff,
                     strict_offsets=state.args.strict_offsets,
+                    output_mode=state.output_mode,
+                    argument_roles=state.argument_roles,
+                    event_argument_roles=state.event_argument_roles,
+                    argument_roles_text=state.argument_roles_text,
+                    event_argument_roles_text=state.event_argument_roles_text,
+                    location_types=state.location_types,
+                    location_types_text=state.location_types_text,
                 )
             )
             normalized = normalize_record(result, -1)
