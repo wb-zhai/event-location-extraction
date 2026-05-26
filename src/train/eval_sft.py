@@ -119,7 +119,7 @@ def evaluate(
     for g, p in zip(gold_rows, pred_rows):
         text = g["question"]
         g_events = g["answer"]["events"]
-        p_events = p.get("answer", {}).get("events", [])
+        p_events = p.get("answer", {}).get("prediction", {}).get("events", [])
 
         g_ev, g_arg, _, _, _ = _normalize(text, g_events)
         p_ev, p_arg, grounded, total, status_counts = _normalize(text, p_events)

@@ -4,7 +4,7 @@ PYTHONPATH=. python src/train/train.py \
   --model_name "answerdotai/ModernBERT-base" \
   --train_file dataset/risk-factor/run-15052025/reader/train-windows-256-modernbert.jsonl \
   --eval_file dataset/risk-factor/run-15052025/reader/dev_200-windows-256-modernbert.jsonl \
-  --output_dir outputs/zhai/reader/modernbert-only-events-run-1 \
+  --output_dir outputs/zhai/reader/modernbert-only-events-run-2 \
   --ontology_file ontologies/risk-factors/risk.label.description.training.json \
   --num_event_candidates -1 \
   --num_relation_candidates -1 \

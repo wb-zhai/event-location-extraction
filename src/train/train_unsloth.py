@@ -235,12 +235,12 @@ def _resolve_candidate_labels(
 
     document_event_labels = _require_label_list(
         row,
-        "event_labels",
+        "events",
         fallback_labels=required_event_labels,
     )
     document_argument_role_labels = _require_label_list(
         row,
-        "argument_labels",
+        "argument_roles",
         fallback_labels=required_argument_role_labels,
     )
     document_location_type_labels = _require_label_list(

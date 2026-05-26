@@ -240,6 +240,7 @@ def _generate_prediction_texts(
     top_p: float | None = None,
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
+    max_input_length: int | None = None,
 ) -> list[str]:
     import torch
 
@@ -264,7 +265,12 @@ def _generate_prediction_texts(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model_inputs = tokenizer(text=prompt_texts, return_tensors="pt", padding=True)
+    model_inputs = tokenizer(
+        text=prompt_texts,
+        return_tensors="pt",
+        padding=True,
+        max_length=max_input_length,
+    )
     model_inputs = {
         name: value.to(model.device) for name, value in model_inputs.items()
     }
@@ -309,6 +315,7 @@ def _generate_prediction_text(
     top_p: float | None = None,
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
+    max_input_length: int | None = None,
 ) -> str:
     return _generate_prediction_texts(
         model,
@@ -324,6 +331,7 @@ def _generate_prediction_text(
         top_p=top_p,
         repetition_penalty=repetition_penalty,
         debug_prompt=debug_prompt,
+        max_input_length=max_input_length,
     )[0]
 
 
@@ -334,6 +342,8 @@ def load_inference_model(args: argparse.Namespace) -> tuple[Any, Any]:
         model_name=args.model_path,
         max_seq_length=args.max_seq_length,
         load_in_4bit=args.load_in_4bit,
+        load_in_16bit=not args.load_in_4bit,
+        gpu_memory_utilization=0.9,
     )
     if getattr(args, "adapter_path", None):
         model.load_adapter(args.adapter_path)
@@ -357,6 +367,7 @@ def predict_document(
     top_p: float | None = None,
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
+    max_input_length: int | None = None,
 ) -> dict[str, Any]:
     return predict_batch_documents(
         model,
@@ -372,6 +383,7 @@ def predict_document(
         top_p=top_p,
         repetition_penalty=repetition_penalty,
         debug_prompt=debug_prompt,
+        max_input_length=max_input_length,
     )[0]
 
 
@@ -390,6 +402,7 @@ def predict_batch_documents(
     top_p: float | None = None,
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
+    max_input_length: int | None = None,
 ) -> list[dict[str, Any]]:
     prediction_texts = _generate_prediction_texts(
         model,
@@ -405,6 +418,7 @@ def predict_batch_documents(
         top_p=top_p,
         repetition_penalty=repetition_penalty,
         debug_prompt=debug_prompt,
+        max_input_length=max_input_length,
     )
 
     results = []
@@ -437,6 +451,7 @@ def run_inference(args: argparse.Namespace) -> dict[str, Any]:
         top_k=args.top_k,
         top_p=args.top_p,
         repetition_penalty=args.repetition_penalty,
+        max_input_length=args.max_seq_length,
     )
 
 
@@ -487,8 +502,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--ontology_file", type=str, default=None)
     parser.add_argument("--event_labels", nargs="+", default=None)
-    parser.add_argument("--max_seq_length", type=int, default=8192)
-    parser.add_argument("--max_new_tokens", type=int, default=4096)
+    parser.add_argument("--max_seq_length", type=int, default=4096)
+    parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--min_p", type=float, default=None)
     parser.add_argument("--top_k", type=int, default=None)
@@ -534,8 +549,9 @@ def run_inference_file(args: argparse.Namespace) -> None:
     model, tokenizer = load_inference_model(args)
 
     with open(args.input_file, "r", encoding="utf-8") as f:
-        lines = [line for line in f if line.strip()]
+        lines = [json.loads(line) for line in f if line.strip()]
         total_lines = len(lines)
+        print("Total documents to process:", total_lines)
 
     is_first = True
     batch_size = args.batch_size
@@ -544,12 +560,8 @@ def run_inference_file(args: argparse.Namespace) -> None:
         for i in tqdm(
             range(0, total_lines, batch_size), desc="Running inference (batched)"
         ):
-            batch_lines = lines[i : i + batch_size]
-            batch_data = [json.loads(line) for line in batch_lines]
-            batch_documents = [
-                d.get("text") or d.get("question") or d.get("document", "")
-                for d in batch_data
-            ]
+            batch_data = lines[i : i + batch_size]
+            batch_documents = [d["question"] for d in batch_data]
 
             predictions = predict_batch_documents(
                 model,
@@ -565,6 +577,7 @@ def run_inference_file(args: argparse.Namespace) -> None:
                 top_p=args.top_p,
                 repetition_penalty=args.repetition_penalty,
                 debug_prompt=is_first,
+                max_input_length=args.max_seq_length,
             )
             is_first = False
 
