@@ -23,6 +23,17 @@ class DummyTokenizer:
             f"{message['role'].upper()}:\n{message['content']}" for message in messages
         )
 
+    def __call__(
+        self,
+        text: str,
+        *,
+        add_special_tokens: bool,
+        return_attention_mask: bool,
+    ) -> dict[str, list[int]]:
+        assert add_special_tokens is False
+        assert return_attention_mask is False
+        return {"input_ids": list(range(len(text.split())))}
+
 
 def build_sft_row() -> dict:
     return {
@@ -65,11 +76,13 @@ def write_candidate_ontology(path: Path) -> Path:
 
 
 def test_format_row_includes_prompt_candidate_labels() -> None:
-    text = train_unsloth._format_row(build_sft_row(), DummyTokenizer())["text"]
+    formatted = train_unsloth._format_row(build_sft_row(), DummyTokenizer())
+    text = formatted["text"]
 
     assert 'Select event labels from the following set: ["attack", "injure"]' in text
     assert "Extract all events." in text
     assert "Select argument role labels" not in text
+    assert formatted["seq_length"] > 0
 
 
 def test_candidate_fill_expands_requested_totals(tmp_path: Path) -> None:
@@ -209,3 +222,32 @@ def test_format_row_uses_gold_label_fallback_when_sampling_enabled(
 
     assert 'Select event labels from the following set: ["attack", "injure"' in text
     assert "Select argument role labels" not in text
+
+
+def test_filter_overlong_samples_uses_cached_seq_length() -> None:
+    class FilterableDataset:
+        def __init__(self, rows: list[dict[str, int | str]]) -> None:
+            self.rows = rows
+
+        def __len__(self) -> int:
+            return len(self.rows)
+
+        def filter(self, predicate, num_proc: int):
+            assert num_proc == 4
+            return FilterableDataset([row for row in self.rows if predicate(row)])
+
+    dataset = FilterableDataset(
+        [
+            {"text": "short", "seq_length": 3},
+            {"text": "long", "seq_length": 9},
+        ]
+    )
+
+    filtered = train_unsloth._filter_overlong_samples(
+        dataset,
+        max_seq_length=5,
+        split_name="Train",
+    )
+
+    assert len(filtered.rows) == 1
+    assert filtered.rows[0]["text"] == "short"

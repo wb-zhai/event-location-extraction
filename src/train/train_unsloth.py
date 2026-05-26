@@ -481,7 +481,11 @@ def _format_row(
         include_descriptions=include_descriptions,
         answer_obj=answer_obj,
     )
-    return {"text": text, "row_index": index}
+    return {
+        "text": text,
+        "row_index": index,
+        "seq_length": _get_sequence_length(tokenizer, text),
+    }
 
 
 def _build_map_fn(
@@ -572,10 +576,10 @@ def _get_sequence_length(tokenizer, text: str) -> int:
     return len(input_ids)
 
 
-def _filter_overlong_samples(dataset, tokenizer, max_seq_length: int, split_name: str):
+def _filter_overlong_samples(dataset, max_seq_length: int, split_name: str):
     original_size = len(dataset)
     filtered_dataset = dataset.filter(
-        lambda row: _get_sequence_length(tokenizer, row["text"]) <= max_seq_length,
+        lambda row: row["seq_length"] <= max_seq_length,
         num_proc=4,
     )
     removed_count = original_size - len(filtered_dataset)
@@ -631,9 +635,7 @@ def _print_train_dataset_preview(
     print("First training sample answer:")
     print(json.dumps(first_answer, ensure_ascii=False))
 
-    sequence_lengths: list[int] = []
-    for text in train_ds["text"]:
-        sequence_lengths.append(_get_sequence_length(tokenizer, text))
+    sequence_lengths = train_ds["seq_length"]
 
     sample_index = random.Random(random_seed).randrange(len(train_ds))
     raw_sample_index = train_ds[sample_index]["row_index"]
@@ -664,23 +666,22 @@ def _print_train_dataset_preview(
     print(label_text)
 
 
-def _print_dataset_max_sequence_length(dataset, tokenizer, split_name: str) -> None:
+def _print_dataset_max_sequence_length(dataset, split_name: str) -> None:
     if len(dataset) == 0:
         print(f"{split_name} max sequence length (tokens): dataset is empty")
         return
-    max_length = max(_get_sequence_length(tokenizer, text) for text in dataset["text"])
+    max_length = max(dataset["seq_length"])
     print(f"{split_name} max sequence length (tokens): {max_length}")
 
 
 def _print_dataset_max_sequence_length_before_filtering(
     dataset,
-    tokenizer,
     split_name: str,
 ) -> None:
     if len(dataset) == 0:
         print(f"{split_name} max sequence length before filtering (tokens): dataset is empty")
         return
-    max_length = max(_get_sequence_length(tokenizer, text) for text in dataset["text"])
+    max_length = max(dataset["seq_length"])
     print(f"{split_name} max sequence length before filtering (tokens): {max_length}")
 
 
@@ -871,12 +872,10 @@ def main(argv: list[str] | None = None) -> None:
         with_indices=True,
         num_proc=4,
     )
-    _print_dataset_max_sequence_length_before_filtering(train_ds, tokenizer, "Train")
+    _print_dataset_max_sequence_length_before_filtering(train_ds, "Train")
     if args.filter_overlong_samples:
-        train_ds = _filter_overlong_samples(
-            train_ds, tokenizer, args.max_seq_length, "Train"
-        )
-    _print_dataset_max_sequence_length(train_ds, tokenizer, "Train")
+        train_ds = _filter_overlong_samples(train_ds, args.max_seq_length, "Train")
+    _print_dataset_max_sequence_length(train_ds, "Train")
 
     eval_ds = None
     if args.eval_file:
@@ -896,12 +895,10 @@ def main(argv: list[str] | None = None) -> None:
             with_indices=True,
             num_proc=4,
         )
-        _print_dataset_max_sequence_length_before_filtering(eval_ds, tokenizer, "Eval")
+        _print_dataset_max_sequence_length_before_filtering(eval_ds, "Eval")
         if args.filter_overlong_samples:
-            eval_ds = _filter_overlong_samples(
-                eval_ds, tokenizer, args.max_seq_length, "Eval"
-            )
-        _print_dataset_max_sequence_length(eval_ds, tokenizer, "Eval")
+            eval_ds = _filter_overlong_samples(eval_ds, args.max_seq_length, "Eval")
+        _print_dataset_max_sequence_length(eval_ds, "Eval")
 
     use_bf16 = torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8
 
