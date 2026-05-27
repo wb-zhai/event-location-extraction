@@ -21,6 +21,10 @@ from scripts.data.generation import gemini_event_gen
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 LOGGER = logging.getLogger("gemini_event_update")
+TARGET_MODE_ALL = "all"
+TARGET_MODE_EVENTS = "events"
+TARGET_MODE_ARGUMENTS = "arguments"
+TARGET_MODES = (TARGET_MODE_ALL, TARGET_MODE_EVENTS, TARGET_MODE_ARGUMENTS)
 
 DEFAULT_SYSTEM_PROMPT = """<role>
 You are an expert data extraction and annotation refinement system specializing in identifying events, risk factors, and their locations related to food insecurity from news articles.
@@ -101,6 +105,30 @@ Read the `<article_text>` comprehensively and perform detailed refinement and up
 </extraction_rules>
 """
 
+TARGET_MODE_SYSTEM_INSTRUCTIONS = {
+    TARGET_MODE_ALL: """<target_mode>
+Refine the provided annotations fully. You may correct event labels, trigger spans, argument roles, location types, and offsets, and you may drop unsupported annotations.
+</target_mode>""",
+    TARGET_MODE_EVENTS: """<target_mode>
+Focus on event review only. Correct event validity, event labels, trigger spans, and trigger offsets. Do not spend effort refining arguments.
+</target_mode>""",
+    TARGET_MODE_ARGUMENTS: """<target_mode>
+Focus on argument review only. Treat each provided event trigger span and event label as fixed context. Only repair, add, or remove arguments, their roles, location types, and offsets. Do not alter event trigger text, event offsets, or event label.
+</target_mode>""",
+}
+
+TARGET_MODE_USER_INSTRUCTIONS = {
+    TARGET_MODE_ALL: """<target_mode_task>
+Fully refine the current annotations against the ontology and article text.
+</target_mode_task>""",
+    TARGET_MODE_EVENTS: """<target_mode_task>
+Update events only. Review event validity, event labels, trigger text, and trigger offsets. Argument refinement is out of scope for this pass.
+</target_mode_task>""",
+    TARGET_MODE_ARGUMENTS: """<target_mode_task>
+Update arguments only. Preserve the provided event identity order whenever possible. Keep each event trigger text, event offsets, and event label fixed; only repair, add, or remove arguments and their labels/location types/offsets.
+</target_mode_task>""",
+}
+
 
 class UpdatedSpan(BaseModel):
     span_text: str = Field(..., description="Verbatim span from article.")
@@ -125,6 +153,187 @@ class UpdatedEvent(BaseModel):
     arguments: list[UpdatedArgument] = Field(default_factory=list)
 
 
+def validate_args(args: argparse.Namespace) -> None:
+    if (
+        args.output_mode == gemini_event_gen.OUTPUT_MODE_SPANS
+        and args.target_mode == TARGET_MODE_ARGUMENTS
+    ):
+        raise ValueError(
+            "--target-mode arguments requires --output-mode events-with-args"
+        )
+
+
+def _append_instruction_block(base_prompt: str, instruction_block: str) -> str:
+    if not instruction_block.strip():
+        return base_prompt
+    return f"{base_prompt.rstrip()}\n\n{instruction_block}\n"
+
+
+def _event_key(event: dict[str, Any]) -> tuple[int, int, str]:
+    return (
+        int(event.get("start_char", -1)),
+        int(event.get("end_char", -1)),
+        str(event.get("event_type", "")).strip(),
+    )
+
+
+def _copy_arguments(arguments: list[dict[str, Any]] | Any) -> list[dict[str, Any]]:
+    copied: list[dict[str, Any]] = []
+    if not isinstance(arguments, list):
+        return copied
+    for argument in arguments:
+        if isinstance(argument, dict):
+            copied.append(dict(argument))
+    return copied
+
+
+def _select_current_annotations(
+    record: dict[str, Any],
+    output_mode: str,
+    target_mode: str,
+) -> list[dict[str, Any]]:
+    if output_mode == gemini_event_gen.OUTPUT_MODE_SPANS:
+        return list(record.get("spans", []))
+
+    events = record.get("events", [])
+    if target_mode != TARGET_MODE_EVENTS:
+        return list(events)
+
+    selected_events: list[dict[str, Any]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        selected_events.append(
+            {
+                "event_type": event.get("event_type"),
+                "trigger_text": event.get("trigger_text"),
+                "start_char": event.get("start_char"),
+                "end_char": event.get("end_char"),
+            }
+        )
+    return selected_events
+
+
+def _merge_event_updates(
+    original_events: list[dict[str, Any]],
+    cleaned_events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    original_arguments = {
+        _event_key(event): _copy_arguments(event.get("arguments", []))
+        for event in original_events
+        if isinstance(event, dict)
+    }
+    merged_events: list[dict[str, Any]] = []
+    for event in cleaned_events:
+        event_key = _event_key(event)
+        merged_event = dict(event)
+        merged_event["arguments"] = original_arguments.get(event_key, [])
+        merged_events.append(merged_event)
+    return merged_events
+
+
+def _clean_argument_updates_for_original_events(
+    raw_answer: dict[str, Any],
+    original_events: list[dict[str, Any]],
+    text: str,
+    labels: set[str],
+    strict_offsets: bool,
+    argument_roles: set[str],
+    event_argument_roles: dict[str, list[str]],
+    location_types: set[str] | None,
+) -> list[dict[str, Any]]:
+    raw_events = raw_answer.get("events", [])
+    if not isinstance(raw_events, list):
+        raw_events = []
+
+    merged_events: list[dict[str, Any]] = []
+    for index, original_event in enumerate(original_events):
+        if not isinstance(original_event, dict):
+            continue
+
+        candidate_arguments: list[dict[str, Any]] = []
+        has_candidate_event = index < len(raw_events) and isinstance(raw_events[index], dict)
+        if has_candidate_event:
+            raw_arguments = raw_events[index].get("arguments", [])
+            if isinstance(raw_arguments, list):
+                candidate_arguments = raw_arguments
+
+        original_arguments = _copy_arguments(original_event.get("arguments", []))
+        cleaned_events = gemini_event_gen.clean_events_with_args(
+            {
+                "events": [
+                    {
+                        "event_type": original_event.get("event_type"),
+                        "trigger_text": original_event.get("trigger_text"),
+                        "start_char": original_event.get("start_char"),
+                        "end_char": original_event.get("end_char"),
+                        "arguments": candidate_arguments,
+                    }
+                ]
+            },
+            text,
+            labels,
+            strict_offsets,
+            argument_roles=argument_roles,
+            event_argument_roles=event_argument_roles,
+            location_types=location_types,
+        )
+
+        merged_event = dict(original_event)
+        if not has_candidate_event:
+            merged_event["arguments"] = original_arguments
+        elif cleaned_events:
+            merged_event["arguments"] = cleaned_events[0].get("arguments", [])
+        else:
+            merged_event["arguments"] = []
+        merged_events.append(merged_event)
+
+    return merged_events
+
+
+def _clean_updated_payload(
+    raw_answer: dict[str, Any],
+    record: dict[str, Any],
+    text: str,
+    labels: set[str],
+    output_mode: str,
+    target_mode: str,
+    strict_offsets: bool,
+    argument_roles: set[str] | None,
+    event_argument_roles: dict[str, list[str]] | None,
+    location_types: set[str] | None,
+) -> list[dict[str, Any]]:
+    if output_mode == gemini_event_gen.OUTPUT_MODE_SPANS:
+        return gemini_event_gen.clean_spans(raw_answer, text, labels, strict_offsets)
+
+    cleaned_events = gemini_event_gen.clean_events_with_args(
+        raw_answer,
+        text,
+        labels,
+        strict_offsets,
+        argument_roles=argument_roles or set(),
+        event_argument_roles=event_argument_roles or {},
+        location_types=location_types,
+    )
+    original_events = [
+        event for event in record.get("events", []) if isinstance(event, dict)
+    ]
+    if target_mode == TARGET_MODE_ALL:
+        return cleaned_events
+    if target_mode == TARGET_MODE_EVENTS:
+        return _merge_event_updates(original_events, cleaned_events)
+    return _clean_argument_updates_for_original_events(
+        raw_answer,
+        original_events,
+        text,
+        labels,
+        strict_offsets,
+        argument_roles=argument_roles or set(),
+        event_argument_roles=event_argument_roles or {},
+        location_types=location_types,
+    )
+
+
 async def generate_update(
     client: GeminiLLMClient,
     record: dict[str, Any],
@@ -138,6 +347,7 @@ async def generate_update(
     max_backoff: float,
     verbose: bool,
     strict_offsets: bool,
+    target_mode: str,
     argument_roles: set[str] | None,
     event_argument_roles: dict[str, list[str]] | None,
     location_types: set[str] | None,
@@ -146,15 +356,10 @@ async def generate_update(
     title = str(record.get("title", ""))
     record_id = str(record.get("id"))
 
-    current_annotations_str = ""
-    if output_mode == gemini_event_gen.OUTPUT_MODE_SPANS:
-        current_annotations_str = json.dumps(
-            record.get("spans", []), ensure_ascii=False, indent=2
-        )
-    else:
-        current_annotations_str = json.dumps(
-            record.get("events", []), ensure_ascii=False, indent=2
-        )
+    current_annotations = _select_current_annotations(record, output_mode, target_mode)
+    current_annotations_str = json.dumps(
+        current_annotations, ensure_ascii=False, indent=2
+    )
 
     argument_roles_text = ""
     if argument_roles:
@@ -188,6 +393,14 @@ async def generate_update(
     # We do a simple fallback if the template doesn't use all kwargs, though we could just pass them.
     # Python's str.format() might raise KeyError if a key is in template but not provided, but it allows extra kwargs.
     prompt = user_prompt_template.format(**format_kwargs)
+    prompt = _append_instruction_block(
+        prompt,
+        TARGET_MODE_USER_INSTRUCTIONS[target_mode],
+    )
+    system_prompt = _append_instruction_block(
+        system_prompt,
+        TARGET_MODE_SYSTEM_INSTRUCTIONS[target_mode],
+    )
 
     response_format = (
         {"spans": list[UpdatedSpan]}
@@ -250,18 +463,30 @@ async def generate_update(
 
     updated_record = dict(record)
     if output_mode == gemini_event_gen.OUTPUT_MODE_SPANS:
-        updated_record["spans"] = gemini_event_gen.clean_spans(
-            raw_answer, text, labels, strict_offsets
-        )
-    else:
-        updated_record["events"] = gemini_event_gen.clean_events_with_args(
+        updated_record["spans"] = _clean_updated_payload(
             raw_answer,
+            record,
             text,
             labels,
+            output_mode,
+            target_mode,
             strict_offsets,
-            argument_roles=argument_roles or set(),
-            event_argument_roles=event_argument_roles or {},
-            location_types=location_types,
+            argument_roles,
+            event_argument_roles,
+            location_types,
+        )
+    else:
+        updated_record["events"] = _clean_updated_payload(
+            raw_answer,
+            record,
+            text,
+            labels,
+            output_mode,
+            target_mode,
+            strict_offsets,
+            argument_roles,
+            event_argument_roles,
+            location_types,
         )
 
     return updated_record
@@ -281,6 +506,7 @@ async def process_batch(
     max_backoff: float,
     verbose: bool,
     strict_offsets: bool,
+    target_mode: str,
     argument_roles: set[str] | None,
     event_argument_roles: dict[str, list[str]] | None,
     location_types: set[str] | None,
@@ -299,6 +525,7 @@ async def process_batch(
             max_backoff=max_backoff,
             verbose=verbose,
             strict_offsets=strict_offsets,
+            target_mode=target_mode,
             argument_roles=argument_roles,
             event_argument_roles=event_argument_roles,
             location_types=location_types,
@@ -322,6 +549,7 @@ async def process_batch(
 
 
 async def run(args: argparse.Namespace) -> None:
+    validate_args(args)
     gemini_event_gen.load_env_file(REPO_ROOT / ".env")
 
     client = GeminiLLMClient(
@@ -383,6 +611,7 @@ async def run(args: argparse.Namespace) -> None:
                 max_backoff=args.max_backoff,
                 verbose=args.verbose,
                 strict_offsets=not args.fast_offsets,
+                target_mode=args.target_mode,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
                 location_types=location_types,
@@ -390,7 +619,7 @@ async def run(args: argparse.Namespace) -> None:
             pbar.update(len(batch))
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Update existing annotations with a new prompt/ontology."
     )
@@ -413,6 +642,12 @@ def parse_args() -> argparse.Namespace:
         choices=gemini_event_gen.OUTPUT_MODES,
         default=gemini_event_gen.OUTPUT_MODE_SPANS,
     )
+    parser.add_argument(
+        "--target-mode",
+        choices=TARGET_MODES,
+        default=TARGET_MODE_ALL,
+        help="Restrict updates to all annotations, only events, or only arguments.",
+    )
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument("--initial-backoff", type=float, default=2.0)
     parser.add_argument("--max-backoff", type=float, default=30.0)
@@ -422,7 +657,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fast-offsets", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--log-level", default="INFO")
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    try:
+        validate_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return args
 
 
 def main() -> None:
