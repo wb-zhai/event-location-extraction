@@ -2,7 +2,83 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
+from statistics import median
 from typing import Any
+
+
+def percentile(sorted_values: list[int], pct: float) -> float:
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return float(sorted_values[0])
+    rank = (len(sorted_values) - 1) * pct
+    lower = int(rank)
+    upper = min(lower + 1, len(sorted_values) - 1)
+    weight = rank - lower
+    return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
+
+
+def print_length_distribution(label: str, lengths: list[int]) -> None:
+    if not lengths:
+        print(f"{label} length stats: none")
+        return
+
+    sorted_lengths = sorted(lengths)
+    bucket_counts: Counter[str] = Counter()
+    for length in lengths:
+        if length <= 10:
+            bucket_counts["1-10"] += 1
+        elif length <= 20:
+            bucket_counts["11-20"] += 1
+        elif length <= 50:
+            bucket_counts["21-50"] += 1
+        elif length <= 100:
+            bucket_counts["51-100"] += 1
+        else:
+            bucket_counts["101+"] += 1
+
+    print(f"{label} length stats:")
+    print(f"  count: {len(lengths)}")
+    print(f"  min / median / avg / max: {sorted_lengths[0]} / {median(sorted_lengths):.1f} / {sum(lengths) / len(lengths):.1f} / {sorted_lengths[-1]}")
+    print(
+        "  p90 / p95 / p99: "
+        f"{percentile(sorted_lengths, 0.90):.1f} / "
+        f"{percentile(sorted_lengths, 0.95):.1f} / "
+        f"{percentile(sorted_lengths, 0.99):.1f}"
+    )
+    print(
+        "  buckets: "
+        + ", ".join(
+            f"{bucket}={bucket_counts.get(bucket, 0)}"
+            for bucket in ("1-10", "11-20", "21-50", "51-100", "101+")
+        )
+    )
+
+
+def print_longest_examples(label: str, spans: list[dict[str, Any]], limit: int = 5) -> None:
+    print(f"longest {label}:")
+    if not spans:
+        print("  none")
+        return
+
+    seen: set[tuple[str, str]] = set()
+    examples_printed = 0
+    for span in sorted(
+        spans,
+        key=lambda item: (-item["length"], item["label"], item["text"], item["record_id"]),
+    ):
+        dedupe_key = (span["label"], span["text"])
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        print(
+            f"  {span['length']:>3} chars | {span['label']} | "
+            f"{span['record_id']} | {span['text']}"
+        )
+        examples_printed += 1
+        if examples_printed >= limit:
+            break
+
 
 if __name__ == "__main__":
 
@@ -22,6 +98,9 @@ if __name__ == "__main__":
     event_roles: Counter[str] = Counter()
     argument_roles: Counter[str] = Counter()
     span_texts: Counter[str] = Counter()
+    trigger_lengths: list[int] = []
+    argument_lengths: list[int] = []
+    longest_spans: list[dict[str, Any]] = []
     total_events = 0
     total_arguments = 0
     total_articles = len(records)
@@ -42,6 +121,16 @@ if __name__ == "__main__":
             trigger_text = str(event.get("trigger_text") or "").strip()
             if trigger_text:
                 span_texts[trigger_text] += 1
+                trigger_lengths.append(len(trigger_text))
+                longest_spans.append(
+                    {
+                        "length": len(trigger_text),
+                        "kind": "trigger",
+                        "label": event_type or "unknown",
+                        "text": trigger_text,
+                        "record_id": record.get("id", ""),
+                    }
+                )
 
             arguments = event.get("arguments", [])
             for argument in arguments:
@@ -49,6 +138,19 @@ if __name__ == "__main__":
                 if role:
                     argument_roles[role] += 1
                     total_arguments += 1
+
+                argument_text = str(argument.get("text") or "").strip()
+                if argument_text:
+                    argument_lengths.append(len(argument_text))
+                    longest_spans.append(
+                        {
+                            "length": len(argument_text),
+                            "kind": "argument",
+                            "label": role or "unknown",
+                            "text": argument_text,
+                            "record_id": record.get("id", ""),
+                        }
+                    )
 
     avg_events = total_events / total_articles if total_articles > 0 else 0
     avg_arguments = total_arguments / total_events if total_events > 0 else 0
@@ -89,3 +191,15 @@ if __name__ == "__main__":
         total_words += len(text.split())
     avg_words = total_words / total_articles if total_articles > 0 else 0
     print(f"average words per article: {avg_words:.2f}")
+
+    print_length_distribution("trigger span", trigger_lengths)
+    print_length_distribution("argument span", argument_lengths)
+
+    print_longest_examples(
+        "trigger spans",
+        [span for span in longest_spans if span["kind"] == "trigger"],
+    )
+    print_longest_examples(
+        "argument spans",
+        [span for span in longest_spans if span["kind"] == "argument"],
+    )

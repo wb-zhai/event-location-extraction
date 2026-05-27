@@ -58,6 +58,24 @@ def safe_text_span(document: str, start: Any, end: Any) -> str:
     return document[start:end]
 
 
+def build_span(
+    document: str,
+    start: int,
+    end: int,
+    *,
+    context_chars: int = 0,
+) -> dict[str, Any]:
+    span = {
+        "start": start,
+        "end": end,
+        "text": document[start:end],
+    }
+    if context_chars > 0:
+        span["left_context"] = document[max(0, start - context_chars) : start]
+        span["right_context"] = document[end : min(len(document), end + context_chars)]
+    return span
+
+
 def tokenize_document(document: str) -> tuple[list[str], list[tuple[int, int]]]:
     tokens: list[str] = []
     token_char_spans: list[tuple[int, int]] = []
@@ -114,7 +132,12 @@ def tokenize_document_with_tokenizer(
     return tokens, token_char_spans
 
 
-def convert_argument(document: str, argument: dict[str, Any]) -> dict[str, Any] | None:
+def convert_argument(
+    document: str,
+    argument: dict[str, Any],
+    *,
+    context_chars: int = 0,
+) -> dict[str, Any] | None:
     start = argument.get("start_char")
     end = argument.get("end_char")
     text = safe_text_span(document, start, end)
@@ -127,9 +150,7 @@ def convert_argument(document: str, argument: dict[str, Any]) -> dict[str, Any] 
 
     converted_argument = {
         "role": role.strip(),
-        "start": start,
-        "end": end,
-        "text": text,
+        "span": build_span(document, start, end, context_chars=context_chars),
     }
     location_type = argument.get("location_type")
     if isinstance(location_type, str) and location_type.strip():
@@ -141,6 +162,8 @@ def convert_event(
     document: str,
     event: dict[str, Any],
     include_arguments: bool = True,
+    *,
+    context_chars: int = 0,
 ) -> dict[str, Any] | None:
     event_type = event.get("event_type")
     if not isinstance(event_type, str) or not event_type.strip():
@@ -154,9 +177,7 @@ def convert_event(
 
     converted = {
         "event_type": event_type.strip(),
-        "start": start,
-        "end": end,
-        "text": text,
+        "trigger": build_span(document, start, end, context_chars=context_chars),
     }
     if not include_arguments:
         return converted
@@ -166,14 +187,18 @@ def convert_event(
     for argument in event.get("arguments", []):
         if not isinstance(argument, dict):
             continue
-        converted_argument = convert_argument(document, argument)
+        converted_argument = convert_argument(
+            document,
+            argument,
+            context_chars=context_chars,
+        )
         if converted_argument is None:
             continue
 
         argument_key = (
             converted_argument["role"],
-            converted_argument["start"],
-            converted_argument["end"],
+            converted_argument["span"]["start"],
+            converted_argument["span"]["end"],
         )
         if argument_key in seen_arguments:
             continue
@@ -187,6 +212,8 @@ def convert_event(
 def convert_document(
     data: dict[str, Any],
     include_arguments: bool = True,
+    *,
+    context_chars: int = 0,
 ) -> dict[str, Any] | None:
     source = data.get("source")
     if not isinstance(source, dict):
@@ -204,13 +231,27 @@ def convert_document(
             document,
             event,
             include_arguments=include_arguments,
+            context_chars=context_chars,
         )
         if converted_event is None:
             continue
         events.append(converted_event)
 
-    events.sort(key=lambda item: (item["start"], item["end"], item["event_type"]))
-    return {"question": document.strip(), "answer": {"events": events}}
+    events.sort(
+        key=lambda item: (
+            item["trigger"]["start"],
+            item["trigger"]["end"],
+            item["event_type"],
+        )
+    )
+    return {
+        "question": document.strip(),
+        "metadata": {
+            "document_char_start": 0,
+            "document_char_end": len(document),
+        },
+        "answer": {"events": events},
+    }
 
 
 def build_windows(
@@ -239,6 +280,8 @@ def slice_window(
     window_start: int,
     window_end: int,
     include_arguments: bool = True,
+    *,
+    context_chars: int = 0,
 ) -> dict[str, Any] | None:
     if not token_char_spans or window_start >= window_end:
         return None
@@ -249,38 +292,55 @@ def slice_window(
 
     events: list[dict[str, Any]] = []
     for event in sample["answer"]["events"]:
-        if not (window_char_start <= event["start"] and event["end"] <= window_char_end):
+        trigger = event["trigger"]
+        if not (
+            window_char_start <= trigger["start"]
+            and trigger["end"] <= window_char_end
+        ):
             continue
 
         windowed_event = {
             "event_type": event["event_type"],
-            "start": event["start"] - window_char_start,
-            "end": event["end"] - window_char_start,
-            "text": event["text"],
+            "trigger": build_span(
+                window_text,
+                trigger["start"] - window_char_start,
+                trigger["end"] - window_char_start,
+                context_chars=context_chars,
+            ),
         }
         if include_arguments:
             arguments: list[dict[str, Any]] = []
             for argument in event.get("arguments", []):
+                argument_span = argument["span"]
                 if not (
-                    window_char_start <= argument["start"]
-                    and argument["end"] <= window_char_end
+                    window_char_start <= argument_span["start"]
+                    and argument_span["end"] <= window_char_end
                 ):
                     continue
-                arguments.append(
-                    {
-                        "role": argument["role"],
-                        "start": argument["start"] - window_char_start,
-                        "end": argument["end"] - window_char_start,
-                        "text": argument["text"],
-                    }
-                )
+                windowed_argument = {
+                    "role": argument["role"],
+                    "span": build_span(
+                        window_text,
+                        argument_span["start"] - window_char_start,
+                        argument_span["end"] - window_char_start,
+                        context_chars=context_chars,
+                    ),
+                }
                 if "location_type" in argument:
-                    arguments[-1]["location_type"] = argument["location_type"]
+                    windowed_argument["location_type"] = argument["location_type"]
+                arguments.append(windowed_argument)
             windowed_event["arguments"] = arguments
 
         events.append(windowed_event)
 
-    return {"question": window_text, "answer": {"events": events}}
+    return {
+        "question": window_text,
+        "metadata": {
+            "document_char_start": window_char_start,
+            "document_char_end": window_char_end,
+        },
+        "answer": {"events": events},
+    }
 
 
 def convert_to_sft_records(
@@ -289,8 +349,14 @@ def convert_to_sft_records(
     window_stride: int | None = None,
     tokenizer: Any | None = None,
     include_arguments: bool = True,
+    *,
+    context_chars: int = 0,
 ) -> list[dict[str, Any]]:
-    sample = convert_document(data, include_arguments=include_arguments)
+    sample = convert_document(
+        data,
+        include_arguments=include_arguments,
+        context_chars=context_chars,
+    )
     if sample is None:
         return []
 
@@ -317,6 +383,7 @@ def convert_to_sft_records(
             window_start,
             window_end,
             include_arguments=include_arguments,
+            context_chars=context_chars,
         )
         if windowed is not None:
             records.append(windowed)
@@ -406,6 +473,15 @@ def main() -> None:
         action="store_true",
         help="Only output event triggers and omit event arguments",
     )
+    parser.add_argument(
+        "--context-chars",
+        type=int,
+        default=0,
+        help=(
+            "Optional number of characters of left/right context to include in each "
+            "trigger/span object. Use 0 to omit context fields."
+        ),
+    )
     args = parser.parse_args()
 
     if args.window_size is not None and args.window_size <= 0:
@@ -414,6 +490,8 @@ def main() -> None:
         raise ValueError("--window-stride must be a positive integer")
     if args.window_size is None and args.window_stride is not None:
         raise ValueError("--window-stride requires --window-size")
+    if args.context_chars < 0:
+        raise ValueError("--context-chars must be >= 0")
 
     input_path = Path(args.input_path)
     output_path = Path(args.output_path)
@@ -433,6 +511,7 @@ def main() -> None:
             window_stride=args.window_stride,
             tokenizer=tokenizer,
             include_arguments=not args.only_events,
+            context_chars=args.context_chars,
         )
         if not converted_records:
             continue
