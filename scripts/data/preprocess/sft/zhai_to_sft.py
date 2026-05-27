@@ -76,6 +76,37 @@ def build_span(
     return span
 
 
+def _strip_offsets_from_span(span: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in span.items() if key not in {"start", "end"}}
+
+
+def _strip_offsets_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    stripped_events: list[dict[str, Any]] = []
+    for event in record["answer"]["events"]:
+        stripped_event = {
+            "event_type": event["event_type"],
+            "trigger": _strip_offsets_from_span(event["trigger"]),
+        }
+        if "arguments" in event:
+            stripped_arguments: list[dict[str, Any]] = []
+            for argument in event["arguments"]:
+                stripped_argument = {
+                    "role": argument["role"],
+                    "span": _strip_offsets_from_span(argument["span"]),
+                }
+                if "location_type" in argument:
+                    stripped_argument["location_type"] = argument["location_type"]
+                stripped_arguments.append(stripped_argument)
+            stripped_event["arguments"] = stripped_arguments
+        stripped_events.append(stripped_event)
+
+    return {
+        "question": record["question"],
+        "metadata": record["metadata"],
+        "answer": {"events": stripped_events},
+    }
+
+
 def tokenize_document(document: str) -> tuple[list[str], list[tuple[int, int]]]:
     tokens: list[str] = []
     token_char_spans: list[tuple[int, int]] = []
@@ -137,6 +168,7 @@ def convert_argument(
     argument: dict[str, Any],
     *,
     context_chars: int = 0,
+    include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     start = argument.get("start_char")
     end = argument.get("end_char")
@@ -150,7 +182,12 @@ def convert_argument(
 
     converted_argument = {
         "role": role.strip(),
-        "span": build_span(document, start, end, context_chars=context_chars),
+        "span": build_span(
+            document,
+            start,
+            end,
+            context_chars=context_chars,
+        ),
     }
     location_type = argument.get("location_type")
     if isinstance(location_type, str) and location_type.strip():
@@ -164,6 +201,7 @@ def convert_event(
     include_arguments: bool = True,
     *,
     context_chars: int = 0,
+    include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     event_type = event.get("event_type")
     if not isinstance(event_type, str) or not event_type.strip():
@@ -177,7 +215,12 @@ def convert_event(
 
     converted = {
         "event_type": event_type.strip(),
-        "trigger": build_span(document, start, end, context_chars=context_chars),
+        "trigger": build_span(
+            document,
+            start,
+            end,
+            context_chars=context_chars,
+        ),
     }
     if not include_arguments:
         return converted
@@ -191,6 +234,7 @@ def convert_event(
             document,
             argument,
             context_chars=context_chars,
+            include_offsets=include_offsets,
         )
         if converted_argument is None:
             continue
@@ -214,6 +258,7 @@ def convert_document(
     include_arguments: bool = True,
     *,
     context_chars: int = 0,
+    include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     source = data.get("source")
     if not isinstance(source, dict):
@@ -232,6 +277,7 @@ def convert_document(
             event,
             include_arguments=include_arguments,
             context_chars=context_chars,
+            include_offsets=include_offsets,
         )
         if converted_event is None:
             continue
@@ -251,7 +297,16 @@ def convert_document(
             "document_char_end": len(document),
         },
         "answer": {"events": events},
-    }
+    } if include_offsets else _strip_offsets_from_record(
+        {
+            "question": document.strip(),
+            "metadata": {
+                "document_char_start": 0,
+                "document_char_end": len(document),
+            },
+            "answer": {"events": events},
+        }
+    )
 
 
 def build_windows(
@@ -282,6 +337,7 @@ def slice_window(
     include_arguments: bool = True,
     *,
     context_chars: int = 0,
+    include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     if not token_char_spans or window_start >= window_end:
         return None
@@ -333,7 +389,7 @@ def slice_window(
 
         events.append(windowed_event)
 
-    return {
+    record = {
         "question": window_text,
         "metadata": {
             "document_char_start": window_char_start,
@@ -341,6 +397,7 @@ def slice_window(
         },
         "answer": {"events": events},
     }
+    return record if include_offsets else _strip_offsets_from_record(record)
 
 
 def convert_to_sft_records(
@@ -351,11 +408,13 @@ def convert_to_sft_records(
     include_arguments: bool = True,
     *,
     context_chars: int = 0,
+    include_offsets: bool = True,
 ) -> list[dict[str, Any]]:
     sample = convert_document(
         data,
         include_arguments=include_arguments,
         context_chars=context_chars,
+        include_offsets=include_offsets,
     )
     if sample is None:
         return []
@@ -384,6 +443,7 @@ def convert_to_sft_records(
             window_end,
             include_arguments=include_arguments,
             context_chars=context_chars,
+            include_offsets=include_offsets,
         )
         if windowed is not None:
             records.append(windowed)
@@ -482,6 +542,14 @@ def main() -> None:
             "trigger/span object. Use 0 to omit context fields."
         ),
     )
+    parser.add_argument(
+        "--omit-offsets",
+        action="store_true",
+        help=(
+            "Do not include start/end fields inside trigger/span objects. "
+            "Metadata document_char_start/document_char_end is still emitted."
+        ),
+    )
     args = parser.parse_args()
 
     if args.window_size is not None and args.window_size <= 0:
@@ -512,6 +580,7 @@ def main() -> None:
             tokenizer=tokenizer,
             include_arguments=not args.only_events,
             context_chars=args.context_chars,
+            include_offsets=not args.omit_offsets,
         )
         if not converted_records:
             continue
