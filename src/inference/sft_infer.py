@@ -369,8 +369,6 @@ def _generate_prediction_text(
 
 
 def load_inference_model(args: argparse.Namespace) -> tuple[Any, Any]:
-    
-
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_path,
         max_seq_length=args.max_seq_length,

@@ -178,11 +178,58 @@
 #   --events_only \
 #   --omit_offsets
 
+# PYTHONPATH=. python src/train/train_unsloth.py \
+#   --model_name unsloth/Qwen3.5-4B \
+#   --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.events.384.jsonl \
+#   --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.events.384.jsonl \
+#   --output_dir outputs/zhai/qwen3.5-4B-lora-sft-window-500-v4-response-events-only-omit_offsets-v3 \
+#   --ontology_file ontologies/zhai/ontology.json \
+#   --num_event_candidates -1 \
+#   --num_relation_candidates -1 \
+#   --train_candidate_shuffle_prob 1.0 \
+#   --train_gold_candidate_dropout_prob 0.0 \
+#   --candidate_sampling_seed 13 \
+#   --max_seq_length 8192 \
+#   --batch_size 4 \
+#   --grad_accum 8 \
+#   --lr 2e-4 \
+#   --epochs 3 \
+#   --filter_overlong_samples \
+#   --load_in_4bit \
+#   --lora_r 32 \
+#   --train_on_responses_only \
+#   --max_empty_event_ratio 0.2 \
+#   --events_only \
+#   --omit_offsets
+
 PYTHONPATH=. python src/train/train_unsloth.py \
   --model_name unsloth/Qwen3.5-4B \
   --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.events.384.jsonl \
   --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.events.384.jsonl \
-  --output_dir outputs/zhai/qwen3.5-4B-lora-sft-window-500-v4-response-events-only-omit_offsets-v2 \
+  --output_dir outputs/zhai/qwen3.5-4B-lora-sft-window-500-v4-response-omit_offsets \
+  --ontology_file ontologies/zhai/ontology.json \
+  --num_event_candidates -1 \
+  --num_relation_candidates -1 \
+  --train_candidate_shuffle_prob 1.0 \
+  --train_gold_candidate_dropout_prob 0.0 \
+  --candidate_sampling_seed 13 \
+  --max_seq_length 8192 \
+  --batch_size 4 \
+  --grad_accum 8 \
+  --lr 2e-4 \
+  --epochs 3 \
+  --filter_overlong_samples \
+  --load_in_4bit \
+  --lora_r 32 \
+  --train_on_responses_only \
+  --max_empty_event_ratio 0.2 \
+  --omit_offsets
+
+PYTHONPATH=. python src/train/train_unsloth.py \
+  --model_name unsloth/Qwen3.5-0.8B \
+  --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.events.384.jsonl \
+  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.events.384.jsonl \
+  --output_dir outputs/zhai/qwen3.5-0.8B-lora-sft-window-500-v4-response-events-only-omit_offsets \
   --ontology_file ontologies/zhai/ontology.json \
   --num_event_candidates -1 \
   --num_relation_candidates -1 \
@@ -200,4 +247,27 @@ PYTHONPATH=. python src/train/train_unsloth.py \
   --train_on_responses_only \
   --max_empty_event_ratio 0.2 \
   --events_only \
+  --omit_offsets
+
+PYTHONPATH=. python src/train/train_unsloth.py \
+  --model_name unsloth/Qwen3.5-7B \
+  --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.events.384.jsonl \
+  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.events.384.jsonl \
+  --output_dir outputs/zhai/qwen3.5-7B-lora-sft-window-500-v4-response-events-only-omit_offsets \
+  --ontology_file ontologies/zhai/ontology.json \
+  --num_event_candidates -1 \
+  --num_relation_candidates -1 \
+  --train_candidate_shuffle_prob 1.0 \
+  --train_gold_candidate_dropout_prob 0.0 \
+  --candidate_sampling_seed 13 \
+  --max_seq_length 8192 \
+  --batch_size 4 \
+  --grad_accum 8 \
+  --lr 2e-4 \
+  --epochs 3 \
+  --filter_overlong_samples \
+  --load_in_4bit \
+  --lora_r 32 \
+  --train_on_responses_only \
+  --max_empty_event_ratio 0.2 \
   --omit_offsets

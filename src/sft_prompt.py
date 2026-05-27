@@ -112,13 +112,14 @@ def build_messages(
 
 
 def _chat_template_kwargs(tokenizer) -> dict[str, Any]:
-    name_or_path = getattr(tokenizer, "name_or_path", "")
-    if isinstance(name_or_path, str) and (
-        "qwen3" in name_or_path.lower() or "qwen3.5" in name_or_path.lower()
-    ):
-        # Qwen3 hybrid-thinking models think by default unless explicitly disabled.
-        return {"enable_thinking": False}
-    return {}
+    # name_or_path = getattr(tokenizer, "name_or_path", "")
+    # print(f"Tokenizer name_or_path: {name_or_path}")
+    # if isinstance(name_or_path, str) and (
+    #     "qwen3" in name_or_path.lower() or "qwen3.5" in name_or_path.lower()
+    # ):
+    #     # Qwen3 hybrid-thinking models think by default unless explicitly disabled.
+    # return {}
+    return {"enable_thinking": False}
 
 
 def render_chat(

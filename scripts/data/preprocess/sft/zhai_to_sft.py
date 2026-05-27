@@ -63,16 +63,18 @@ def build_span(
     start: int,
     end: int,
     *,
-    context_chars: int = 0,
+    context_words: int = 0,
 ) -> dict[str, Any]:
     span = {
         "start": start,
         "end": end,
         "text": document[start:end],
     }
-    if context_chars > 0:
-        span["left_context"] = document[max(0, start - context_chars) : start]
-        span["right_context"] = document[end : min(len(document), end + context_chars)]
+    if context_words > 0:
+        left_text = document[:start]
+        right_text = document[end:]
+        span["left_context"] = " ".join(left_text.split()[-context_words:]) if left_text.split() else ""
+        span["right_context"] = " ".join(right_text.split()[:context_words]) if right_text.split() else "" 
     return span
 
 
@@ -167,7 +169,7 @@ def convert_argument(
     document: str,
     argument: dict[str, Any],
     *,
-    context_chars: int = 0,
+    context_words: int = 0,
     include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     start = argument.get("start_char")
@@ -186,7 +188,7 @@ def convert_argument(
             document,
             start,
             end,
-            context_chars=context_chars,
+            context_words=context_words,
         ),
     }
     location_type = argument.get("location_type")
@@ -200,7 +202,7 @@ def convert_event(
     event: dict[str, Any],
     include_arguments: bool = True,
     *,
-    context_chars: int = 0,
+    context_words: int = 0,
     include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     event_type = event.get("event_type")
@@ -219,7 +221,7 @@ def convert_event(
             document,
             start,
             end,
-            context_chars=context_chars,
+            context_words=context_words,
         ),
     }
     if not include_arguments:
@@ -233,7 +235,7 @@ def convert_event(
         converted_argument = convert_argument(
             document,
             argument,
-            context_chars=context_chars,
+            context_words=context_words,
             include_offsets=include_offsets,
         )
         if converted_argument is None:
@@ -257,7 +259,7 @@ def convert_document(
     data: dict[str, Any],
     include_arguments: bool = True,
     *,
-    context_chars: int = 0,
+    context_words: int = 0,
     include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     source = data.get("source")
@@ -276,7 +278,7 @@ def convert_document(
             document,
             event,
             include_arguments=include_arguments,
-            context_chars=context_chars,
+            context_words=context_words,
             include_offsets=include_offsets,
         )
         if converted_event is None:
@@ -336,7 +338,7 @@ def slice_window(
     window_end: int,
     include_arguments: bool = True,
     *,
-    context_chars: int = 0,
+    context_words: int = 0,
     include_offsets: bool = True,
 ) -> dict[str, Any] | None:
     if not token_char_spans or window_start >= window_end:
@@ -361,7 +363,7 @@ def slice_window(
                 window_text,
                 trigger["start"] - window_char_start,
                 trigger["end"] - window_char_start,
-                context_chars=context_chars,
+                context_words=context_words,
             ),
         }
         if include_arguments:
@@ -379,7 +381,7 @@ def slice_window(
                         window_text,
                         argument_span["start"] - window_char_start,
                         argument_span["end"] - window_char_start,
-                        context_chars=context_chars,
+                        context_words=context_words,
                     ),
                 }
                 if "location_type" in argument:
@@ -407,13 +409,13 @@ def convert_to_sft_records(
     tokenizer: Any | None = None,
     include_arguments: bool = True,
     *,
-    context_chars: int = 0,
+    context_words: int = 0,
     include_offsets: bool = True,
 ) -> list[dict[str, Any]]:
     sample = convert_document(
         data,
         include_arguments=include_arguments,
-        context_chars=context_chars,
+        context_words=context_words,
         include_offsets=True if window_size is not None else include_offsets,
     )
     if sample is None:
@@ -442,7 +444,7 @@ def convert_to_sft_records(
             window_start,
             window_end,
             include_arguments=include_arguments,
-            context_chars=context_chars,
+            context_words=context_words,
             include_offsets=include_offsets,
         )
         if windowed is not None:
@@ -534,11 +536,11 @@ def main() -> None:
         help="Only output event triggers and omit event arguments",
     )
     parser.add_argument(
-        "--context-chars",
+        "--context-words",
         type=int,
         default=0,
         help=(
-            "Optional number of characters of left/right context to include in each "
+            "Optional number of words of left/right context to include in each "
             "trigger/span object. Use 0 to omit context fields."
         ),
     )
@@ -558,8 +560,8 @@ def main() -> None:
         raise ValueError("--window-stride must be a positive integer")
     if args.window_size is None and args.window_stride is not None:
         raise ValueError("--window-stride requires --window-size")
-    if args.context_chars < 0:
-        raise ValueError("--context-chars must be >= 0")
+    if args.context_words < 0:
+        raise ValueError("--context-words must be >= 0")
 
     input_path = Path(args.input_path)
     output_path = Path(args.output_path)
@@ -579,7 +581,7 @@ def main() -> None:
             window_stride=args.window_stride,
             tokenizer=tokenizer,
             include_arguments=not args.only_events,
-            context_chars=args.context_chars,
+            context_words=args.context_words,
             include_offsets=not args.omit_offsets,
         )
         if not converted_records:
