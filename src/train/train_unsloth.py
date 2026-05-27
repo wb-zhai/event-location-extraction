@@ -18,7 +18,7 @@ from src.data.dataset import (
     _apply_training_candidate_transform,
     _build_candidate_labels,
 )
-from src.sft_prompt import render_chat
+from src.sft_prompt import render_chat, build_messages
 
 
 @dataclass(frozen=True)
@@ -63,10 +63,12 @@ def _coerce_span(
 
     span_text = _safe_substring(document, start, end)
     normalized = {
-        "start": start,
-        "end": end,
         "text": span_text if span_text else (text if isinstance(text, str) else ""),
     }
+    if start is not None:
+        normalized["start"] = start
+    if end is not None:
+        normalized["end"] = end
     if isinstance(span_like, dict):
         for field_name in ("left_context", "right_context"):
             value = span_like.get(field_name)
@@ -131,7 +133,7 @@ def _select_label_descriptions(
     }
 
 
-def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _enrich_events(document: str, events: list[dict[str, Any]], *, events_only: bool = False) -> list[dict[str, Any]]:
     enriched: list[dict[str, Any]] = []
     for event in events:
         trigger = _coerce_span(
@@ -144,31 +146,33 @@ def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str
         out_event = {
             "event_type": event.get("event_type", ""),
             "trigger": trigger,
-            "arguments": [],
         }
-        for arg in event.get("arguments", []):
-            span = _coerce_span(
-                document,
-                arg.get("span"),
-                start=arg.get("start"),
-                end=arg.get("end"),
-                text=arg.get("text"),
+        
+        if not events_only:
+            out_event["arguments"] = []
+            for arg in event.get("arguments", []):
+                span = _coerce_span(
+                    document,
+                    arg.get("span"),
+                    start=arg.get("start"),
+                    end=arg.get("end"),
+                    text=arg.get("text"),
+                )
+                out_event["arguments"].append(
+                    {
+                        "role": arg.get("role", ""),
+                        "span": span,
+                        "location_type": arg.get("location_type", ""),
+                    }
+                )
+            out_event["arguments"].sort(
+                key=lambda x: (
+                    x["span"].get("start", 10**9),
+                    x["span"].get("end", 10**9),
+                    x.get("role", ""),
+                    x.get("location_type", ""),
+                )
             )
-            out_event["arguments"].append(
-                {
-                    "role": arg.get("role", ""),
-                    "span": span,
-                    "location_type": arg.get("location_type", ""),
-                }
-            )
-        out_event["arguments"].sort(
-            key=lambda x: (
-                x["span"].get("start", 10**9),
-                x["span"].get("end", 10**9),
-                x.get("role", ""),
-                x.get("location_type", ""),
-            )
-        )
 
         enriched.append(out_event)
 
@@ -407,6 +411,8 @@ def _chat_text(
     ontology: SftCandidateOntology | None,
     include_descriptions: bool,
     answer_obj: dict[str, Any],
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ) -> str:
     return render_chat(
         tokenizer,
@@ -436,6 +442,8 @@ def _chat_text(
         ),
         answer_obj=answer_obj,
         add_generation_prompt=False,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )
 
 
@@ -449,9 +457,10 @@ def _chat_parts(
     ontology: SftCandidateOntology | None,
     include_descriptions: bool,
     answer_obj: dict[str, Any],
-) -> tuple[str, str]:
-    prompt_text = render_chat(
-        tokenizer,
+    events_only: bool = False,
+    omit_offsets: bool = False,
+) -> tuple[list[dict[str, str]], str]:
+    messages = build_messages(
         document,
         _select_label_descriptions(
             event_labels,
@@ -476,10 +485,11 @@ def _chat_parts(
             ),
             include_descriptions=include_descriptions,
         ),
-        add_generation_prompt=True,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )
     label_text = json.dumps(answer_obj, ensure_ascii=False)
-    return prompt_text, label_text
+    return messages, label_text
 
 
 def _format_row(
@@ -496,10 +506,12 @@ def _format_row(
     include_descriptions: bool = False,
     candidate_rng: random.Random | None = None,
     index: int = 0,
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ) -> dict[str, str]:
     document = row["question"]
     raw_events = row["answer"]["events"]
-    answer_obj = {"events": _enrich_events(document, raw_events)}
+    answer_obj = {"events": _enrich_events(document, raw_events, events_only=events_only)}
     event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
         row,
         ontology=ontology,
@@ -523,6 +535,8 @@ def _format_row(
         ontology=ontology,
         include_descriptions=include_descriptions,
         answer_obj=answer_obj,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )
     return {
         "text": text,
@@ -542,6 +556,8 @@ def _build_map_fn(
     gold_candidate_dropout_probability: float,
     random_seed: int,
     include_descriptions: bool,
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ):
     candidate_rng = random.Random(random_seed)
 
@@ -559,6 +575,8 @@ def _build_map_fn(
             include_descriptions=include_descriptions,
             candidate_rng=candidate_rng,
             index=index,
+            events_only=events_only,
+            omit_offsets=omit_offsets,
         )
 
     return _map_fn
@@ -577,10 +595,12 @@ def _build_sample_preview(
     random_seed: int,
     include_descriptions: bool,
     index: int,
-) -> tuple[str, str]:
+    events_only: bool = False,
+    omit_offsets: bool = False,
+) -> tuple[list[dict[str, str]], str]:
     document = row["question"]
     raw_events = row["answer"]["events"]
-    answer_obj = {"events": _enrich_events(document, raw_events)}
+    answer_obj = {"events": _enrich_events(document, raw_events, events_only=events_only)}
     event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
         row,
         ontology=ontology,
@@ -602,6 +622,8 @@ def _build_sample_preview(
         ontology=ontology,
         include_descriptions=include_descriptions,
         answer_obj=answer_obj,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )
 
 
@@ -708,24 +730,18 @@ def _print_train_dataset_preview(
     gold_candidate_dropout_probability: float,
     random_seed: int,
     include_descriptions: bool,
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ) -> None:
     if len(train_ds) == 0:
         print("Training dataset is empty; no preview available.")
         return
 
-    first_raw_row = raw_train_ds[0]
-    first_document = first_raw_row["question"]
-    first_answer = {"events": _enrich_events(first_document, first_raw_row["answer"]["events"])}
-    print("First training sample question:")
-    print(first_document)
-    print("First training sample answer:")
-    print(json.dumps(first_answer, ensure_ascii=False))
-
     sequence_lengths = train_ds["seq_length"]
 
     sample_index = random.Random(random_seed).randrange(len(train_ds))
     raw_sample_index = train_ds[sample_index]["row_index"]
-    prompt_text, label_text = _build_sample_preview(
+    messages, label_text = _build_sample_preview(
         raw_train_ds[raw_sample_index],
         tokenizer,
         ontology=ontology,
@@ -737,6 +753,8 @@ def _print_train_dataset_preview(
         random_seed=random_seed,
         include_descriptions=include_descriptions,
         index=raw_sample_index,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )
 
     avg_length = sum(sequence_lengths) / len(sequence_lengths)
@@ -746,9 +764,14 @@ def _print_train_dataset_preview(
         f"max={max(sequence_lengths)}"
     )
     print(f"Random training sample index: {sample_index}")
-    print("Sample input:")
-    print(prompt_text)
-    print("Sample label:")
+    for msg in messages:
+        if msg["role"] == "system":
+            print("System prompt:")
+            print(msg["content"])
+        elif msg["role"] == "user":
+            print("User prompt:")
+            print(msg["content"])
+    print("Sample answer:")
     print(label_text)
 
 
@@ -832,6 +855,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--load_in_16bit", action="store_true")
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--train_on_responses_only", action="store_true")
+    parser.add_argument(
+        "--events_only",
+        action="store_true",
+        help="Train only on event extraction (no arguments).",
+    )
+    parser.add_argument(
+        "--omit_offsets",
+        action="store_true",
+        help="Omit character offsets in prompts and responses.",
+    )
     parser.add_argument(
         "--ontology_file",
         type=str,
@@ -972,6 +1005,8 @@ def main(argv: list[str] | None = None) -> None:
             gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
             random_seed=args.candidate_sampling_seed,
             include_descriptions=args.description,
+            events_only=args.events_only,
+            omit_offsets=args.omit_offsets,
         ),
         with_indices=True,
         num_proc=4,
@@ -1056,6 +1091,8 @@ def main(argv: list[str] | None = None) -> None:
         gold_candidate_dropout_probability=args.train_gold_candidate_dropout_prob,
         random_seed=args.candidate_sampling_seed,
         include_descriptions=args.description,
+        events_only=args.events_only,
+        omit_offsets=args.omit_offsets,
     )
 
     trainer.train()

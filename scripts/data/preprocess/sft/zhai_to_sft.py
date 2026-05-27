@@ -414,7 +414,7 @@ def convert_to_sft_records(
         data,
         include_arguments=include_arguments,
         context_chars=context_chars,
-        include_offsets=include_offsets,
+        include_offsets=True if window_size is not None else include_offsets,
     )
     if sample is None:
         return []

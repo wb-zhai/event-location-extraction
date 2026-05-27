@@ -267,6 +267,8 @@ def _generate_prediction_texts(
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
     max_input_length: int | None = None,
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ) -> list[str]:
 
     prompt_texts = [
@@ -277,6 +279,8 @@ def _generate_prediction_texts(
             argument_roles,
             location_types,
             add_generation_prompt=True,
+            events_only=events_only,
+            omit_offsets=omit_offsets,
         )
         for doc in documents
     ]
@@ -341,6 +345,8 @@ def _generate_prediction_text(
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
     max_input_length: int | None = None,
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ) -> str:
     return _generate_prediction_texts(
         model,
@@ -357,6 +363,8 @@ def _generate_prediction_text(
         repetition_penalty=repetition_penalty,
         debug_prompt=debug_prompt,
         max_input_length=max_input_length,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )[0]
 
 
@@ -372,6 +380,7 @@ def load_inference_model(args: argparse.Namespace) -> tuple[Any, Any]:
     )
     if getattr(args, "adapter_path", None):
         model.load_adapter(args.adapter_path)
+        print("Loaded LoRA adapter from", args.adapter_path)
 
     FastLanguageModel.for_inference(model)
     return model, tokenizer
@@ -393,6 +402,8 @@ def predict_document(
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
     max_input_length: int | None = None,
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ) -> dict[str, Any]:
     return predict_batch_documents(
         model,
@@ -409,6 +420,8 @@ def predict_document(
         repetition_penalty=repetition_penalty,
         debug_prompt=debug_prompt,
         max_input_length=max_input_length,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )[0]
 
 
@@ -428,6 +441,8 @@ def predict_batch_documents(
     repetition_penalty: float | None = None,
     debug_prompt: bool = False,
     max_input_length: int | None = None,
+    events_only: bool = False,
+    omit_offsets: bool = False,
 ) -> list[dict[str, Any]]:
     prediction_texts = _generate_prediction_texts(
         model,
@@ -444,6 +459,8 @@ def predict_batch_documents(
         repetition_penalty=repetition_penalty,
         debug_prompt=debug_prompt,
         max_input_length=max_input_length,
+        events_only=events_only,
+        omit_offsets=omit_offsets,
     )
 
     results = []
@@ -477,6 +494,8 @@ def run_inference(args: argparse.Namespace) -> dict[str, Any]:
         top_p=args.top_p,
         repetition_penalty=args.repetition_penalty,
         max_input_length=args.max_seq_length,
+        events_only=getattr(args, "events_only", False),
+        omit_offsets=getattr(args, "omit_offsets", False),
     )
 
 
@@ -515,6 +534,9 @@ def run_interactive(args: argparse.Namespace) -> None:
             top_k=args.top_k,
             top_p=args.top_p,
             repetition_penalty=args.repetition_penalty,
+            events_only=getattr(args, "events_only", False),
+            omit_offsets=getattr(args, "omit_offsets", False),
+            debug_prompt=True,
         )
         print(json.dumps(prediction, ensure_ascii=False, indent=2))
 
@@ -546,6 +568,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--description",
         action="store_true",
         help="Include ontology label descriptions in prompts in addition to label keys.",
+    )
+    parser.add_argument(
+        "--events_only",
+        action="store_true",
+        help="Keep only event labels in the prompt.",
+    )
+    parser.add_argument(
+        "--omit_offsets",
+        action="store_true",
+        help="Omit character offsets from the generation.",
     )
 
     text_group = parser.add_mutually_exclusive_group(required=False)
@@ -601,6 +633,8 @@ def run_inference_file(args: argparse.Namespace) -> None:
                 argument_roles,
                 location_types,
                 add_generation_prompt=True,
+                events_only=getattr(args, "events_only", False),
+                omit_offsets=getattr(args, "omit_offsets", False),
             )
             for doc in documents
         ]
