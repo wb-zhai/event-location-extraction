@@ -1,4 +1,6 @@
 from __future__ import annotations
+from unsloth import FastLanguageModel
+
 
 import argparse
 import json
@@ -7,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from tqdm import tqdm
+
+import torch
+from torch.utils.data import DataLoader
 
 from src.inference.text_anchor import TextAnchorResolver
 from src.sft_prompt import render_chat
@@ -242,7 +247,6 @@ def _generate_prediction_texts(
     debug_prompt: bool = False,
     max_input_length: int | None = None,
 ) -> list[str]:
-    import torch
 
     prompt_texts = [
         render_chat(
@@ -336,7 +340,7 @@ def _generate_prediction_text(
 
 
 def load_inference_model(args: argparse.Namespace) -> tuple[Any, Any]:
-    from unsloth import FastLanguageModel
+    
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_path,
@@ -515,6 +519,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--batch_size", type=int, default=1, help="Batch size for inference"
     )
     parser.add_argument(
+        "--num_workers", type=int, default=4, help="Number of dataloader workers"
+    )
+    parser.add_argument(
         "--description",
         action="store_true",
         help="Include ontology label descriptions in prompts in addition to label keys.",
@@ -545,8 +552,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def run_inference_file(args: argparse.Namespace) -> None:
+    
     event_labels, argument_roles, location_types = _load_ontology_arguments(args)
     model, tokenizer = load_inference_model(args)
+
+    tokenizer.padding_side = "left"
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
     with open(args.input_file, "r", encoding="utf-8") as f:
         lines = [json.loads(line) for line in f if line.strip()]
@@ -556,33 +568,73 @@ def run_inference_file(args: argparse.Namespace) -> None:
     is_first = True
     batch_size = args.batch_size
 
-    with open(args.output_file, "w", encoding="utf-8") as fout:
-        for i in tqdm(
-            range(0, total_lines, batch_size), desc="Running inference (batched)"
-        ):
-            batch_data = lines[i : i + batch_size]
-            batch_documents = [d["question"] for d in batch_data]
+    
 
-            predictions = predict_batch_documents(
-                model,
+    def collate_fn(batch):
+        documents = [d["question"] for d in batch]
+        prompt_texts = [
+            render_chat(
                 tokenizer,
-                documents=batch_documents,
-                event_labels=event_labels,
-                argument_roles=argument_roles,
-                location_types=location_types,
-                max_new_tokens=args.max_new_tokens,
-                temperature=args.temperature,
-                min_p=args.min_p,
-                top_k=args.top_k,
-                top_p=args.top_p,
-                repetition_penalty=args.repetition_penalty,
-                debug_prompt=is_first,
-                max_input_length=args.max_seq_length,
+                doc,
+                event_labels,
+                argument_roles,
+                location_types,
+                add_generation_prompt=True,
             )
-            is_first = False
+            for doc in documents
+        ]
+        model_inputs = tokenizer(
+            text=prompt_texts,
+            return_tensors="pt",
+            padding=True,
+            max_length=args.max_seq_length,
+        )
+        return batch, prompt_texts, model_inputs
 
-            for data, prediction in zip(batch_data, predictions):
-                data["prediction"] = prediction
+    dataloader = DataLoader(
+        lines,
+        batch_size=batch_size,
+        collate_fn=collate_fn,
+        num_workers=getattr(args, "num_workers", 0)
+    )
+
+    generation_kwargs = {
+        "max_new_tokens": args.max_new_tokens,
+        "do_sample": args.temperature is not None and args.temperature > 0.0,
+    }
+    if args.temperature is not None: generation_kwargs["temperature"] = args.temperature
+    if args.min_p is not None: generation_kwargs["min_p"] = args.min_p
+    if args.top_k is not None: generation_kwargs["top_k"] = args.top_k
+    if args.top_p is not None: generation_kwargs["top_p"] = args.top_p
+    if args.repetition_penalty is not None: generation_kwargs["repetition_penalty"] = args.repetition_penalty
+
+    with open(args.output_file, "w", encoding="utf-8") as fout:
+        for batch_data, prompt_texts, model_inputs in tqdm(
+            dataloader, desc="Running inference (batched)"
+        ):
+            if is_first and prompt_texts:
+                print("====== DEBUG PROMPT ======")
+                print(prompt_texts[0])
+                print("==========================")
+
+            model_inputs = {k: v.to(model.device) for k, v in model_inputs.items()}
+
+            with torch.inference_mode():
+                outputs = model.generate(**model_inputs, **generation_kwargs)
+
+            prompt_length = int(model_inputs["input_ids"].shape[-1])
+            generated_tokens = outputs[:, prompt_length:]
+            prediction_texts = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+
+            for data, doc, pred_text in zip(batch_data, [d["question"] for d in batch_data], prediction_texts):
+                if is_first:
+                    print("====== DEBUG RAW OUTPUT ======")
+                    print(pred_text)
+                    print("==============================")
+                    is_first = False
+
+                parsed_prediction = _parse_prediction_text(pred_text)
+                data["prediction"] = _normalize_prediction(doc, parsed_prediction)
                 fout.write(json.dumps(data, ensure_ascii=False) + "\n")
 
 
