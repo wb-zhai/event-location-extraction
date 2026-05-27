@@ -48,6 +48,33 @@ def _safe_substring(text: str, start: Any, end: Any) -> str:
     return text[start:end]
 
 
+def _coerce_span(
+    document: str,
+    span_like: dict[str, Any] | None,
+    *,
+    start: Any = None,
+    end: Any = None,
+    text: Any = None,
+) -> dict[str, Any]:
+    if isinstance(span_like, dict):
+        start = span_like.get("start", start)
+        end = span_like.get("end", end)
+        text = span_like.get("text", text)
+
+    span_text = _safe_substring(document, start, end)
+    normalized = {
+        "start": start,
+        "end": end,
+        "text": span_text if span_text else (text if isinstance(text, str) else ""),
+    }
+    if isinstance(span_like, dict):
+        for field_name in ("left_context", "right_context"):
+            value = span_like.get(field_name)
+            if isinstance(value, str) and value:
+                normalized[field_name] = value
+    return normalized
+
+
 def _load_sft_candidate_ontology(path: str | Path) -> SftCandidateOntology:
     with open(path, "r", encoding="utf-8") as handle:
         payload = json.load(handle)
@@ -81,6 +108,16 @@ def _normalize_candidate_count(name: str, value: int | None) -> int | None:
     return value
 
 
+def _normalize_max_empty_event_ratio(value: float | None) -> float | None:
+    if value is None:
+        return None
+    if value < 0:
+        raise ValueError(
+            f"--max_empty_event_ratio must be >= 0 when provided, got {value}"
+        )
+    return value
+
+
 def _select_label_descriptions(
     labels: list[str],
     descriptions: dict[str, str] | None,
@@ -97,31 +134,37 @@ def _select_label_descriptions(
 def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     enriched: list[dict[str, Any]] = []
     for event in events:
-        ev_start = event.get("start")
-        ev_end = event.get("end")
+        trigger = _coerce_span(
+            document,
+            event.get("trigger"),
+            start=event.get("start"),
+            end=event.get("end"),
+            text=event.get("text"),
+        )
         out_event = {
             "event_type": event.get("event_type", ""),
-            "start": ev_start,
-            "end": ev_end,
-            "text": _safe_substring(document, ev_start, ev_end),
+            "trigger": trigger,
             "arguments": [],
         }
         for arg in event.get("arguments", []):
-            a_start = arg.get("start")
-            a_end = arg.get("end")
+            span = _coerce_span(
+                document,
+                arg.get("span"),
+                start=arg.get("start"),
+                end=arg.get("end"),
+                text=arg.get("text"),
+            )
             out_event["arguments"].append(
                 {
                     "role": arg.get("role", ""),
-                    "start": a_start,
-                    "end": a_end,
-                    "text": _safe_substring(document, a_start, a_end),
+                    "span": span,
                     "location_type": arg.get("location_type", ""),
                 }
             )
         out_event["arguments"].sort(
             key=lambda x: (
-                x.get("start", 10**9),
-                x.get("end", 10**9),
+                x["span"].get("start", 10**9),
+                x["span"].get("end", 10**9),
                 x.get("role", ""),
                 x.get("location_type", ""),
             )
@@ -131,8 +174,8 @@ def _enrich_events(document: str, events: list[dict[str, Any]]) -> list[dict[str
 
     enriched.sort(
         key=lambda x: (
-            x.get("start", 10**9),
-            x.get("end", 10**9),
+            x["trigger"].get("start", 10**9),
+            x["trigger"].get("end", 10**9),
             x.get("event_type", ""),
         )
     )
@@ -610,6 +653,49 @@ def _subsample_dataset(dataset, max_samples: int, seed: int, split_name: str):
     return subsampled_dataset
 
 
+def _row_has_events(row: dict[str, Any]) -> bool:
+    answer = row.get("answer")
+    if not isinstance(answer, dict):
+        return False
+    events = answer.get("events")
+    return isinstance(events, list) and len(events) > 0
+
+
+def _limit_empty_event_rows(dataset, max_ratio: float, seed: int):
+    empty_indices: list[int] = []
+    non_empty_indices: list[int] = []
+    for index, row in enumerate(dataset):
+        if _row_has_events(row):
+            non_empty_indices.append(index)
+        else:
+            empty_indices.append(index)
+
+    non_empty_count = len(non_empty_indices)
+    empty_count = len(empty_indices)
+    max_empty_count = int(max_ratio * non_empty_count)
+
+    if empty_count <= max_empty_count:
+        print(
+            "Train empty-event ratio already within limit: "
+            f"{empty_count} empty, {non_empty_count} non-empty, ratio<={max_ratio}."
+        )
+        return dataset
+
+    kept_empty_indices = (
+        random.Random(seed).sample(empty_indices, k=max_empty_count)
+        if max_empty_count > 0
+        else []
+    )
+    kept_indices = sorted(non_empty_indices + kept_empty_indices)
+    limited_dataset = dataset.select(kept_indices)
+    print(
+        "Train empty-event rows limited: "
+        f"{len(kept_empty_indices)}/{empty_count} empty kept with "
+        f"{non_empty_count} non-empty rows using max ratio={max_ratio} and seed={seed}."
+    )
+    return limited_dataset
+
+
 def _print_train_dataset_preview(
     train_ds,
     raw_train_ds,
@@ -721,6 +807,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Randomly subsample this many training rows before formatting.",
     )
     parser.add_argument(
+        "--max_empty_event_ratio",
+        type=float,
+        default=None,
+        help=(
+            "Maximum allowed ratio of empty-event rows to non-empty rows in the "
+            "training split. Empty rows are deterministically downsampled before formatting."
+        ),
+    )
+    parser.add_argument(
         "--filter_overlong_samples",
         action="store_true",
         help="Drop formatted samples whose tokenized length exceeds --max_seq_length.",
@@ -786,6 +881,9 @@ def main(argv: list[str] | None = None) -> None:
     args.num_event_candidates = _normalize_candidate_count(
         "--num_event_candidates",
         args.num_event_candidates,
+    )
+    args.max_empty_event_ratio = _normalize_max_empty_event_ratio(
+        args.max_empty_event_ratio
     )
     args.num_relation_candidates = _normalize_candidate_count(
         "--num_relation_candidates",
@@ -855,6 +953,12 @@ def main(argv: list[str] | None = None) -> None:
             max_samples=args.max_train_samples,
             seed=args.candidate_sampling_seed,
             split_name="Train",
+        )
+    if args.max_empty_event_ratio is not None:
+        train_ds = _limit_empty_event_rows(
+            train_ds,
+            max_ratio=args.max_empty_event_ratio,
+            seed=args.candidate_sampling_seed,
         )
     raw_train_ds = train_ds
     train_ds = train_ds.map(

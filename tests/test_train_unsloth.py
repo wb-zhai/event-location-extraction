@@ -251,3 +251,61 @@ def test_filter_overlong_samples_uses_cached_seq_length() -> None:
 
     assert len(filtered.rows) == 1
     assert filtered.rows[0]["text"] == "short"
+
+
+def test_normalize_max_empty_event_ratio_rejects_negative() -> None:
+    with pytest.raises(ValueError, match="--max_empty_event_ratio"):
+        train_unsloth._normalize_max_empty_event_ratio(-0.1)
+
+
+def test_limit_empty_event_rows_enforces_ratio() -> None:
+    class SelectableDataset:
+        def __init__(self, rows: list[dict]) -> None:
+            self.rows = rows
+
+        def __iter__(self):
+            return iter(self.rows)
+
+        def select(self, indices: list[int]):
+            return SelectableDataset([self.rows[index] for index in indices])
+
+    rows = [
+        {"id": "empty-1", "answer": {"events": []}},
+        {"id": "pos-1", "answer": {"events": [{"event_type": "attack"}]}},
+        {"id": "empty-2", "answer": {"events": []}},
+        {"id": "empty-3", "answer": {"events": []}},
+        {"id": "pos-2", "answer": {"events": [{"event_type": "injure"}]}},
+        {"id": "empty-4", "answer": {"events": []}},
+    ]
+    dataset = SelectableDataset(rows)
+
+    limited = train_unsloth._limit_empty_event_rows(dataset, max_ratio=0.5, seed=7)
+    kept_ids = [row["id"] for row in limited.rows]
+    kept_empty = [sample_id for sample_id in kept_ids if sample_id.startswith("empty")]
+    kept_non_empty = [sample_id for sample_id in kept_ids if sample_id.startswith("pos")]
+
+    assert kept_non_empty == ["pos-1", "pos-2"]
+    assert len(kept_empty) == 1
+
+
+def test_limit_empty_event_rows_leaves_dataset_when_within_ratio() -> None:
+    class SelectableDataset:
+        def __init__(self, rows: list[dict]) -> None:
+            self.rows = rows
+
+        def __iter__(self):
+            return iter(self.rows)
+
+        def select(self, indices: list[int]):
+            return SelectableDataset([self.rows[index] for index in indices])
+
+    rows = [
+        {"id": "pos-1", "answer": {"events": [{"event_type": "attack"}]}},
+        {"id": "empty-1", "answer": {"events": []}},
+        {"id": "pos-2", "answer": {"events": [{"event_type": "injure"}]}},
+    ]
+    dataset = SelectableDataset(rows)
+
+    limited = train_unsloth._limit_empty_event_rows(dataset, max_ratio=1.0, seed=7)
+
+    assert limited is dataset

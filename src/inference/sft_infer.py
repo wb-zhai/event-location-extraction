@@ -128,15 +128,67 @@ def _safe_substring(text: str, start: Any, end: Any) -> str:
     return text[start:end]
 
 
+def _normalize_span_prediction(
+    document: str,
+    span_like: dict[str, Any] | None,
+    *,
+    start: Any = None,
+    end: Any = None,
+    text: Any = None,
+) -> dict[str, Any] | None:
+    if isinstance(span_like, dict):
+        start = span_like.get("start", start)
+        end = span_like.get("end", end)
+        text = span_like.get("text", text)
+
+    span_text = _safe_substring(document, start, end)
+    if span_text and (not isinstance(text, str) or not text or text == span_text):
+        normalized = {
+            "start": start,
+            "end": end,
+            "text": span_text,
+        }
+        if isinstance(span_like, dict):
+            for field_name in ("left_context", "right_context"):
+                value = span_like.get(field_name)
+                if isinstance(value, str) and value:
+                    normalized[field_name] = value
+        return normalized
+
+    if not isinstance(text, str) or not text.strip():
+        return None
+
+    match = _ANCHOR_RESOLVER.resolve(document, text)
+    if match.start is None or match.end is None or match.matched_text is None:
+        return None
+
+    normalized = {
+        "start": match.start,
+        "end": match.end,
+        "text": match.matched_text,
+    }
+    if isinstance(span_like, dict):
+        for field_name in ("left_context", "right_context"):
+            value = span_like.get(field_name)
+            if isinstance(value, str) and value:
+                normalized[field_name] = value
+    return normalized
+
+
 def _normalize_event(document: str, event: dict[str, Any]) -> dict[str, Any] | None:
     event_type = event.get("event_type")
     if not isinstance(event_type, str) or not event_type:
         return None
 
-    start = event.get("start")
-    end = event.get("end")
-    text = event.get("text")
-    span_text = _safe_substring(document, start, end)
+    normalized_trigger = _normalize_span_prediction(
+        document,
+        event.get("trigger"),
+        start=event.get("start"),
+        end=event.get("end"),
+        text=event.get("text"),
+    )
+    if normalized_trigger is None:
+        return None
 
     normalized_args = []
     if "arguments" in event and isinstance(event["arguments"], list):
@@ -147,60 +199,25 @@ def _normalize_event(document: str, event: dict[str, Any]) -> dict[str, Any] | N
             if not isinstance(arg_role, str) or not arg_role:
                 continue
 
-            arg_start = arg.get("start")
-            arg_end = arg.get("end")
-            arg_text = arg.get("text")
-            arg_span = _safe_substring(document, arg_start, arg_end)
-
-            norm_arg = None
-            if arg_span and (
-                not isinstance(arg_text, str) or not arg_text or arg_text == arg_span
-            ):
+            normalized_span = _normalize_span_prediction(
+                document,
+                arg.get("span"),
+                start=arg.get("start"),
+                end=arg.get("end"),
+                text=arg.get("text"),
+            )
+            if normalized_span is not None:
                 norm_arg = {
                     "role": arg_role,
-                    "start": arg_start,
-                    "end": arg_end,
-                    "text": arg_span,
+                    "span": normalized_span,
                 }
-            elif isinstance(arg_text, str) and arg_text.strip():
-                match = _ANCHOR_RESOLVER.resolve(document, arg_text)
-                if (
-                    match.start is not None
-                    and match.end is not None
-                    and match.matched_text is not None
-                ):
-                    norm_arg = {
-                        "role": arg_role,
-                        "start": match.start,
-                        "end": match.end,
-                        "text": match.matched_text,
-                    }
-
-            if norm_arg is not None:
                 if "location_type" in arg:
                     norm_arg["location_type"] = arg["location_type"]
                 normalized_args.append(norm_arg)
 
-    if span_text and (not isinstance(text, str) or not text or text == span_text):
-        return {
-            "event_type": event_type,
-            "start": start,
-            "end": end,
-            "text": span_text,
-            "arguments": normalized_args,
-        }
-
-    if not isinstance(text, str) or not text.strip():
-        return None
-
-    match = _ANCHOR_RESOLVER.resolve(document, text)
-    if match.start is None or match.end is None or match.matched_text is None:
-        return None
     return {
         "event_type": event_type,
-        "start": match.start,
-        "end": match.end,
-        "text": match.matched_text,
+        "trigger": normalized_trigger,
         "arguments": normalized_args,
     }
 
@@ -216,8 +233,8 @@ def _normalize_prediction(document: str, prediction: dict[str, Any]) -> dict[str
             continue
         key = (
             normalized_event["event_type"],
-            normalized_event["start"],
-            normalized_event["end"],
+            normalized_event["trigger"]["start"],
+            normalized_event["trigger"]["end"],
         )
         if key in seen:
             continue
@@ -225,7 +242,11 @@ def _normalize_prediction(document: str, prediction: dict[str, Any]) -> dict[str
         normalized_events.append(normalized_event)
 
     normalized_events.sort(
-        key=lambda item: (item["start"], item["end"], item["event_type"])
+        key=lambda item: (
+            item["trigger"]["start"],
+            item["trigger"]["end"],
+            item["event_type"],
+        )
     )
     return {"events": normalized_events}
 
