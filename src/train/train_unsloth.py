@@ -803,11 +803,11 @@ def _response_only(trainer: SFTTrainer, model_name: str) -> SFTTrainer:
             response_part = "<|im_start|>assistant\n",
         )
     if "qwen3.5" in model_name.lower():
-        print("Applying response-only training template for Qwen3.5 model")
+        print("Applying response-only training template for Qwen3.5 model in no-thinking mode")
         return train_on_responses_only(
             trainer,
             instruction_part = "<|im_start|>user\n",
-            response_part = "<|im_start|>assistant\n<think>",
+            response_part = "<|im_start|>assistant\n",
         )
     
     raise ValueError(
