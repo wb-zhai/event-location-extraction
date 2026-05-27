@@ -12,13 +12,20 @@ from unsloth import FastLanguageModel
 from unsloth.chat_templates import train_on_responses_only
 from datasets import load_dataset
 from trl import SFTConfig, SFTTrainer
+from transformers import TrainerCallback
 
 from src.data.dataset import (
     DEFAULT_CANDIDATE_SAMPLING_SEED,
     _apply_training_candidate_transform,
     _build_candidate_labels,
 )
+from src.inference.sft_infer import predict_batch_documents
 from src.sft_prompt import render_chat, build_messages
+from src.train.eval_sft import evaluate as evaluate_sft_predictions
+
+DEFAULT_GEN_EVAL_MAX_SAMPLES = 8
+DEFAULT_PREFLIGHT_MAX_SAMPLES = 3
+DEFAULT_GEN_EVAL_MAX_NEW_TOKENS = 512
 
 
 @dataclass(frozen=True)
@@ -38,6 +45,16 @@ class SftCandidateOntology:
     @property
     def location_type_labels(self) -> list[str]:
         return list(self.location_type_descriptions)
+
+
+@dataclass(frozen=True)
+class SftGenerationEvalSample:
+    row_index: int
+    row: dict[str, Any]
+    document: str
+    event_labels: list[str] | dict[str, str]
+    argument_role_labels: list[str] | dict[str, str]
+    location_type_labels: list[str] | dict[str, str]
 
 
 def _safe_substring(text: str, start: Any, end: Any) -> str:
@@ -627,6 +644,233 @@ def _build_sample_preview(
     )
 
 
+def _select_rows_for_generation_checks(dataset, max_samples: int) -> list[tuple[int, dict[str, Any]]]:
+    if max_samples <= 0:
+        raise ValueError(f"max_samples must be > 0, got {max_samples}")
+    sample_count = min(len(dataset), max_samples)
+    return [(index, dataset[index]) for index in range(sample_count)]
+
+
+def _build_generation_eval_samples(
+    dataset,
+    *,
+    ontology: SftCandidateOntology | None,
+    num_event_candidates: int | None,
+    num_relation_candidates: int | None,
+    random_seed: int,
+    include_descriptions: bool,
+    max_samples: int,
+) -> list[SftGenerationEvalSample]:
+    samples: list[SftGenerationEvalSample] = []
+    for row_index, row in _select_rows_for_generation_checks(dataset, max_samples):
+        event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
+            row,
+            ontology=ontology,
+            num_event_candidates=num_event_candidates,
+            num_relation_candidates=num_relation_candidates,
+            is_training=False,
+            candidate_shuffle_probability=0.0,
+            gold_candidate_dropout_probability=0.0,
+            random_seed=random_seed,
+            candidate_rng=random.Random(random_seed),
+            index=row_index,
+        )
+        samples.append(
+            SftGenerationEvalSample(
+                row_index=row_index,
+                row=row,
+                document=row["question"],
+                event_labels=_select_label_descriptions(
+                    event_labels,
+                    ontology.event_descriptions if ontology is not None else None,
+                    include_descriptions=include_descriptions,
+                ),
+                argument_role_labels=_select_label_descriptions(
+                    argument_role_labels,
+                    (
+                        ontology.argument_role_descriptions
+                        if ontology is not None
+                        else None
+                    ),
+                    include_descriptions=include_descriptions,
+                ),
+                location_type_labels=_select_label_descriptions(
+                    location_type_labels,
+                    (
+                        ontology.location_type_descriptions
+                        if ontology is not None
+                        else None
+                    ),
+                    include_descriptions=include_descriptions,
+                ),
+            )
+        )
+    return samples
+
+
+def _predict_generation_eval_samples(
+    model,
+    tokenizer,
+    samples: list[SftGenerationEvalSample],
+    *,
+    max_new_tokens: int,
+    max_input_length: int,
+    events_only: bool,
+    omit_offsets: bool,
+) -> list[dict[str, Any]]:
+    predictions: list[dict[str, Any]] = []
+    for sample in samples:
+        prediction = predict_batch_documents(
+            model,
+            tokenizer,
+            documents=[sample.document],
+            event_labels=sample.event_labels,
+            argument_roles=sample.argument_role_labels,
+            location_types=sample.location_type_labels,
+            max_new_tokens=max_new_tokens,
+            max_input_length=max_input_length,
+            events_only=events_only,
+            omit_offsets=omit_offsets,
+        )[0]
+        predictions.append({"prediction": prediction})
+    return predictions
+
+
+def _run_generation_preflight(
+    model,
+    tokenizer,
+    samples: list[SftGenerationEvalSample],
+    *,
+    max_new_tokens: int,
+    max_input_length: int,
+    events_only: bool,
+    omit_offsets: bool,
+) -> None:
+    if not samples:
+        print("Preflight skipped: no samples available.")
+        return
+
+    was_training = model.training
+    model.eval()
+    try:
+        predictions = _predict_generation_eval_samples(
+            model,
+            tokenizer,
+            samples,
+            max_new_tokens=max_new_tokens,
+            max_input_length=max_input_length,
+            events_only=events_only,
+            omit_offsets=omit_offsets,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Preflight generation check failed on {len(samples)} samples"
+        ) from exc
+    finally:
+        if was_training:
+            model.train()
+
+    for index, prediction_row in enumerate(predictions):
+        prediction = prediction_row.get("prediction")
+        if not isinstance(prediction, dict):
+            raise RuntimeError(
+                f"Preflight generation check produced a non-dict prediction for sample {index}"
+            )
+        events = prediction.get("events")
+        if not isinstance(events, list):
+            raise RuntimeError(
+                f"Preflight generation check produced an invalid 'events' payload for sample {index}"
+            )
+
+    print(f"Preflight generation check passed on {len(samples)} samples.")
+
+
+def _log_generation_metrics(
+    trainer: SFTTrainer,
+    metrics: dict[str, float],
+    *,
+    prefix: str,
+) -> dict[str, float]:
+    prefixed_metrics = {f"{prefix}{name}": value for name, value in metrics.items()}
+    trainer.log(prefixed_metrics)
+    return prefixed_metrics
+
+
+class GenerationEvalCallback(TrainerCallback):
+    def __init__(
+        self,
+        *,
+        trainer: SFTTrainer,
+        tokenizer,
+        samples: list[SftGenerationEvalSample],
+        max_new_tokens: int,
+        max_input_length: int,
+        events_only: bool,
+        omit_offsets: bool,
+        metric_prefix: str = "gen_eval_",
+    ) -> None:
+        self.trainer = trainer
+        self.tokenizer = tokenizer
+        self.samples = samples
+        self.max_new_tokens = max_new_tokens
+        self.max_input_length = max_input_length
+        self.events_only = events_only
+        self.omit_offsets = omit_offsets
+        self.metric_prefix = metric_prefix
+        self._printed_example = False
+
+    def on_evaluate(self, args, state, control, **kwargs):
+        if not self.samples or not state.is_world_process_zero:
+            return control
+
+        model = kwargs.get("model", self.trainer.model)
+        if model is None:
+            raise ValueError("Trainer model is not initialized")
+
+        was_training = model.training
+        model.eval()
+        try:
+            prediction_rows = _predict_generation_eval_samples(
+                model,
+                self.tokenizer,
+                self.samples,
+                max_new_tokens=self.max_new_tokens,
+                max_input_length=self.max_input_length,
+                events_only=self.events_only,
+                omit_offsets=self.omit_offsets,
+            )
+        finally:
+            if was_training:
+                model.train()
+
+        gold_rows = [sample.row for sample in self.samples]
+        metrics = evaluate_sft_predictions(gold_rows, prediction_rows)
+        prefixed_metrics = _log_generation_metrics(
+            self.trainer,
+            metrics,
+            prefix=self.metric_prefix,
+        )
+
+        callback_metrics = kwargs.get("metrics")
+        if isinstance(callback_metrics, dict):
+            callback_metrics.update(prefixed_metrics)
+
+        if not self._printed_example and prediction_rows:
+            print("Generative eval example gold:")
+            print(json.dumps(gold_rows[0]["answer"], ensure_ascii=False, indent=2))
+            print("Generative eval example prediction:")
+            print(
+                json.dumps(
+                    prediction_rows[0]["prediction"],
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            self._printed_example = True
+
+        return control
+
+
 def _get_sequence_length(tokenizer, text: str) -> int:
     tokenized = tokenizer(
         text=text,
@@ -906,6 +1150,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_CANDIDATE_SAMPLING_SEED,
         help="Random seed used for deterministic candidate sampling.",
     )
+    parser.add_argument(
+        "--gen_eval_max_samples",
+        type=int,
+        default=DEFAULT_GEN_EVAL_MAX_SAMPLES,
+        help="Number of eval rows to use for generation-based eval during training.",
+    )
+    parser.add_argument(
+        "--preflight_max_samples",
+        type=int,
+        default=DEFAULT_PREFLIGHT_MAX_SAMPLES,
+        help="Number of train rows to use for the pre-training generation smoke test.",
+    )
+    parser.add_argument(
+        "--gen_eval_max_new_tokens",
+        type=int,
+        default=DEFAULT_GEN_EVAL_MAX_NEW_TOKENS,
+        help="Maximum generated tokens for generation-based eval and preflight checks.",
+    )
     return parser.parse_args(argv)
 
 
@@ -994,6 +1256,15 @@ def main(argv: list[str] | None = None) -> None:
             seed=args.candidate_sampling_seed,
         )
     raw_train_ds = train_ds
+    preflight_samples = _build_generation_eval_samples(
+        raw_train_ds,
+        ontology=ontology,
+        num_event_candidates=args.num_event_candidates,
+        num_relation_candidates=args.num_relation_candidates,
+        random_seed=args.candidate_sampling_seed,
+        include_descriptions=args.description,
+        max_samples=args.preflight_max_samples,
+    )
     train_ds = train_ds.map(
         _build_map_fn(
             tokenizer,
@@ -1017,9 +1288,19 @@ def main(argv: list[str] | None = None) -> None:
     _print_dataset_max_sequence_length(train_ds, "Train")
 
     eval_ds = None
+    generation_eval_samples: list[SftGenerationEvalSample] = []
     if args.eval_file:
-        eval_ds = load_dataset("json", data_files=args.eval_file, split="train")
-        eval_ds = eval_ds.map(
+        raw_eval_ds = load_dataset("json", data_files=args.eval_file, split="train")
+        generation_eval_samples = _build_generation_eval_samples(
+            raw_eval_ds,
+            ontology=ontology,
+            num_event_candidates=args.num_event_candidates,
+            num_relation_candidates=args.num_relation_candidates,
+            random_seed=args.candidate_sampling_seed,
+            include_descriptions=args.description,
+            max_samples=args.gen_eval_max_samples,
+        )
+        eval_ds = raw_eval_ds.map(
             _build_map_fn(
                 tokenizer,
                 ontology=ontology,
@@ -1079,6 +1360,29 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.train_on_responses_only:
         trainer = _response_only(trainer, args.model_name)
+
+    _run_generation_preflight(
+        model,
+        tokenizer,
+        preflight_samples,
+        max_new_tokens=args.gen_eval_max_new_tokens,
+        max_input_length=args.max_seq_length,
+        events_only=args.events_only,
+        omit_offsets=args.omit_offsets,
+    )
+
+    if generation_eval_samples:
+        trainer.add_callback(
+            GenerationEvalCallback(
+                trainer=trainer,
+                tokenizer=tokenizer,
+                samples=generation_eval_samples,
+                max_new_tokens=args.gen_eval_max_new_tokens,
+                max_input_length=args.max_seq_length,
+                events_only=args.events_only,
+                omit_offsets=args.omit_offsets,
+            )
+        )
 
     _print_train_dataset_preview(
         train_ds,
