@@ -72,6 +72,16 @@ def build_messages(
     return messages
 
 
+def _chat_template_kwargs(tokenizer) -> dict[str, Any]:
+    name_or_path = getattr(tokenizer, "name_or_path", "")
+    if isinstance(name_or_path, str) and (
+        "qwen3" in name_or_path.lower() or "qwen3.5" in name_or_path.lower()
+    ):
+        # Qwen3 hybrid-thinking models think by default unless explicitly disabled.
+        return {"enable_thinking": False}
+    return {}
+
+
 def render_chat(
     tokenizer,
     document: str,
@@ -92,4 +102,5 @@ def render_chat(
         ),
         tokenize=False,
         add_generation_prompt=add_generation_prompt,
+        **_chat_template_kwargs(tokenizer),
     )
