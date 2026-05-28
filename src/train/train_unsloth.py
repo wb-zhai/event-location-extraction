@@ -497,6 +497,7 @@ def _chat_text(
     answer_obj: dict[str, Any],
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> str:
     return render_chat(
         tokenizer,
@@ -534,6 +535,7 @@ def _chat_text(
         add_generation_prompt=False,
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )
 
 
@@ -550,6 +552,7 @@ def _chat_parts(
     answer_obj: dict[str, Any],
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> tuple[list[dict[str, str]], str]:
     messages = build_messages(
         document,
@@ -584,6 +587,7 @@ def _chat_parts(
         ),
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )
     label_text = json.dumps(answer_obj, ensure_ascii=False)
     return messages, label_text
@@ -605,6 +609,7 @@ def _format_row(
     index: int = 0,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> dict[str, str]:
     document = row["question"]
     raw_events = row["answer"]["events"]
@@ -636,6 +641,7 @@ def _format_row(
         answer_obj=answer_obj,
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )
     return {
         "text": text,
@@ -657,6 +663,7 @@ def _build_map_fn(
     include_descriptions: bool,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ):
     candidate_rng = random.Random(random_seed)
 
@@ -676,6 +683,7 @@ def _build_map_fn(
             index=index,
             events_only=events_only,
             omit_offsets=omit_offsets,
+            omit_context=omit_context,
         )
 
     return _map_fn
@@ -696,6 +704,7 @@ def _build_sample_preview(
     index: int,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> tuple[list[dict[str, str]], str]:
     document = row["question"]
     raw_events = row["answer"]["events"]
@@ -725,6 +734,7 @@ def _build_sample_preview(
         answer_obj=answer_obj,
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )
 
 
@@ -808,6 +818,7 @@ def _predict_generation_eval_samples(
     max_input_length: int,
     events_only: bool,
     omit_offsets: bool,
+    omit_context: bool,
 ) -> list[dict[str, Any]]:
     predictions: list[dict[str, Any]] = []
     for sample in samples:
@@ -822,6 +833,7 @@ def _predict_generation_eval_samples(
             max_input_length=max_input_length,
             events_only=events_only,
             omit_offsets=omit_offsets,
+            omit_context=omit_context,
         )[0]
         predictions.append({"prediction": prediction})
     return predictions
@@ -836,6 +848,7 @@ def _run_generation_preflight(
     max_input_length: int,
     events_only: bool,
     omit_offsets: bool,
+    omit_context: bool,
 ) -> None:
     if not samples:
         print("Preflight skipped: no samples available.")
@@ -852,6 +865,7 @@ def _run_generation_preflight(
             max_input_length=max_input_length,
             events_only=events_only,
             omit_offsets=omit_offsets,
+            omit_context=omit_context,
         )
     except Exception as exc:
         raise RuntimeError(
@@ -898,6 +912,7 @@ class GenerationEvalCallback(TrainerCallback):
         max_input_length: int,
         events_only: bool,
         omit_offsets: bool,
+        omit_context: bool = False,
         metric_prefix: str = "gen_eval_",
     ) -> None:
         self.trainer = trainer
@@ -907,6 +922,7 @@ class GenerationEvalCallback(TrainerCallback):
         self.max_input_length = max_input_length
         self.events_only = events_only
         self.omit_offsets = omit_offsets
+        self.omit_context = omit_context
         self.metric_prefix = metric_prefix
         self._printed_example = False
 
@@ -1067,6 +1083,7 @@ def _print_train_dataset_preview(
     include_descriptions: bool,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> None:
     if len(train_ds) == 0:
         print("Training dataset is empty; no preview available.")
@@ -1090,6 +1107,7 @@ def _print_train_dataset_preview(
         index=raw_sample_index,
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )
 
     avg_length = sum(sequence_lengths) / len(sequence_lengths)
@@ -1201,6 +1219,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Omit character offsets in prompts and responses.",
     )
     parser.add_argument(
+        "--omit_context",
+        action="store_true",
+        help="Omit context fields in JSON schema for offsets omission.",
+    )
+    parser.add_argument(
         "--ontology_file",
         type=str,
         default=None,
@@ -1258,6 +1281,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=DEFAULT_GEN_EVAL_MAX_NEW_TOKENS,
         help="Maximum generated tokens for generation-based eval and preflight checks.",
+    )
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        nargs="?",
+        const=True,
+        default=None,
+        help="Path to a checkpoint folder to resume training from, or just pass the flag to auto-resume from the latest checkpoint in output_dir.",
     )
     return parser.parse_args(argv)
 
@@ -1369,6 +1399,7 @@ def main(argv: list[str] | None = None) -> None:
             include_descriptions=args.description,
             events_only=args.events_only,
             omit_offsets=args.omit_offsets,
+            omit_context=args.omit_context,
         ),
         with_indices=True,
         num_proc=4,
@@ -1460,20 +1491,21 @@ def main(argv: list[str] | None = None) -> None:
         max_input_length=args.max_seq_length,
         events_only=args.events_only,
         omit_offsets=args.omit_offsets,
+        omit_context=args.omit_context,
     )
 
-    if generation_eval_samples:
-        trainer.add_callback(
-            GenerationEvalCallback(
-                trainer=trainer,
-                tokenizer=tokenizer,
-                samples=generation_eval_samples,
-                max_new_tokens=args.gen_eval_max_new_tokens,
-                max_input_length=args.max_seq_length,
-                events_only=args.events_only,
-                omit_offsets=args.omit_offsets,
-            )
-        )
+    # if generation_eval_samples:
+    #     trainer.add_callback(
+    #         GenerationEvalCallback(
+    #             trainer=trainer,
+    #             tokenizer=tokenizer,
+    #             samples=generation_eval_samples,
+    #             max_new_tokens=args.gen_eval_max_new_tokens,
+    #             max_input_length=args.max_seq_length,
+    #             events_only=args.events_only,
+    #             omit_offsets=args.omit_offsets,
+    #         )
+    #     )
 
     _print_train_dataset_preview(
         train_ds,
@@ -1488,9 +1520,10 @@ def main(argv: list[str] | None = None) -> None:
         include_descriptions=args.description,
         events_only=args.events_only,
         omit_offsets=args.omit_offsets,
+        omit_context=args.omit_context,
     )
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
     trainer.save_model(str(Path(args.output_dir) / "final_adapter"))
     tokenizer.save_pretrained(str(Path(args.output_dir) / "final_adapter"))
 

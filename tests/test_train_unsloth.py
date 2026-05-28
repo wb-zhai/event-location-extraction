@@ -519,7 +519,7 @@ def test_generation_eval_callback_logs_prefixed_metrics(monkeypatch: pytest.Monk
                 location_type_labels=["city", "region"],
             )
         ],
-        batch_size=2,
+        
         max_new_tokens=64,
         max_input_length=512,
         events_only=True,
