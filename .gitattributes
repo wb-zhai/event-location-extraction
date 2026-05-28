@@ -1,1 +1,2 @@
 dataset/risk-factor/run-15052025/reader/train-windows-256-modernbert.jsonl filter=lfs diff=lfs merge=lfs -text
+dataset/risk-factor/run-15052025/sft/*.candidates.jsonl filter=lfs diff=lfs merge=lfs -text

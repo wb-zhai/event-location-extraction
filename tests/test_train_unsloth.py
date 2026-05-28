@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from src.data.dataset import DEFAULT_CANDIDATE_SAMPLING_SEED, load_candidate_ontology
+from src.data.dataset import DEFAULT_CANDIDATE_SAMPLING_SEED
 from src.train import train_unsloth
 
 
@@ -39,8 +40,9 @@ def build_sft_row() -> dict:
     return {
         "id": "doc-1",
         "question": "bombing in baghdad injured civilians",
-        "event_labels": ["attack", "injure"],
-        "argument_labels": ["place", "victim"],
+        "events": ["attack", "injure"],
+        "argument_roles": ["place", "victim"],
+        "location_types": ["city", "region"],
         "answer": {
             "events": [
                 {
@@ -48,7 +50,7 @@ def build_sft_row() -> dict:
                     "start": 0,
                     "end": 7,
                     "arguments": [
-                        {"role": "place", "start": 11, "end": 18},
+                        {"role": "place", "start": 11, "end": 18, "location_type": "city"},
                     ],
                 },
                 {
@@ -56,7 +58,7 @@ def build_sft_row() -> dict:
                     "start": 19,
                     "end": 26,
                     "arguments": [
-                        {"role": "victim", "start": 27, "end": 36},
+                        {"role": "victim", "start": 27, "end": 36, "location_type": "region"},
                     ],
                 },
             ]
@@ -67,8 +69,9 @@ def build_sft_row() -> dict:
 def write_candidate_ontology(path: Path) -> Path:
     path.write_text(
         (
-            '{"event_labels":["attack","injure","disaster","protest","arrest"],'
-            '"argument_labels":["place","victim","agent","time","weapon"]}'
+            '{"events":{"attack":"Attack","injure":"Injury","disaster":"Disaster","protest":"Protest","arrest":"Arrest"},'
+            '"argument_roles":{"place":"Place","victim":"Victim","agent":"Agent","time":"Time","weapon":"Weapon"},'
+            '"location_types":{"city":"City","region":"Region","country":"Country"}}'
         ),
         encoding="utf-8",
     )
@@ -86,9 +89,11 @@ def test_format_row_includes_prompt_candidate_labels() -> None:
 
 
 def test_candidate_fill_expands_requested_totals(tmp_path: Path) -> None:
-    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    ontology = train_unsloth._load_sft_candidate_ontology(
+        write_candidate_ontology(tmp_path / "ontology.json")
+    )
 
-    event_labels, argument_labels = train_unsloth._resolve_candidate_labels(
+    event_labels, argument_labels, location_type_labels = train_unsloth._resolve_candidate_labels(
         build_sft_row(),
         ontology=ontology,
         num_event_candidates=4,
@@ -103,17 +108,21 @@ def test_candidate_fill_expands_requested_totals(tmp_path: Path) -> None:
 
     assert len(event_labels) == 4
     assert len(argument_labels) == 4
+    assert len(location_type_labels) == 3
     assert {"attack", "injure"}.issubset(event_labels)
     assert {"place", "victim"}.issubset(argument_labels)
+    assert {"city", "region"}.issubset(location_type_labels)
     assert len(set(event_labels)) == len(event_labels)
     assert len(set(argument_labels)) == len(argument_labels)
 
 
 def test_train_sampling_applies_dropout_and_shuffle(tmp_path: Path) -> None:
-    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    ontology = train_unsloth._load_sft_candidate_ontology(
+        write_candidate_ontology(tmp_path / "ontology.json")
+    )
     row = build_sft_row()
 
-    base_event_labels, base_argument_labels = train_unsloth._resolve_candidate_labels(
+    base_event_labels, base_argument_labels, _ = train_unsloth._resolve_candidate_labels(
         row,
         ontology=ontology,
         num_event_candidates=4,
@@ -125,7 +134,7 @@ def test_train_sampling_applies_dropout_and_shuffle(tmp_path: Path) -> None:
         candidate_rng=random.Random(7),
         index=0,
     )
-    train_event_labels, train_argument_labels = train_unsloth._resolve_candidate_labels(
+    train_event_labels, train_argument_labels, _ = train_unsloth._resolve_candidate_labels(
         row,
         ontology=ontology,
         num_event_candidates=4,
@@ -147,7 +156,9 @@ def test_train_sampling_applies_dropout_and_shuffle(tmp_path: Path) -> None:
 
 
 def test_eval_candidate_lists_are_deterministic(tmp_path: Path) -> None:
-    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    ontology = train_unsloth._load_sft_candidate_ontology(
+        write_candidate_ontology(tmp_path / "ontology.json")
+    )
     row = build_sft_row()
 
     first = train_unsloth._resolve_candidate_labels(
@@ -198,9 +209,9 @@ def test_main_requires_ontology_when_sampling_enabled(tmp_path: Path) -> None:
 
 def test_format_row_rejects_missing_prompt_labels() -> None:
     row = build_sft_row()
-    del row["event_labels"]
+    del row["events"]
 
-    with pytest.raises(ValueError, match="event_labels"):
+    with pytest.raises(ValueError, match="events"):
         train_unsloth._format_row(row, DummyTokenizer())
 
 
@@ -208,9 +219,12 @@ def test_format_row_uses_gold_label_fallback_when_sampling_enabled(
     tmp_path: Path,
 ) -> None:
     row = build_sft_row()
-    del row["event_labels"]
-    del row["argument_labels"]
-    ontology = load_candidate_ontology(write_candidate_ontology(tmp_path / "ontology.json"))
+    del row["events"]
+    del row["argument_roles"]
+    del row["location_types"]
+    ontology = train_unsloth._load_sft_candidate_ontology(
+        write_candidate_ontology(tmp_path / "ontology.json")
+    )
 
     text = train_unsloth._format_row(
         row,
@@ -309,3 +323,231 @@ def test_limit_empty_event_rows_leaves_dataset_when_within_ratio() -> None:
     limited = train_unsloth._limit_empty_event_rows(dataset, max_ratio=1.0, seed=7)
 
     assert limited is dataset
+
+
+def test_select_rows_for_generation_checks_is_deterministic() -> None:
+    rows = [{"id": f"doc-{index}"} for index in range(5)]
+
+    selected = train_unsloth._select_rows_for_generation_checks(rows, 3)
+
+    assert selected == [(0, rows[0]), (1, rows[1]), (2, rows[2])]
+
+
+def test_preflight_generation_check_accepts_empty_predictions(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyModel:
+        def __init__(self) -> None:
+            self.training = True
+
+        def eval(self) -> None:
+            self.training = False
+
+        def train(self) -> None:
+            self.training = True
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_predict(*args, **kwargs):
+        calls.append(kwargs)
+        return [{"prediction": {"events": []}}]
+
+    monkeypatch.setattr(train_unsloth, "_predict_generation_eval_samples", fake_predict)
+
+    samples = [
+        train_unsloth.SftGenerationEvalSample(
+            row_index=0,
+            row=build_sft_row(),
+            document="bombing in baghdad injured civilians",
+            event_labels=["attack", "injure"],
+            argument_role_labels=["place", "victim"],
+            location_type_labels=["city", "region"],
+        )
+    ]
+    model = DummyModel()
+
+    train_unsloth._run_generation_preflight(
+        model,
+        DummyTokenizer(),
+        samples,
+        batch_size=2,
+        max_new_tokens=64,
+        max_input_length=512,
+        events_only=True,
+        omit_offsets=True,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["events_only"] is True
+    assert calls[0]["omit_offsets"] is True
+    assert model.training is True
+
+
+def test_preflight_generation_check_raises_on_inference_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyModel:
+        training = False
+
+        def eval(self) -> None:
+            pass
+
+    def fake_predict(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(train_unsloth, "_predict_generation_eval_samples", fake_predict)
+
+    with pytest.raises(RuntimeError, match="Preflight generation check failed"):
+        train_unsloth._run_generation_preflight(
+            DummyModel(),
+            DummyTokenizer(),
+            [
+                train_unsloth.SftGenerationEvalSample(
+                    row_index=0,
+                    row=build_sft_row(),
+                    document="bombing in baghdad injured civilians",
+                    event_labels=["attack"],
+                    argument_role_labels=["place"],
+                    location_type_labels=["city"],
+                )
+            ],
+            batch_size=2,
+            max_new_tokens=64,
+            max_input_length=512,
+            events_only=False,
+            omit_offsets=False,
+        )
+
+
+def test_predict_generation_eval_samples_batches_compatible_samples(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    predict_calls: list[dict[str, Any]] = []
+
+    def fake_predict_batch_documents(*args, **kwargs):
+        predict_calls.append(kwargs)
+        return [{"events": []} for _ in kwargs["documents"]]
+
+    monkeypatch.setattr(train_unsloth, "predict_batch_documents", fake_predict_batch_documents)
+
+    shared_a = train_unsloth.SftGenerationEvalSample(
+        row_index=0,
+        row=build_sft_row(),
+        document="doc-a",
+        event_labels=["attack"],
+        argument_role_labels=["place"],
+        location_type_labels=["city"],
+    )
+    shared_b = train_unsloth.SftGenerationEvalSample(
+        row_index=1,
+        row=build_sft_row(),
+        document="doc-b",
+        event_labels=["attack"],
+        argument_role_labels=["place"],
+        location_type_labels=["city"],
+    )
+    different = train_unsloth.SftGenerationEvalSample(
+        row_index=2,
+        row=build_sft_row(),
+        document="doc-c",
+        event_labels=["injure"],
+        argument_role_labels=["victim"],
+        location_type_labels=["region"],
+    )
+
+    predictions = train_unsloth._predict_generation_eval_samples(
+        object(),
+        DummyTokenizer(),
+        [shared_a, shared_b, different],
+        batch_size=2,
+        max_new_tokens=64,
+        max_input_length=512,
+        events_only=False,
+        omit_offsets=False,
+    )
+
+    assert predictions == [
+        {"prediction": {"events": []}},
+        {"prediction": {"events": []}},
+        {"prediction": {"events": []}},
+    ]
+    assert len(predict_calls) == 2
+    assert predict_calls[0]["documents"] == ["doc-a", "doc-b"]
+    assert predict_calls[1]["documents"] == ["doc-c"]
+
+
+def test_generation_eval_callback_logs_prefixed_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyModel:
+        def __init__(self) -> None:
+            self.training = True
+
+        def eval(self) -> None:
+            self.training = False
+
+        def train(self) -> None:
+            self.training = True
+
+    class DummyTrainer:
+        def __init__(self) -> None:
+            self.model = DummyModel()
+            self.logged: list[dict[str, float]] = []
+
+        def log(self, metrics: dict[str, float]) -> None:
+            self.logged.append(metrics)
+
+    predict_calls: list[dict[str, Any]] = []
+
+    def fake_predict(*args, **kwargs):
+        predict_calls.append(kwargs)
+        return [{"prediction": {"events": []}}]
+
+    def fake_evaluate(gold_rows, pred_rows):
+        assert gold_rows == [build_sft_row()]
+        assert pred_rows == [{"prediction": {"events": []}}]
+        return {"event_f1": 0.25, "doc_exact_match": 0.0}
+
+    monkeypatch.setattr(train_unsloth, "_predict_generation_eval_samples", fake_predict)
+    monkeypatch.setattr(train_unsloth, "evaluate_sft_predictions", fake_evaluate)
+
+    trainer = DummyTrainer()
+    callback = train_unsloth.GenerationEvalCallback(
+        trainer=trainer,
+        tokenizer=DummyTokenizer(),
+        samples=[
+            train_unsloth.SftGenerationEvalSample(
+                row_index=0,
+                row=build_sft_row(),
+                document="bombing in baghdad injured civilians",
+                event_labels=["attack", "injure"],
+                argument_role_labels=["place", "victim"],
+                location_type_labels=["city", "region"],
+            )
+        ],
+        batch_size=2,
+        max_new_tokens=64,
+        max_input_length=512,
+        events_only=True,
+        omit_offsets=True,
+    )
+
+    state = type("State", (), {"is_world_process_zero": True})()
+    metrics: dict[str, float] = {}
+    control = object()
+
+    returned_control = callback.on_evaluate(
+        None,
+        state,
+        control,
+        model=trainer.model,
+        metrics=metrics,
+    )
+
+    assert returned_control is control
+    assert trainer.logged == [
+        {
+            "gen_eval_event_f1": 0.25,
+            "gen_eval_doc_exact_match": 0.0,
+        }
+    ]
+    assert metrics == trainer.logged[0]
+    assert predict_calls[0]["events_only"] is True
+    assert predict_calls[0]["omit_offsets"] is True
+    assert predict_calls[0]["show_progress"] is True
+    assert predict_calls[0]["batch_size"] == 2
+    assert trainer.model.training is True
