@@ -468,8 +468,11 @@ def _generate_prediction_text(
 
 def load_inference_model(args: argparse.Namespace) -> tuple[Any, Any]:
     _require_unsloth()
+    model_name = getattr(args, "model_name", None) or getattr(args, "model_path", None)
+    if not model_name:
+        raise ValueError("model_name is required.")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.model_path,
+        model_name=model_name,
         max_seq_length=args.max_seq_length,
         load_in_4bit=args.load_in_4bit,
         load_in_16bit=not args.load_in_4bit,
@@ -647,7 +650,8 @@ def run_interactive(args: argparse.Namespace) -> None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, required=True)
+    parser.add_argument("--model_name", type=str, required=True)
+    parser.add_argument("--model_path", type=str, default=None, help=argparse.SUPPRESS)
     parser.add_argument(
         "--adapter_path", type=str, default=None, help="Optional path to a LoRA adapter"
     )
