@@ -1,5 +1,6 @@
 unsloth==2026.5.7
 json-repair
+gradio
 # torch>=2.10.0
 # transformers>=5.5,<5.6
 # accelerate>=1.1.0
