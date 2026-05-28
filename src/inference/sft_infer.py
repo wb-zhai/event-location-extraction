@@ -17,6 +17,11 @@ from src.sft_prompt import render_chat
 _ANCHOR_RESOLVER = TextAnchorResolver()
 
 try:
+    from json_repair import repair_json
+except ModuleNotFoundError:  # pragma: no cover - optional dependency in tests
+    repair_json = None
+
+try:
     from unsloth import FastLanguageModel
 except ModuleNotFoundError:  # pragma: no cover - exercised indirectly in tests
     FastLanguageModel = None
@@ -109,8 +114,39 @@ def _extract_first_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _repair_first_json_object(text: str) -> dict[str, Any] | None:
+    if repair_json is None:
+        return None
+
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            parsed = repair_json(text[index:], return_objects=True)
+        except TypeError:
+            try:
+                parsed = repair_json(text[index:])
+            except Exception:
+                continue
+        except Exception:
+            continue
+
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, str):
+            try:
+                loaded = json.loads(parsed)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(loaded, dict):
+                return loaded
+    return None
+
+
 def _parse_prediction_text(text: str) -> dict[str, Any]:
     parsed = _extract_first_json_object(text)
+    if parsed is None:
+        parsed = _repair_first_json_object(text)
     if parsed is None:
         print(
             "Warning: failed to parse model output as JSON; returning empty events.",

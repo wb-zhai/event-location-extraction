@@ -12,6 +12,7 @@ class AnchorStatus:
     MATCH_EXACT = "match_exact"
     MATCH_LESSER = "match_lesser"
     MATCH_FUZZY = "match_fuzzy"
+    MATCH_CONTEXT = "match_context"
     NOT_FOUND = "not_found"
 
 
@@ -107,6 +108,205 @@ class TextAnchorResolver:
 
     def resolve_many(self, source_text: str, quotes: list[str]) -> list[AnchorMatch]:
         return [self.resolve(source_text, quote) for quote in quotes]
+
+    def resolve_with_context(
+        self,
+        source_text: str,
+        quote: str | None = None,
+        *,
+        left_context: str | None = None,
+        right_context: str | None = None,
+        start_hint: int | None = None,
+        end_hint: int | None = None,
+    ) -> AnchorMatch:
+        if not source_text:
+            return AnchorMatch(
+                start=None,
+                end=None,
+                score=0.0,
+                status=AnchorStatus.NOT_FOUND,
+                matched_text=None,
+            )
+
+        normalized_quote = quote if isinstance(quote, str) and quote.strip() else None
+        normalized_left = (
+            left_context if isinstance(left_context, str) and left_context else None
+        )
+        normalized_right = (
+            right_context if isinstance(right_context, str) and right_context else None
+        )
+
+        if normalized_left is None and normalized_right is None:
+            if normalized_quote is None:
+                return AnchorMatch(
+                    start=None,
+                    end=None,
+                    score=0.0,
+                    status=AnchorStatus.NOT_FOUND,
+                    matched_text=None,
+                )
+            return self.resolve(source_text, normalized_quote)
+
+        bounded = self._resolve_with_bounded_context(
+            source_text,
+            normalized_quote,
+            left_context=normalized_left,
+            right_context=normalized_right,
+            start_hint=start_hint,
+            end_hint=end_hint,
+        )
+        if bounded is not None:
+            return bounded
+
+        if normalized_quote is not None:
+            return self.resolve(source_text, normalized_quote)
+
+        return AnchorMatch(
+            start=None,
+            end=None,
+            score=0.0,
+            status=AnchorStatus.NOT_FOUND,
+            matched_text=None,
+        )
+
+    def _resolve_with_bounded_context(
+        self,
+        source_text: str,
+        quote: str | None,
+        *,
+        left_context: str | None,
+        right_context: str | None,
+        start_hint: int | None,
+        end_hint: int | None,
+    ) -> AnchorMatch | None:
+        bounds = self._candidate_bounds(
+            source_text,
+            left_context=left_context,
+            right_context=right_context,
+        )
+        if not bounds:
+            return None
+
+        best_match: AnchorMatch | None = None
+        best_rank: tuple[float, float, float] | None = None
+
+        for bound_start, bound_end, context_score in bounds:
+            if quote is not None:
+                bounded_match = self._resolve_in_window(
+                    source_text,
+                    quote,
+                    bound_start,
+                    bound_end,
+                )
+                if bounded_match is None:
+                    continue
+                match = AnchorMatch(
+                    start=bounded_match.start,
+                    end=bounded_match.end,
+                    score=max(bounded_match.score, context_score),
+                    status=bounded_match.status,
+                    matched_text=bounded_match.matched_text,
+                )
+            else:
+                if bound_end <= bound_start:
+                    continue
+                match = AnchorMatch(
+                    start=bound_start,
+                    end=bound_end,
+                    score=context_score,
+                    status=AnchorStatus.MATCH_CONTEXT,
+                    matched_text=source_text[bound_start:bound_end],
+                )
+
+            hint_score = self._hint_score(
+                match.start,
+                match.end,
+                start_hint=start_hint,
+                end_hint=end_hint,
+            )
+            span_length = (match.end or 0) - (match.start or 0)
+            rank = (hint_score, context_score, -float(span_length))
+            if best_rank is None or rank > best_rank:
+                best_rank = rank
+                best_match = match
+
+        return best_match
+
+    def _candidate_bounds(
+        self,
+        source_text: str,
+        *,
+        left_context: str | None,
+        right_context: str | None,
+    ) -> list[tuple[int, int, float]]:
+        left_matches = (
+            [(m.start(), m.end()) for m in re.finditer(re.escape(left_context), source_text)]
+            if left_context
+            else [(0, 0)]
+        )
+        right_matches = (
+            [(m.start(), m.end()) for m in re.finditer(re.escape(right_context), source_text)]
+            if right_context
+            else [(len(source_text), len(source_text))]
+        )
+
+        candidates: list[tuple[int, int, float]] = []
+        seen: set[tuple[int, int]] = set()
+        for left_start, left_end in left_matches:
+            for right_start, right_end in right_matches:
+                if left_context and right_context and left_end > right_start:
+                    continue
+                start = left_end if left_context else 0
+                end = right_start if right_context else len(source_text)
+                if end < start:
+                    continue
+                key = (start, end)
+                if key in seen:
+                    continue
+                seen.add(key)
+                context_score = 1.0 if left_context and right_context else 0.8
+                candidates.append((start, end, context_score))
+
+        candidates.sort(key=lambda item: (item[0], item[1]))
+        return candidates
+
+    def _resolve_in_window(
+        self,
+        source_text: str,
+        quote: str,
+        start: int,
+        end: int,
+    ) -> AnchorMatch | None:
+        if end <= start:
+            return None
+        window = source_text[start:end]
+        match = self.resolve(window, quote)
+        if match.start is None or match.end is None or match.matched_text is None:
+            return None
+        return AnchorMatch(
+            start=start + match.start,
+            end=start + match.end,
+            score=match.score,
+            status=match.status,
+            matched_text=match.matched_text,
+        )
+
+    @staticmethod
+    def _hint_score(
+        start: int | None,
+        end: int | None,
+        *,
+        start_hint: int | None,
+        end_hint: int | None,
+    ) -> float:
+        if start is None or end is None:
+            return 0.0
+        if start_hint is None or end_hint is None:
+            return 0.0
+        hint_length = max(1, end_hint - start_hint)
+        start_delta = abs(start - start_hint)
+        end_delta = abs(end - end_hint)
+        return -((start_delta + end_delta) / hint_length)
 
     def _find_lesser_match(
         self, source_text: str, quote: str
