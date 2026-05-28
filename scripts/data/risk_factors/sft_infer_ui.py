@@ -66,7 +66,7 @@ class AppState:
     def __init__(self) -> None:
         self.model: Any | None = None
         self.tokenizer: Any | None = None
-        self.model_path: str | None = None
+        self.model_name: str | None = None
         self.adapter_path: str | None = None
         self.load_in_4bit: bool = True
         self.max_seq_length: int = 8192
@@ -85,16 +85,16 @@ def _coerce_optional_int(value: Any) -> int | None:
 
 
 def _build_load_args(payload: dict[str, Any]) -> argparse.Namespace:
-    model_path = str(payload.get("model_path") or "").strip()
-    if not model_path:
-        raise ValueError("model_path is required.")
+    model_name = str(payload.get("model_name") or "").strip()
+    if not model_name:
+        raise ValueError("model_name is required.")
 
     adapter_path = str(payload.get("adapter_path") or "").strip() or None
     max_seq_length = int(payload.get("max_seq_length") or 8192)
     load_in_4bit = bool(payload.get("load_in_4bit", True))
 
     return argparse.Namespace(
-        model_path=str(resolve_local_path(model_path)),
+        model_name=model_name,
         adapter_path=str(resolve_local_path(adapter_path)) if adapter_path else None,
         max_seq_length=max_seq_length,
         load_in_4bit=load_in_4bit,
@@ -210,7 +210,7 @@ class SftInferHandler(BaseHTTPRequestHandler):
             self.send_json(
                 {
                     "loaded_model": {
-                        "model_path": self.server.state.model_path,
+                        "model_name": self.server.state.model_name,
                         "adapter_path": self.server.state.adapter_path,
                         "load_in_4bit": self.server.state.load_in_4bit,
                         "max_seq_length": self.server.state.max_seq_length,
@@ -272,7 +272,7 @@ class SftInferHandler(BaseHTTPRequestHandler):
             model, tokenizer = sft_infer.load_inference_model(args)
             self.server.state.model = model
             self.server.state.tokenizer = tokenizer
-            self.server.state.model_path = args.model_path
+            self.server.state.model_name = args.model_name
             self.server.state.adapter_path = args.adapter_path
             self.server.state.load_in_4bit = args.load_in_4bit
             self.server.state.max_seq_length = args.max_seq_length
@@ -280,7 +280,7 @@ class SftInferHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "loaded_model": {
-                        "model_path": args.model_path,
+                        "model_name": args.model_name,
                         "adapter_path": args.adapter_path,
                         "load_in_4bit": args.load_in_4bit,
                         "max_seq_length": args.max_seq_length,
@@ -459,8 +459,8 @@ INDEX_HTML = r"""<!doctype html>
     <aside class="panel">
       <div class="section">
         <div class="field">
-          <label for="modelPath">Base model path</label>
-          <input id="modelPath" placeholder="Path to base model">
+          <label for="modelName">Base model name</label>
+          <input id="modelName" placeholder="Hugging Face model name, e.g. unsloth/Qwen3-4B">
         </div>
         <div class="field">
           <label for="adapterPath">Adapter path</label>
@@ -632,7 +632,7 @@ INDEX_HTML = r"""<!doctype html>
 
     function renderLoadedModel(model) {
       el("loadedModelMeta").textContent = [
-        `model ${model.model_path}`,
+        `model ${model.model_name}`,
         model.adapter_path ? `adapter ${model.adapter_path}` : "no adapter",
         model.load_in_4bit ? "4-bit" : "16-bit",
         `max_seq_length ${model.max_seq_length}`
@@ -646,7 +646,7 @@ INDEX_HTML = r"""<!doctype html>
           method: "POST",
           headers: {"content-type": "application/json"},
           body: JSON.stringify({
-            model_path: el("modelPath").value,
+            model_name: el("modelName").value,
             adapter_path: el("adapterPath").value,
             max_seq_length: Number(el("maxSeqLength").value || 8192),
             load_in_4bit: boolValue("loadIn4Bit")
