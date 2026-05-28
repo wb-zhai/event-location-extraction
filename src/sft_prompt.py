@@ -88,7 +88,7 @@ def build_messages(
 ) -> list[dict[str, str]]:
     system_prompt = SYSTEM_PROMPT_EVENTS_ONLY if events_only else SYSTEM_PROMPT
     if omit_offsets:
-        system_prompt = system_prompt.replace('"start":0, "end":1, ', '')
+        system_prompt = system_prompt.replace('"start":0, "end":1, "text":"..."', '"text":"...", "left_context":"...", "right_context":"..."')
         system_prompt = re.sub(r'\n\d+\) start/end must be character offsets in the provided document.', '', system_prompt)
         system_prompt = re.sub(r'\n\d+\) Put trigger offsets under trigger( and argument offsets under span)?\.', '', system_prompt)
     messages = [

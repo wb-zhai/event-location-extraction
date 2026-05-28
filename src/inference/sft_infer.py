@@ -613,8 +613,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--ontology_file", type=str, default=None)
     parser.add_argument("--event_labels", nargs="+", default=None)
-    parser.add_argument("--max_seq_length", type=int, default=4096)
-    parser.add_argument("--max_new_tokens", type=int, default=512)
+    parser.add_argument("--max_seq_length", type=int, default=8192)
+    parser.add_argument("--max_new_tokens", type=int, default=1024)
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--min_p", type=float, default=None)
     parser.add_argument("--top_k", type=int, default=None)
@@ -626,7 +626,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--batch_size", type=int, default=1, help="Batch size for inference"
     )
     parser.add_argument(
-        "--num_workers", type=int, default=4, help="Number of dataloader workers"
+        "--num_workers", type=int, default=8, help="Number of dataloader workers"
     )
     parser.add_argument(
         "--description",
