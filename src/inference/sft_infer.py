@@ -6,7 +6,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ModuleNotFoundError:  # pragma: no cover - optional for file/batch progress only
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 import torch
 from torch.utils.data import DataLoader
@@ -650,7 +654,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ontology_file", type=str, default=None)
     parser.add_argument("--event_labels", nargs="+", default=None)
     parser.add_argument("--max_seq_length", type=int, default=8192)
-    parser.add_argument("--max_new_tokens", type=int, default=1024)
+    parser.add_argument("--max_new_tokens", type=int, default=4096)
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--min_p", type=float, default=None)
     parser.add_argument("--top_k", type=int, default=None)
