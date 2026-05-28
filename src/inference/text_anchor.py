@@ -128,6 +128,71 @@ class TextAnchorResolver:
                 matched_text=None,
             )
 
+        # Fast path exact matches
+        if quote is not None:
+            # 1. Try exact match at hints
+            if start_hint is not None and end_hint is not None:
+                # Allow a small window around the hint in case of minor offsets
+                window_start = max(0, start_hint - 20)
+                window_end = min(len(source_text), end_hint + 20)
+                idx = source_text.find(quote, window_start, window_end)
+                if idx != -1:
+                    return AnchorMatch(
+                        start=idx,
+                        end=idx + len(quote),
+                        score=1.0,
+                        status=AnchorStatus.MATCH_EXACT,
+                        matched_text=quote,
+                    )
+
+            # 2. Try exact match using context built together
+            if left_context or right_context:
+                l_ctx = left_context or ""
+                r_ctx = right_context or ""
+                combined = l_ctx + quote + r_ctx
+                idx = source_text.find(combined)
+                if idx != -1:
+                    start_pos = idx + len(l_ctx)
+                    end_pos = start_pos + len(quote)
+                    return AnchorMatch(
+                        start=start_pos,
+                        end=end_pos,
+                        score=1.0,
+                        status=AnchorStatus.MATCH_EXACT,
+                        matched_text=quote,
+                    )
+        else:
+            # quote is None
+            if left_context and right_context:
+                # Try to find exactly left_context + right_context
+                combined = left_context + right_context
+                idx = source_text.find(combined)
+                if idx != -1:
+                    start_pos = idx + len(left_context)
+                    return AnchorMatch(
+                        start=start_pos,
+                        end=start_pos,
+                        score=1.0,
+                        status=AnchorStatus.MATCH_EXACT,
+                        matched_text="",
+                    )
+
+                # Try finding them independently
+                l_idx = source_text.find(left_context)
+                if l_idx != -1:
+                    r_idx = source_text.find(right_context, l_idx + len(left_context))
+                    if r_idx != -1:
+                        st = l_idx + len(left_context)
+                        en = r_idx
+                        return AnchorMatch(
+                            start=st,
+                            end=en,
+                            score=1.0,
+                            status=AnchorStatus.MATCH_EXACT,
+                            matched_text=source_text[st:en],
+                        )
+
+        # Fallback to bounded context resolution
         normalized_quote = quote if isinstance(quote, str) and quote.strip() else None
         normalized_left = (
             left_context if isinstance(left_context, str) and left_context else None
