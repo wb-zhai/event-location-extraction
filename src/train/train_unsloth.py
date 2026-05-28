@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from tqdm.auto import tqdm
 from unsloth import FastLanguageModel
 from unsloth.chat_templates import train_on_responses_only
 from datasets import load_dataset
@@ -27,7 +26,6 @@ from src.train.eval_sft import evaluate as evaluate_sft_predictions
 DEFAULT_GEN_EVAL_MAX_SAMPLES = 8
 DEFAULT_PREFLIGHT_MAX_SAMPLES = 3
 DEFAULT_GEN_EVAL_MAX_NEW_TOKENS = 512
-DEFAULT_GEN_EVAL_BATCH_SIZE = 4
 
 
 @dataclass(frozen=True)
@@ -710,88 +708,31 @@ def _build_generation_eval_samples(
     return samples
 
 
-def _sample_label_signature(
-    sample: SftGenerationEvalSample,
-) -> tuple[tuple[str, Any], tuple[str, Any], tuple[str, Any]]:
-    def _freeze_labels(
-        labels: list[str] | dict[str, str],
-    ) -> tuple[str, Any]:
-        if isinstance(labels, dict):
-            return ("dict", tuple(labels.items()))
-        return ("list", tuple(labels))
-
-    return (
-        _freeze_labels(sample.event_labels),
-        _freeze_labels(sample.argument_role_labels),
-        _freeze_labels(sample.location_type_labels),
-    )
-
-
-def _generation_eval_batches(
-    samples: list[SftGenerationEvalSample],
-    batch_size: int,
-) -> list[list[SftGenerationEvalSample]]:
-    if batch_size <= 0:
-        raise ValueError(f"batch_size must be > 0, got {batch_size}")
-
-    grouped_samples: dict[
-        tuple[tuple[str, Any], tuple[str, Any], tuple[str, Any]],
-        list[SftGenerationEvalSample],
-    ] = {}
-    sample_group_order: list[
-        tuple[tuple[str, Any], tuple[str, Any], tuple[str, Any]]
-    ] = []
-    for sample in samples:
-        signature = _sample_label_signature(sample)
-        if signature not in grouped_samples:
-            grouped_samples[signature] = []
-            sample_group_order.append(signature)
-        grouped_samples[signature].append(sample)
-
-    batches: list[list[SftGenerationEvalSample]] = []
-    for signature in sample_group_order:
-        group = grouped_samples[signature]
-        for start in range(0, len(group), batch_size):
-            batches.append(group[start : start + batch_size])
-    return batches
-
-
 def _predict_generation_eval_samples(
     model,
     tokenizer,
     samples: list[SftGenerationEvalSample],
     *,
-    batch_size: int,
     max_new_tokens: int,
     max_input_length: int,
     events_only: bool,
     omit_offsets: bool,
-    show_progress: bool = False,
-    progress_desc: str = "Generative eval",
 ) -> list[dict[str, Any]]:
     predictions: list[dict[str, Any]] = []
-    batches = _generation_eval_batches(samples, batch_size)
-    batch_iterator = tqdm(
-        batches,
-        desc=progress_desc,
-        leave=False,
-        disable=not show_progress,
-    )
-
-    for batch in batch_iterator:
-        batch_predictions = predict_batch_documents(
+    for sample in samples:
+        prediction = predict_batch_documents(
             model,
             tokenizer,
-            documents=[sample.document for sample in batch],
-            event_labels=batch[0].event_labels,
-            argument_roles=batch[0].argument_role_labels,
-            location_types=batch[0].location_type_labels,
+            documents=[sample.document],
+            event_labels=sample.event_labels,
+            argument_roles=sample.argument_role_labels,
+            location_types=sample.location_type_labels,
             max_new_tokens=max_new_tokens,
             max_input_length=max_input_length,
             events_only=events_only,
             omit_offsets=omit_offsets,
-        )
-        predictions.extend({"prediction": prediction} for prediction in batch_predictions)
+        )[0]
+        predictions.append({"prediction": prediction})
     return predictions
 
 
@@ -800,7 +741,6 @@ def _run_generation_preflight(
     tokenizer,
     samples: list[SftGenerationEvalSample],
     *,
-    batch_size: int,
     max_new_tokens: int,
     max_input_length: int,
     events_only: bool,
@@ -817,7 +757,6 @@ def _run_generation_preflight(
             model,
             tokenizer,
             samples,
-            batch_size=batch_size,
             max_new_tokens=max_new_tokens,
             max_input_length=max_input_length,
             events_only=events_only,
@@ -864,7 +803,6 @@ class GenerationEvalCallback(TrainerCallback):
         trainer: SFTTrainer,
         tokenizer,
         samples: list[SftGenerationEvalSample],
-        batch_size: int,
         max_new_tokens: int,
         max_input_length: int,
         events_only: bool,
@@ -874,7 +812,6 @@ class GenerationEvalCallback(TrainerCallback):
         self.trainer = trainer
         self.tokenizer = tokenizer
         self.samples = samples
-        self.batch_size = batch_size
         self.max_new_tokens = max_new_tokens
         self.max_input_length = max_input_length
         self.events_only = events_only
@@ -897,13 +834,10 @@ class GenerationEvalCallback(TrainerCallback):
                 model,
                 self.tokenizer,
                 self.samples,
-                batch_size=self.batch_size,
                 max_new_tokens=self.max_new_tokens,
                 max_input_length=self.max_input_length,
                 events_only=self.events_only,
                 omit_offsets=self.omit_offsets,
-                show_progress=True,
-                progress_desc="Generative eval",
             )
         finally:
             if was_training:
@@ -1234,12 +1168,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_GEN_EVAL_MAX_NEW_TOKENS,
         help="Maximum generated tokens for generation-based eval and preflight checks.",
     )
-    parser.add_argument(
-        "--gen_eval_batch_size",
-        type=int,
-        default=DEFAULT_GEN_EVAL_BATCH_SIZE,
-        help="Batch size for generation-based eval and preflight inference.",
-    )
     return parser.parse_args(argv)
 
 
@@ -1437,7 +1365,6 @@ def main(argv: list[str] | None = None) -> None:
         model,
         tokenizer,
         preflight_samples,
-        batch_size=args.gen_eval_batch_size,
         max_new_tokens=args.gen_eval_max_new_tokens,
         max_input_length=args.max_seq_length,
         events_only=args.events_only,
@@ -1450,7 +1377,6 @@ def main(argv: list[str] | None = None) -> None:
                 trainer=trainer,
                 tokenizer=tokenizer,
                 samples=generation_eval_samples,
-                batch_size=args.gen_eval_batch_size,
                 max_new_tokens=args.gen_eval_max_new_tokens,
                 max_input_length=args.max_seq_length,
                 events_only=args.events_only,

@@ -204,8 +204,8 @@
 
 PYTHONPATH=. python src/train/train_unsloth.py \
   --model_name unsloth/Qwen3.5-4B \
-  --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.events.384.jsonl \
-  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.events.384.jsonl \
+  --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.384.jsonl \
+  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.384.jsonl \
   --output_dir outputs/zhai/qwen3.5-4B-lora-sft-window-500-v4-response-omit_offsets \
   --ontology_file ontologies/zhai/ontology.json \
   --num_event_candidates -1 \
@@ -251,9 +251,9 @@ PYTHONPATH=. python src/train/train_unsloth.py \
 
 PYTHONPATH=. python src/train/train_unsloth.py \
   --model_name unsloth/Qwen3.5-7B \
-  --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.events.384.jsonl \
-  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.events.384.jsonl \
-  --output_dir outputs/zhai/qwen3.5-7B-lora-sft-window-500-v4-response-events-only-omit_offsets \
+  --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.context.384.jsonl \
+  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.context.384.jsonl \
+  --output_dir outputs/zhai/qwen3.5-7B-lora-sft-window-500-v4-response-omit_offsets \
   --ontology_file ontologies/zhai/ontology.json \
   --num_event_candidates -1 \
   --num_relation_candidates -1 \
