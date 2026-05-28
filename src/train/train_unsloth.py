@@ -52,9 +52,9 @@ class SftGenerationEvalSample:
     row_index: int
     row: dict[str, Any]
     document: str
-    event_labels: list[str] | dict[str, str]
-    argument_role_labels: list[str] | dict[str, str]
-    location_type_labels: list[str] | dict[str, str]
+    event_labels: str
+    argument_role_labels: str
+    location_type_labels: str
 
 
 def _safe_substring(text: str, start: Any, end: Any) -> str:
@@ -148,6 +148,43 @@ def _select_label_descriptions(
     return {
         label: descriptions.get(label, "") for label in labels
     }
+
+
+def _format_prompt_candidates(candidates: list[str] | dict[str, str]) -> str:
+    if isinstance(candidates, dict):
+        return " | ".join(
+            f"{label}: {description}" if description else label
+            for label, description in candidates.items()
+        )
+    return " | ".join(candidates)
+
+
+def _extract_passage_event_candidates(row: dict[str, Any]) -> list[tuple[str, str]] | None:
+    passages = row.get("passages")
+    if not isinstance(passages, list):
+        return None
+
+    candidates: list[tuple[str, str]] = []
+    seen_labels: set[str] = set()
+    for passage in passages:
+        if not isinstance(passage, dict):
+            continue
+        document = passage.get("document")
+        if not isinstance(document, dict):
+            continue
+        text = document.get("text")
+        if not isinstance(text, str) or not text or text in seen_labels:
+            continue
+        metadata = document.get("metadata")
+        description = ""
+        if isinstance(metadata, dict):
+            raw_description = metadata.get("description")
+            if isinstance(raw_description, str):
+                description = raw_description
+        seen_labels.add(text)
+        candidates.append((text, description))
+
+    return candidates or None
 
 
 def _enrich_events(document: str, events: list[dict[str, Any]], *, events_only: bool = False) -> list[dict[str, Any]]:
@@ -297,10 +334,25 @@ def _resolve_candidate_labels(
     if not isinstance(sample_id, str) or not sample_id:
         sample_id = document if isinstance(document, str) and document else str(index)
 
-    document_event_labels = _require_label_list(
-        row,
-        "events",
-        fallback_labels=required_event_labels,
+    passage_event_candidates = _extract_passage_event_candidates(row)
+    passage_event_labels = (
+        [label for label, _ in passage_event_candidates]
+        if passage_event_candidates is not None
+        else None
+    )
+    event_ontology_labels = (
+        passage_event_labels
+        if passage_event_labels is not None
+        else (ontology.event_labels if ontology is not None else None)
+    )
+    document_event_labels = (
+        list(passage_event_labels)
+        if passage_event_labels is not None
+        else _require_label_list(
+            row,
+            "events",
+            fallback_labels=required_event_labels,
+        )
     )
     document_argument_role_labels = _require_label_list(
         row,
@@ -313,8 +365,8 @@ def _resolve_candidate_labels(
         fallback_labels=required_location_type_labels,
     )
     requested_event_total = num_event_candidates
-    if requested_event_total is None and ontology is not None:
-        requested_event_total = len(ontology.event_labels)
+    if requested_event_total is None and event_ontology_labels is not None:
+        requested_event_total = len(event_ontology_labels)
     requested_relation_total = num_relation_candidates
     if requested_relation_total is None and ontology is not None:
         requested_relation_total = len(ontology.argument_role_labels)
@@ -327,7 +379,7 @@ def _resolve_candidate_labels(
         label_kind="event",
         required_labels=required_event_labels,
         document_labels=document_event_labels,
-        ontology_labels=ontology.event_labels if ontology is not None else None,
+        ontology_labels=event_ontology_labels,
         requested_total=requested_event_total,
         rng=candidate_rng,
     )
@@ -360,7 +412,7 @@ def _resolve_candidate_labels(
             labels=event_labels,
             required_labels=required_event_labels,
             ontology_labels=(
-                ontology.event_labels if num_event_candidates is not None else None
+                event_ontology_labels if num_event_candidates is not None else None
             ),
             shuffle_probability=(
                 candidate_shuffle_probability
@@ -418,6 +470,20 @@ def _resolve_candidate_labels(
     return event_labels, argument_role_labels, location_type_labels
 
 
+def _resolve_event_descriptions_for_row(
+    row: dict[str, Any],
+    ontology: SftCandidateOntology | None,
+) -> dict[str, str] | None:
+    passage_event_candidates = _extract_passage_event_candidates(row)
+    if passage_event_candidates is not None:
+        return {
+            label: description for label, description in passage_event_candidates
+        }
+    if ontology is None:
+        return None
+    return ontology.event_descriptions
+
+
 def _chat_text(
     tokenizer,
     document: str,
@@ -425,6 +491,7 @@ def _chat_text(
     argument_role_labels: list[str],
     location_type_labels: list[str],
     *,
+    event_descriptions: dict[str, str] | None,
     ontology: SftCandidateOntology | None,
     include_descriptions: bool,
     answer_obj: dict[str, Any],
@@ -434,28 +501,34 @@ def _chat_text(
     return render_chat(
         tokenizer,
         document,
-        _select_label_descriptions(
-            event_labels,
-            ontology.event_descriptions if ontology is not None else None,
-            include_descriptions=include_descriptions,
+        _format_prompt_candidates(
+            _select_label_descriptions(
+                event_labels,
+                event_descriptions,
+                include_descriptions=include_descriptions,
+            )
         ),
-        _select_label_descriptions(
-            argument_role_labels,
-            (
-                ontology.argument_role_descriptions
-                if ontology is not None
-                else None
-            ),
-            include_descriptions=include_descriptions,
+        _format_prompt_candidates(
+            _select_label_descriptions(
+                argument_role_labels,
+                (
+                    ontology.argument_role_descriptions
+                    if ontology is not None
+                    else None
+                ),
+                include_descriptions=include_descriptions,
+            )
         ),
-        _select_label_descriptions(
-            location_type_labels,
-            (
-                ontology.location_type_descriptions
-                if ontology is not None
-                else None
-            ),
-            include_descriptions=include_descriptions,
+        _format_prompt_candidates(
+            _select_label_descriptions(
+                location_type_labels,
+                (
+                    ontology.location_type_descriptions
+                    if ontology is not None
+                    else None
+                ),
+                include_descriptions=include_descriptions,
+            )
         ),
         answer_obj=answer_obj,
         add_generation_prompt=False,
@@ -471,6 +544,7 @@ def _chat_parts(
     argument_role_labels: list[str],
     location_type_labels: list[str],
     *,
+    event_descriptions: dict[str, str] | None,
     ontology: SftCandidateOntology | None,
     include_descriptions: bool,
     answer_obj: dict[str, Any],
@@ -479,28 +553,34 @@ def _chat_parts(
 ) -> tuple[list[dict[str, str]], str]:
     messages = build_messages(
         document,
-        _select_label_descriptions(
-            event_labels,
-            ontology.event_descriptions if ontology is not None else None,
-            include_descriptions=include_descriptions,
+        _format_prompt_candidates(
+            _select_label_descriptions(
+                event_labels,
+                event_descriptions,
+                include_descriptions=include_descriptions,
+            )
         ),
-        _select_label_descriptions(
-            argument_role_labels,
-            (
-                ontology.argument_role_descriptions
-                if ontology is not None
-                else None
-            ),
-            include_descriptions=include_descriptions,
+        _format_prompt_candidates(
+            _select_label_descriptions(
+                argument_role_labels,
+                (
+                    ontology.argument_role_descriptions
+                    if ontology is not None
+                    else None
+                ),
+                include_descriptions=include_descriptions,
+            )
         ),
-        _select_label_descriptions(
-            location_type_labels,
-            (
-                ontology.location_type_descriptions
-                if ontology is not None
-                else None
-            ),
-            include_descriptions=include_descriptions,
+        _format_prompt_candidates(
+            _select_label_descriptions(
+                location_type_labels,
+                (
+                    ontology.location_type_descriptions
+                    if ontology is not None
+                    else None
+                ),
+                include_descriptions=include_descriptions,
+            )
         ),
         events_only=events_only,
         omit_offsets=omit_offsets,
@@ -529,6 +609,7 @@ def _format_row(
     document = row["question"]
     raw_events = row["answer"]["events"]
     answer_obj = {"events": _enrich_events(document, raw_events, events_only=events_only)}
+    event_descriptions = _resolve_event_descriptions_for_row(row, ontology)
     event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
         row,
         ontology=ontology,
@@ -549,6 +630,7 @@ def _format_row(
         event_labels,
         argument_role_labels,
         location_type_labels,
+        event_descriptions=event_descriptions,
         ontology=ontology,
         include_descriptions=include_descriptions,
         answer_obj=answer_obj,
@@ -618,6 +700,7 @@ def _build_sample_preview(
     document = row["question"]
     raw_events = row["answer"]["events"]
     answer_obj = {"events": _enrich_events(document, raw_events, events_only=events_only)}
+    event_descriptions = _resolve_event_descriptions_for_row(row, ontology)
     event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
         row,
         ontology=ontology,
@@ -636,6 +719,7 @@ def _build_sample_preview(
         event_labels,
         argument_role_labels,
         location_type_labels,
+        event_descriptions=event_descriptions,
         ontology=ontology,
         include_descriptions=include_descriptions,
         answer_obj=answer_obj,
@@ -663,6 +747,7 @@ def _build_generation_eval_samples(
 ) -> list[SftGenerationEvalSample]:
     samples: list[SftGenerationEvalSample] = []
     for row_index, row in _select_rows_for_generation_checks(dataset, max_samples):
+        event_descriptions = _resolve_event_descriptions_for_row(row, ontology)
         event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
             row,
             ontology=ontology,
@@ -680,28 +765,34 @@ def _build_generation_eval_samples(
                 row_index=row_index,
                 row=row,
                 document=row["question"],
-                event_labels=_select_label_descriptions(
-                    event_labels,
-                    ontology.event_descriptions if ontology is not None else None,
-                    include_descriptions=include_descriptions,
+                event_labels=_format_prompt_candidates(
+                    _select_label_descriptions(
+                        event_labels,
+                        event_descriptions,
+                        include_descriptions=include_descriptions,
+                    )
                 ),
-                argument_role_labels=_select_label_descriptions(
-                    argument_role_labels,
-                    (
-                        ontology.argument_role_descriptions
-                        if ontology is not None
-                        else None
-                    ),
-                    include_descriptions=include_descriptions,
+                argument_role_labels=_format_prompt_candidates(
+                    _select_label_descriptions(
+                        argument_role_labels,
+                        (
+                            ontology.argument_role_descriptions
+                            if ontology is not None
+                            else None
+                        ),
+                        include_descriptions=include_descriptions,
+                    )
                 ),
-                location_type_labels=_select_label_descriptions(
-                    location_type_labels,
-                    (
-                        ontology.location_type_descriptions
-                        if ontology is not None
-                        else None
-                    ),
-                    include_descriptions=include_descriptions,
+                location_type_labels=_format_prompt_candidates(
+                    _select_label_descriptions(
+                        location_type_labels,
+                        (
+                            ontology.location_type_descriptions
+                            if ontology is not None
+                            else None
+                        ),
+                        include_descriptions=include_descriptions,
+                    )
                 ),
             )
         )

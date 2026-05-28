@@ -60,3 +60,34 @@ def test_resolve_not_found():
     assert match.status == AnchorStatus.NOT_FOUND
     assert match.start is None
     assert match.end is None
+
+
+def test_resolve_with_context_uses_context_only_bounds():
+    resolver = TextAnchorResolver()
+    text = "prefix alpha target omega suffix"
+
+    match = resolver.resolve_with_context(
+        text,
+        left_context="alpha ",
+        right_context=" omega",
+    )
+
+    assert match.status == AnchorStatus.MATCH_CONTEXT
+    assert match.start is not None and match.end is not None
+    assert text[match.start : match.end] == "target"
+
+
+def test_resolve_with_context_disambiguates_duplicate_quote():
+    resolver = TextAnchorResolver()
+    text = "alpha target omega filler alpha target omega"
+
+    match = resolver.resolve_with_context(
+        text,
+        "target",
+        left_context="filler alpha ",
+        right_context=" omega",
+    )
+
+    assert match.start is not None and match.end is not None
+    assert text[match.start : match.end] == "target"
+    assert match.start == text.rfind("target")

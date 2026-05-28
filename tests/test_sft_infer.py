@@ -121,6 +121,23 @@ def test_parse_prediction_text_returns_empty_events_on_malformed_json(
     assert "failed to parse model output as JSON" in capsys.readouterr().err
 
 
+def test_parse_prediction_text_repairs_malformed_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_repair_json(text: str, return_objects: bool = True):
+        assert text == '{"events":[{"event_type":"attack""text":"bombing"}]}'
+        assert return_objects is True
+        return {"events": [{"event_type": "attack", "text": "bombing"}]}
+
+    monkeypatch.setattr(sft_infer, "repair_json", fake_repair_json)
+
+    parsed = sft_infer._parse_prediction_text(
+        '{"events":[{"event_type":"attack""text":"bombing"}]}'
+    )
+
+    assert parsed == {"events": [{"event_type": "attack", "text": "bombing"}]}
+
+
 def test_normalize_prediction_keeps_valid_offsets() -> None:
     document = "bombing in baghdad injured civilians"
     prediction = {
@@ -174,6 +191,104 @@ def test_normalize_prediction_dedupes_grounded_events() -> None:
     assert sft_infer._normalize_prediction(document, prediction) == {
         "events": [
             {"event_type": "attack", "start": 0, "end": 7, "text": "bombing"}
+        ]
+    }
+
+
+def test_normalize_prediction_anchors_with_context_when_offsets_missing() -> None:
+    document = "before alpha baghdad omega after"
+    prediction = {
+        "events": [
+            {
+                "event_type": "attack",
+                "trigger": {
+                    "left_context": "alpha ",
+                    "right_context": " omega",
+                },
+            },
+        ]
+    }
+
+    assert sft_infer._normalize_prediction(document, prediction) == {
+        "events": [
+            {
+                "event_type": "attack",
+                "trigger": {
+                    "start": 13,
+                    "end": 20,
+                    "text": "baghdad",
+                    "left_context": "alpha ",
+                    "right_context": " omega",
+                },
+                "arguments": [],
+            }
+        ]
+    }
+
+
+def test_normalize_prediction_uses_context_to_adjust_wrong_offsets() -> None:
+    document = "before alpha baghdad omega middle alpha mosul omega"
+    prediction = {
+        "events": [
+            {
+                "event_type": "attack",
+                "trigger": {
+                    "start": 0,
+                    "end": 7,
+                    "text": "baghdad",
+                    "left_context": "alpha ",
+                    "right_context": " omega",
+                },
+            },
+        ]
+    }
+
+    assert sft_infer._normalize_prediction(document, prediction) == {
+        "events": [
+            {
+                "event_type": "attack",
+                "trigger": {
+                    "start": 13,
+                    "end": 20,
+                    "text": "baghdad",
+                    "left_context": "alpha ",
+                    "right_context": " omega",
+                },
+                "arguments": [],
+            }
+        ]
+    }
+
+
+def test_normalize_prediction_keeps_offsets_when_only_offsets_exist() -> None:
+    document = "before alpha baghdad omega after"
+    prediction = {
+        "events": [
+            {
+                "event_type": "attack",
+                "trigger": {
+                    "start": 13,
+                    "end": 20,
+                    "left_context": "wrong ",
+                    "right_context": " wrong",
+                },
+            },
+        ]
+    }
+
+    assert sft_infer._normalize_prediction(document, prediction) == {
+        "events": [
+            {
+                "event_type": "attack",
+                "trigger": {
+                    "start": 13,
+                    "end": 20,
+                    "text": "baghdad",
+                    "left_context": "wrong ",
+                    "right_context": " wrong",
+                },
+                "arguments": [],
+            }
         ]
     }
 

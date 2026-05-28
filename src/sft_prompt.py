@@ -3,94 +3,151 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import re
-
-SYSTEM_PROMPT = (
+SYSTEM_PROMPT_WITH_ARGS = (
     "You extract risk-factor events and their location arguments from text.\n"
-    "Return JSON only with this shape:\n"
-    '{"events":[{"event_type":"...", "trigger":{"start":0, "end":1, "text":"..."}, "arguments":[{"role":"...", "span":{"start":0, "end":1, "text":"..."}, "location_type":"..."}]}]}\n'
-    "Rules:\n"
-    "1) trigger.text and argument span.text must be exact substrings from the document.\n"
-    "2) start/end must be character offsets in the provided document.\n"
-    "3) Put trigger offsets under trigger and argument offsets under span.\n"
-    "4) Use only the provided event labels, argument roles, and location types.\n"
-    "5) Extract only events that clearly match the provided event labels.\n"
-    "6) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.\n"
-    "7) Argument spans must be the shortest exact location phrase.\n"
-    "8) If no valid event matches the ontology, return {\"events\":[]}.\n"
-    "9) Do not paraphrase. Do not add unsupported events or arguments.\n"
-    "10) Never place event labels in the argument role field."
 )
+SYSTEM_PROMPT_EVENTS_ONLY = "You extract risk-factor events from text.\n"
 
-SYSTEM_PROMPT_EVENTS_ONLY = (
-    "You extract risk-factor events from text.\n"
-    "Return JSON only with this shape:\n"
-    '{"events":[{"event_type":"...", "trigger":{"start":0, "end":1, "text":"..."}}]}\n'
-    "Rules:\n"
-    "1) trigger.text must be an exact substring from the document.\n"
-    "2) start/end must be character offsets in the provided document.\n"
-    "3) Put trigger offsets under trigger.\n"
-    "4) Use only the provided event labels.\n"
-    "5) Extract only events that clearly match the provided event labels.\n"
-    "6) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.\n"
-    "7) If no valid event matches the ontology, return {\"events\":[]}.\n"
-    "8) Do not paraphrase. Do not add unsupported events."
+SCHEMA_WITH_ARGS_OFFSETS = (
+    '{"events":[{"event_type":"...", "trigger":{"start":0, "end":1, "text":"..."}, '
+    '"arguments":[{"role":"...", "span":{"start":0, "end":1, "text":"..."}, "location_type":"..."}]}]}'
+)
+SCHEMA_EVENTS_ONLY_OFFSETS = (
+    '{"events":[{"event_type":"...", "trigger":{"start":0, "end":1, "text":"..."}}]}'
+)
+SCHEMA_WITH_ARGS_CONTEXT = (
+    '{"events":[{"event_type":"...", "trigger":{"text":"...", "left_context":"...", "right_context":"..."}, '
+    '"arguments":[{"role":"...", "span":{"text":"...", "left_context":"...", "right_context":"..."}, "location_type":"..."}]}]}'
+)
+SCHEMA_EVENTS_ONLY_CONTEXT = (
+    '{"events":[{"event_type":"...", "trigger":{"text":"...", "left_context":"...", "right_context":"..."}}]}'
 )
 
 USER_TEMPLATE_EVENTS_ONLY = (
-    "Extract all ontology-matching risk-factor events.\n\n"
+    "Extract all risk-factor events that clearly match the provided event labels.\n\n"
     "Document:\n{document}\n\n"
     "Select event labels from the following set: {event_labels}\n"
-    "Return valid JSON only. Use short trigger spans."
+    "Return valid JSON only. Use the exact output schema described above."
 )
 
-
 USER_TEMPLATE = (
-    "Extract all ontology-matching risk-factor events and their location arguments.\n\n"
+    "Extract all risk-factor events that clearly match the provided event labels and attach only their location arguments.\n\n"
     "Document:\n{document}\n\n"
     "Select event labels from the following set: {event_labels}\n"
     "Select argument roles from the following set: {argument_roles}\n"
     "Select location types from the following set: {location_types}\n"
-    "Return valid JSON only. Use short trigger spans and short location spans."
+    "Return valid JSON only. Use the exact output schema described above."
 )
+
+
+def _build_system_prompt(*, events_only: bool, omit_offsets: bool) -> str:
+    task_line = SYSTEM_PROMPT_EVENTS_ONLY if events_only else SYSTEM_PROMPT_WITH_ARGS
+    if events_only and omit_offsets:
+        schema = SCHEMA_EVENTS_ONLY_CONTEXT
+        rules = [
+            "1) trigger.text must be an exact substring from the document.",
+            "2) Put trigger text under trigger.text and include left_context and right_context.",
+            "3) left_context and right_context must be exact verbatim text immediately before and after that trigger mention in the document.",
+            "4) Target about 4 words for left_context and about 4 words for right_context; use fewer only when the mention is near a boundary or fewer words are needed.",
+            "5) Use the shortest context that uniquely identifies that occurrence. Do not include the trigger text itself inside left_context or right_context.",
+            "6) Either context field may be empty when the mention touches a document boundary.",
+            "7) Use only the provided event labels.",
+            "8) Extract only events that clearly match the provided event labels.",
+            "9) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
+            '10) If no valid event matches the provided labels, return {"events":[]}.',
+            "11) Do not paraphrase. Do not add unsupported events.",
+        ]
+    elif events_only:
+        schema = SCHEMA_EVENTS_ONLY_OFFSETS
+        rules = [
+            "1) trigger.text must be an exact substring from the document.",
+            "2) start/end must be character offsets in the provided document.",
+            "3) Put trigger offsets under trigger.",
+            "4) When start/end are present, do not output left_context or right_context.",
+            "5) Use only the provided event labels.",
+            "6) Extract only events that clearly match the provided event labels.",
+            "7) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
+            '8) If no valid event matches the provided labels, return {"events":[]}.',
+            "9) Do not paraphrase. Do not add unsupported events.",
+        ]
+    elif omit_offsets:
+        schema = SCHEMA_WITH_ARGS_CONTEXT
+        rules = [
+            "1) trigger.text and argument span.text must be exact substrings from the document.",
+            "2) Put trigger text under trigger.text and argument text under span.text.",
+            "3) For every trigger and argument span, left_context and right_context must be exact verbatim text immediately before and after that mention in the document.",
+            "4) Target about 4 words for each left_context and about 4 words for each right_context; use fewer only when the mention is near a boundary or fewer words are needed.",
+            "5) Use the shortest context that uniquely identifies that occurrence. Do not include the trigger text or span text itself inside the context fields.",
+            "6) Either context field may be empty when the mention touches a document boundary.",
+            "7) Use only the provided event labels, argument roles, and location types.",
+            "8) Extract only events that clearly match the provided event labels.",
+            "9) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
+            "10) Argument spans must be the shortest exact location phrase.",
+            '11) If an event has no valid location arguments, return "arguments":[] for that event.',
+            '12) If no valid event matches the provided labels, return {"events":[]}.',
+            "13) Do not paraphrase. Do not add unsupported events or arguments.",
+            "14) Never place event labels in the argument role field.",
+        ]
+    else:
+        schema = SCHEMA_WITH_ARGS_OFFSETS
+        rules = [
+            "1) trigger.text and argument span.text must be exact substrings from the document.",
+            "2) start/end must be character offsets in the provided document.",
+            "3) Put trigger offsets under trigger and argument offsets under span.",
+            "4) When start/end are present, do not output left_context or right_context.",
+            "5) Use only the provided event labels, argument roles, and location types.",
+            "6) Extract only events that clearly match the provided event labels.",
+            "7) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
+            "8) Argument spans must be the shortest exact location phrase.",
+            '9) If an event has no valid location arguments, return "arguments":[] for that event.',
+            '10) If no valid event matches the provided labels, return {"events":[]}.',
+            "11) Do not paraphrase. Do not add unsupported events or arguments.",
+            "12) Never place event labels in the argument role field.",
+        ]
+
+    return task_line + "Return JSON only with this shape:\n" + schema + "\nRules:\n" + "\n".join(rules)
 
 
 def build_user_prompt(
     document: str,
-    event_labels: list[str] | dict[str, str],
-    argument_roles: list[str] | dict[str, str],
-    location_types: list[str] | dict[str, str],
+    event_labels: str | list[str] | dict[str, str],
+    argument_roles: str | list[str] | dict[str, str],
+    location_types: str | list[str] | dict[str, str],
     *,
     events_only: bool = False,
     omit_offsets: bool = False,
 ) -> str:
+    def _render_candidates(value: str | list[str] | dict[str, str]) -> str:
+        if isinstance(value, str):
+            return value
+        return json.dumps(value, ensure_ascii=False)
+
     if events_only:
         return USER_TEMPLATE_EVENTS_ONLY.format(
             document=document,
-            event_labels=json.dumps(event_labels, ensure_ascii=False),
+            event_labels=_render_candidates(event_labels),
         )
     return USER_TEMPLATE.format(
         document=document,
-        event_labels=json.dumps(event_labels, ensure_ascii=False),
-        argument_roles=json.dumps(argument_roles, ensure_ascii=False),
-        location_types=json.dumps(location_types, ensure_ascii=False),
+        event_labels=_render_candidates(event_labels),
+        argument_roles=_render_candidates(argument_roles),
+        location_types=_render_candidates(location_types),
     )
 
 def build_messages(
     document: str,
-    event_labels: list[str] | dict[str, str],
-    argument_roles: list[str] | dict[str, str],
-    location_types: list[str] | dict[str, str],
+    event_labels: str | list[str] | dict[str, str],
+    argument_roles: str | list[str] | dict[str, str],
+    location_types: str | list[str] | dict[str, str],
     *,
     answer_obj: dict[str, Any] | None = None,
     events_only: bool = False,
     omit_offsets: bool = False,
 ) -> list[dict[str, str]]:
-    system_prompt = SYSTEM_PROMPT_EVENTS_ONLY if events_only else SYSTEM_PROMPT
-    if omit_offsets:
-        system_prompt = system_prompt.replace('"start":0, "end":1, "text":"..."', '"text":"...", "left_context":"...", "right_context":"..."')
-        system_prompt = re.sub(r'\n\d+\) start/end must be character offsets in the provided document.', '', system_prompt)
-        system_prompt = re.sub(r'\n\d+\) Put trigger offsets under trigger( and argument offsets under span)?\.', '', system_prompt)
+    system_prompt = _build_system_prompt(
+        events_only=events_only,
+        omit_offsets=omit_offsets,
+    )
     messages = [
         {"role": "system", "content": system_prompt},
         {
@@ -125,9 +182,9 @@ def _chat_template_kwargs(tokenizer) -> dict[str, Any]:
 def render_chat(
     tokenizer,
     document: str,
-    event_labels: list[str] | dict[str, str],
-    argument_roles: list[str] | dict[str, str],
-    location_types: list[str] | dict[str, str],
+    event_labels: str | list[str] | dict[str, str],
+    argument_roles: str | list[str] | dict[str, str],
+    location_types: str | list[str] | dict[str, str],
     *,
     answer_obj: dict[str, Any] | None = None,
     add_generation_prompt: bool,
