@@ -1,6 +1,4 @@
 from __future__ import annotations
-from unsloth import FastLanguageModel
-
 
 import argparse
 import json
@@ -17,6 +15,11 @@ from src.inference.text_anchor import TextAnchorResolver
 from src.sft_prompt import render_chat
 
 _ANCHOR_RESOLVER = TextAnchorResolver()
+
+try:
+    from unsloth import FastLanguageModel
+except ModuleNotFoundError:  # pragma: no cover - exercised indirectly in tests
+    FastLanguageModel = None
 
 
 def _load_ontology_file(
@@ -136,13 +139,36 @@ def _normalize_span_prediction(
     end: Any = None,
     text: Any = None,
 ) -> dict[str, Any] | None:
+    left_context = None
+    right_context = None
     if isinstance(span_like, dict):
         start = span_like.get("start", start)
         end = span_like.get("end", end)
         text = span_like.get("text", text)
+        left_context = span_like.get("left_context")
+        right_context = span_like.get("right_context")
 
     span_text = _safe_substring(document, start, end)
-    if span_text and (not isinstance(text, str) or not text or text == span_text):
+    has_context = bool(
+        (isinstance(left_context, str) and left_context)
+        or (isinstance(right_context, str) and right_context)
+    )
+    if span_text and not has_context and (
+        not isinstance(text, str) or not text or text == span_text
+    ):
+        normalized = {
+            "start": start,
+            "end": end,
+            "text": span_text,
+        }
+        if isinstance(span_like, dict):
+            for field_name in ("left_context", "right_context"):
+                value = span_like.get(field_name)
+                if isinstance(value, str) and value:
+                    normalized[field_name] = value
+        return normalized
+
+    if span_text and not isinstance(text, str):
         normalized = {
             "start": start,
             "end": end,
@@ -156,9 +182,41 @@ def _normalize_span_prediction(
         return normalized
 
     if not isinstance(text, str) or not text.strip():
+        if has_context:
+            match = _ANCHOR_RESOLVER.resolve_with_context(
+                document,
+                None,
+                left_context=left_context if isinstance(left_context, str) else None,
+                right_context=right_context if isinstance(right_context, str) else None,
+                start_hint=start if isinstance(start, int) else None,
+                end_hint=end if isinstance(end, int) else None,
+            )
+            if (
+                match.start is not None
+                and match.end is not None
+                and match.matched_text is not None
+            ):
+                normalized = {
+                    "start": match.start,
+                    "end": match.end,
+                    "text": match.matched_text,
+                }
+                if isinstance(span_like, dict):
+                    for field_name in ("left_context", "right_context"):
+                        value = span_like.get(field_name)
+                        if isinstance(value, str) and value:
+                            normalized[field_name] = value
+                return normalized
         return None
 
-    match = _ANCHOR_RESOLVER.resolve(document, text)
+    match = _ANCHOR_RESOLVER.resolve_with_context(
+        document,
+        text,
+        left_context=left_context if isinstance(left_context, str) else None,
+        right_context=right_context if isinstance(right_context, str) else None,
+        start_hint=start if isinstance(start, int) else None,
+        end_hint=end if isinstance(end, int) else None,
+    )
     if match.start is None or match.end is None or match.matched_text is None:
         return None
 
@@ -369,6 +427,7 @@ def _generate_prediction_text(
 
 
 def load_inference_model(args: argparse.Namespace) -> tuple[Any, Any]:
+    _require_unsloth()
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_path,
         max_seq_length=args.max_seq_length,
@@ -495,6 +554,13 @@ def run_inference(args: argparse.Namespace) -> dict[str, Any]:
         events_only=getattr(args, "events_only", False),
         omit_offsets=getattr(args, "omit_offsets", False),
     )
+
+
+def _require_unsloth() -> None:
+    if FastLanguageModel is None:
+        raise ModuleNotFoundError(
+            "unsloth is required for model loading in sft_infer.py"
+        )
 
 
 def _interactive_should_stop(text: str) -> bool:
