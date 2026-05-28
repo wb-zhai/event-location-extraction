@@ -6,7 +6,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ModuleNotFoundError:  # pragma: no cover - optional for file/batch progress only
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 import torch
 from torch.utils.data import DataLoader
@@ -15,6 +19,11 @@ from src.inference.text_anchor import TextAnchorResolver
 from src.sft_prompt import render_chat
 
 _ANCHOR_RESOLVER = TextAnchorResolver()
+
+try:
+    from json_repair import repair_json
+except ModuleNotFoundError:  # pragma: no cover - optional dependency in tests
+    repair_json = None
 
 try:
     from unsloth import FastLanguageModel
@@ -109,8 +118,39 @@ def _extract_first_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _repair_first_json_object(text: str) -> dict[str, Any] | None:
+    if repair_json is None:
+        return None
+
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            parsed = repair_json(text[index:], return_objects=True)
+        except TypeError:
+            try:
+                parsed = repair_json(text[index:])
+            except Exception:
+                continue
+        except Exception:
+            continue
+
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, str):
+            try:
+                loaded = json.loads(parsed)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(loaded, dict):
+                return loaded
+    return None
+
+
 def _parse_prediction_text(text: str) -> dict[str, Any]:
     parsed = _extract_first_json_object(text)
+    if parsed is None:
+        parsed = _repair_first_json_object(text)
     if parsed is None:
         print(
             "Warning: failed to parse model output as JSON; returning empty events.",
@@ -614,7 +654,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ontology_file", type=str, default=None)
     parser.add_argument("--event_labels", nargs="+", default=None)
     parser.add_argument("--max_seq_length", type=int, default=8192)
-    parser.add_argument("--max_new_tokens", type=int, default=1024)
+    parser.add_argument("--max_new_tokens", type=int, default=4096)
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--min_p", type=float, default=None)
     parser.add_argument("--top_k", type=int, default=None)
