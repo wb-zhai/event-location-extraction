@@ -367,6 +367,7 @@ def _generate_prediction_texts(
     max_input_length: int | None = None,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> list[str]:
 
     prompt_texts = [
@@ -379,6 +380,7 @@ def _generate_prediction_texts(
             add_generation_prompt=True,
             events_only=events_only,
             omit_offsets=omit_offsets,
+            omit_context=omit_context,
         )
         for doc in documents
     ]
@@ -504,6 +506,7 @@ def predict_document(
     max_input_length: int | None = None,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> dict[str, Any]:
     return predict_batch_documents(
         model,
@@ -522,6 +525,7 @@ def predict_document(
         max_input_length=max_input_length,
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )[0]
 
 
@@ -543,6 +547,7 @@ def predict_batch_documents(
     max_input_length: int | None = None,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> list[dict[str, Any]]:
     prediction_texts = _generate_prediction_texts(
         model,
@@ -561,6 +566,7 @@ def predict_batch_documents(
         max_input_length=max_input_length,
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )
 
     results = []
@@ -596,6 +602,7 @@ def run_inference(args: argparse.Namespace) -> dict[str, Any]:
         max_input_length=args.max_seq_length,
         events_only=getattr(args, "events_only", False),
         omit_offsets=getattr(args, "omit_offsets", False),
+        omit_context=getattr(args, "omit_context", False),
     )
 
 
@@ -605,6 +612,34 @@ def _require_unsloth() -> None:
             "unsloth is required for model loading in sft_infer.py"
         )
 
+
+
+def _extract_passage_event_candidates(row: dict[str, Any]) -> list[tuple[str, str]] | None:
+    passages = row.get("passages")
+    if not isinstance(passages, list):
+        return None
+
+    candidates: list[tuple[str, str]] = []
+    seen_labels: set[str] = set()
+    for passage in passages:
+        if not isinstance(passage, dict):
+            continue
+        document = passage.get("document")
+        if not isinstance(document, dict):
+            continue
+        text = document.get("text")
+        if not isinstance(text, str) or not text or text in seen_labels:
+            continue
+        metadata = document.get("metadata")
+        description = ""
+        if isinstance(metadata, dict):
+            raw_description = metadata.get("description")
+            if isinstance(raw_description, str):
+                description = raw_description
+        seen_labels.add(text)
+        candidates.append((text, description))
+
+    return candidates or None
 
 def _interactive_should_stop(text: str) -> bool:
     return text.strip().lower() in {"exit", "quit"}
@@ -643,6 +678,7 @@ def run_interactive(args: argparse.Namespace) -> None:
             repetition_penalty=args.repetition_penalty,
             events_only=getattr(args, "events_only", False),
             omit_offsets=getattr(args, "omit_offsets", False),
+            omit_context=getattr(args, "omit_context", False),
             debug_prompt=True,
         )
         print(json.dumps(prediction, ensure_ascii=False, indent=2))
@@ -686,6 +722,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--omit_offsets",
         action="store_true",
         help="Omit character offsets from the generation.",
+    )
+    parser.add_argument(
+        "--omit_context",
+        action="store_true",
+        help="Omit context from the generation.",
     )
 
     text_group = parser.add_mutually_exclusive_group(required=False)
@@ -732,20 +773,31 @@ def run_inference_file(args: argparse.Namespace) -> None:
     
 
     def collate_fn(batch):
-        documents = [d["question"] for d in batch]
-        prompt_texts = [
-            render_chat(
-                tokenizer,
-                doc,
-                event_labels,
-                argument_roles,
-                location_types,
-                add_generation_prompt=True,
-                events_only=getattr(args, "events_only", False),
-                omit_offsets=getattr(args, "omit_offsets", False),
+        prompt_texts = []
+        for d in batch:
+            doc = d["question"]
+            d_event_labels = event_labels
+            
+            passage_candidates = _extract_passage_event_candidates(d)
+            if passage_candidates is not None:
+                if isinstance(d_event_labels, dict):
+                    d_event_labels = {label: desc for label, desc in passage_candidates}
+                else:
+                    d_event_labels = [label for label, _ in passage_candidates]
+                    
+            prompt_texts.append(
+                render_chat(
+                    tokenizer,
+                    doc,
+                    d_event_labels,
+                    argument_roles,
+                    location_types,
+                    add_generation_prompt=True,
+                    events_only=getattr(args, "events_only", False),
+                    omit_offsets=getattr(args, "omit_offsets", False),
+                    omit_context=getattr(args, "omit_context", False),
+                )
             )
-            for doc in documents
-        ]
         model_inputs = tokenizer(
             text=prompt_texts,
             return_tensors="pt",

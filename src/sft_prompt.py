@@ -22,6 +22,13 @@ SCHEMA_WITH_ARGS_CONTEXT = (
 SCHEMA_EVENTS_ONLY_CONTEXT = (
     '{"events":[{"event_type":"...", "trigger":{"text":"...", "left_context":"...", "right_context":"..."}}]}'
 )
+SCHEMA_WITH_ARGS_TEXT_ONLY = (
+    '{"events":[{"event_type":"...", "trigger":{"text":"..."}, '
+    '"arguments":[{"role":"...", "span":{"text":"..."}, "location_type":"..."}]}]}'
+)
+SCHEMA_EVENTS_ONLY_TEXT_ONLY = (
+    '{"events":[{"event_type":"...", "trigger":{"text":"..."}}]}'
+)
 
 USER_TEMPLATE_EVENTS_ONLY = (
     "Extract all risk-factor events that clearly match the provided event labels.\n\n"
@@ -40,9 +47,21 @@ USER_TEMPLATE = (
 )
 
 
-def _build_system_prompt(*, events_only: bool, omit_offsets: bool) -> str:
+def _build_system_prompt(*, events_only: bool, omit_offsets: bool, omit_context: bool = False) -> str:
     task_line = SYSTEM_PROMPT_EVENTS_ONLY if events_only else SYSTEM_PROMPT_WITH_ARGS
-    if events_only and omit_offsets:
+    if events_only and omit_offsets and omit_context:
+        schema = SCHEMA_EVENTS_ONLY_TEXT_ONLY
+        rules = [
+            "1) trigger.text must be an exact substring from the document.",
+            "2) Put trigger text under trigger.text.",
+            "3) Do not output start, end, left_context, or right_context.",
+            "4) Use only the provided event labels.",
+            "5) Extract only events that clearly match the provided event labels.",
+            "6) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
+            '7) If no valid event matches the provided labels, return {"events":[]}.',
+            "8) Do not paraphrase. Do not add unsupported events.",
+        ]
+    elif events_only and omit_offsets:
         schema = SCHEMA_EVENTS_ONLY_CONTEXT
         rules = [
             "1) trigger.text must be an exact substring from the document.",
@@ -67,8 +86,23 @@ def _build_system_prompt(*, events_only: bool, omit_offsets: bool) -> str:
             "5) Use only the provided event labels.",
             "6) Extract only events that clearly match the provided event labels.",
             "7) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
-            '8) If no valid event matches the provided labels, return {"events":[]}.',
+            "8) If no valid event matches the provided labels, return {\"events\":[]}.",
             "9) Do not paraphrase. Do not add unsupported events.",
+        ]
+    elif omit_offsets and omit_context:
+        schema = SCHEMA_WITH_ARGS_TEXT_ONLY
+        rules = [
+            "1) trigger.text and argument span.text must be exact substrings from the document.",
+            "2) Put trigger text under trigger.text and argument text under span.text.",
+            "3) Do not output start, end, left_context, or right_context.",
+            "4) Use only the provided event labels, argument roles, and location types.",
+            "5) Extract only events that clearly match the provided event labels.",
+            "6) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
+            "7) Argument spans must be the shortest exact location phrase.",
+            '8) If an event has no valid location arguments, return "arguments":[] for that event.',
+            '9) If no valid event matches the provided labels, return {"events":[]}.',
+            "10) Do not paraphrase. Do not add unsupported events or arguments.",
+            "11) Never place event labels in the argument role field.",
         ]
     elif omit_offsets:
         schema = SCHEMA_WITH_ARGS_CONTEXT
@@ -116,11 +150,17 @@ def build_user_prompt(
     *,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> str:
     def _render_candidates(value: str | list[str] | dict[str, str]) -> str:
         if isinstance(value, str):
             return value
-        return json.dumps(value, ensure_ascii=False)
+        if isinstance(value, dict):
+            return " | ".join(
+                f"{label}: {description}" if description else label
+                for label, description in value.items()
+            )
+        return " | ".join(value)
 
     if events_only:
         return USER_TEMPLATE_EVENTS_ONLY.format(
@@ -143,10 +183,12 @@ def build_messages(
     answer_obj: dict[str, Any] | None = None,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> list[dict[str, str]]:
     system_prompt = _build_system_prompt(
         events_only=events_only,
         omit_offsets=omit_offsets,
+        omit_context=omit_context,
     )
     messages = [
         {"role": "system", "content": system_prompt},
@@ -190,6 +232,7 @@ def render_chat(
     add_generation_prompt: bool,
     events_only: bool = False,
     omit_offsets: bool = False,
+    omit_context: bool = False,
 ) -> str:
     return tokenizer.apply_chat_template(
         build_messages(
@@ -200,6 +243,7 @@ def render_chat(
             answer_obj=answer_obj,
             events_only=events_only,
             omit_offsets=omit_offsets,
+            omit_context=omit_context,
         ),
         tokenize=False,
         add_generation_prompt=add_generation_prompt,
