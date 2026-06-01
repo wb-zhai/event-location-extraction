@@ -205,7 +205,7 @@
 PYTHONPATH=. python src/train/train_unsloth.py \
   --model_name unsloth/Qwen3.5-4B \
   --train_file dataset/risk-factor/run-15052025/sft/train.v4.sft.events.384.candidates.jsonl \
-  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.events.384.candidaates.jsonl \
+  --eval_file dataset/risk-factor/run-15052025/sft/dev.v4.sft.events.384.candidates.jsonl \
   --output_dir outputs/zhai/qwen3.5-4B-lora-sft-window-500-v4-response-events-only-candidates-v5 \
   --ontology_file ontologies/zhai/ontology.json \
   --num_event_candidates -1 \
@@ -223,7 +223,9 @@ PYTHONPATH=. python src/train/train_unsloth.py \
   --lora_r 32 \
   --train_on_responses_only \
   --max_empty_event_ratio 0.2 \
-  --omit_offsets
+  --omit_offsets \
+  --omit_context \
+  --events_only
 
 # PYTHONPATH=. python src/train/train_unsloth.py \
 #   --model_name unsloth/Qwen3.5-0.8B \
