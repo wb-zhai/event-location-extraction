@@ -173,7 +173,7 @@ def _safe_substring(text: str, start: Any, end: Any) -> str:
 
 def _normalize_span_prediction(
     document: str,
-    span_like: dict[str, Any] | None,
+    span_like: dict[str, Any] | str | None,
     *,
     start: Any = None,
     end: Any = None,
@@ -187,6 +187,8 @@ def _normalize_span_prediction(
         text = span_like.get("text", text)
         left_context = span_like.get("left_context")
         right_context = span_like.get("right_context")
+    elif isinstance(span_like, str):
+        text = span_like
 
     span_text = _safe_substring(document, start, end)
     has_context = bool(
