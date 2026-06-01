@@ -7,19 +7,57 @@ from typing import Any
 LOCATION_ARGUMENT_ROLES = {"location", "source_location", "target_location"}
 
 
+def _record_validation_stat(stats: dict[str, int] | None, key: str, count: int = 1) -> None:
+    if stats is None:
+        return
+    stats[key] = int(stats.get(key, 0)) + count
+
+
+def _candidate_match_offsets(
+    span_text: str, text: str, start_char: int, repair_window_chars: int
+) -> list[tuple[int, int]]:
+    if not span_text:
+        return []
+    offsets: list[tuple[int, int]] = []
+    search_start = 0
+    while True:
+        found = text.find(span_text, search_start)
+        if found < 0:
+            break
+        if abs(found - start_char) <= repair_window_chars:
+            offsets.append((found, found + len(span_text)))
+        search_start = found + 1
+    return offsets
+
+
 def find_offsets(
-    span_text: str, text: str, start_char: int, end_char: int
+    span_text: str,
+    text: str,
+    start_char: int,
+    end_char: int,
+    *,
+    repair_window_chars: int = 200,
+    stats: dict[str, int] | None = None,
 ) -> tuple[int, int]:
-    """Return exact offsets, repairing by substring search when possible."""
+    """Return exact offsets, repairing only to an unambiguous nearby occurrence."""
     if (
         0 <= start_char < end_char <= len(text)
         and text[start_char:end_char] == span_text
     ):
         return start_char, end_char
 
-    found = text.find(span_text)
-    if found >= 0:
-        return found, found + len(span_text)
+    if repair_window_chars < 0:
+        _record_validation_stat(stats, "rejected_offsets")
+        return -1, -1
+
+    candidates = _candidate_match_offsets(span_text, text, start_char, repair_window_chars)
+    if len(candidates) == 1:
+        _record_validation_stat(stats, "repaired_offsets")
+        return candidates[0]
+    if len(candidates) > 1:
+        _record_validation_stat(stats, "ambiguous_offsets")
+    else:
+        _record_validation_stat(stats, "rejected_offsets")
 
     return -1, -1
 
@@ -31,7 +69,13 @@ def clamp_offsets(start_char: int, end_char: int, text_length: int) -> tuple[int
 
 
 def clean_spans(
-    parsed: dict[str, Any], text: str, labels: set[str], strict_offsets: bool
+    parsed: dict[str, Any],
+    text: str,
+    labels: set[str],
+    strict_offsets: bool,
+    *,
+    repair_window_chars: int = 200,
+    validation_stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Validate flat span outputs against labels and article text."""
     cleaned: list[dict[str, Any]] = []
@@ -54,7 +98,14 @@ def clean_spans(
             start_char, end_char = -1, -1
 
         raw_start_char, raw_end_char = start_char, end_char
-        start_char, end_char = find_offsets(span_text, text, start_char, end_char)
+        start_char, end_char = find_offsets(
+            span_text,
+            text,
+            start_char,
+            end_char,
+            repair_window_chars=repair_window_chars,
+            stats=validation_stats,
+        )
         if strict_offsets and start_char < 0:
             continue
         if start_char < 0:
@@ -87,6 +138,8 @@ def clean_events_with_args(
     argument_roles: set[str],
     event_argument_roles: dict[str, list[str]],
     location_types: set[str] | None = None,
+    repair_window_chars: int = 200,
+    validation_stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Validate event trigger and linked argument outputs."""
     cleaned: list[dict[str, Any]] = []
@@ -111,7 +164,14 @@ def clean_events_with_args(
             start_char, end_char = -1, -1
 
         raw_start_char, raw_end_char = start_char, end_char
-        start_char, end_char = find_offsets(trigger_text, text, start_char, end_char)
+        start_char, end_char = find_offsets(
+            trigger_text,
+            text,
+            start_char,
+            end_char,
+            repair_window_chars=repair_window_chars,
+            stats=validation_stats,
+        )
         if strict_offsets and start_char < 0:
             continue
         if start_char < 0:
@@ -171,7 +231,12 @@ def clean_events_with_args(
 
             raw_arg_start_char, raw_arg_end_char = arg_start_char, arg_end_char
             arg_start_char, arg_end_char = find_offsets(
-                argument_text, text, arg_start_char, arg_end_char
+                argument_text,
+                text,
+                arg_start_char,
+                arg_end_char,
+                repair_window_chars=repair_window_chars,
+                stats=validation_stats,
             )
             if strict_offsets and arg_start_char < 0:
                 continue

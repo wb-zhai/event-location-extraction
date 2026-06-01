@@ -27,6 +27,7 @@ from scripts.data.generation.relevance_filter import (
     classify_article_relevance,
     clean_relevance_decision,
 )
+from scripts.data.generation.retrieval import BM25Index
 from scripts.data.generation.windowing import ArticleWindow
 from scripts.data.generation.windowing import build_article_windows as build_windows
 
@@ -198,6 +199,11 @@ OUTPUT_MODE_SPANS = "spans"
 OUTPUT_MODE_EVENTS_WITH_ARGS = "events-with-args"
 OUTPUT_MODES = (OUTPUT_MODE_SPANS, OUTPUT_MODE_EVENTS_WITH_ARGS)
 LOCATION_ARGUMENT_ROLES = {"location", "source_location", "target_location"}
+EXAMPLE_RETRIEVAL_RANDOM = "random"
+EXAMPLE_RETRIEVAL_BM25 = "bm25"
+LABEL_RETRIEVAL_OFF = "off"
+LABEL_RETRIEVAL_BM25 = "bm25"
+GENERIC_TRIGGER_WORDS = {"war", "conflict", "violence"}
 
 
 class ExtractedSpan(BaseModel):
@@ -906,6 +912,187 @@ def format_examples(examples: list[dict[str, Any]], output_mode: str) -> str:
     if not formatted:
         return ""
     return EXAMPLES_HEADER + "\n\n" + "\n\n".join(formatted)
+
+
+def _record_output_labels(record: dict[str, Any], output_mode: str) -> list[str]:
+    expected_output = record.get("expected_output") or {}
+    if output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+        return [
+            str(event.get("event_type") or "").strip()
+            for event in expected_output.get("events", []) or []
+            if isinstance(event, dict) and str(event.get("event_type") or "").strip()
+        ]
+    return [
+        str(span.get("label") or "").strip()
+        for span in expected_output.get("spans", []) or []
+        if isinstance(span, dict) and str(span.get("label") or "").strip()
+    ]
+
+
+def build_example_retriever(
+    examples: list[dict[str, Any]], output_mode: str
+) -> BM25Index | None:
+    if not examples:
+        return None
+
+    documents: list[str] = []
+    payloads: list[dict[str, Any]] = []
+    for record in examples:
+        labels = _record_output_labels(record, output_mode)
+        if not labels:
+            continue
+        trigger_texts: list[str] = []
+        expected_output = record.get("expected_output") or {}
+        for event in expected_output.get("events", []) or []:
+            if isinstance(event, dict):
+                trigger_texts.append(str(event.get("trigger_text") or ""))
+        for span in expected_output.get("spans", []) or []:
+            if isinstance(span, dict):
+                trigger_texts.append(str(span.get("span_text") or ""))
+        documents.append(
+            " ".join(
+                [
+                    str(record.get("text") or ""),
+                    " ".join(labels),
+                    " ".join(trigger_texts),
+                ]
+            )
+        )
+        payloads.append(record)
+    return BM25Index(documents, payloads) if payloads else None
+
+
+def build_label_retriever(
+    ontology: dict[str, str],
+    examples: list[dict[str, Any]],
+    output_mode: str,
+) -> BM25Index | None:
+    if not ontology:
+        return None
+
+    trigger_texts_by_label: dict[str, list[str]] = defaultdict(list)
+    for record in examples:
+        expected_output = record.get("expected_output") or {}
+        if output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+            for event in expected_output.get("events", []) or []:
+                if not isinstance(event, dict):
+                    continue
+                label = str(event.get("event_type") or "").strip()
+                trigger_text = str(event.get("trigger_text") or "").strip()
+                if label and trigger_text:
+                    trigger_texts_by_label[label].append(trigger_text)
+        else:
+            for span in expected_output.get("spans", []) or []:
+                if not isinstance(span, dict):
+                    continue
+                label = str(span.get("label") or "").strip()
+                trigger_text = str(span.get("span_text") or "").strip()
+                if label and trigger_text:
+                    trigger_texts_by_label[label].append(trigger_text)
+
+    documents: list[str] = []
+    payloads: list[str] = []
+    for label, description in sorted(ontology.items()):
+        trigger_texts = trigger_texts_by_label.get(label, [])
+        documents.append(" ".join([label, description, " ".join(trigger_texts)]))
+        payloads.append(label)
+    return BM25Index(documents, payloads)
+
+
+def retrieve_examples_for_query(
+    query_text: str,
+    title: str,
+    examples: list[dict[str, Any]],
+    *,
+    output_mode: str,
+    sample_size: int | None,
+    retrieval_mode: str,
+    example_retriever: BM25Index | None = None,
+    per_label_cap: int = 2,
+) -> list[dict[str, Any]]:
+    if sample_size is None or sample_size < 1 or not examples:
+        return []
+    if retrieval_mode != EXAMPLE_RETRIEVAL_BM25 or example_retriever is None:
+        return sample_examples(examples, sample_size, output_mode)
+
+    retrieved = example_retriever.search(f"{title}\n{query_text}", top_k=max(sample_size * 4, sample_size))
+    if not retrieved:
+        return sample_examples(examples, sample_size, output_mode)
+
+    selected: list[dict[str, Any]] = []
+    seen_windows: set[tuple[Any, Any]] = set()
+    label_counts: Counter[str] = Counter()
+    for item in retrieved:
+        record = item.payload
+        window_key = (record.get("_example_index"), record.get("_window_index"))
+        if window_key in seen_windows:
+            continue
+        labels = _record_output_labels(record, output_mode)
+        dominant_label = labels[0] if labels else ""
+        if dominant_label and label_counts[dominant_label] >= per_label_cap:
+            continue
+        selected.append(record)
+        seen_windows.add(window_key)
+        if dominant_label:
+            label_counts[dominant_label] += 1
+        if len(selected) >= sample_size:
+            break
+    return selected
+
+
+def effective_example_count(
+    example_sample_size: int | None, example_top_k: int | None
+) -> int | None:
+    return example_top_k if example_top_k is not None else example_sample_size
+
+
+def retrieve_candidate_ontology(
+    ontology: dict[str, str],
+    *,
+    label_retriever: BM25Index | None,
+    title: str,
+    text: str,
+    top_k: int,
+) -> dict[str, str]:
+    if label_retriever is None or top_k < 1 or top_k >= len(ontology):
+        return ontology
+
+    retrieved = label_retriever.search(f"{title}\n{text}", top_k=max(top_k, 1))
+    if not retrieved:
+        return ontology
+    labels = [str(item.payload) for item in retrieved if item.score > 0.0]
+    if len(labels) < min(top_k, 3):
+        return ontology
+    return {label: ontology[label] for label in labels if label in ontology}
+
+
+def filter_generic_trigger_events(
+    events: list[dict[str, Any]], *, enabled: bool
+) -> list[dict[str, Any]]:
+    if not enabled:
+        return events
+
+    filtered: list[dict[str, Any]] = []
+    seen_generic_keys: set[tuple[str, int, int]] = set()
+    for event in events:
+        trigger_text = str(event.get("trigger_text") or "").strip()
+        if not trigger_text:
+            continue
+        trigger_words = trigger_text.lower().split()
+        arguments = event.get("arguments", []) or []
+        if (
+            len(trigger_words) == 1
+            and trigger_words[0] in GENERIC_TRIGGER_WORDS
+            and not arguments
+        ):
+            continue
+        key = (trigger_text.lower(), int(event.get("start_char", -1)), int(event.get("end_char", -1)))
+        if len(trigger_words) == 1 and trigger_words[0] in GENERIC_TRIGGER_WORDS:
+            if key in seen_generic_keys:
+                continue
+            seen_generic_keys.add(key)
+        filtered.append(event)
+    return filtered
 
 
 def completed_ids(path: Path, retry_failed: bool) -> set[str]:
@@ -1683,6 +1870,72 @@ most_common_first_seen = adjudication.most_common_first_seen
 merge_self_consistency_events = adjudication.merge_self_consistency_events
 
 
+def build_prompt_payload(
+    *,
+    title: str,
+    text: str,
+    ontology: dict[str, str],
+    user_prompt_template: str,
+    output_mode: str,
+    argument_roles_text: str,
+    event_argument_roles_text: str,
+    location_types_text: str,
+    examples: list[dict[str, Any]] | None,
+    example_sample_size: int | None,
+    example_retrieval: str,
+    example_retriever: BM25Index | None,
+    label_retrieval: str,
+    label_retriever: BM25Index | None,
+    label_top_k: int,
+    ontology_text_override: str = "",
+) -> tuple[str, dict[str, Any]]:
+    candidate_ontology = (
+        retrieve_candidate_ontology(
+            ontology,
+            label_retriever=label_retriever,
+            title=title,
+            text=text,
+            top_k=label_top_k,
+        )
+        if label_retrieval == LABEL_RETRIEVAL_BM25
+        else ontology
+    )
+    example_records = retrieve_examples_for_query(
+        text,
+        title,
+        examples or [],
+        output_mode=output_mode,
+        sample_size=example_sample_size,
+        retrieval_mode=example_retrieval,
+        example_retriever=example_retriever,
+    )
+    rendered_ontology_text = (
+        ontology_text_override
+        if ontology_text_override and label_retrieval != LABEL_RETRIEVAL_BM25
+        else format_ontology(candidate_ontology)
+    )
+    prompt = render_user_prompt(
+        user_prompt_template,
+        rendered_ontology_text,
+        title,
+        text,
+        argument_roles_text=argument_roles_text,
+        event_argument_roles_text=event_argument_roles_text,
+        location_types_text=location_types_text,
+        examples_text=format_examples(example_records, output_mode),
+    )
+    metadata = {
+        "retrieval": {
+            "example_retrieval": example_retrieval,
+            "examples_selected": len(example_records),
+            "label_retrieval": label_retrieval,
+            "candidate_label_count": len(candidate_ontology),
+            "candidate_labels": sorted(candidate_ontology),
+        }
+    }
+    return prompt, metadata
+
+
 async def generate_sample(
     client: GeminiLLMClient,
     prompt: str,
@@ -1698,6 +1951,7 @@ async def generate_sample(
     argument_roles: set[str] | None = None,
     event_argument_roles: dict[str, list[str]] | None = None,
     location_types: set[str] | None = None,
+    repair_window_chars: int = 200,
     override_settings: dict[str, Any] | None = None,
     verbose: bool = False,
     step: str = "extract",
@@ -1748,9 +2002,19 @@ async def generate_sample(
             parsed = (
                 raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
             )
+            metadata = dict(response.metadata)
+            validation_stats: dict[str, int] = {}
             if output_mode == OUTPUT_MODE_SPANS:
-                spans = clean_spans(parsed, text, labels, strict_offsets)
-                return SampleResult(spans=spans, metadata=response.metadata)
+                spans = clean_spans(
+                    parsed,
+                    text,
+                    labels,
+                    strict_offsets,
+                    repair_window_chars=repair_window_chars,
+                    validation_stats=validation_stats,
+                )
+                metadata["validation"] = validation_stats
+                return SampleResult(spans=spans, metadata=metadata)
 
             if argument_roles is None or event_argument_roles is None:
                 raise ValueError(
@@ -1765,8 +2029,11 @@ async def generate_sample(
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
                 location_types=location_types,
+                repair_window_chars=repair_window_chars,
+                validation_stats=validation_stats,
             )
-            return SampleResult(events=events, metadata=response.metadata)
+            metadata["validation"] = validation_stats
+            return SampleResult(events=events, metadata=metadata)
         except Exception as exc:
             if attempt >= max_retries:
                 raise
@@ -1898,6 +2165,20 @@ def combine_metadata(sample_metadata: list[dict[str, Any]]) -> dict[str, Any]:
             for metadata in sample_metadata
             if isinstance(metadata.get(key, 0), int | float)
         )
+    validation_keys = {
+        key
+        for metadata in sample_metadata
+        for key in (metadata.get("validation") or {})
+        if isinstance((metadata.get("validation") or {}).get(key), int)
+    }
+    if validation_keys:
+        combined["validation"] = {
+            key: sum(
+                int((metadata.get("validation") or {}).get(key, 0))
+                for metadata in sample_metadata
+            )
+            for key in sorted(validation_keys)
+        }
     return combined
 
 
@@ -1965,7 +2246,7 @@ async def generate_windowed_one(
     record_id: str,
     title: str,
     text: str,
-    ontology_text: str,
+    ontology: dict[str, str],
     labels: set[str],
     system_prompt: str,
     user_prompt_template: str,
@@ -1980,6 +2261,8 @@ async def generate_windowed_one(
     event_argument_roles_text: str,
     location_types_text: str,
     location_types: set[str] | None,
+    repair_window_chars: int,
+    ontology_text: str,
     window_target_chars: int,
     window_max_chars: int,
     window_overlap_sentences: int,
@@ -1989,6 +2272,12 @@ async def generate_windowed_one(
     self_consistency_min_successful_samples: int = 3,
     examples: list[dict[str, Any]] | None = None,
     example_sample_size: int | None = None,
+    example_retrieval: str = EXAMPLE_RETRIEVAL_RANDOM,
+    example_retriever: BM25Index | None = None,
+    label_retrieval: str = LABEL_RETRIEVAL_OFF,
+    label_retriever: BM25Index | None = None,
+    label_top_k: int = 0,
+    strict_generic_trigger_filter: bool = False,
     verbose: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     windows = build_article_windows(
@@ -2033,20 +2322,23 @@ async def generate_windowed_one(
                 override_settings = {"temperature": self_consistency_temperature}
 
                 for sample_index in range(self_consistency_samples):
-                    prompt = render_user_prompt(
-                        user_prompt_template,
-                        ontology_text,
-                        title,
-                        window.text,
+                    prompt, prompt_metadata = build_prompt_payload(
+                        title=title,
+                        text=window.text,
+                        ontology=ontology,
+                        user_prompt_template=user_prompt_template,
+                        output_mode=output_mode,
                         argument_roles_text=argument_roles_text,
                         event_argument_roles_text=event_argument_roles_text,
                         location_types_text=location_types_text,
-                        examples_text=format_examples(
-                            sample_examples(
-                                examples or [], example_sample_size, output_mode
-                            ),
-                            output_mode,
-                        ),
+                        examples=examples,
+                        example_sample_size=example_sample_size,
+                        example_retrieval=example_retrieval,
+                        example_retriever=example_retriever,
+                        label_retrieval=label_retrieval,
+                        label_retriever=label_retriever,
+                        label_top_k=label_top_k,
+                        ontology_text_override=ontology_text,
                     )
                     try:
                         sample = await generate_sample(
@@ -2064,6 +2356,7 @@ async def generate_windowed_one(
                             argument_roles=argument_roles,
                             event_argument_roles=event_argument_roles,
                             location_types=location_types,
+                            repair_window_chars=repair_window_chars,
                             override_settings=override_settings,
                             verbose=verbose,
                             step=(
@@ -2073,7 +2366,7 @@ async def generate_windowed_one(
                                 f"{self_consistency_samples}"
                             ),
                         )
-                        sample_metadata.append(sample.metadata)
+                        sample_metadata.append({**sample.metadata, **prompt_metadata})
                         record_self_consistency_sample_success(
                             sample_summaries, sample_index
                         )
@@ -2121,18 +2414,23 @@ async def generate_windowed_one(
                     )
                 continue
 
-            prompt = render_user_prompt(
-                user_prompt_template,
-                ontology_text,
-                title,
-                window.text,
+            prompt, prompt_metadata = build_prompt_payload(
+                title=title,
+                text=window.text,
+                ontology=ontology,
+                user_prompt_template=user_prompt_template,
+                output_mode=output_mode,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
                 location_types_text=location_types_text,
-                examples_text=format_examples(
-                    sample_examples(examples or [], example_sample_size, output_mode),
-                    output_mode,
-                ),
+                examples=examples,
+                example_sample_size=example_sample_size,
+                example_retrieval=example_retrieval,
+                example_retriever=example_retriever,
+                label_retrieval=label_retrieval,
+                label_retriever=label_retriever,
+                label_top_k=label_top_k,
+                ontology_text_override=ontology_text,
             )
             sample = await generate_sample(
                 client=client,
@@ -2149,13 +2447,14 @@ async def generate_windowed_one(
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
                 location_types=location_types,
+                repair_window_chars=repair_window_chars,
                 verbose=verbose,
                 step=(
                     "window_extraction "
                     f"window={window.window_index + 1}/{len(windows)}"
                 ),
             )
-            sample_metadata.append(sample.metadata)
+            sample_metadata.append({**sample.metadata, **prompt_metadata})
             if output_mode == OUTPUT_MODE_SPANS:
                 projected_spans.extend(project_window_spans(sample.spans, window, text))
             else:
@@ -2171,6 +2470,10 @@ async def generate_windowed_one(
         payload = merge_window_spans(projected_spans, text)
     else:
         payload = merge_window_events(projected_events, text)
+        payload = filter_generic_trigger_events(
+            payload,
+            enabled=strict_generic_trigger_filter,
+        )
 
     metadata = combine_metadata(sample_metadata)
     metadata["long_document"] = {
@@ -2199,7 +2502,6 @@ async def generate_windowed_one(
 async def generate_one(
     client: GeminiLLMClient,
     record: dict[str, Any],
-    ontology_text: str,
     labels: set[str],
     system_prompt: str,
     user_prompt_template: str,
@@ -2212,12 +2514,15 @@ async def generate_one(
     self_consistency_temperature: float = 0.7,
     self_consistency_min_successful_samples: int = 3,
     output_mode: str = OUTPUT_MODE_SPANS,
+    ontology: dict[str, str] | None = None,
+    ontology_text: str = "",
     argument_roles: set[str] | None = None,
     event_argument_roles: dict[str, list[str]] | None = None,
     argument_roles_text: str = "",
     event_argument_roles_text: str = "",
     location_types_text: str = "",
     location_types: set[str] | None = None,
+    repair_window_chars: int = 200,
     long_document_mode: bool = False,
     long_document_threshold_chars: int = 12000,
     window_target_chars: int = 6000,
@@ -2227,10 +2532,17 @@ async def generate_one(
     verifier_prompt_template: str = DEFAULT_VERIFIER_PROMPT,
     examples: list[dict[str, Any]] | None = None,
     example_sample_size: int | None = None,
+    example_retrieval: str = EXAMPLE_RETRIEVAL_RANDOM,
+    example_retriever: BM25Index | None = None,
+    label_retrieval: str = LABEL_RETRIEVAL_OFF,
+    label_retriever: BM25Index | None = None,
+    label_top_k: int = 0,
+    strict_generic_trigger_filter: bool = False,
     verbose: bool = False,
 ) -> dict[str, Any]:
     if output_mode not in OUTPUT_MODES:
         raise ValueError(f"Unsupported output mode: {output_mode}")
+    ontology = ontology or {label: label for label in sorted(labels)}
 
     record_id = str(record.get("id"))
     title = str(record.get("title") or "")
@@ -2244,6 +2556,7 @@ async def generate_one(
                 record_id=record_id,
                 title=title,
                 text=text,
+                ontology=ontology,
                 ontology_text=ontology_text,
                 labels=labels,
                 system_prompt=system_prompt,
@@ -2259,6 +2572,7 @@ async def generate_one(
                 event_argument_roles_text=event_argument_roles_text,
                 location_types_text=location_types_text,
                 location_types=location_types,
+                repair_window_chars=repair_window_chars,
                 window_target_chars=window_target_chars,
                 window_max_chars=window_max_chars,
                 window_overlap_sentences=window_overlap_sentences,
@@ -2270,13 +2584,19 @@ async def generate_one(
                 ),
                 examples=examples,
                 example_sample_size=example_sample_size,
+                example_retrieval=example_retrieval,
+                example_retriever=example_retriever,
+                label_retrieval=label_retrieval,
+                label_retriever=label_retriever,
+                label_top_k=label_top_k,
+                strict_generic_trigger_filter=strict_generic_trigger_filter,
                 verbose=verbose,
             )
             payload_key = "spans" if output_mode == OUTPUT_MODE_SPANS else "events"
             if enable_verifier and output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
                 decisions, verifier_metadata = await verify_events(
                     client=client,
-                    ontology_text=ontology_text,
+                    ontology_text=ontology_text or format_ontology(ontology),
                     title=title,
                     text=text,
                     events=payload,
@@ -2313,18 +2633,23 @@ async def generate_one(
 
     if not self_consistency:
         try:
-            prompt = render_user_prompt(
-                user_prompt_template,
-                ontology_text,
-                title,
-                text,
+            prompt, prompt_metadata = build_prompt_payload(
+                title=title,
+                text=text,
+                ontology=ontology,
+                user_prompt_template=user_prompt_template,
+                output_mode=output_mode,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
                 location_types_text=location_types_text,
-                examples_text=format_examples(
-                    sample_examples(examples or [], example_sample_size, output_mode),
-                    output_mode,
-                ),
+                examples=examples,
+                example_sample_size=example_sample_size,
+                example_retrieval=example_retrieval,
+                example_retriever=example_retriever,
+                label_retrieval=label_retrieval,
+                label_retriever=label_retriever,
+                label_top_k=label_top_k,
+                ontology_text_override=ontology_text,
             )
             sample = await generate_sample(
                 client=client,
@@ -2341,6 +2666,7 @@ async def generate_one(
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
                 location_types=location_types,
+                repair_window_chars=repair_window_chars,
                 verbose=verbose,
                 step="extraction",
             )
@@ -2348,11 +2674,15 @@ async def generate_one(
             payload = (
                 sample.spans if output_mode == OUTPUT_MODE_SPANS else sample.events
             )
-            metadata = dict(sample.metadata)
+            if output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+                payload = filter_generic_trigger_events(
+                    payload, enabled=strict_generic_trigger_filter
+                )
+            metadata = {**sample.metadata, **prompt_metadata}
             if enable_verifier and output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
                 decisions, verifier_metadata = await verify_events(
                     client=client,
-                    ontology_text=ontology_text,
+                    ontology_text=ontology_text or format_ontology(ontology),
                     title=title,
                     text=text,
                     events=payload,
@@ -2398,18 +2728,23 @@ async def generate_one(
 
     for sample_index in range(self_consistency_samples):
         try:
-            prompt = render_user_prompt(
-                user_prompt_template,
-                ontology_text,
-                title,
-                text,
+            prompt, prompt_metadata = build_prompt_payload(
+                title=title,
+                text=text,
+                ontology=ontology,
+                user_prompt_template=user_prompt_template,
+                output_mode=output_mode,
                 argument_roles_text=argument_roles_text,
                 event_argument_roles_text=event_argument_roles_text,
                 location_types_text=location_types_text,
-                examples_text=format_examples(
-                    sample_examples(examples or [], example_sample_size, output_mode),
-                    output_mode,
-                ),
+                examples=examples,
+                example_sample_size=example_sample_size,
+                example_retrieval=example_retrieval,
+                example_retriever=example_retriever,
+                label_retrieval=label_retrieval,
+                label_retriever=label_retriever,
+                label_top_k=label_top_k,
+                ontology_text_override=ontology_text,
             )
             sample = await generate_sample(
                 client=client,
@@ -2426,6 +2761,7 @@ async def generate_one(
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
                 location_types=location_types,
+                repair_window_chars=repair_window_chars,
                 override_settings=override_settings,
                 verbose=verbose,
                 step=(
@@ -2437,7 +2773,7 @@ async def generate_one(
                 sample_spans.append(sample.spans)
             else:
                 sample_events.append(sample.events)
-            sample_metadata.append(sample.metadata)
+            sample_metadata.append({**sample.metadata, **prompt_metadata})
             record_self_consistency_sample_success(sample_summaries, sample_index)
         except Exception as exc:
             record_self_consistency_sample_failure(
@@ -2487,11 +2823,14 @@ async def generate_one(
         events, event_support_by_key, argument_support_by_event_key, threshold = (
             merge_self_consistency_events(sample_events, text)
         )
+        events = filter_generic_trigger_events(
+            events, enabled=strict_generic_trigger_filter
+        )
         metadata = combine_metadata(sample_metadata)
         if enable_verifier:
             decisions, verifier_metadata = await verify_events(
                 client=client,
-                ontology_text=ontology_text,
+                ontology_text=ontology_text or format_ontology(ontology),
                 title=title,
                 text=text,
                 events=events,
@@ -2628,19 +2967,25 @@ async def worker(
     output_queue: asyncio.Queue[dict[str, Any] | None],
     args: argparse.Namespace,
     system_prompt: str,
-    ontology_text: str,
     labels: set[str],
-    argument_roles: set[str],
-    event_argument_roles: dict[str, list[str]],
-    argument_roles_text: str,
-    event_argument_roles_text: str,
+    ontology_text: str,
+    ontology: dict[str, str] | None = None,
+    argument_roles: set[str] | None = None,
+    event_argument_roles: dict[str, list[str]] | None = None,
+    argument_roles_text: str = "",
+    event_argument_roles_text: str = "",
     location_types: set[str] | None = None,
     location_types_text: str = "",
     user_prompt_template: str = "",
     examples: list[dict[str, Any]] | None = None,
+    example_retriever: BM25Index | None = None,
+    label_retriever: BM25Index | None = None,
 ) -> None:
     client: GeminiLLMClient | None = None
     relevance_client: GeminiLLMClient | None = None
+    ontology = ontology or {label: label for label in sorted(labels)}
+    argument_roles = argument_roles or set()
+    event_argument_roles = event_argument_roles or {}
 
     while True:
         record = await input_queue.get()
@@ -2739,7 +3084,7 @@ async def worker(
             result = await generate_one(
                 client=client,
                 record=record,
-                ontology_text=ontology_text,
+                ontology=ontology,
                 labels=labels,
                 system_prompt=system_prompt,
                 user_prompt_template=user_prompt_template,
@@ -2760,6 +3105,7 @@ async def worker(
                 event_argument_roles_text=event_argument_roles_text,
                 location_types=location_types,
                 location_types_text=location_types_text,
+                repair_window_chars=args.offset_repair_window_chars,
                 long_document_mode=args.long_document_mode,
                 long_document_threshold_chars=args.long_document_threshold_chars,
                 window_target_chars=args.window_target_chars,
@@ -2767,7 +3113,15 @@ async def worker(
                 window_overlap_sentences=args.window_overlap_sentences,
                 enable_verifier=args.enable_verifier,
                 examples=examples,
-                example_sample_size=args.example_sample_size,
+                example_sample_size=effective_example_count(
+                    args.example_sample_size, getattr(args, "example_top_k", None)
+                ),
+                example_retrieval=args.example_retrieval,
+                example_retriever=example_retriever,
+                label_retrieval=args.label_retrieval,
+                label_retriever=label_retriever,
+                label_top_k=args.label_top_k,
+                strict_generic_trigger_filter=args.strict_generic_trigger_filter,
                 verbose=args.verbose,
             )
             result.setdefault("llm", {})
@@ -2985,6 +3339,7 @@ def parse_batch_payload(
     argument_roles: set[str],
     event_argument_roles: dict[str, list[str]],
     location_types: set[str],
+    repair_window_chars: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     response = line.get("response")
     if not isinstance(response, dict):
@@ -2994,8 +3349,20 @@ def parse_batch_payload(
     raw_answer = batch_response_text(response)
     parsed = json.loads(raw_answer)
     metadata = batch_usage_metadata(response)
+    validation_stats: dict[str, int] = {}
     if output_mode == OUTPUT_MODE_SPANS:
-        return clean_spans(parsed, text, labels, strict_offsets), metadata
+        metadata["validation"] = validation_stats
+        return (
+            clean_spans(
+                parsed,
+                text,
+                labels,
+                strict_offsets,
+                repair_window_chars=repair_window_chars,
+                validation_stats=validation_stats,
+            ),
+            metadata,
+        )
 
     return (
         clean_events_with_args(
@@ -3006,8 +3373,10 @@ def parse_batch_payload(
             argument_roles=argument_roles,
             event_argument_roles=event_argument_roles,
             location_types=location_types,
+            repair_window_chars=repair_window_chars,
+            validation_stats=validation_stats,
         ),
-        metadata,
+        {**metadata, "validation": validation_stats},
     )
 
 
@@ -3109,8 +3478,12 @@ def build_extraction_tasks(
     event_argument_roles_text: str,
     location_types_text: str,
     examples: list[dict[str, Any]],
+    ontology: dict[str, str] | None = None,
+    example_retriever: BM25Index | None = None,
+    label_retriever: BM25Index | None = None,
 ) -> list[ExtractionBatchTask]:
     tasks: list[ExtractionBatchTask] = []
+    ontology = ontology or {}
     for record in records:
         record_id = str(record.get("id"))
         title = str(record.get("title") or "")
@@ -3144,20 +3517,53 @@ def build_extraction_tasks(
         for window in windows:
             task_text = window.text if window is not None else text
             for sample_index in range(sample_count):
-                prompt = render_user_prompt(
-                    user_prompt_template,
-                    ontology_text,
-                    title,
-                    task_text,
-                    argument_roles_text=argument_roles_text,
-                    event_argument_roles_text=event_argument_roles_text,
-                    location_types_text=location_types_text,
-                    examples_text=format_examples(
-                        sample_examples(
-                            examples or [], args.example_sample_size, args.output_mode
+                prompt = (
+                    build_prompt_payload(
+                        title=title,
+                        text=task_text,
+                        ontology=ontology or {"_": ontology_text},
+                        user_prompt_template=user_prompt_template,
+                        output_mode=args.output_mode,
+                        argument_roles_text=argument_roles_text,
+                        event_argument_roles_text=event_argument_roles_text,
+                        location_types_text=location_types_text,
+                        examples=examples,
+                        example_sample_size=effective_example_count(
+                            args.example_sample_size,
+                            getattr(args, "example_top_k", None),
                         ),
-                        args.output_mode,
-                    ),
+                        example_retrieval=getattr(
+                            args, "example_retrieval", EXAMPLE_RETRIEVAL_RANDOM
+                        ),
+                        example_retriever=example_retriever,
+                        label_retrieval=getattr(
+                            args, "label_retrieval", LABEL_RETRIEVAL_OFF
+                        ),
+                        label_retriever=label_retriever,
+                        label_top_k=int(getattr(args, "label_top_k", 0) or 0),
+                        ontology_text_override=ontology_text,
+                    )[0]
+                    if ontology
+                    else render_user_prompt(
+                        user_prompt_template,
+                        ontology_text,
+                        title,
+                        task_text,
+                        argument_roles_text=argument_roles_text,
+                        event_argument_roles_text=event_argument_roles_text,
+                        location_types_text=location_types_text,
+                        examples_text=format_examples(
+                            sample_examples(
+                                examples or [],
+                                effective_example_count(
+                                    args.example_sample_size,
+                                    getattr(args, "example_top_k", None),
+                                ),
+                                args.output_mode,
+                            ),
+                            args.output_mode,
+                        ),
+                    )
                 )
                 tasks.append(
                     ExtractionBatchTask(
@@ -3424,11 +3830,16 @@ def aggregate_extraction_record(
                     ),
                     "source": source,
                 }
+            payload = task_result["payload"]
+            if args.output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
+                payload = filter_generic_trigger_events(
+                    payload, enabled=args.strict_generic_trigger_filter
+                )
             return {
                 "id": record_id,
                 "status": "ok",
                 "source": source,
-                payload_key: task_result["payload"],
+                payload_key: payload,
                 "llm": {
                     "model": model_name,
                     "metadata": dict(task_result["metadata"]),
@@ -3505,6 +3916,9 @@ def aggregate_extraction_record(
         if args.output_mode == OUTPUT_MODE_EVENTS_WITH_ARGS:
             events, event_support_by_key, argument_support_by_event_key, threshold = (
                 merge_self_consistency_events(sample_payloads, text)
+            )
+            events = filter_generic_trigger_events(
+                events, enabled=args.strict_generic_trigger_filter
             )
             event_support = [
                 {
@@ -3803,16 +4217,29 @@ async def run(args: argparse.Namespace) -> None:
 
     loaded_records = load_records(args.input)
     unique_records = dedupe_records(loaded_records)
+    example_count = effective_example_count(
+        args.example_sample_size, getattr(args, "example_top_k", None)
+    )
     raw_examples = (
-        load_examples(args.examples) if args.example_sample_size is not None else []
+        load_examples(args.examples) if example_count is not None else []
     )
     examples = compact_example_records(raw_examples, args.output_mode)
+    example_retriever = (
+        build_example_retriever(examples, args.output_mode)
+        if args.example_retrieval == EXAMPLE_RETRIEVAL_BM25
+        else None
+    )
+    label_retriever = (
+        build_label_retriever(ontology, examples, args.output_mode)
+        if args.label_retrieval == LABEL_RETRIEVAL_BM25
+        else None
+    )
     if examples:
         LOGGER.info(
             "loaded example_articles=%s example_windows=%s sample_size=%s",
             len(raw_examples),
             len(examples),
-            min(args.example_sample_size, len(examples)),
+            min(example_count, len(examples)),
         )
 
     if args.overwrite:
@@ -3937,6 +4364,9 @@ async def run(args: argparse.Namespace) -> None:
             event_argument_roles_text=event_argument_roles_text,
             location_types_text=location_types_text,
             examples=examples,
+            ontology=ontology,
+            example_retriever=example_retriever,
+            label_retriever=label_retriever,
         )
         extraction_task_by_key = {
             task.batch_key: task for task in extraction_tasks
@@ -3992,6 +4422,7 @@ async def run(args: argparse.Namespace) -> None:
                             argument_roles=argument_roles,
                             event_argument_roles=event_argument_roles,
                             location_types=location_types,
+                            repair_window_chars=args.offset_repair_window_chars,
                         )
                         extraction_task_results[batch_key] = {
                             "status": "ok",
@@ -4231,8 +4662,9 @@ async def run(args: argparse.Namespace) -> None:
                 output_queue=output_queue,
                 args=args,
                 system_prompt=system_prompt,
-                ontology_text=ontology_text,
                 labels=labels,
+                ontology_text=ontology_text,
+                ontology=ontology,
                 argument_roles=argument_roles,
                 event_argument_roles=event_argument_roles,
                 argument_roles_text=argument_roles_text,
@@ -4241,6 +4673,8 @@ async def run(args: argparse.Namespace) -> None:
                 location_types_text=location_types_text,
                 user_prompt_template=user_prompt_template,
                 examples=examples,
+                example_retriever=example_retriever,
+                label_retriever=label_retriever,
             )
         )
         for i in range(args.workers)
@@ -4388,6 +4822,18 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--example-retrieval",
+        choices=[EXAMPLE_RETRIEVAL_RANDOM, EXAMPLE_RETRIEVAL_BM25],
+        default=EXAMPLE_RETRIEVAL_RANDOM,
+        help="How to choose few-shot examples when examples are enabled.",
+    )
+    parser.add_argument(
+        "--example-top-k",
+        type=int,
+        default=None,
+        help="Optional explicit top-k for example retrieval; defaults to --example-sample-size.",
+    )
+    parser.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -4452,12 +4898,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--long-document-threshold-chars",
         type=int,
-        default=1000,
+        default=None,
         help="Minimum article character length that triggers windowed extraction.",
     )
     parser.add_argument("--window-target-chars", type=int, default=None)
     parser.add_argument("--window-max-chars", type=int, default=None)
     parser.add_argument("--window-overlap-sentences", type=int, default=None)
+    parser.add_argument(
+        "--label-retrieval",
+        choices=[LABEL_RETRIEVAL_OFF, LABEL_RETRIEVAL_BM25],
+        default=LABEL_RETRIEVAL_OFF,
+        help="Optionally retrieve candidate ontology labels before extraction.",
+    )
+    parser.add_argument(
+        "--label-top-k",
+        type=int,
+        default=12,
+        help="Maximum number of candidate labels to keep when label retrieval is enabled.",
+    )
+    parser.add_argument(
+        "--offset-repair-window-chars",
+        type=int,
+        default=200,
+        help="Maximum distance from the proposed offset to consider during offset repair.",
+    )
+    parser.add_argument(
+        "--strict-generic-trigger-filter",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Drop unsupported generic one-word triggers like war/conflict/violence.",
+    )
     parser.add_argument(
         "--enable-verifier",
         action=argparse.BooleanOptionalAction,
@@ -4580,22 +5050,75 @@ def apply_pipeline_defaults(args: argparse.Namespace) -> None:
         if args.enable_relevance_filter is not None
         else config.get("enable_relevance_filter", mode.enable_relevance_filter)
     )
+    args.example_retrieval = str(
+        config.get("example_retrieval", getattr(args, "example_retrieval", EXAMPLE_RETRIEVAL_RANDOM))
+    )
+    args.label_retrieval = str(
+        config.get("label_retrieval", getattr(args, "label_retrieval", LABEL_RETRIEVAL_OFF))
+    )
+    args.label_top_k = int(config.get("label_top_k", getattr(args, "label_top_k", 12)))
+    if getattr(args, "example_top_k", None) is not None:
+        args.example_top_k = int(args.example_top_k)
+    elif "example_top_k" in config:
+        args.example_top_k = int(config["example_top_k"])
+    args.offset_repair_window_chars = int(
+        config.get(
+            "offset_repair_window_chars",
+            getattr(args, "offset_repair_window_chars", 200),
+        )
+    )
+    args.strict_generic_trigger_filter = bool(
+        config.get(
+            "strict_generic_trigger_filter",
+            getattr(args, "strict_generic_trigger_filter", False),
+        )
+    )
+
+    window_defaults = {
+        "window_target_chars": 1000,
+        "window_max_chars": 1500,
+        "window_overlap_sentences": 1,
+        "long_document_threshold_chars": getattr(
+            args, "long_document_threshold_chars", 1000
+        ),
+    }
+    if args.mode == "precision_first":
+        window_defaults = {
+            "window_target_chars": 4000,
+            "window_max_chars": 6000,
+            "window_overlap_sentences": 1,
+            "long_document_threshold_chars": 5000,
+        }
 
     args.window_target_chars = int(
         args.window_target_chars
         if args.window_target_chars is not None
-        else config.get("window_target_chars", 1000)
+        else config.get("window_target_chars", window_defaults["window_target_chars"])
     )
     args.window_max_chars = int(
         args.window_max_chars
         if args.window_max_chars is not None
-        else config.get("window_max_chars", 1500)
+        else config.get("window_max_chars", window_defaults["window_max_chars"])
     )
     args.window_overlap_sentences = int(
         args.window_overlap_sentences
         if args.window_overlap_sentences is not None
-        else config.get("window_overlap_sentences", 1)
+        else config.get(
+            "window_overlap_sentences", window_defaults["window_overlap_sentences"]
+        )
     )
+    args.long_document_threshold_chars = int(
+        config.get(
+            "long_document_threshold_chars",
+            window_defaults["long_document_threshold_chars"],
+        )
+        if getattr(args, "long_document_threshold_chars", None) is None
+        else args.long_document_threshold_chars
+    )
+    if getattr(args, "example_top_k", None) is None:
+        args.example_top_k = (
+            args.example_sample_size if args.example_sample_size is not None else None
+        )
 
     for field in ("model", "workers", "long_document_threshold_chars", "batch_size"):
         if field in config:
@@ -4641,6 +5164,10 @@ def main() -> None:
         raise ValueError("--window-max-chars must be >= --window-target-chars")
     if args.window_overlap_sentences < 0:
         raise ValueError("--window-overlap-sentences must be >= 0")
+    if args.label_top_k < 1:
+        raise ValueError("--label-top-k must be >= 1")
+    if args.offset_repair_window_chars < 0:
+        raise ValueError("--offset-repair-window-chars must be >= 0")
     if args.relevance_max_chars < 1:
         raise ValueError("--relevance-max-chars must be >= 1")
     if not 0.0 <= args.relevance_confidence_threshold <= 1.0:

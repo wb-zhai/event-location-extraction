@@ -22,6 +22,17 @@ class PipelineMode:
 
 
 MODE_DEFAULTS = {
+    "precision_first": PipelineMode(
+        output_mode="events-with-args",
+        self_consistency=True,
+        self_consistency_samples=5,
+        self_consistency_temperature=0.3,
+        strict_offsets=True,
+        long_document_mode=True,
+        enable_verifier=True,
+        enable_synthetic_gaps=False,
+        enable_relevance_filter=False,
+    ),
     "quality_first": PipelineMode(
         output_mode="events-with-args",
         self_consistency=True,
