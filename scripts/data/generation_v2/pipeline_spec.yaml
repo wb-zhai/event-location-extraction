@@ -1,0 +1,34 @@
+version: generation_v2
+ontology: ontologies/zhai/ontology.json
+
+models:
+  final_annotator: gemini-3.1-pro-preview
+  verifier: gemini-3.1-pro-preview
+  router: gemini-2.5-flash
+
+sampling_mix:
+  event_seeded_positive: 0.50
+  hard_negative: 0.20
+  sibling_negative: 0.15
+  random_negative: 0.15
+
+windowing:
+  target_chars: 6000
+  max_chars: 9000
+  overlap_sentences: 2
+  keep_events_only_when_trigger_in_core: true
+  run_all_location_extraction_on_every_window: true
+
+validation:
+  exact_substring_offsets: true
+  offset_repair: unambiguous_nearby_match_only
+  reject_overlapping_token_spans: true
+  reject_unseen_event_types: true
+  reject_disallowed_argument_roles: true
+  reject_inferred_locations: true
+
+review_thresholds:
+  event_trigger_exact_precision: 0.90
+  location_exact_precision: 0.95
+  event_argument_link_precision: 0.85
+  negative_false_positive_rate: 0.05

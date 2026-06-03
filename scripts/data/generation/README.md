@@ -17,7 +17,7 @@ The pipeline is intentionally small and deterministic around the LLM call.
 1. Load input records from JSON or JSONL.
 2. Normalize each record to `id`, `title`, `text`, `source_url`, and
    `publish_date`.
-3. Load the ontology from `ontologies/risk-factors/risk.cluster.description.json`.
+3. Load the ontology from `ontologies/zhai/ontology.json`.
 4. For long articles, split text into sentence-aware windows with overlap.
 5. Ask Gemini for structured annotations.
 6. Validate labels, argument roles, copied text, and character offsets.
@@ -123,6 +123,26 @@ uv run python scripts/data/generation/gemini_event_gen.py \
   --mode low_cost
 ```
 
+### `precision_first`
+
+Precision-oriented mode for cleaner synthetic labels.
+
+- verifier enabled
+- self-consistency enabled
+- larger long-document windows
+- intended for BM25 example and label retrieval
+
+```bash
+uv run python scripts/data/generation/gemini_event_gen.py \
+  dataset/input.jsonl \
+  dataset/events.precision.jsonl \
+  --mode precision_first \
+  --example-sample-size 4 \
+  --example-retrieval bm25 \
+  --label-retrieval bm25 \
+  --strict-generic-trigger-filter
+```
+
 ## Common Runs
 
 Process only the first 10 records:
@@ -183,6 +203,17 @@ Useful knobs:
 --window-target-chars 6000
 --window-max-chars 9000
 --window-overlap-sentences 2
+```
+
+Precision-oriented retrieval and filtering knobs:
+
+```bash
+--example-retrieval {random,bm25}
+--example-top-k 4
+--label-retrieval {off,bm25}
+--label-top-k 12
+--offset-repair-window-chars 200
+--strict-generic-trigger-filter
 ```
 
 Use smaller windows for debugging:

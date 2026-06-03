@@ -285,6 +285,7 @@ class ExtractionBatchTask:
     text: str
     window: ArticleWindow | None = None
     sample_index: int | None = None
+    event_index: int | None = None
     chunk_index: int = -1
 
 
