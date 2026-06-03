@@ -77,6 +77,16 @@ def _resolve_span(text: str, obj: dict[str, Any]) -> tuple[tuple[int, int] | Non
     return None, AnchorStatus.NOT_FOUND
 
 
+def _anchor_payload(
+    obj: dict[str, Any], *, keys: tuple[str, ...] = ("trigger", "argument", "entity")
+) -> dict[str, Any]:
+    for key in keys:
+        nested = obj.get(key)
+        if isinstance(nested, dict):
+            return nested
+    return obj
+
+
 def _collect_annotations(doc_text: str, events: list[dict[str, Any]]) -> tuple[
     set[EventAnnotation],
     set[ArgumentAnnotation],
@@ -98,7 +108,7 @@ def _collect_annotations(doc_text: str, events: list[dict[str, Any]]) -> tuple[
     for ev in events:
         total += 1
         ev_type = ev.get("event_type", "")
-        ev_span, ev_status = _resolve_span(doc_text, ev)
+        ev_span, ev_status = _resolve_span(doc_text, _anchor_payload(ev))
         status_counts[ev_status] = status_counts.get(ev_status, 0) + 1
         if ev_span is None:
             continue
@@ -109,7 +119,7 @@ def _collect_annotations(doc_text: str, events: list[dict[str, Any]]) -> tuple[
         for arg in ev.get("arguments", []):
             total += 1
             role = arg.get("role", "")
-            arg_span, arg_status = _resolve_span(doc_text, arg)
+            arg_span, arg_status = _resolve_span(doc_text, _anchor_payload(arg))
             status_counts[arg_status] = status_counts.get(arg_status, 0) + 1
             if arg_span is None:
                 continue

@@ -94,7 +94,7 @@ class LLMClient:
     @staticmethod
     def parse_response_format(
         response_format: Any, add_cot_field: bool = True
-    ) -> BaseModel:
+    ) -> Any:
         """
         Parse the response format into a Pydantic model.
         This method converts a dictionary or Pydantic model into a structured response format.
@@ -104,7 +104,7 @@ class LLMClient:
             add_cot_field: Whether to add a 'chain_of_thoughts' field to the response format.
 
         Returns:
-            BaseModel: A Pydantic model representing the response format.
+            A Pydantic model class representing the response format.
         """
         if isinstance(response_format, dict):
             if add_cot_field:
@@ -120,11 +120,14 @@ class LLMClient:
             response_format_model = create_schema_from_dict(
                 response_format, name="ResponseFormat"
             )
-        elif isinstance(response_format, BaseModel):
+        elif isinstance(response_format, type) and issubclass(response_format, BaseModel):
             response_format_model = response_format
+        elif isinstance(response_format, BaseModel):
+            response_format_model = type(response_format)
         else:
             raise ValueError(
-                "`response_format` must be a dictionary or a Pydantic `BaseModel` instance."
+                "`response_format` must be a dictionary, Pydantic `BaseModel` class, "
+                "or Pydantic `BaseModel` instance."
             )
 
         return response_format_model
