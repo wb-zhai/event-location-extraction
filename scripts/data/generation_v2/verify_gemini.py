@@ -155,6 +155,9 @@ def verified_record(
     metadata = dict(source_record.get("metadata") or {})
     previous_usage = metadata.get("usage") or {}
     verifier_usage = normalize_usage(result.get("usage"))
+    thought_summaries = dict(metadata.get("thought_summaries") or {})
+    if result.get("thought_summaries"):
+        thought_summaries["verifier"] = result["thought_summaries"]
     metadata.update(
         {
             "verifier_model": args.verifier_model,
@@ -175,6 +178,8 @@ def verified_record(
             "raw_response_path": result.get("raw_response_path") or metadata.get("raw_response_path"),
         }
     )
+    if thought_summaries:
+        metadata["thought_summaries"] = thought_summaries
     if decision == "accept":
         return {**source_record, "metadata": metadata}
     if decision == "fix":
@@ -219,6 +224,9 @@ def output_row_for_result(
         metadata = dict(task.record.get("metadata") or {})
         previous_usage = metadata.get("usage") or {}
         verifier_usage = normalize_usage(result.get("usage"))
+        thought_summaries = dict(metadata.get("thought_summaries") or {})
+        if result.get("thought_summaries"):
+            thought_summaries["verifier"] = result["thought_summaries"]
         metadata.update(
             {
                 "verifier_model": args.verifier_model,
@@ -239,6 +247,8 @@ def output_row_for_result(
                 "raw_response_path": result.get("raw_response_path") or metadata.get("raw_response_path"),
             }
         )
+        if thought_summaries:
+            metadata["thought_summaries"] = thought_summaries
         return {**task.record, "status": "error", "error": error, "metadata": metadata}
 
     if result.get("error"):

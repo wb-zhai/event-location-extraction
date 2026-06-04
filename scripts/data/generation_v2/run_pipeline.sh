@@ -22,6 +22,7 @@ Options:
   --batch-api                             Use Gemini Batch API for annotation and verification
   --batch-size N                          Default: 1000
   --batch-poll-interval-seconds N         Default: 30
+  --save-thought-summaries                Save Gemini thought summaries in row metadata when available
   --target-chars N                        Window target chars. Default: 6000
   --max-chars N                           Window max chars. Default: 9000
   --overlap-sentences N                   Default: 2
@@ -71,6 +72,7 @@ WORKERS="4"
 BATCH_API="0"
 BATCH_SIZE="1000"
 BATCH_POLL_INTERVAL_SECONDS="30"
+SAVE_THOUGHT_SUMMARIES="0"
 TARGET_CHARS="6000"
 MAX_CHARS="9000"
 OVERLAP_SENTENCES="2"
@@ -95,6 +97,7 @@ while [[ $# -gt 0 ]]; do
     --batch-api) BATCH_API="1"; shift ;;
     --batch-size) BATCH_SIZE="$2"; shift 2 ;;
     --batch-poll-interval-seconds) BATCH_POLL_INTERVAL_SECONDS="$2"; shift 2 ;;
+    --save-thought-summaries) SAVE_THOUGHT_SUMMARIES="1"; shift ;;
     --target-chars) TARGET_CHARS="$2"; shift 2 ;;
     --max-chars) MAX_CHARS="$2"; shift 2 ;;
     --overlap-sentences) OVERLAP_SENTENCES="$2"; shift 2 ;;
@@ -135,6 +138,10 @@ if [[ "$BATCH_API" == "1" ]]; then
   COMMON_GEMINI_ARGS+=(--batch-api --batch-size "$BATCH_SIZE" --batch-poll-interval-seconds "$BATCH_POLL_INTERVAL_SECONDS")
 fi
 
+if [[ "$SAVE_THOUGHT_SUMMARIES" == "1" ]]; then
+  COMMON_GEMINI_ARGS+=(--save-thought-summaries)
+fi
+
 if [[ "$OVERWRITE" == "1" ]]; then
   COMMON_GEMINI_ARGS+=(--overwrite)
 fi
@@ -150,6 +157,16 @@ if [[ "$OVERWRITE" == "1" ]]; then
   SAMPLE_ARGS+=(--overwrite)
 fi
 
+CONTINUE_LIMIT="0"
+if [[ "$OVERWRITE" != "1" && -n "$LIMIT" && -f "$SAMPLED" ]]; then
+  CURRENT_SAMPLED_ROWS="$(awk 'END {print NR + 0}' "$SAMPLED")"
+  if (( CURRENT_SAMPLED_ROWS < LIMIT )); then
+    CONTINUE_LIMIT="1"
+    SAMPLE_ARGS+=(--append-to-limit)
+    echo "Existing sample has $CURRENT_SAMPLED_ROWS rows; appending $((LIMIT - CURRENT_SAMPLED_ROWS)) rows to reach limit $LIMIT"
+  fi
+fi
+
 echo "[1/6] Sampling articles -> $SAMPLED"
 uv run python scripts/data/generation_v2/sample_articles.py "$INPUT" "$SAMPLED" "${SAMPLE_ARGS[@]}"
 
@@ -160,6 +177,9 @@ WINDOW_ARGS=(
 )
 if [[ "$OVERWRITE" == "1" ]]; then
   WINDOW_ARGS+=(--overwrite)
+fi
+if [[ "$CONTINUE_LIMIT" == "1" ]]; then
+  WINDOW_ARGS+=(--append-missing)
 fi
 
 echo "[2/6] Windowing articles -> $WINDOWS"
@@ -172,7 +192,7 @@ uv run python scripts/data/generation_v2/annotate_gemini.py "$WINDOWS" "$RAW" \
 
 if [[ "$SKIP_VERIFY" == "1" ]]; then
   echo "[4/6] Verification skipped; using raw annotations"
-  if [[ -f "$VERIFIED" && "$OVERWRITE" != "1" ]]; then
+  if [[ -f "$VERIFIED" && "$OVERWRITE" != "1" && "$CONTINUE_LIMIT" != "1" ]]; then
     echo "Verified output already exists, skipping: $VERIFIED"
   else
     cp "$RAW" "$VERIFIED"
@@ -186,6 +206,9 @@ fi
 
 RECOVER_ARGS=(--html "$REVIEW_HTML")
 if [[ "$OVERWRITE" == "1" ]]; then
+  RECOVER_ARGS+=(--overwrite)
+fi
+if [[ "$CONTINUE_LIMIT" == "1" ]]; then
   RECOVER_ARGS+=(--overwrite)
 fi
 

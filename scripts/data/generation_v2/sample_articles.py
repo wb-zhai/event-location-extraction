@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v2.io_utils import load_json_tolerant, load_records, resolve_path, write_jsonl
+from scripts.data.generation_v2.io_utils import iter_jsonl, load_json_tolerant, load_records, resolve_path, write_jsonl
 
 FOOD_INSECURITY_KEYWORDS: tuple[tuple[str, float], ...] = (
     ("food insecurity", 4.0),
@@ -248,6 +248,24 @@ def sample_records(
     return selected[:limit]
 
 
+def append_sample_records_to_limit(output_path: Path, selected: list[dict], limit: int | None) -> int:
+    existing = list(iter_jsonl(output_path))
+    if limit is not None and len(existing) >= limit:
+        print(f"Output already has {len(existing)} sampled rows, meeting limit {limit}: {output_path}")
+        return 0
+
+    target = limit if limit is not None else len(existing) + len(selected)
+    existing_ids = {str(row.get("id")) for row in existing}
+    appended = [row for row in selected if str(row.get("id")) not in existing_ids][: max(target - len(existing), 0)]
+    if not appended:
+        print(f"No new sampled rows to append: {output_path}")
+        return 0
+
+    write_jsonl(output_path, appended, overwrite=False)
+    print(f"Appended {len(appended)} sampled rows to {output_path}")
+    return len(appended)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sample clean articles for generation_v2.")
     parser.add_argument("input", type=Path)
@@ -261,13 +279,18 @@ def parse_args() -> argparse.Namespace:
         help="Boost likely food-insecurity risk-factor articles.",
     )
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--append-to-limit",
+        action="store_true",
+        help="Append new sampled rows when output exists and --limit is larger than the current row count.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     output_path = resolve_path(args.output)
-    if output_path.exists() and not args.overwrite:
+    if output_path.exists() and not args.overwrite and not args.append_to_limit:
         print(f"Output already exists, skipping: {output_path}")
         return 0
     records = load_records(resolve_path(args.input))
@@ -278,6 +301,9 @@ def main() -> int:
         seed=args.seed,
         keyword=args.keyword,
     )
+    if output_path.exists() and not args.overwrite and args.append_to_limit:
+        append_sample_records_to_limit(output_path, selected, args.limit)
+        return 0
     write_jsonl(output_path, selected, overwrite=True)
     return 0
 

@@ -58,6 +58,7 @@ class PromptSettings(BaseModel):
     temperature: float | None = None
     reasoning_effort: str | int | None = None
     max_tokens: int | None = None
+    save_thought_summaries: bool | None = None
 
 
 class AnnotationMetadata(BaseModel):
@@ -74,6 +75,7 @@ class AnnotationMetadata(BaseModel):
     batch_job_name: str | None = None
     raw_response_path: str | None = None
     verifier_decision: str | None = None
+    thought_summaries: dict[str, list[str]] = Field(default_factory=dict)
     recovery_status: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 

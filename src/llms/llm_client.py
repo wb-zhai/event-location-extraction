@@ -27,6 +27,15 @@ REASONING_EFFORT = {"disable": 0, "low": 1024, "medium": 2048, "high": 4096}
 logger = logging.getLogger(__name__)
 
 
+def _thought_summaries_from_parts(parts: list[Any]) -> list[str]:
+    summaries: list[str] = []
+    for part in parts:
+        text = getattr(part, "text", None)
+        if text and getattr(part, "thought", False):
+            summaries.append(str(text))
+    return summaries
+
+
 def create_schema_from_dict(
     field_types: dict[str, type], name: str = "MyModel"
 ) -> BaseModel:
@@ -322,6 +331,7 @@ class GeminiLLMClient(LLMClient):
         conversation_history: List[Dict[str, str]] | None = None,
         reasoning_effort: str | int | None = None,
         streaming: bool = False,
+        include_thoughts: bool = False,
         **kwargs,
     ):
         """
@@ -365,17 +375,25 @@ class GeminiLLMClient(LLMClient):
 
         if "2.5" in self.model_name and "gemini" in self.model_name:
             # otherwise thinking budget is not supported
-            thinking_config = types.ThinkingConfig(thinking_budget=reasoning_effort)
+            thinking_config = types.ThinkingConfig(
+                thinking_budget=reasoning_effort,
+                include_thoughts=include_thoughts or None,
+            )
             config.thinking_config = thinking_config
         elif "3" in self.model_name and "gemini" in self.model_name:
             reasoning_effort = "low" if reasoning_effort <= 1024 else "high"
-            thinking_config = types.ThinkingConfig(thinking_level=reasoning_effort)
+            thinking_config = types.ThinkingConfig(
+                thinking_level=reasoning_effort,
+                include_thoughts=include_thoughts or None,
+            )
             config.thinking_config = thinking_config
         elif "-maas" in self.model_name:
             thinking_config = types.ThinkingConfig(
-                thinking_budget=reasoning_effort, include_thoughts=False
+                thinking_budget=reasoning_effort, include_thoughts=include_thoughts
             )
             config.thinking_config = thinking_config
+        elif include_thoughts:
+            config.thinking_config = types.ThinkingConfig(include_thoughts=True)
 
         response_format_model = None
         if response_format is not None:
@@ -473,6 +491,11 @@ class GeminiLLMClient(LLMClient):
                             or 0,
                             "thoughts_token_count": chunk.usage_metadata.thoughts_token_count
                             or 0,
+                            "thought_summaries": _thought_summaries_from_parts(
+                                chunk.candidates[0].content.parts
+                            )
+                            if getattr(chunk, "candidates", None)
+                            else [],
                         },
                         parsed=chunk.parsed if response_format_model else None,
                     )
@@ -494,6 +517,11 @@ class GeminiLLMClient(LLMClient):
                         or 0,
                         "thoughts_token_count": response.usage_metadata.thoughts_token_count
                         or 0,
+                        "thought_summaries": _thought_summaries_from_parts(
+                            response.candidates[0].content.parts
+                        )
+                        if getattr(response, "candidates", None)
+                        else [],
                     },
                     parsed=response.parsed if response_format_model else None,
                 )

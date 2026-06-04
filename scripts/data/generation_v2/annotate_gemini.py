@@ -149,6 +149,7 @@ def clean_payload(
     usage: dict[str, int],
     batch_job_name: str | None = None,
     raw_response_path: str | None = None,
+    thought_summaries: list[str] | None = None,
 ) -> dict[str, Any]:
     local_text = str(source_record.get("text") or "")
     article_text = str(source_record.get("article_text") or local_text)
@@ -250,6 +251,8 @@ def clean_payload(
         "batch_job_name": batch_job_name,
         "raw_response_path": raw_response_path,
     }
+    if thought_summaries:
+        metadata["thought_summaries"] = {"extractor": thought_summaries}
     record = AnnotationRecord(
         id=str(source_record.get("article_id") or source_record.get("id")),
         text=article_text,
@@ -306,6 +309,11 @@ def output_row_for_result(
                 "run_id": task.record.get("run_id"),
                 "task_key": task.key,
                 "usage": {"extractor": normalize_usage(result.get("usage"))},
+                **(
+                    {"thought_summaries": {"extractor": result["thought_summaries"]}}
+                    if result.get("thought_summaries")
+                    else {}
+                ),
             },
         }
     try:
@@ -319,6 +327,7 @@ def output_row_for_result(
             usage=normalize_usage(result.get("usage")),
             batch_job_name=result.get("batch_job_name"),
             raw_response_path=result.get("raw_response_path"),
+            thought_summaries=result.get("thought_summaries"),
         )
     except Exception as exc:
         return {
@@ -334,6 +343,11 @@ def output_row_for_result(
                 "usage": {"extractor": normalize_usage(result.get("usage"))},
                 "batch_job_name": result.get("batch_job_name"),
                 "raw_response_path": result.get("raw_response_path"),
+                **(
+                    {"thought_summaries": {"extractor": result["thought_summaries"]}}
+                    if result.get("thought_summaries")
+                    else {}
+                ),
             },
         }
 

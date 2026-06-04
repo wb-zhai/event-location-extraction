@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v2.io_utils import append_jsonl_row, load_records, resolve_path, write_jsonl
+from scripts.data.generation_v2.io_utils import append_jsonl_row, iter_jsonl, load_records, resolve_path, write_jsonl
 
 
 @dataclass(frozen=True)
@@ -185,17 +185,39 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-chars", type=int, default=9000)
     parser.add_argument("--overlap-sentences", type=int, default=2)
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--append-missing",
+        action="store_true",
+        help="Append windows only for sampled article ids not already present in the output.",
+    )
     return parser.parse_args()
+
+
+def completed_article_ids(output_path: Path) -> set[str]:
+    completed: set[str] = set()
+    for row in iter_jsonl(output_path):
+        article_id = row.get("article_id") or str(row.get("id", "")).split("::w", 1)[0]
+        if article_id:
+            completed.add(str(article_id))
+    return completed
 
 
 def main() -> int:
     args = parse_args()
     output_path = resolve_path(args.output)
-    if output_path.exists() and not args.overwrite:
+    if output_path.exists() and not args.overwrite and not args.append_missing:
         print(f"Output already exists, skipping: {output_path}")
         return 0
     records = load_records(resolve_path(args.input))
-    write_jsonl(output_path, [], overwrite=True)
+    if output_path.exists() and not args.overwrite and args.append_missing:
+        completed = completed_article_ids(output_path)
+        records = [record for record in records if str(record.get("id")) not in completed]
+        if not records:
+            print(f"No new sampled articles to window: {output_path}")
+            return 0
+        print(f"Appending windows for {len(records)} new sampled articles to {output_path}")
+    else:
+        write_jsonl(output_path, [], overwrite=True)
     row_count = 0
     for record in tqdm(records, desc="Windowing"):
         for row in window_record(

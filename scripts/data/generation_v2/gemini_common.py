@@ -85,6 +85,7 @@ def add_gemini_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--retry-failed", action="store_true")
+    parser.add_argument("--save-thought-summaries", action="store_true")
 
 
 def prompt_settings(args: argparse.Namespace, *, component: str) -> dict[str, Any]:
@@ -93,17 +94,20 @@ def prompt_settings(args: argparse.Namespace, *, component: str) -> dict[str, An
             "temperature": args.verifier_temperature,
             "reasoning_effort": args.verifier_reasoning_effort,
             "max_tokens": args.max_tokens,
+            "save_thought_summaries": args.save_thought_summaries,
         }
     if component == "router":
         return {
             "temperature": args.router_temperature,
             "reasoning_effort": args.router_reasoning_effort,
             "max_tokens": args.max_tokens,
+            "save_thought_summaries": args.save_thought_summaries,
         }
     return {
         "temperature": args.temperature,
         "reasoning_effort": args.reasoning_effort,
         "max_tokens": args.max_tokens,
+        "save_thought_summaries": args.save_thought_summaries,
     }
 
 
@@ -144,6 +148,8 @@ def batch_generation_config(
         "responseJsonSchema": schema,
     }
     thinking = _thinking_config_for_batch(model, settings.get("reasoning_effort"))
+    if settings.get("save_thought_summaries"):
+        thinking = {**(thinking or {}), "includeThoughts": True}
     if thinking is not None:
         config["thinkingConfig"] = thinking
     return config
@@ -179,21 +185,33 @@ def parse_json_response_text(text: str) -> dict[str, Any]:
     return json.loads(text)
 
 
-def extract_batch_response(line: dict[str, Any]) -> tuple[str, dict[str, Any] | None, dict[str, int], str | None]:
+def _text_from_response_parts(parts: list[dict[str, Any]]) -> str:
+    return "".join(str(part.get("text") or "") for part in parts if not part.get("thought"))
+
+
+def _thought_summaries_from_response_parts(parts: list[dict[str, Any]]) -> list[str]:
+    return [str(part.get("text") or "") for part in parts if part.get("thought") and part.get("text")]
+
+
+def extract_batch_response(
+    line: dict[str, Any],
+) -> tuple[str, dict[str, Any] | None, dict[str, int], str | None, list[str]]:
     key = str(line.get("key") or line.get("custom_id") or "")
     if line.get("error") or line.get("status"):
-        return key, None, normalize_usage({}), json.dumps(line.get("error") or line.get("status"))
+        return key, None, normalize_usage({}), json.dumps(line.get("error") or line.get("status")), []
 
     response = line.get("response") or line
     usage = normalize_usage(response.get("usageMetadata") or response.get("usage_metadata") or {})
     text = ""
+    thought_summaries: list[str] = []
     try:
         candidates = response.get("candidates") or []
         parts = candidates[0]["content"]["parts"]
-        text = parts[0].get("text") or ""
-        return key, parse_json_response_text(text), usage, None
+        thought_summaries = _thought_summaries_from_response_parts(parts)
+        text = _text_from_response_parts(parts)
+        return key, parse_json_response_text(text), usage, None, thought_summaries
     except Exception as exc:
-        return key, None, usage, f"failed to parse batch response: {exc}; text={text[:500]}"
+        return key, None, usage, f"failed to parse batch response: {exc}; text={text[:500]}", thought_summaries
 
 
 async def call_interactive(
@@ -219,6 +237,7 @@ async def call_interactive(
             response_format=interactive_response_format(response_schema),
             add_cot_field=False,
             reasoning_effort=current_settings.get("reasoning_effort"),
+            include_thoughts=bool(current_settings.get("save_thought_summaries")),
         ):
             responses.append(response)
         if not responses:
@@ -238,6 +257,7 @@ async def call_interactive(
             "payload": payload,
             "usage": normalize_usage(response.metadata),
             "raw_text": response.text,
+            "thought_summaries": response.metadata.get("thought_summaries") or [],
         }
 
     snippet = last_response_text[:500].replace("\n", "\\n")
@@ -408,13 +428,14 @@ async def run_batch_tasks(
         for line in output_path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            key, payload, usage, error = extract_batch_response(json.loads(line))
+            key, payload, usage, error, thought_summaries = extract_batch_response(json.loads(line))
             record_result(
                 {
                     "key": key,
                     "payload": payload,
                     "usage": usage,
                     "error": error,
+                    "thought_summaries": thought_summaries,
                     "batch_job_name": result.get("job_name"),
                     "raw_response_path": str(output_path),
                 }
