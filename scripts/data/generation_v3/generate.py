@@ -21,8 +21,6 @@ from src.llms.llm_client import GeminiLLMClient
 
 LOGGER = logging.getLogger("generation_v3")
 
-DEFAULT_INPUT = REPO_ROOT / "dataset/zhai/raw/sampled_by_event_label.filtered.jsonl"
-DEFAULT_OUTPUT = REPO_ROOT / "dataset/zhai/generated/gemini_annotations.v3.jsonl"
 DEFAULT_PROMPT = Path(__file__).with_name("annotation_prompt.txt")
 DEFAULT_MODEL = "gemini-2.5-flash"
 
@@ -70,7 +68,9 @@ def iter_jsonl(path: Path) -> list[dict[str, Any]]:
                 try:
                     records.append(json.loads(line))
                 except json.JSONDecodeError as exc:
-                    raise ValueError(f"Invalid JSONL at {path}:{line_no}: {exc}") from exc
+                    raise ValueError(
+                        f"Invalid JSONL at {path}:{line_no}: {exc}"
+                    ) from exc
     return records
 
 
@@ -105,7 +105,7 @@ def output_record(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
-        "id": record.get("id"),
+        "id": record.get("id") or record.get("uri") or record.get("doc_id"),
         "status": "ok",
         "source": record.get("source"),
         "annotation": annotation,
@@ -115,12 +115,30 @@ def output_record(
 
 def error_record(record: dict[str, Any], error: str, *, model: str) -> dict[str, Any]:
     return {
-        "id": record.get("id"),
+        "id": record.get("id") or record.get("uri") or record.get("doc_id"),
         "status": "error",
         "source": record.get("source"),
         "error": error,
         "llm": {"model": model},
     }
+
+
+def completed_output_ids(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    completed: set[str] = set()
+    for result in iter_jsonl(path):
+        if result.get("status") != "ok" or "llm" not in result:
+            continue
+        result_id = result.get("id")
+        if result_id is not None:
+            completed.add(str(result_id))
+    return completed
+
+
+def append_jsonl(handle: Any, record: dict[str, Any]) -> None:
+    handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    handle.flush()
 
 
 async def generate_one(
@@ -136,12 +154,18 @@ async def generate_one(
         add_cot_field=False,
         include_thoughts=include_thoughts,
     ):
-        parsed = response.parsed.model_dump() if response.parsed else json.loads(response.text)
+        parsed = (
+            response.parsed.model_dump()
+            if response.parsed
+            else json.loads(response.text)
+        )
         return parsed, response.metadata
     raise RuntimeError("Gemini returned no response.")
 
 
-async def run_sync(args: argparse.Namespace, records: list[dict[str, Any]], template: str) -> None:
+async def run_sync(
+    args: argparse.Namespace, records: list[dict[str, Any]], template: str
+) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
         system_prompt=None,
@@ -150,8 +174,21 @@ async def run_sync(args: argparse.Namespace, records: list[dict[str, Any]], temp
         reasoning_effort=args.reasoning_effort,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8") as handle:
-        for record in tqdm(records, desc="annotating"):
+    completed = completed_output_ids(args.output)
+    pending = [
+        (index, record)
+        for index, record in enumerate(records)
+        if record_id(record, index) not in completed
+    ]
+    if completed:
+        LOGGER.info(
+            "Skipping %s records already present in %s", len(completed), args.output
+        )
+
+    semaphore = asyncio.Semaphore(args.workers)
+
+    async def process_record(index: int, record: dict[str, Any]) -> dict[str, Any]:
+        async with semaphore:
             try:
                 annotation, metadata = await generate_one(
                     client,
@@ -159,11 +196,21 @@ async def run_sync(args: argparse.Namespace, records: list[dict[str, Any]], temp
                     render_prompt(template, record),
                     include_thoughts=args.include_thoughts,
                 )
-                result = output_record(record, annotation, model=args.model, metadata=metadata)
+                return output_record(
+                    record, annotation, model=args.model, metadata=metadata
+                )
             except Exception as exc:
-                LOGGER.exception("Failed id=%s", record.get("id"))
-                result = error_record(record, str(exc), model=args.model)
-            handle.write(json.dumps(result, ensure_ascii=False) + "\n")
+                LOGGER.exception("Failed id=%s", record_id(record, index))
+                return error_record(record, str(exc), model=args.model)
+
+    coroutines = [process_record(index, record) for index, record in pending]
+    with args.output.open("a", encoding="utf-8") as handle:
+        for future in tqdm(
+            asyncio.as_completed(coroutines),
+            total=len(coroutines),
+            desc="annotating",
+        ):
+            append_jsonl(handle, await future)
 
 
 async def run_interactive(args: argparse.Namespace, template: str) -> None:
@@ -190,7 +237,7 @@ async def run_interactive(args: argparse.Namespace, template: str) -> None:
     traces = {
         "thoughts_token_count": metadata.get("thoughts_token_count", 0),
         "thought_summaries": metadata.get("thought_summaries", []),
-        "thought_signatures": metadata.get("thought_signatures", []),
+        # "thought_signatures": metadata.get("thought_signatures", []),
     }
     print("THINKING_TRACES")
     print(json.dumps(traces, ensure_ascii=False, indent=2))
@@ -204,7 +251,9 @@ def thinking_budget(reasoning_effort: str | None) -> int:
     try:
         return int(reasoning_effort)
     except ValueError:
-        return {"disable": 0, "low": 1024, "medium": 2048, "high": 4096}[reasoning_effort]
+        return {"disable": 0, "low": 1024, "medium": 2048, "high": 4096}[
+            reasoning_effort
+        ]
 
 
 def thinking_level(reasoning_effort: str | None) -> str:
@@ -242,7 +291,11 @@ def batch_request_config(args: argparse.Namespace) -> dict[str, Any]:
 
 def build_batch_tasks(records: list[dict[str, Any]], template: str) -> list[BatchTask]:
     return [
-        BatchTask(key=record_id(record, index), record=record, prompt=render_prompt(template, record))
+        BatchTask(
+            key=record_id(record, index),
+            record=record,
+            prompt=render_prompt(template, record),
+        )
         for index, record in enumerate(records)
     ]
 
@@ -251,7 +304,9 @@ def chunked(items: list[Any], size: int) -> list[list[Any]]:
     return [items[index : index + size] for index in range(0, len(items), size)]
 
 
-def batch_request_line(task: BatchTask, request_config: dict[str, Any]) -> dict[str, Any]:
+def batch_request_line(
+    task: BatchTask, request_config: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "key": task.key,
         "request": {
@@ -279,10 +334,18 @@ async def poll_batch_job(client: GeminiLLMClient, name: str, interval: int) -> A
 def batch_response_text(response: dict[str, Any]) -> str:
     if isinstance(response.get("text"), str):
         return response["text"]
+    fallback_text: str | None = None
     for candidate in response.get("candidates") or []:
         for part in (candidate.get("content") or {}).get("parts") or []:
-            if isinstance(part.get("text"), str):
-                return part["text"]
+            text = part.get("text")
+            if not isinstance(text, str):
+                continue
+            if part.get("thought"):
+                fallback_text = fallback_text or text
+                continue
+            return text
+    if fallback_text is not None:
+        return fallback_text
     raise ValueError("Batch response does not contain generated text.")
 
 
@@ -293,7 +356,9 @@ def batch_response_metadata(response: dict[str, Any]) -> dict[str, Any]:
         metadata.update(
             {
                 "prompt_tokens": int(
-                    usage.get("prompt_token_count") or usage.get("promptTokenCount") or 0
+                    usage.get("prompt_token_count")
+                    or usage.get("promptTokenCount")
+                    or 0
                 ),
                 "completion_tokens": int(
                     usage.get("candidates_token_count")
@@ -306,7 +371,9 @@ def batch_response_metadata(response: dict[str, Any]) -> dict[str, Any]:
                     or 0
                 ),
                 "thoughts_token_count": int(
-                    usage.get("thoughts_token_count") or usage.get("thoughtsTokenCount") or 0
+                    usage.get("thoughts_token_count")
+                    or usage.get("thoughtsTokenCount")
+                    or 0
                 ),
             }
         )
@@ -322,7 +389,7 @@ def batch_response_metadata(response: dict[str, Any]) -> dict[str, Any]:
             if signature:
                 signatures.append(str(signature))
     metadata["thought_summaries"] = summaries
-    metadata["thought_signatures"] = signatures
+    # metadata["thought_signatures"] = signatures
     return metadata
 
 
@@ -333,7 +400,100 @@ def batch_result_key(line: dict[str, Any]) -> str:
     return str(metadata.get("key") or "")
 
 
-async def run_batch(args: argparse.Namespace, records: list[dict[str, Any]], template: str) -> None:
+async def execute_batch_chunk(
+    *,
+    client: GeminiLLMClient,
+    args: argparse.Namespace,
+    request_config: dict[str, Any],
+    task_chunk: list[BatchTask],
+    chunk_index: int,
+) -> tuple[list[dict[str, Any]], set[str]]:
+    request_path = args.output.with_suffix(
+        f".batch.part-{chunk_index:04d}.requests.jsonl"
+    )
+    result_path = args.output.with_suffix(
+        f".batch.part-{chunk_index:04d}.results.jsonl"
+    )
+    request_path.write_text(
+        "".join(
+            json.dumps(batch_request_line(task, request_config), ensure_ascii=False)
+            + "\n"
+            for task in task_chunk
+        ),
+        encoding="utf-8",
+    )
+    uploaded = await asyncio.to_thread(
+        client.client.files.upload,
+        file=str(request_path),
+        config=genai_types.UploadFileConfig(
+            display_name=request_path.stem,
+            mime_type="jsonl",
+        ),
+    )
+    job = await asyncio.to_thread(
+        client.client.batches.create,
+        model=args.model,
+        src=uploaded.name,
+        config={"display_name": f"{args.output.stem}-part-{chunk_index:04d}"},
+    )
+    job = await poll_batch_job(client, job.name, args.batch_poll_interval_seconds)
+    if job.state.name != "JOB_STATE_SUCCEEDED":
+        error = f"Batch job {job.name} ended with {job.state.name}: {job.error}"
+        return [
+            error_record(task.record, error, model=args.model) for task in task_chunk
+        ], {task.key for task in task_chunk}
+    if not job.dest or not job.dest.file_name:
+        error = f"Batch job {job.name} succeeded without a result file."
+        return [
+            error_record(task.record, error, model=args.model) for task in task_chunk
+        ], {task.key for task in task_chunk}
+
+    data = await asyncio.to_thread(
+        client.client.files.download, file=job.dest.file_name
+    )
+    result_path.write_bytes(data)
+
+    task_by_key = {task.key: task for task in task_chunk}
+    seen: set[str] = set()
+    records: list[dict[str, Any]] = []
+    for line in iter_jsonl(result_path):
+        key = batch_result_key(line)
+        task = task_by_key.get(key)
+        if task is None:
+            LOGGER.warning("Skipping unexpected batch result key=%s", key)
+            continue
+        try:
+            response = line.get("response")
+            if not isinstance(response, dict):
+                raise ValueError(str(line.get("error") or "Missing batch response."))
+            annotation = json.loads(batch_response_text(response))
+            annotation = Annotation.model_validate(annotation).model_dump()
+            records.append(
+                output_record(
+                    task.record,
+                    annotation,
+                    model=args.model,
+                    metadata={
+                        **batch_response_metadata(response),
+                        "batch_job_name": job.name,
+                    },
+                )
+            )
+        except Exception as exc:
+            records.append(error_record(task.record, str(exc), model=args.model))
+        seen.add(key)
+
+    for task in task_chunk:
+        if task.key not in seen:
+            records.append(
+                error_record(task.record, "Batch result missing.", model=args.model)
+            )
+    return records, seen
+
+
+async def run_batch(
+    args: argparse.Namespace, records: list[dict[str, Any]], template: str
+) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
         system_prompt=None,
@@ -343,76 +503,56 @@ async def run_batch(args: argparse.Namespace, records: list[dict[str, Any]], tem
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     request_config = batch_request_config(args)
-    tasks = build_batch_tasks(records, template)
-    by_key = {task.key: task for task in tasks}
-    results: dict[str, dict[str, Any]] = {}
+    completed = completed_output_ids(args.output)
+    tasks = [
+        task
+        for task in build_batch_tasks(records, template)
+        if task.key not in completed
+    ]
+    if completed:
+        LOGGER.info(
+            "Skipping %s records already present in %s", len(completed), args.output
+        )
+    chunks = list(enumerate(chunked(tasks, args.batch_size), start=1))
+    semaphore = asyncio.Semaphore(args.workers)
 
-    for chunk_index, task_chunk in enumerate(chunked(tasks, args.batch_size), start=1):
-        request_path = args.output.with_suffix(f".batch.part-{chunk_index:04d}.requests.jsonl")
-        result_path = args.output.with_suffix(f".batch.part-{chunk_index:04d}.results.jsonl")
-        request_path.write_text(
-            "".join(
-                json.dumps(batch_request_line(task, request_config), ensure_ascii=False) + "\n"
-                for task in task_chunk
-            ),
-            encoding="utf-8",
-        )
-        uploaded = await asyncio.to_thread(
-            client.client.files.upload,
-            file=str(request_path),
-            config=genai_types.UploadFileConfig(
-                display_name=request_path.stem,
-                mime_type="jsonl",
-            ),
-        )
-        job = await asyncio.to_thread(
-            client.client.batches.create,
-            model=args.model,
-            src=uploaded.name,
-            config={"display_name": f"{args.output.stem}-part-{chunk_index:04d}"},
-        )
-        job = await poll_batch_job(client, job.name, args.batch_poll_interval_seconds)
-        if job.state.name != "JOB_STATE_SUCCEEDED":
-            raise RuntimeError(f"Batch job {job.name} ended with {job.state.name}: {job.error}")
-        data = await asyncio.to_thread(client.client.files.download, file=job.dest.file_name)
-        result_path.write_bytes(data)
-
-        for line in iter_jsonl(result_path):
-            key = batch_result_key(line)
-            task = by_key.get(key)
-            if task is None:
-                LOGGER.warning("Skipping unexpected batch result key=%s", key)
-                continue
+    async def run_chunk(
+        chunk_index: int, task_chunk: list[BatchTask]
+    ) -> tuple[list[dict[str, Any]], set[str]]:
+        async with semaphore:
             try:
-                response = line.get("response")
-                if not isinstance(response, dict):
-                    raise ValueError(str(line.get("error") or "Missing batch response."))
-                annotation = json.loads(batch_response_text(response))
-                annotation = Annotation.model_validate(annotation).model_dump()
-                results[key] = output_record(
-                    task.record,
-                    annotation,
-                    model=args.model,
-                    metadata={
-                        **batch_response_metadata(response),
-                        "batch_job_name": job.name,
-                    },
+                return await execute_batch_chunk(
+                    client=client,
+                    args=args,
+                    request_config=request_config,
+                    task_chunk=task_chunk,
+                    chunk_index=chunk_index,
                 )
             except Exception as exc:
-                results[key] = error_record(task.record, str(exc), model=args.model)
+                LOGGER.exception("Failed batch chunk=%s", chunk_index)
+                return [
+                    error_record(task.record, str(exc), model=args.model)
+                    for task in task_chunk
+                ], {task.key for task in task_chunk}
 
-    with args.output.open("w", encoding="utf-8") as handle:
-        for task in tasks:
-            result = results.get(task.key) or error_record(
-                task.record, "Batch result missing.", model=args.model
-            )
-            handle.write(json.dumps(result, ensure_ascii=False) + "\n")
+    coroutines = [
+        run_chunk(chunk_index, task_chunk) for chunk_index, task_chunk in chunks
+    ]
+    with args.output.open("a", encoding="utf-8") as handle:
+        for future in tqdm(
+            asyncio.as_completed(coroutines),
+            total=len(coroutines),
+            desc="batch chunks",
+        ):
+            chunk_records, _seen = await future
+            for result in chunk_records:
+                append_jsonl(handle, result)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--input", type=Path, default=None)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--prompt", type=Path, default=DEFAULT_PROMPT)
     parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env")
     parser.add_argument("--model", default=DEFAULT_MODEL)
@@ -426,7 +566,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-api", action="store_true")
     parser.add_argument("--batch-size", type=int, default=100)
     parser.add_argument("--batch-poll-interval-seconds", type=int, default=30)
-    return parser.parse_args()
+    parser.add_argument("--workers", type=int, default=4)
+
+    args = parser.parse_args()
+    if not args.interactive:
+        if args.input is None:
+            raise ValueError("Input path is required when not in interactive mode.")
+
+    if args.output is None:
+        raise ValueError("Output path is required.")
+    if args.input is not None and args.input.resolve() == args.output.resolve():
+        raise ValueError("--output must be different from --input.")
+    if args.workers < 1:
+        raise ValueError("--workers must be >= 1")
+    if args.batch_size < 1:
+        raise ValueError("--batch-size must be >= 1")
+    if args.batch_poll_interval_seconds < 1:
+        raise ValueError("--batch-poll-interval-seconds must be >= 1")
+    return args
 
 
 async def main() -> None:
