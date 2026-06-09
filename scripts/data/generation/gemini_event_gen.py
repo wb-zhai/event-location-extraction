@@ -4899,7 +4899,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--long-document-threshold-chars",
         type=int,
-        default=None,
+        default=3000,
         help="Minimum article character length that triggers windowed extraction.",
     )
     parser.add_argument("--window-target-chars", type=int, default=None)

@@ -21,7 +21,13 @@ from pydantic import BaseModel, Field, create_model
 
 from src.llms.settings import LLMSettings
 
-REASONING_EFFORT = {"disable": 0, "low": 1024, "medium": 2048, "high": 4096}
+REASONING_EFFORT = {
+    "disable": 0,
+    "minimal": 0,
+    "low": 1024,
+    "medium": 2048,
+    "high": 4096,
+}
 
 
 logger = logging.getLogger(__name__)
@@ -34,6 +40,15 @@ def _thought_summaries_from_parts(parts: list[Any]) -> list[str]:
         if text and getattr(part, "thought", False):
             summaries.append(str(text))
     return summaries
+
+
+def _thought_signatures_from_parts(parts: list[Any]) -> list[str]:
+    signatures: list[str] = []
+    for part in parts:
+        signature = getattr(part, "thought_signature", None)
+        if signature:
+            signatures.append(str(signature))
+    return signatures
 
 
 def create_schema_from_dict(
@@ -357,6 +372,7 @@ class GeminiLLMClient(LLMClient):
 
         config = types.GenerateContentConfig(**override_settings)
 
+        raw_reasoning_effort = reasoning_effort
         if reasoning_effort is None:
             reasoning_effort = 0
         elif isinstance(reasoning_effort, str):
@@ -381,7 +397,14 @@ class GeminiLLMClient(LLMClient):
             )
             config.thinking_config = thinking_config
         elif "3" in self.model_name and "gemini" in self.model_name:
-            reasoning_effort = "low" if reasoning_effort <= 1024 else "high"
+            if raw_reasoning_effort in {"minimal", "low", "medium", "high"}:
+                reasoning_effort = raw_reasoning_effort
+            elif reasoning_effort <= 1024:
+                reasoning_effort = "low"
+            elif reasoning_effort <= 2048:
+                reasoning_effort = "medium"
+            else:
+                reasoning_effort = "high"
             thinking_config = types.ThinkingConfig(
                 thinking_level=reasoning_effort,
                 include_thoughts=include_thoughts or None,
@@ -496,6 +519,11 @@ class GeminiLLMClient(LLMClient):
                             )
                             if getattr(chunk, "candidates", None)
                             else [],
+                            "thought_signatures": _thought_signatures_from_parts(
+                                chunk.candidates[0].content.parts
+                            )
+                            if getattr(chunk, "candidates", None)
+                            else [],
                         },
                         parsed=chunk.parsed if response_format_model else None,
                     )
@@ -518,6 +546,11 @@ class GeminiLLMClient(LLMClient):
                         "thoughts_token_count": response.usage_metadata.thoughts_token_count
                         or 0,
                         "thought_summaries": _thought_summaries_from_parts(
+                            response.candidates[0].content.parts
+                        )
+                        if getattr(response, "candidates", None)
+                        else [],
+                        "thought_signatures": _thought_signatures_from_parts(
                             response.candidates[0].content.parts
                         )
                         if getattr(response, "candidates", None)
