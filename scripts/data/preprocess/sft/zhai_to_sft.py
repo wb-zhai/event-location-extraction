@@ -269,6 +269,13 @@ def convert_document(
     document = source.get("text")
     if not isinstance(document, str) or not document.strip():
         return None
+    metadata = {
+        "document_char_start": 0,
+        "document_char_end": len(document),
+    }
+    doc_id = data.get("id")
+    if isinstance(doc_id, str) and doc_id:
+        metadata["doc_id"] = doc_id
 
     events: list[dict[str, Any]] = []
     for event in data.get("events", []):
@@ -294,18 +301,12 @@ def convert_document(
     )
     return {
         "question": document.strip(),
-        "metadata": {
-            "document_char_start": 0,
-            "document_char_end": len(document),
-        },
+        "metadata": metadata,
         "answer": {"events": events},
     } if include_offsets else _strip_offsets_from_record(
         {
             "question": document.strip(),
-            "metadata": {
-                "document_char_start": 0,
-                "document_char_end": len(document),
-            },
+            "metadata": metadata,
             "answer": {"events": events},
         }
     )
@@ -399,6 +400,9 @@ def slice_window(
         },
         "answer": {"events": events},
     }
+    doc_id = sample.get("metadata", {}).get("doc_id")
+    if isinstance(doc_id, str) and doc_id:
+        record["metadata"]["doc_id"] = doc_id
     return record if include_offsets else _strip_offsets_from_record(record)
 
 

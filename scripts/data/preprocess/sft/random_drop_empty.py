@@ -17,7 +17,7 @@ if __name__ == "__main__":
     new_data = []
     for example in data:
         if len(example["answer"]["events"]) == 0:
-            if random.random() < 0.5:
+            if random.random() < 0.25:
                 new_data.append(example)
         else:
             new_data.append(example)
