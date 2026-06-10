@@ -26,7 +26,7 @@ Ground every event with one exact quote copied from the article.
   "events": [
     {
       "event_type": "string",
-      "location_text": "string | not_stated",
+      "event_location": "string | not_stated",
       "event_time": "string | not_stated",
       "time_status": "past | ongoing | forecast | not_stated",
       "affected_entity": "string | not_stated | not_applicable",
@@ -49,9 +49,11 @@ If the article contains no extractable ontology event related to food insecurity
 
 <missingness_convention>
 Use "not_stated" when the article does not provide the information.
-Use "not_applicable" when the field does not make sense for that event.
-These values are different. Do not merge them.
-Do not infer plausible values from world knowledge, geography, URLs, filenames, metadata outside the input text, or neighboring events.
+Use "not_applicable" only when the field truly does not make sense for that event.
+Prefer "not_stated" over "not_applicable" when uncertain.
+For affected_entity and affected_group, use "not_stated" if the article does not explicitly name the affected entity or group.
+Do not infer plausible values from world knowledge, geography, URLs, filenames, source names, publication metadata outside the input text, or neighboring events.
+If a location, time, affected entity, affected group, severity, or modality is not explicitly grounded in the input text, use the appropriate missingness value.
 </missingness_convention>
 
 <allowed_event_types>
@@ -140,7 +142,10 @@ If the same event is repeated without new event information, extract it once.
 Do not extract background world knowledge.
 Do not extract vague implications unless the text clearly states the event.
 Do not create causal links.
-Do not infer hidden events, IPC pillars, admin levels, or event IDs.
+Do not infer hidden events, IPC pillars, admin levels, coordinates, or event IDs.
+
+Historical or background examples may be extracted if they are explicit risk-related events and can be grounded cleanly.
+Do not extract a background example if it is only a causal analogy and the article does not state a concrete event matching the ontology.
 
 If an article mentions a response, aid delivery, surgery, treatment, funding, policy action, or logistics action, do NOT extract it unless that response itself exactly matches an allowed ontology event label.
 
@@ -149,7 +154,20 @@ Prefer specific event mentions over broad themes:
 - "people fled their homes" -> fled home population or population affected by displacement, depending on wording
 - "rainfall far below normal" -> drought conditions
 - "armed clashes" -> military conflict or violence, depending on wording
+- "water stress", "water shortage", "decline in fresh water", or "decreased water availability" -> water supply reduction
+- "arsenic contamination", "salinity intrusion", "polluted groundwater", or "unsafe water" -> water contamination
 </extraction_rules>
+
+<event_type_disambiguation>
+Do not label general disease burden, mortality from disease, or lack of safe water as "disease outbreak" unless the text explicitly states an outbreak, epidemic, spread, surge, increase in cases, or disease cases in a specific population or place.
+Use "water contamination" for arsenic contamination, salinity, toxins, polluted groundwater, unsafe water, or contaminated water sources when directly supported.
+Use "water supply reduction" for water stress, water shortage, reduced water availability, reduced water flow, or depletion of renewable water unless a more specific allowed label is directly supported.
+Use "low crop yield" for explicit reduced harvests, crop yield drops, declining agricultural production, or production losses.
+Use "food scarcity" for explicit food shortages, food deficits, hunger increases, or insufficient access to food.
+Use "population affected by displacement" when the text describes people being displaced, on the move, forced to move, or becoming refugees.
+Use "people killed" when the article states deaths but the event is not large-scale enough to support "mass casualty event".
+Use "mass casualty event" only for incidents or events with large-scale deaths or casualties, or when the article wording clearly indicates mass casualties.
+</event_type_disambiguation>
 
 <field_definitions>
 document_relevance:
@@ -161,90 +179,129 @@ event_type:
 - If multiple labels seem possible, choose the most specific label directly supported by the grounding_quote.
 - Remove the event if no allowed label is clearly supported.
 
-location_text:
-- Copy the place name that best anchors where the event happens.
-- Prefer named places: countries, provinces, cities, districts, camps, border crossings.
-- Do not use vague spatial or relational phrases such as "across the border", "nearby", "in the area", "outside the city", or "close to the coast" if a named place is available.
-- For migration events, use the origin location for an origin crisis and the destination location for an arrival or influx event.
-- If no explicit named event location is given, use "not_stated".
+event_location:
+- The best event-specific location string explicitly grounded in the input text.
+- The objective is to produce a place-name query that can later be processed by a geocoder such as Photon.
+- Do not invent, complete, enrich, or disambiguate locations using world knowledge.
+- Do not add parent locations such as country, province, district, or region unless they are part of the location phrase used in the article.
+- Do not add ", Country" or other administrative context merely to help geocoding.
+- Use only location names explicitly stated in the article text.
+- The location does not need to appear inside grounding_quote, but it must appear somewhere in the article and must clearly scope the extracted event.
+- If a location is mentioned elsewhere in the article but does not clearly scope the event, use "not_stated".
+- Preserve the article's place-name wording as much as possible, with only minimal cleanup.
+
+Location normalization rules:
+- Remove vague spatial modifiers when a clean named place remains:
+  - "southwestern part of Bangladesh" -> "Bangladesh"
+  - "coastal areas of Bangladesh" -> "Bangladesh"
+  - "areas around Kabul" -> "Kabul"
+- Do not split coordinated region names incorrectly:
+  - "South and South East Asia" -> "South Asia; South East Asia"
+  - not "South; South East Asia"
+- If the article lists multiple explicit event locations for the same event, include them as a semicolon-separated list in the order they appear:
+  - "China, Nepal, India and Bangladesh" -> "China; Nepal; India; Bangladesh"
+  - "Khyber Pakhtunkhwa, Sindh, Punjab and Baluchistan regions" -> "Khyber Pakhtunkhwa; Sindh; Punjab; Baluchistan"
+- Keep useful named geographic units when stated:
+  - "Shandong province" -> "Shandong province"
+  - "Satkhira district" -> "Satkhira district"
+  - "Kathmandu Valley" -> "Kathmandu Valley"
+  - "Indus River basin" -> "Indus River basin"
+  - "Himalayan sub-region" -> "Himalayan sub-region"
+- Do not replace a stated region with countries unless the countries are explicitly listed in the same sentence or immediate context.
+- If both a broad region and specific places are explicitly listed for the same event, prefer the specific listed places.
+- Do not use broad non-geocodable scopes as locations:
+  - "world" -> "not_stated"
+  - "globally" -> "not_stated"
+  - "internationally" -> "not_stated"
+  - "many regions" -> "not_stated"
+  - "some regions" -> "not_stated"
+  - "developing countries" -> "not_stated"
+  - "the region" -> "not_stated" unless the named region is explicitly stated nearby.
+- Use named regions only when they are explicitly stated:
+  - "South Asia" -> "South Asia"
+  - "South East Asia" -> "South East Asia"
+  - "Middle East" -> "Middle East"
+  - "Himalayan sub-region" -> "Himalayan sub-region"
+- For migration or displacement:
+  - Use the origin location for an origin crisis.
+  - Use the destination location for an arrival, influx, or hosting event.
+  - If both origin and destination are central and explicitly named, choose the location most directly tied to the extracted event.
+- For river-basin or water-system events:
+  - Use the named basin, river, glacier system, or water system if that is where the event occurs.
+  - Examples: "Indus River basin", "Yellow River", "Himalayan glaciers".
+- If no explicit named event location is stated, use "not_stated".
 
 event_time:
-- The normalized, machine-parseable time or date for the event.
-- Do not simply copy the time phrase from the article when it can be normalized.
-- Infer the real event date/time whenever possible using only:
+- The most grounded event-specific time expression.
+- Prefer normalized, machine-parseable values only when normalization is direct, lossless, and does not invent precision.
+- Do not invent exact dates, months, years, ranges, start dates, or end dates.
+- Do not convert vague expressions into precise dates.
+- Use only:
   - the event-specific wording in the article;
   - the article publication date, if explicitly included in the input text;
-  - calendar logic for relative expressions.
+  - simple calendar logic for relative expressions when the publication date is explicit.
 - Do not use world knowledge, external sources, URLs, filenames, or metadata outside the input text.
-- Use the most precise grounded value possible.
-- Use ISO-like formats:
-  - Year: YYYY
-  - Month: YYYY-MM
-  - Day: YYYY-MM-DD
-  - Year range: YYYY-YYYY
-  - Month range: YYYY-MM/YYYY-MM
-  - Day range: YYYY-MM-DD/YYYY-MM-DD
-  - Open-ended start: YYYY-
-  - Open-ended end: -YYYY
-- Normalize absolute expressions:
-  - "from 1992 to 1996" -> "1992-1996"
-  - "between 1992 and 1996" -> "1992-1996"
-  - "as of mid-2018" -> "2018"
-  - "in 2018" -> "2018"
-  - "in March 2018" -> "2018-03"
-  - "on 12 March 2018" -> "2018-03-12"
-  - "since March 2018" -> "2018-03-"
-  - "before 2018" -> "-2018"
-  - "after 2018" -> "2018-"
-- Normalize relative expressions using the article publication date when it is explicitly included in the input text:
-  - If the publication date is 2018-07-15, then "last month" -> "2018-06"
-  - If the publication date is 2018-07-15, then "this month" -> "2018-07"
-  - If the publication date is 2018-07-15, then "this year" -> "2018"
-  - If the publication date is 2018-07-15, then "yesterday" -> "2018-07-14"
-  - If the publication date is 2018-07-15, then "today" -> "2018-07-15"
-  - If the publication date is 2018-07-15, then "tomorrow" -> "2018-07-16" only when the event is forecast or projected.
-  - If the publication date is 2018-07-15, then "next month" -> "2018-08" only when the event is forecast or projected.
-- For weekday expressions such as "on Tuesday":
-  - Resolve to the closest matching calendar date not after the publication date, unless the article clearly indicates a future event.
-  - If the publication date is Sunday 2018-07-15, then "on Tuesday" -> "2018-07-10" unless future wording is explicit.
-- For vague but directional expressions:
-  - "recently" -> "not_stated" unless the article gives a more specific anchor.
-  - "in recent years" -> "not_stated" unless the article gives a bounded range.
-  - "for decades" -> "not_stated" unless the article gives a start year or range.
-  - "during the rainy season" -> "not_stated" unless the article explicitly defines the season dates.
-  - "currently", "now", "still", or "ongoing" -> use the article publication date if the event is clearly current at publication time; otherwise use "not_stated".
-- If the article gives a duration and an anchor, normalize to a range when possible:
-  - If publication date is 2018-07-15, "over the past two weeks" -> "2018-07-01/2018-07-15"
-  - If publication date is 2018-07-15, "over the past year" -> "2017-07/2018-07" unless exact day precision is clearly intended.
-- If the article gives a time expression with lower precision, do not invent higher precision:
-  - "mid-2018" -> "2018"
-  - "early 2018" -> "2018"
-  - "late 2018" -> "2018"
-  - "summer 2018" -> "2018" unless the article explicitly defines the season dates.
-- If no event-specific time is stated, use "not_stated".
-- Do not include filler words such as "from", "to", "as of", "around", "during", "since", "last", or "next" in event_time unless the expression cannot be normalized and is still useful.
-- If a time expression cannot be normalized but is explicitly event-specific and useful, copy the shortest useful time phrase from the article.
-- If a non-normalized time phrase would not be useful for downstream parsing, use "not_stated".
+
+Normalize only when direct:
+- "from 1992 to 1996" -> "1992-1996"
+- "between 1992 and 1996" -> "1992-1996"
+- "in 2018" -> "2018"
+- "in March 2018" -> "2018-03"
+- "on 12 March 2018" -> "2018-03-12"
+- "since March 2018" -> "2018-03-"
+- "before 2018" -> "-2018"
+- "after 2018" -> "2018-"
+- "as of mid-2018" -> "2018"
+- "early 2018", "mid-2018", "late 2018" -> "2018"
+
+Keep vague but informative expressions when exact normalization would invent precision:
+- "by the 2020s" -> "by the 2020s"
+- "during the 2020s" -> "2020s"
+- "middle of the century" -> "middle of the century"
+- "by the middle of the century" -> "by the middle of the century"
+- "in the next 20 years" -> "in the next 20 years" unless the article publication date is explicit and the exact range can be derived without ambiguity.
+- "over the past ten years" -> "over the past ten years" unless the article publication date is explicit and the exact range can be derived without ambiguity.
+- "in recent years" -> "in recent years"
+- "currently" -> "currently"
+- "now" -> "now"
+- "still" -> "still"
+- "ongoing" -> "ongoing"
+
+Normalize relative expressions only when publication date is explicitly included in the input text:
+- If publication date is "2018-07-15", "last month" -> "2018-06"
+- If publication date is "2018-07-15", "this month" -> "2018-07"
+- If publication date is "2018-07-15", "yesterday" -> "2018-07-14"
+- If publication date is "2018-07-15", "today" -> "2018-07-15"
+- If publication date is "2018-07-15", "tomorrow" -> "2018-07-16" only when the event is forecast or projected.
+
+Do not over-normalize:
+- "by the 2020s" must not become "2020-01-01/2029-12-31".
+- "middle of the century" must not become "2050" unless the article explicitly says "2050".
+- "past ten years" must not become a date range unless a publication date is explicitly present and the range is unambiguous.
+- Do not add day or month precision when the article only gives a year, decade, season, or vague period.
+
+If no event-specific time is stated, use "not_stated".
 
 time_status:
-- "past" if the event clearly happened before the article's publication date and is completed or historical.
-- "ongoing" if the event is continuing, current, rising, still happening, or affecting people at the article's publication date.
-- "forecast" if the event is expected, projected, warned about, or likely to happen after the article's publication date.
+- "past" if the event clearly happened before the article's publication/reporting moment and is completed or historical.
+- "ongoing" if the event is continuing, current, rising, still happening, or affecting people at the article's publication/reporting moment.
+- "forecast" if the event is expected, projected, warned about, likely, predicted, or planned to happen after the article's publication/reporting moment.
 - "not_stated" if the article does not provide enough information.
-- Base this only on article wording, the explicitly provided publication date in the input text, and the normalized event_time.
-- Do not infer time status from world knowledge.
+- Base this only on article wording, the explicitly provided publication date in the input text, and event_time.
+- Do not infer time_status from world knowledge.
 
 affected_entity:
 - The thing, system, asset, or livelihood affected.
 - Examples: "food and medicine", "healthcare system", "water supply", "maize crop", "roads", "aid supplies".
 - If absent, use "not_stated".
-- If this field does not make sense for the event, use "not_applicable".
+- Prefer "not_stated" over "not_applicable" unless the field truly cannot apply to the event.
 
 affected_group:
 - The people or population group affected.
 - Examples: "farmers", "children", "refugees", "pastoralists", "Venezuelan migrants".
 - If absent, use "not_stated".
-- If this field does not make sense for the event, use "not_applicable".
+- Prefer "not_stated" over "not_applicable" unless the field truly cannot apply to the event.
+- For humanitarian, disaster, displacement, food, water, health, and conflict events, affected_group usually makes sense; if the article does not name the group, use "not_stated".
 
 severity:
 - "low" for limited or mild impact.
@@ -256,15 +313,16 @@ severity:
 
 modality:
 - "asserted" if the article states the event as a fact.
-- "reported" if the event is attributed to a source, authority, official, or organization.
-- "projected" if the event is expected or projected in the future.
-- "hedged" if the event is uncertain, possible, suspected, or conditional.
+- "reported" if the event is attributed to a source, authority, official, report, data source, or organization.
+- "projected" if the event is expected, predicted, forecast, estimated, likely, warned about, or projected in the future.
+- "hedged" if the event is uncertain, possible, suspected, conditional, or explicitly not confirmed.
 
 grounding_quote:
 - Must be one exact, contiguous span copied from the article.
 - Must be sufficient to justify the event_type.
-- Prefer the shortest local quote that clearly supports the event.
-- The quote may also include the source wording used to normalize event_time when helpful.
+- Prefer the shortest local quote that clearly supports the event_type.
+- The grounding_quote does not need to include event_location if the location is explicitly stated elsewhere in the article and clearly scopes the event.
+- The grounding_quote does not need to include event_time if the time is explicitly stated elsewhere in the article and clearly scopes the event.
 - Do not paraphrase.
 </field_definitions>
 
@@ -273,8 +331,8 @@ Example article sentence:
 "Published on 15 July 2018. Aid officials warned that food shortages are worsening in northern Gaza, while families who fled Rafah last month remain in makeshift shelters."
 
 Correct extraction pattern:
-- "food shortages are worsening in northern Gaza" supports event_type "food scarcity", location_text "northern Gaza", event_time "2018-07-15", time_status "ongoing", modality "reported".
-- "families who fled Rafah last month" supports event_type "fled home population", location_text "Rafah", event_time "2018-06", time_status "past".
+- "food shortages are worsening in northern Gaza" supports event_type "food scarcity", event_location "northern Gaza", event_time "2018-07-15", time_status "ongoing", modality "reported".
+- "families who fled Rafah last month" supports event_type "fled home population", event_location "Rafah", event_time "2018-06", time_status "past".
 
 Do not extract "Aid officials warned" as an aid event. It is attribution, not an ontology event.
 
@@ -283,14 +341,80 @@ Example article sentence:
 
 Correct extraction pattern:
 - "from 1992 to 1996" should be normalized as event_time "1992-1996".
-- "political instability" supports event_type "political instability".
+- If no explicit named event location is given for the political instability, event_location should be "not_stated".
+- Do not infer "Afghanistan" unless Afghanistan is explicitly stated in the event sentence or nearby article context.
 
 Example article sentence:
 "There were still disease outbreaks in Afghanistan as of mid-2018, including some cases of measles and Crimean-Congo hemorrhagic fever."
 
 Correct extraction pattern:
-- "as of mid-2018" should be normalized as event_time "2018".
 - "disease outbreaks in Afghanistan" supports event_type "disease outbreak".
+- event_location should be "Afghanistan".
+- "as of mid-2018" should be normalized as event_time "2018".
+
+Example article sentence:
+"A flood ravaged the southwestern part of Bangladesh in 2000."
+
+Correct extraction pattern:
+- event_type should be "flooding".
+- event_location should be "Bangladesh".
+- event_time should be "2000".
+- Do not output "southwestern part of Bangladesh" because it contains a vague spatial modifier and the clean named location "Bangladesh" is explicitly present.
+
+Example article sentence:
+"The 1995 grain harvest in Shandong province declined by 2.7 million tons."
+
+Correct extraction pattern:
+- event_type should be "low crop yield".
+- event_location should be "Shandong province".
+- event_time should be "1995".
+- Do not output "Shandong, China" unless the article itself uses that full location phrase.
+
+Example article sentence:
+"120 million to 1.2 billion will experience increased water stress by the 2020s in South and South East Asia."
+
+Correct extraction pattern:
+- event_type should be "water supply reduction".
+- event_location should be "South Asia; South East Asia".
+- event_time should be "by the 2020s".
+- Do not output event_location "South; South East Asia".
+- Do not output event_time "2020-01-01/2029-12-31".
+
+Example article sentence:
+"In the next 20 years, China, Nepal, India and Bangladesh in the Himalayan sub-region will face a depletion of almost 275 billion cubic meters of annual renewable water."
+
+Correct extraction pattern:
+- event_type should be "water supply reduction".
+- event_location should be "China; Nepal; India; Bangladesh".
+- event_time should be "in the next 20 years" unless the article publication date is explicit and an exact range can be derived without ambiguity.
+- Prefer the explicitly listed countries over the broader phrase "Himalayan sub-region".
+
+Example article sentence:
+"The crop yield will drop by 30-50% in the case of all the four countries by the middle of the century."
+
+Correct extraction pattern:
+- event_type should be "low crop yield".
+- If the immediately preceding sentence explicitly lists the four countries as China, Nepal, India and Bangladesh, event_location may be "China; Nepal; India; Bangladesh".
+- event_time should be "by the middle of the century".
+- Do not convert "middle of the century" to "2050" unless the article explicitly says "2050".
+
+Example article sentence:
+"The World Health Organization described the arsenic contamination in Bangladesh as 'the largest mass poisoning of a population in history'."
+
+Correct extraction pattern:
+- event_type should be "water contamination".
+- event_location should be "Bangladesh".
+- affected_group should be "population" or "Bangladeshis" if explicitly stated nearby; otherwise "not_stated".
+- Do not label this as "disease outbreak".
+
+Example article sentence:
+"In September 2011, a 6.9-magnitude earthquake in Nepal's Kathmandu Valley displaced 12,301 people and killed six people."
+
+Correct extraction pattern:
+- event_type may be "population affected by displacement" for the displacement.
+- event_location should be "Kathmandu Valley".
+- event_time should be "2011-09".
+- Do not output "Kathmandu Valley, Nepal" unless that exact combined place phrase is used in the article.
 </examples>
 
 <article_text>
@@ -303,12 +427,20 @@ Before returning the JSON, silently verify:
 - The top-level object has exactly document_relevance and events.
 - Every event object has exactly the schema keys.
 - Every event_type is exactly one allowed ontology label.
+- Every event object uses event_location, not location_text.
 - Every event object uses event_time, not time_text.
-- Every event_time value is normalized when the article provides a normalizable absolute or relative time expression.
+- Every event_location value is explicitly grounded in the article text.
+- No event_location value adds a country, parent region, administrative unit, or disambiguating context unless that exact or equivalent location phrase is explicitly present in the article text.
+- No event_location value is inferred from world knowledge, geography, URLs, filenames, source names, or metadata outside the input text.
+- Coordinated locations are not split incorrectly.
+- If no explicit named event location is stated, event_location is "not_stated".
+- Every event_time value is the most grounded event-specific time expression.
+- event_time is normalized only when normalization is direct, lossless, and does not invent precision.
+- event_time does not invent days, months, years, start dates, end dates, or ranges.
+- Vague but informative time expressions remain vague rather than being over-normalized.
 - Relative event times are normalized only against the publication date explicitly included in the input text.
-- event_time uses the most precise grounded ISO-like value possible.
-- event_time does not contain filler words such as "from", "to", "as of", "around", "during", "since", "last", or "next" unless the expression cannot be normalized and is still useful.
-- If the event time cannot be normalized or grounded, event_time is "not_stated".
+- If the event time cannot be grounded, event_time is "not_stated".
+- affected_entity and affected_group use "not_stated" when missing.
 - Every grounding_quote is copied verbatim from <article_text>.
 - Every non-missing field is grounded in the article.
 - There are no duplicate event records.

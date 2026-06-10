@@ -358,7 +358,7 @@ def main():
     parser.add_argument(
         "--max-chars",
         type=int,
-        default=3000,
+        default=1000,
         help="Max characters to use for relevance",
     )
     parser.add_argument(

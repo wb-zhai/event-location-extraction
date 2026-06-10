@@ -24,11 +24,17 @@ LOGGER = logging.getLogger("generation_v3")
 DEFAULT_PROMPT = Path(__file__).with_name("annotation_prompt.txt")
 DEFAULT_MODEL = "gemini-2.5-flash"
 
+SYSTEM_PROMPT_PATH = Path(__file__).with_name("system_prompt.txt")
+USER_PROMPT_PATH = Path(__file__).with_name("user_prompt.txt")
+
+SYSTEM_PROMPT = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
+USER_PROMPT = USER_PROMPT_PATH.read_text(encoding="utf-8").strip()
+
 
 class AnnotationEvent(BaseModel):
     event_type: str
-    location_text: str
-    time_text: str
+    event_location: str
+    event_time: str
     time_status: Literal["past", "ongoing", "forecast", "not_stated"]
     affected_entity: str
     affected_group: str
@@ -74,26 +80,48 @@ def iter_jsonl(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def load_input_records(path: Path) -> list[dict[str, Any]]:
+    if path.suffix == ".json":
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            return [payload]
+        raise ValueError(f"Expected JSON object or list at {path}.")
+    return iter_jsonl(path)
+
+
 def record_id(record: dict[str, Any], index: int) -> str:
-    return str(record.get("id") or record.get("uri") or record.get("doc_id") or index)
+    return str(record.get("id") or index)
 
 
 def source_title(record: dict[str, Any]) -> str:
-    source = record.get("source")
-    if isinstance(source, dict):
-        return str(source.get("title") or "")
     return str(record.get("title") or "")
 
 
 def source_text(record: dict[str, Any]) -> str:
-    source = record.get("source")
-    if isinstance(source, dict):
-        return str(source.get("text") or "")
-    return str(record.get("text") or record.get("body") or "")
+    return str(record.get("text") or "")
+
+
+def source_publish_date(record: dict[str, Any]) -> str:
+    return str(record.get("publish_date") or "")
+
+
+def source_record(record: dict[str, Any]) -> dict[str, str]:
+    return {
+        "title": source_title(record),
+        "text": source_text(record),
+        "source_url": str(record.get("source_url") or ""),
+        "publish_date": source_publish_date(record),
+    }
 
 
 def render_prompt(template: str, record: dict[str, Any]) -> str:
-    article = f"Title: {source_title(record)}\n\n{source_text(record)}"
+    article = (
+        f"Title: {source_title(record)}\n"
+        f"publish_date: {source_publish_date(record) or 'not_stated'}\n\n"
+        f"{source_text(record)}"
+    )
     return template.replace("{{ARTICLE_TEXT}}", article)
 
 
@@ -105,9 +133,9 @@ def output_record(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
-        "id": record.get("id") or record.get("uri") or record.get("doc_id"),
+        "id": record.get("id"),
         "status": "ok",
-        "source": record.get("source"),
+        "source": source_record(record),
         "annotation": annotation,
         "llm": {"model": model, "metadata": metadata or {}},
     }
@@ -115,9 +143,9 @@ def output_record(
 
 def error_record(record: dict[str, Any], error: str, *, model: str) -> dict[str, Any]:
     return {
-        "id": record.get("id") or record.get("uri") or record.get("doc_id"),
+        "id": record.get("id"),
         "status": "error",
-        "source": record.get("source"),
+        "source": source_record(record),
         "error": error,
         "llm": {"model": model},
     }
@@ -168,7 +196,7 @@ async def run_sync(
 ) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
-        system_prompt=None,
+        system_prompt=SYSTEM_PROMPT,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
@@ -222,7 +250,7 @@ async def run_interactive(args: argparse.Namespace, template: str) -> None:
 
     client = GeminiLLMClient(
         model_name=args.model,
-        system_prompt=None,
+        system_prompt=SYSTEM_PROMPT,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
@@ -237,7 +265,6 @@ async def run_interactive(args: argparse.Namespace, template: str) -> None:
     traces = {
         "thoughts_token_count": metadata.get("thoughts_token_count", 0),
         "thought_summaries": metadata.get("thought_summaries", []),
-        # "thought_signatures": metadata.get("thought_signatures", []),
     }
     print("THINKING_TRACES")
     print(json.dumps(traces, ensure_ascii=False, indent=2))
@@ -379,17 +406,12 @@ def batch_response_metadata(response: dict[str, Any]) -> dict[str, Any]:
         )
 
     summaries: list[str] = []
-    signatures: list[str] = []
     for candidate in response.get("candidates") or []:
         for part in (candidate.get("content") or {}).get("parts") or []:
             text = part.get("text")
             if text and part.get("thought"):
                 summaries.append(str(text))
-            signature = part.get("thoughtSignature") or part.get("thought_signature")
-            if signature:
-                signatures.append(str(signature))
     metadata["thought_summaries"] = summaries
-    # metadata["thought_signatures"] = signatures
     return metadata
 
 
@@ -496,7 +518,7 @@ async def run_batch(
 ) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
-        system_prompt=None,
+        system_prompt=SYSTEM_PROMPT,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
@@ -553,7 +575,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument("--prompt", type=Path, default=DEFAULT_PROMPT)
+    parser.add_argument("--prompt", type=Path, default=USER_PROMPT_PATH)
     parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--temperature", type=float, default=0.0)
@@ -595,7 +617,7 @@ async def main() -> None:
         await run_interactive(args, template)
         return
 
-    records = iter_jsonl(args.input)
+    records = load_input_records(args.input)
     if args.limit is not None:
         records = records[: args.limit]
     if args.batch_api:
