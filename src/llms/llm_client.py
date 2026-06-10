@@ -168,11 +168,16 @@ class LLMClient:
         Returns:
             str: The rendered prompt text.
         """
-        # Append .prompt if not already present
-        if not template_name.endswith(".prompt"):
-            template_name = f"{template_name}.prompt"
-
-        template = self.prompt_env.get_template(template_name)
+        try:
+            # Append .prompt if not already present
+            if not template_name.endswith(".prompt"):
+                template_name = f"{template_name}.prompt"
+            template = self.prompt_env.get_template(template_name)
+        except jinja2.TemplateNotFound:
+            # try to treat it as a raw string template
+            template_name = template_name.replace(".prompt", "")
+            template = jinja2.Template(template_name)
+        
         rendered_prompt = template.render(**kwargs)
         return rendered_prompt
 
