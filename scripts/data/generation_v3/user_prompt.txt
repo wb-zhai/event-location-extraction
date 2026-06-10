@@ -1,10 +1,12 @@
 <context>
+<publish_date>{{PUBLISH_DATE}}</publish_date>
 <article_text>
 {{ARTICLE_TEXT}}
 </article_text>
 </context>
 
 <task>
-Based only on the article text and publish_date above, extract all explicitly stated risk-related events according to the system instruction.
+Based only on publish_date and article_text above, extract all explicitly stated risk-related events according to the system instruction.
+
 Return the final JSON object only.
 </task>
