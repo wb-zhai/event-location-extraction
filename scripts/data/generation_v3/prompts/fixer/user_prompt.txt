@@ -1,0 +1,13 @@
+<context>
+<publish_date>{{PUBLISH_DATE}}</publish_date>
+<article_text>
+{{ARTICLE_TEXT}}
+</article_text>
+</context>
+
+<invalid_events>
+{{INVALID_EVENTS}}
+</invalid_events>
+
+For each event in invalid_events (in order), decide whether it can be fixed or must be dropped.
+Return a JSON object with a "decisions" array aligned 1-to-1 with the input events.

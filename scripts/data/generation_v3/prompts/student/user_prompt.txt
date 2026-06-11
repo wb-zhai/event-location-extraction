@@ -1,0 +1,10 @@
+<context>
+<publish_date>{{PUBLISH_DATE}}</publish_date>
+<article_text>
+{{ARTICLE_TEXT}}
+</article_text>
+</context>
+
+<task>
+Extract all risk-related events from the article above. Return the JSON object only.
+</task>

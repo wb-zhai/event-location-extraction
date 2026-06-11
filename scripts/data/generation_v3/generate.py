@@ -24,16 +24,13 @@ LOGGER = logging.getLogger("generation_v3")
 DEFAULT_PROMPT = Path(__file__).with_name("annotation_prompt.txt")
 DEFAULT_MODEL = "gemini-2.5-flash"
 
-SYSTEM_PROMPT_PATH = Path(__file__).with_name("system_prompt.txt")
-USER_PROMPT_PATH = Path(__file__).with_name("user_prompt.txt")
-
-SYSTEM_PROMPT = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
-USER_PROMPT = USER_PROMPT_PATH.read_text(encoding="utf-8").strip()
-
-
+SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "system_prompt.txt"
+USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "user_prompt.txt"
 class AnnotationEvent(BaseModel):
     event_type: str
+    event_location_text: str
     event_location: str
+    event_time_text: str
     event_time: str
     time_status: Literal["past", "ongoing", "forecast", "not_stated"]
     affected_entity: str
@@ -46,6 +43,15 @@ class AnnotationEvent(BaseModel):
 class Annotation(BaseModel):
     document_relevance: Literal["relevant", "not_relevant"]
     events: list[AnnotationEvent] = Field(default_factory=list)
+
+
+# Pre-built schema dict (same as batch_request_config). Used in both sync and batch
+# paths to guarantee identical wire format. Replicating the batch path's explicit
+# t_schema(...).model_dump(exclude_none=True) call avoids the SDK's internal
+# Schema-object serialization, which produces a different (and rejected) wire format.
+_ANNOTATION_SCHEMA_DICT = genai_transformers.t_schema(None, Annotation).model_dump(
+    exclude_none=True
+)
 
 
 @dataclass
@@ -117,12 +123,10 @@ def source_record(record: dict[str, Any]) -> dict[str, str]:
 
 
 def render_prompt(template: str, record: dict[str, Any]) -> str:
-    article = (
-        f"Title: {source_title(record)}\n"
-        f"publish_date: {source_publish_date(record) or 'not_stated'}\n\n"
-        f"{source_text(record)}"
-    )
-    return template.replace("{{ARTICLE_TEXT}}", article)
+    article = f"Title: {source_title(record)}\n" "\n" f"{source_text(record)}"
+    return template.replace(
+        "{{PUBLISH_DATE}}", source_publish_date(record) or "not_stated"
+    ).replace("{{ARTICLE_TEXT}}", article)
 
 
 def output_record(
@@ -176,27 +180,29 @@ async def generate_one(
     *,
     include_thoughts: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    # Pass the pre-built schema dict via override_settings so both sync and batch
+    # paths send the same wire format (matching batch_request_config).
     async for response in client.generate(
         prompt,
-        response_format=Annotation,
+        override_settings={
+            "response_mime_type": "application/json",
+            "response_schema": _ANNOTATION_SCHEMA_DICT,
+        },
         add_cot_field=False,
         include_thoughts=include_thoughts,
+        reasoning_effort=client.reasoning_effort,
     ):
-        parsed = (
-            response.parsed.model_dump()
-            if response.parsed
-            else json.loads(response.text)
-        )
-        return parsed, response.metadata
+        annotation = Annotation.model_validate(json.loads(response.text)).model_dump()
+        return annotation, response.metadata
     raise RuntimeError("Gemini returned no response.")
 
 
 async def run_sync(
-    args: argparse.Namespace, records: list[dict[str, Any]], template: str
+    args: argparse.Namespace, records: list[dict[str, Any]], template: str, system_prompt: str
 ) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
@@ -241,7 +247,7 @@ async def run_sync(
             append_jsonl(handle, await future)
 
 
-async def run_interactive(args: argparse.Namespace, template: str) -> None:
+async def run_interactive(args: argparse.Namespace, template: str, system_prompt: str) -> None:
     if sys.stdin.isatty():
         print("Paste article text, then press Ctrl-D:", file=sys.stderr)
     text = sys.stdin.read().strip()
@@ -250,7 +256,7 @@ async def run_interactive(args: argparse.Namespace, template: str) -> None:
 
     client = GeminiLLMClient(
         model_name=args.model,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
@@ -297,9 +303,7 @@ def thinking_level(reasoning_effort: str | None) -> str:
 def batch_request_config(args: argparse.Namespace) -> dict[str, Any]:
     generation_config: dict[str, Any] = {
         "responseMimeType": "application/json",
-        "responseSchema": genai_transformers.t_schema(None, Annotation).model_dump(
-            exclude_none=True
-        ),
+        "responseSchema": _ANNOTATION_SCHEMA_DICT,
         "maxOutputTokens": args.max_tokens,
         "temperature": args.temperature,
     }
@@ -510,15 +514,17 @@ async def execute_batch_chunk(
             records.append(
                 error_record(task.record, "Batch result missing.", model=args.model)
             )
+    request_path.unlink(missing_ok=True)
+    result_path.unlink(missing_ok=True)
     return records, seen
 
 
 async def run_batch(
-    args: argparse.Namespace, records: list[dict[str, Any]], template: str
+    args: argparse.Namespace, records: list[dict[str, Any]], template: str, system_prompt: str
 ) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         reasoning_effort=args.reasoning_effort,
@@ -612,18 +618,21 @@ async def main() -> None:
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
     load_env_file(args.env_file)
+    system_prompt = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    print("System prompt:")
+    print(system_prompt)
     template = args.prompt.read_text(encoding="utf-8")
     if args.interactive:
-        await run_interactive(args, template)
+        await run_interactive(args, template, system_prompt)
         return
 
     records = load_input_records(args.input)
     if args.limit is not None:
         records = records[: args.limit]
     if args.batch_api:
-        await run_batch(args, records, template)
+        await run_batch(args, records, template, system_prompt)
     else:
-        await run_sync(args, records, template)
+        await run_sync(args, records, template, system_prompt)
 
 
 if __name__ == "__main__":

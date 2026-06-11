@@ -17,7 +17,9 @@ Think carefully before answering, but do not show your reasoning.
   "events": [
     {
       "event_type": "string",
+      "event_location_text": "string | not_stated",
       "event_location": "string | not_stated",
+      "event_time_text": "string | not_stated",
       "event_time": "string | not_stated",
       "time_status": "past | ongoing | forecast | not_stated",
       "affected_entity": "string | not_stated | not_applicable",
@@ -31,75 +33,165 @@ Think carefully before answering, but do not show your reasoning.
 </output_schema>
 
 <allowed_event_types>
-economic factor decline
-increased risk
-economic situation affecting people
-low crop yield
-infrastructure degradation
-shortcoming
-food scarcity
-political instability
-deforested land
-disease outbreak
-military conflict
-fire destruction
-conflict risk
-violence
-population affected by displacement
-rights violation
-risk destruction
-hazard exposure vulnerability condition
-degradation environment
-militant group presence
-flooding
-clustering
-traumatic situation
-disaster event
-looting risk
-pest insect spread
-artillery bombing
-climate event
-corridor blockade
-resource depletion
-threat of attack
-fled home population
-migrant influx
-increased rainfall
-drought conditions
-water supply reduction
-fallen river flow
-risk pollution
-water lying
-critical need
-refugee crisis
-human life threat
-temperature increase climate change
-geopolitical risk
-increased heat
-existing humanitarian crisis
-cyclone impact
-palestinian civilian risk
-israel gaza conflict
-reduced aid
-trade embargo
-obstruction of humanitarian aid
-ecosystem extinction
-lack of shelter
-financial contributions
-population increase
-sea inundation
-marine ecosystem impact
-water contamination
-people killed
-waste accumulation
-mass casualty event
-flight disruption
-power outage
-food aid requirement
-ineffective sewage drainage
-strong wind
-monsoon rain event
-stolen food ration
+cyclone
+harvest devastation
+rising inflation
+prolonged fighting
+air attack
+locusts
+rival warlords
+water distribution shortages
+militia groups
+reduced imports
+prolonged dry spell
+population crisis
+floods
+migration
+environmental degradation
+pests
+farmland loss or access
+siege
+gastrointestinal distress
+drought
+humanitarian disaster
+civil strife
+economic collapse
+cholera outbreak
+land invasions
+withheld relief
+economic crisis
+cattle death
+terrorism
+bombing campaign
+flee
+police torture
+natural disaster
+increased external debt
+aid worker deaths
+lack of roads
+severe rains
+failed crops
+insufficient rainfall
+epidemics affecting agriculture
+land grab
+international embargo
+blockade
+international terrorists
+internal strife
+makeshift camps
+land reform
+forests destroyed
+economic impoverishment
+malnourished
+restricted relief flights
+restricted humanitarian access
+carbon emissions
+call for donations
+land seizures
+food insecurity
+pirates
+foreign troops
+continued deterioration
+totalitarian rule
+conflict
+acute hunger
+human rights abuses
+military junta
+lack of agricultural infrastructure
+toll on livestock
+dependence on international aid
+mismanagement
+displacement
+the offensive
+tragedy
+gangs of bandits
+continued strife
+rinderpest
+reduced national output
+clans
+aid appeal
+convoys
+food crisis
+overthrow
+cattle plague
+catastrophe
+foreign aid
+international alarm
+collapse of government
+dehydrated
+repression
+cycle of poverty
+rebel insurgency
+weather extremes
+slashed export
+potato blight
+corrupt government
+clan battle
+oppressive regimes
+unable to sow
+price of food
+authoritarian rule
+bad harvests
+violent suppression
+brain drain
+price rise
+refugees
+years of warfare
+destructive pattern
+transport bottleneck
+harvest decline
+rising food prices
+humanitarian situation
+self reliance
+land degradation
+hunger crises
+secession
+mass hunger
+looting
+forced eviction from land
+apathy from starvation
+wreaked havoc
+regimes toppled
+massive starvation
+military dictatorship
+infrastructure damage
+water availability
+lack of alternatives
+economic rise
+anti-western policies
+ecological crisis
+alarming level
+mayhem
+life-threatening hunger
+man-made disaster
+slave trade
+climatic hazards
+devastated the economy
+corruption
+clan warfare
+brutal government
+coup
+international intervention
+lack of authority
+lack of cultivation
+poor soil quality
+disrupted trade
+food assistance
+greenhouse gases
+disruption to farming
+dysfunction
+power struggle
+livestock deaths
+asylum seekers
+climate change
+politically engineered
+warlord
+dictators
+jihadist groups
+infant mortality
+burning houses
+major offensive
+stolen food aid
 </allowed_event_types>
 
 <document_relevance_rules>
@@ -133,20 +225,25 @@ Do not stop after finding the most important events.
 event_type must exactly match one allowed_event_types label.
 Use the most specific directly supported label.
 
-Water stress, water shortage, reduced water availability, reduced flow, or depletion -> water supply reduction.
-Arsenic contamination, salinity, toxins, polluted groundwater, unsafe water -> water contamination.
-Food shortages, food deficit, hunger increase -> food scarcity.
-Reduced harvest, declining agricultural production, crop losses -> low crop yield.
-Displaced people, refugees, people on the move -> population affected by displacement.
-Do not use disease outbreak for general disease burden or disease deaths unless the text states outbreak, epidemic, spread, surge, increase in cases, or cases in a specific place/population.
+Water stress, water shortage, reduced water availability, reduced flow, or depletion -> water availability or water distribution shortages.
+Arsenic contamination, salinity, toxins, polluted groundwater, unsafe water -> environmental degradation or ecological crisis if directly stated.
+Food shortages, food deficit, hunger increase, famine -> food insecurity or food crisis.
+Reduced harvest, declining agricultural production, crop losses -> harvest decline or failed crops or harvest devastation.
+Displaced people, refugees, people on the move -> displacement, flee, or refugees.
+Do not use cholera outbreak unless cholera is explicitly named. Do not use epidemics affecting agriculture unless the epidemic affects crops or livestock.
 
-Sanctions are not automatically "trade embargo".
-Use "trade embargo" only when the text explicitly states embargo, trade ban, import/export ban, trade blockade, or equivalent trade restriction.
-Generic sanctions causing economic harm -> economic factor decline or economic situation affecting people, if concrete harm is stated.
+Below-average rainfall, reduced rainfall, decreased rainfall, insufficient rainfall -> use "drought" or "prolonged dry spell" only if the text explicitly characterizes conditions as drought. Use "insufficient rainfall" for lack of rain stated directly.
+Malnutrition, acute malnutrition, undernourishment, food consumption gaps -> malnourished. Use "food insecurity" if food deficit is stated, "acute hunger" if acute need is stated.
+
+Sanctions are not automatically "international embargo".
+Use "international embargo" only when the text explicitly states embargo, trade ban, import/export ban, trade blockade, or equivalent trade restriction.
+Generic sanctions causing economic harm -> economic crisis or economic impoverishment, if concrete harm is stated.
 </event_type_rules>
 
 <event_location_rules>
-event_location is a geocodable place-name string.
+event_location_text is the shortest verbatim quote from article_text that contains the location evidence.
+Copy it exactly as it appears. If no explicit location is stated, use "not_stated".
+event_location is derived from event_location_text — a geocodable place-name string.
 Use only locations explicitly stated in article_text.
 Do not use world knowledge to infer locations.
 Do not use historical states, wartime entities, organizations, governments, or political bodies as event_location unless they are also geocodable place names.
@@ -155,6 +252,7 @@ If no explicit geocodable place is stated, use "not_stated".
 
 The location does not need to appear inside grounding_quote, but it must clearly scope the same event in nearby article_text.
 Do not add parent context such as country, province, district, or region unless article_text itself uses that location phrase.
+Livelihood zones, pastoral zones, agropastoral zones, and similar livelihood or administrative classifications (e.g. "Northern Inland Pastoral livelihood zone", "Guban Pastoral") are not geocodable place names. Use the explicitly stated geocodable place that contains them (e.g. the named region or country), or "not_stated" if none is stated nearby.
 Do not convert locations using outside geography knowledge.
 
 For multiple stated geocodable locations, separate them with semicolons in article order:
@@ -164,6 +262,10 @@ For multiple stated geocodable locations, separate them with semicolons in artic
 Remove vague modifiers when a clean named place remains:
 - "southwestern part of Bangladesh" -> "Bangladesh"
 - "coastal areas of Bangladesh" -> "Bangladesh"
+- "northern Gaza" -> "Gaza"
+- "southern Lebanon" -> "Lebanon"
+- "eastern Ukraine" -> "Ukraine"
+- Any directional or zonal prefix (northern, southern, eastern, western, northeastern, northwestern, southeastern, southwestern, central, coastal, rural, urban, remote) followed by a geocodable place -> strip the prefix and keep the place name.
 
 Preserve named units:
 - "Shandong province" -> "Shandong province"
@@ -186,43 +288,22 @@ If countries or places are the affected places, put them in event_location.
 </event_location_rules>
 
 <event_time_rules>
-event_time is the most grounded parseable event-specific time expression.
+event_time_text is the shortest verbatim quote from article_text that contains the time evidence, or the resolved relative expression (e.g. "last month", "today").
+Copy it exactly as it appears. If no explicit or resolvable time is stated, use "not_stated".
+event_time is derived from event_time_text — the most grounded parseable event-specific time expression.
 Use only times explicitly stated in article_text or times resolved from relative expressions using publish_date.
-Do not use publication date as event_time unless the event is explicitly framed relative to publication date, such as "today", "yesterday", "last month", "this year", "currently", or "now".
-If a more specific event date is explicitly stated in article_text, prefer that over publish_date.
+Do not use publication date as event_time unless the event is explicitly framed relative to publication date (e.g. "today", "currently", "last month", "this year").
+If a more specific event date is stated in article_text, prefer it over publish_date.
 
-Normalize direct dates:
-- "from 1992 to 1996" -> "1992-1996"
-- "between 1992 and 1996" -> "1992-1996"
-- "in 2018" -> "2018"
-- "in March 2018" -> "2018-03"
-- "on 12 March 2018" -> "2018-03-12"
-- "since March 2018" -> "2018-03-"
-- "before 2018" -> "-2018"
-- "after 2018" -> "2018-"
-- "as of mid-2018" -> "2018"
-- "early 2018" -> "2018"
-- "mid-2018" -> "2018"
-- "late 2018" -> "2018"
-- "spring of 1991" -> "1991"
-- "summer 2020" -> "2020"
-- "autumn 2020" -> "2020"
-- "fall 2020" -> "2020"
-- "winter 2020" -> "2020"
+Format using ISO 8601, truncating to the known precision (YYYY, YYYY-MM, or YYYY-MM-DD).
+Drop vague qualifiers (early/mid/late/spring/summer/fall/winter) and keep just the year.
+For ranges, use `/` as separator: "from X to Y" or "between X and Y" -> "X/Y".
+For open-ended bounds, use a trailing or leading `/`: "since X" -> "X/", "after X" -> "X/", "before/until/through X" -> "/X".
 
-Resolve relative dates only if publish_date is provided:
-- publish_date "2018-07-15" + "today" -> "2018-07-15"
-- publish_date "2018-07-15" + "yesterday" -> "2018-07-14"
-- publish_date "2018-07-15" + "last month" -> "2018-06"
-- publish_date "2018-07-15" + "last year" -> "2017"
-- publish_date "2018-07-15" + "this year" -> "2018"
+Resolve relative expressions using publish_date: "today" -> publish_date, "yesterday" -> publish_date minus 1 day, "last month/year" -> subtract accordingly, "this year" -> publish_date year.
+For "currently", "now", "still", or "ongoing": use publish_date if provided, otherwise "not_stated".
 
-For "currently", "now", "still", or "ongoing":
-- If publish_date is provided and the event is current at publication time, use publish_date.
-- If publish_date is not provided, keep the expression as written only if event-specific.
-- Otherwise use "not_stated".
-
-If both a transcript/recording date and publish_date are present in article_text, use the date that most directly scopes the event.
+If both a transcript/recording date and publish_date are present, use the date that most directly scopes the event.
 If no event-specific time is stated or resolvable, use "not_stated".
 </event_time_rules>
 
@@ -278,9 +359,11 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
 <example>
 <input>120 million to 1.2 billion will experience increased water stress by the 2020s in South and South East Asia.</input>
 <output_fields>
-event_type: water supply reduction
+event_type: water availability
+event_location_text: in South and South East Asia
 event_location: South Asia; South East Asia
-event_time: by the 2020s
+event_time_text: by the 2020s
+event_time: /2029
 time_status: forecast
 </output_fields>
 </example>
@@ -288,8 +371,10 @@ time_status: forecast
 <example>
 <input>A flood ravaged the southwestern part of Bangladesh in 2000.</input>
 <output_fields>
-event_type: flooding
+event_type: floods
+event_location_text: the southwestern part of Bangladesh
 event_location: Bangladesh
+event_time_text: in 2000
 event_time: 2000
 time_status: past
 </output_fields>
@@ -298,8 +383,10 @@ time_status: past
 <example>
 <input>The 1995 grain harvest in Shandong province declined by 2.7 million tons.</input>
 <output_fields>
-event_type: low crop yield
+event_type: harvest decline
+event_location_text: in Shandong province
 event_location: Shandong province
+event_time_text: The 1995 grain harvest
 event_time: 1995
 time_status: past
 affected_entity: grain harvest
@@ -307,10 +394,13 @@ affected_entity: grain harvest
 </example>
 
 <example>
-<input>The World Health Organization described the arsenic contamination in Bangladesh as the largest mass poisoning.</input>
+<input>The World Health Organization described the arsenic contamination in northeast Bangladesh as the largest mass poisoning.</input>
 <output_fields>
-event_type: water contamination
+event_type: environmental degradation
+event_location_text: in northeast Bangladesh
 event_location: Bangladesh
+event_time_text: not_stated
+event_time: not_stated
 affected_entity: water
 modality: reported
 </output_fields>
@@ -319,8 +409,10 @@ modality: reported
 <example>
 <input>the outbreak of the wars in Croatia in the spring of 1991</input>
 <output_fields>
-event_type: military conflict
+event_type: conflict
+event_location_text: in Croatia
 event_location: Croatia
+event_time_text: in the spring of 1991
 event_time: 1991
 time_status: past
 modality: asserted
@@ -330,8 +422,10 @@ modality: asserted
 <example>
 <input>There is a conflict in Bosnia, a major conflict in Bosnia</input>
 <output_fields>
-event_type: military conflict
+event_type: conflict
+event_location_text: in Bosnia
 event_location: Bosnia
+event_time_text: not_stated
 event_time: publish_date if provided
 time_status: ongoing
 severity: high
@@ -342,8 +436,11 @@ modality: asserted
 <example>
 <input>right-wing extremists in Croatia carried out military attacks on Serbian communities</input>
 <output_fields>
-event_type: violence
+event_type: civil strife
+event_location_text: in Croatia
 event_location: Croatia
+event_time_text: not_stated
+event_time: not_stated
 affected_group: Serbian communities
 modality: asserted
 </output_fields>
@@ -352,8 +449,11 @@ modality: asserted
 <example>
 <input>Germany, Italy and other European countries have suffered tremendously from sanctions</input>
 <output_fields>
-event_type: economic factor decline
+event_type: economic crisis
+event_location_text: Germany, Italy and other European countries
 event_location: Germany; Italy
+event_time_text: not_stated
+event_time: not_stated
 affected_entity: not_stated
 affected_group: not_stated
 severity: high
@@ -364,8 +464,11 @@ modality: asserted
 <example>
 <input>There are rumors about German leopard tanks being used in Bosnia. They haven't been confirmed so far as I know.</input>
 <output_fields>
-event_type: military conflict
+event_type: conflict
+event_location_text: in Bosnia
 event_location: Bosnia
+event_time_text: not_stated
+event_time: not_stated
 modality: hedged
 </output_fields>
 </example>
@@ -378,6 +481,8 @@ Before returning, validate silently:
 - Every event has exactly the schema keys.
 - Every event_type is from allowed_event_types.
 - Every event_location is either explicitly stated and geocodable, or "not_stated".
+- event_location_text is copied verbatim from article_text, or "not_stated" if event_location is "not_stated".
+- event_time_text is copied verbatim from article_text (or is the resolved relative expression), or "not_stated" if event_time is "not_stated".
 - No location, time, affected group, severity, or event type is invented.
 - grounding_quote is copied verbatim from article_text.
 - If events is empty, document_relevance is "not_relevant".

@@ -182,8 +182,21 @@ def is_near_duplicate_text(
     shingles: frozenset[str],
     seen_shingles: list[frozenset[str]],
     threshold: float = TEXT_NEAR_DUPLICATE_THRESHOLD,
+    shingle_index: dict[str, list[int]] | None = None,
 ) -> bool:
     if not shingles:
+        return False
+    if shingle_index is not None:
+        candidates: set[int] = set()
+        for s in shingles:
+            candidates.update(shingle_index.get(s, ()))
+        for idx in candidates:
+            previous = seen_shingles[idx]
+            if not previous:
+                continue
+            overlap = len(shingles & previous) / min(len(shingles), len(previous))
+            if overlap >= threshold:
+                return True
         return False
     for previous in seen_shingles:
         if not previous:
@@ -199,10 +212,12 @@ def article_identity_seen(
     shingles: frozenset[str],
     seen: dict[str, set[str]],
     seen_shingles: list[frozenset[str]],
+    shingle_index: dict[str, list[int]] | None = None,
 ) -> bool:
     return any(value is not None and value in seen[key] for key, value in keys.items()) or is_near_duplicate_text(
         shingles,
         seen_shingles,
+        shingle_index=shingle_index,
     )
 
 
@@ -253,12 +268,11 @@ def keyword_terms(ontology_path: Path) -> list[tuple[str, float]]:
     return sorted(terms.items(), key=lambda item: (-item[1], item[0]))
 
 
-def keyword_quality_score(title: str, text: str, terms: list[tuple[str, float]]) -> float:
+def keyword_quality_score(title: str, text: str, patterns: list[tuple[re.Pattern[str], float]]) -> float:
     haystack = f"{title}\n{text}".lower()
     score = 0.0
-    for term, weight in terms:
-        pattern = rf"(?<![a-z]){re.escape(term)}(?![a-z])"
-        hits = len(re.findall(pattern, haystack))
+    for pattern, weight in patterns:
+        hits = len(pattern.findall(haystack))
         if hits:
             score += weight * min(hits, 3)
     return score
@@ -290,7 +304,7 @@ def overall_score(quality_score_value: float, keyword_quality_score_value: float
 
 def score_sort_key(row: dict) -> tuple[float, str]:
     return (
-        -float(row.get("overall_score", 0.0)),
+        -float(row.get("keyword_quality_score", 0.0)),
         str(row.get("id") or ""),
     )
 
@@ -313,6 +327,10 @@ def sample_records(
     rng = random.Random(seed)
     terms = ontology_terms(ontology_path)
     keywords = keyword_terms(ontology_path) if keyword else []
+    keyword_patterns: list[tuple[re.Pattern[str], float]] = [
+        (re.compile(rf"(?<![a-z]){re.escape(term)}(?![a-z])"), weight)
+        for term, weight in keywords
+    ]
     buckets: dict[str, list[dict]] = {
         "keyword_risk_factor": [],
         "event_seeded_positive": [],
@@ -336,7 +354,7 @@ def sample_records(
             "overall_score": overall_score(score),
         }
         if keyword:
-            keyword_score = keyword_quality_score(str(record.get("title") or ""), text, keywords)
+            keyword_score = keyword_quality_score(str(record.get("title") or ""), text, keyword_patterns)
             row["keyword_quality_score"] = keyword_score
             row["overall_score"] = overall_score(score, keyword_score)
             if keyword_score >= 4.0:
@@ -348,16 +366,20 @@ def sample_records(
 
     seen = empty_article_identity_seen()
     seen_shingles: list[frozenset[str]] = []
+    shingle_index: dict[str, list[int]] = {}
     candidates.sort(key=score_sort_key)
     for row in candidates:
         identity_keys = article_identity_keys(row)
         shingles = text_shingles(str(row.get("text") or ""))
-        if article_identity_seen(identity_keys, shingles, seen, seen_shingles):
+        if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
             if summary is not None:
                 summary.duplicate_removed_count += 1
             continue
         remember_article_identity(identity_keys, seen)
+        idx = len(seen_shingles)
         seen_shingles.append(shingles)
+        for s in shingles:
+            shingle_index.setdefault(s, []).append(idx)
         buckets[row["source_bucket"]].append(row)
 
     if summary is not None:
@@ -399,7 +421,8 @@ def sample_records(
     for bucket, fraction in mix.items():
         take = int(limit * fraction)
         selected.extend(buckets[bucket][:take])
-    remainder = [row for rows in buckets.values() for row in rows if row not in selected]
+    selected_ids = {row["id"] for row in selected}
+    remainder = [row for rows in buckets.values() for row in rows if row["id"] not in selected_ids]
     selected.extend(remainder[: max(limit - len(selected), 0)])
     selected = selected[:limit]
     selected = sorted(selected, key=score_sort_key) if order_by_score else selected
@@ -442,9 +465,14 @@ def append_sample_records_to_limit(output_path: Path, selected: list[dict], limi
     existing_ids = {str(row.get("id")) for row in existing}
     seen = empty_article_identity_seen()
     seen_shingles: list[frozenset[str]] = []
+    shingle_index: dict[str, list[int]] = {}
     for row in existing:
         remember_article_identity(article_identity_keys(row), seen)
-        seen_shingles.append(text_shingles(str(row.get("text") or "")))
+        idx = len(seen_shingles)
+        shingles = text_shingles(str(row.get("text") or ""))
+        seen_shingles.append(shingles)
+        for s in shingles:
+            shingle_index.setdefault(s, []).append(idx)
 
     appended = []
     for row in selected:
@@ -454,12 +482,15 @@ def append_sample_records_to_limit(output_path: Path, selected: list[dict], limi
             continue
         identity_keys = article_identity_keys(row)
         shingles = text_shingles(str(row.get("text") or ""))
-        if article_identity_seen(identity_keys, shingles, seen, seen_shingles):
+        if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
             continue
         appended.append(row)
         existing_ids.add(str(row.get("id")))
         remember_article_identity(identity_keys, seen)
+        idx = len(seen_shingles)
         seen_shingles.append(shingles)
+        for s in shingles:
+            shingle_index.setdefault(s, []).append(idx)
     if not appended:
         print(f"No new sampled rows to append: {output_path}")
         return 0

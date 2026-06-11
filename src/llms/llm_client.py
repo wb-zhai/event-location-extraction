@@ -34,21 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 def _thought_summaries_from_parts(parts: list[Any]) -> list[str]:
-    summaries: list[str] = []
-    for part in parts:
-        text = getattr(part, "text", None)
-        if text and getattr(part, "thought", False):
-            summaries.append(str(text))
-    return summaries
-
-
-def _thought_signatures_from_parts(parts: list[Any]) -> list[str]:
-    signatures: list[str] = []
-    for part in parts:
-        signature = getattr(part, "thought_signature", None)
-        if signature:
-            signatures.append(str(signature))
-    return signatures
+    return [
+        str(getattr(part, "text", ""))
+        for part in parts
+        if getattr(part, "thought", False) and getattr(part, "text", None)
+    ]
 
 
 def create_schema_from_dict(
@@ -402,19 +392,20 @@ class GeminiLLMClient(LLMClient):
             )
             config.thinking_config = thinking_config
         elif "3" in self.model_name and "gemini" in self.model_name:
-            if raw_reasoning_effort in {"minimal", "low", "medium", "high"}:
-                reasoning_effort = raw_reasoning_effort
-            elif reasoning_effort <= 1024:
-                reasoning_effort = "low"
-            elif reasoning_effort <= 2048:
-                reasoning_effort = "medium"
-            else:
-                reasoning_effort = "high"
-            thinking_config = types.ThinkingConfig(
-                thinking_level=reasoning_effort,
-                include_thoughts=include_thoughts or None,
-            )
-            config.thinking_config = thinking_config
+            if raw_reasoning_effort is not None or include_thoughts:
+                if raw_reasoning_effort in {"minimal", "low", "medium", "high"}:
+                    reasoning_effort = raw_reasoning_effort
+                elif reasoning_effort <= 1024:
+                    reasoning_effort = "low"
+                elif reasoning_effort <= 2048:
+                    reasoning_effort = "medium"
+                else:
+                    reasoning_effort = "high"
+                thinking_config = types.ThinkingConfig(
+                    thinking_level=reasoning_effort,
+                    include_thoughts=include_thoughts or None,
+                )
+                config.thinking_config = thinking_config
         elif "-maas" in self.model_name:
             thinking_config = types.ThinkingConfig(
                 thinking_budget=reasoning_effort, include_thoughts=include_thoughts
@@ -524,11 +515,6 @@ class GeminiLLMClient(LLMClient):
                             )
                             if getattr(chunk, "candidates", None)
                             else [],
-                            "thought_signatures": _thought_signatures_from_parts(
-                                chunk.candidates[0].content.parts
-                            )
-                            if getattr(chunk, "candidates", None)
-                            else [],
                         },
                         parsed=chunk.parsed if response_format_model else None,
                     )
@@ -551,11 +537,6 @@ class GeminiLLMClient(LLMClient):
                         "thoughts_token_count": response.usage_metadata.thoughts_token_count
                         or 0,
                         "thought_summaries": _thought_summaries_from_parts(
-                            response.candidates[0].content.parts
-                        )
-                        if getattr(response, "candidates", None)
-                        else [],
-                        "thought_signatures": _thought_signatures_from_parts(
                             response.candidates[0].content.parts
                         )
                         if getattr(response, "candidates", None)
