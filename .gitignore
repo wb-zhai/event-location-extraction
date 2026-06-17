@@ -1,4 +1,5 @@
 # Custom
+.claude
 .github/hooks/*
 .github/copilot-instructions.md
 dataset/*

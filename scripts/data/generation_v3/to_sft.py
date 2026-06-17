@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import random
 import re
 import sys
 
@@ -581,6 +582,19 @@ def main():
         metavar="NAME_OR_PATH",
         help="HuggingFace tokenizer to use for token count statistics",
     )
+    parser.add_argument(
+        "--max-empty-ratio",
+        type=float,
+        default=None,
+        metavar="RATIO",
+        help="Randomly drop empty windows so they make up at most this fraction of all windows (0–1). Default: keep all.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for --max-empty-ratio sampling (default: non-deterministic)",
+    )
     args = parser.parse_args()
 
     if args.top_k_candidates is not None and args.top_k_candidates < 1:
@@ -593,6 +607,8 @@ def main():
         parser.error("--max-paras must be >= 1")
     if args.overlap_paras < 0:
         parser.error("--overlap-paras must be >= 0")
+    if args.max_empty_ratio is not None and not (0.0 <= args.max_empty_ratio <= 1.0):
+        parser.error("--max-empty-ratio must be between 0 and 1")
 
     ignore = set(args.ignore)
     default_labels = load_ontology_labels(args.ontology)
@@ -615,7 +631,7 @@ def main():
 
             annotation = row.get("annotation")
             if annotation is None:
-                print(f"Skipping line {lineno}: no annotation", file=sys.stderr)
+                print(f"Skipping line {lineno} (id: {row.get('id')}): no annotation", file=sys.stderr)
                 continue
 
             try:
@@ -624,7 +640,7 @@ def main():
                     row_labels(row, default_labels, args.top_k_candidates),
                 )
             except ValueError as e:
-                print(f"Skipping line {lineno}: {e}", file=sys.stderr)
+                print(f"Skipping line {lineno} (id: {row.get('id')}): {e}", file=sys.stderr)
                 continue
 
             if args.no_window:
@@ -658,6 +674,10 @@ def main():
                     )
                 )
 
+    if args.max_empty_ratio is not None:
+        rng = random.Random(args.seed)
+        records = _drop_empty_windows(records, args.max_empty_ratio, rng)
+
     # Strip internal metadata before writing
     output_records = [
         {k: v for k, v in r.items() if not k.startswith("_")}
@@ -671,6 +691,29 @@ def main():
 
     if args.tokenizer and records:
         _print_token_stats(output_records, args.tokenizer)
+
+
+def _drop_empty_windows(
+    records: list[dict], max_empty_ratio: float, rng: random.Random
+) -> list[dict]:
+    """Randomly drop empty windows so their share doesn't exceed *max_empty_ratio*."""
+    empty_indices = [i for i, r in enumerate(records) if r["_window_events"] == 0]
+    non_empty_count = len(records) - len(empty_indices)
+
+    if max_empty_ratio >= 1.0 or not empty_indices:
+        return records
+
+    # solve: max_keep / (non_empty + max_keep) <= max_empty_ratio
+    max_keep = int(max_empty_ratio * non_empty_count / (1.0 - max_empty_ratio))
+
+    if len(empty_indices) <= max_keep:
+        return records
+
+    to_drop = set(rng.sample(empty_indices, len(empty_indices) - max_keep))
+    dropped = len(to_drop)
+    result = [r for i, r in enumerate(records) if i not in to_drop]
+    print(f"Dropped {dropped} empty windows to meet --max-empty-ratio {max_empty_ratio}", file=sys.stderr)
+    return result
 
 
 def _print_window_stats(records: list[dict]) -> None:
