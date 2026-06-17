@@ -163,6 +163,8 @@ def report(label: str, totals: dict[str, dict[str, int]], *, batch: bool = False
 
     suffix = " (known models only)" if has_unknown else ""
     print(f"  Total{suffix}: ${total_cost:.4f}")
+    if grand["records"]:
+        print(f"  Avg/row: ${total_cost / grand['records']:.6f}")
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:

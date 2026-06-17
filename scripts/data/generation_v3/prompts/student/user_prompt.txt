@@ -6,5 +6,7 @@
 </context>
 
 <task>
-Extract all risk-related events from the article above. Return the JSON object only.
+Based only on publish_date and article_text above, extract all explicitly stated risk-related events according to the system instruction.
+
+Return the final JSON object only.
 </task>

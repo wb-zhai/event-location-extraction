@@ -1,8 +1,8 @@
 """Convert zhai-annotated JSONL to LlamaFactory Alpaca SFT format.
 
-Supports paragraph-based windowing (default) so each training example fits within
-a small model's context window.  Use --no-window to fall back to one record per
-whole article.
+Supports paragraph-based windowing (default) so each training example fits
+within a small model's context window.  Oversized paragraphs are split before
+windowing.  Use --no-window to fall back to one record per whole article.
 """
 from __future__ import annotations
 
@@ -11,15 +11,22 @@ import json
 import pathlib
 import re
 import sys
-from typing import Optional
 
 HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-DEFAULT_IGNORE = {"document_relevance", "event_location_text", "event_time_text", "affected_group", "affected_entity"}
+DEFAULT_IGNORE = {
+    "document_relevance",
+    "event_location_text",
+    "event_time_text",
+    "affected_group",
+    "affected_entity",
+    "severity",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -27,6 +34,8 @@ DEFAULT_IGNORE = {"document_relevance", "event_location_text", "event_time_text"
 # ---------------------------------------------------------------------------
 
 _BLANK_LINE_RE = re.compile(r"\n[ \t]*\n+")
+_SENTENCE_TERMINATORS = {".", "!", "?", "。", "！", "？"}
+_CLOSING_PUNCTUATION = {'"', "'", ")", "]", "}", "”", "’"}
 
 
 def split_paragraphs(text: str) -> list[tuple[int, int]]:
@@ -42,6 +51,71 @@ def split_paragraphs(text: str) -> list[tuple[int, int]]:
     if tail.strip():
         paras.append((cursor, len(text)))
     return paras
+
+
+def _trim_span(text: str, start: int, end: int) -> tuple[int, int]:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+def _sentence_spans(text: str, start: int, end: int) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    sent_start = start
+    idx = start
+    while idx < end:
+        if text[idx] not in _SENTENCE_TERMINATORS:
+            idx += 1
+            continue
+
+        sent_end = idx + 1
+        while sent_end < end and text[sent_end] in _CLOSING_PUNCTUATION:
+            sent_end += 1
+        if sent_end == end or text[sent_end].isspace():
+            trimmed = _trim_span(text, sent_start, sent_end)
+            if trimmed[0] < trimmed[1]:
+                spans.append(trimmed)
+            sent_start = sent_end
+            while sent_start < end and text[sent_start].isspace():
+                sent_start += 1
+            idx = sent_start
+            continue
+
+        idx += 1
+
+    trimmed = _trim_span(text, sent_start, end)
+    if trimmed[0] < trimmed[1]:
+        spans.append(trimmed)
+    return spans
+
+
+def split_oversized_paragraphs(
+    text: str, paras: list[tuple[int, int]], *, max_chars: int
+) -> list[tuple[int, int]]:
+    """Split oversized paragraph spans into complete sentence spans.
+
+    Normal paragraphs remain intact. Oversized paragraphs are split into
+    complete sentence spans so windows prefer semantic boundaries. A sentence
+    longer than *max_chars* remains intact because there is no smaller sentence
+    boundary to choose. Offsets always refer to *text*.
+    """
+    if max_chars < 1:
+        raise ValueError("max_chars must be >= 1")
+
+    split_paras: list[tuple[int, int]] = []
+    for para_start, para_end in paras:
+        para_start, para_end = _trim_span(text, para_start, para_end)
+        if para_start >= para_end:
+            continue
+        if para_end - para_start <= max_chars:
+            split_paras.append((para_start, para_end))
+            continue
+
+        split_paras.extend(_sentence_spans(text, para_start, para_end))
+
+    return split_paras
 
 
 # ---------------------------------------------------------------------------
@@ -116,9 +190,8 @@ def build_paragraph_windows(
 ) -> list[tuple[int, int]]:
     """Return a list of (lo, hi) paragraph *index* ranges (hi exclusive).
 
-    Each window covers paras[lo:hi].  Windows are greedy: accumulate whole
-    paragraphs until the next one would exceed max_chars *or* max_paras is
-    already reached.  An oversized single paragraph always forms its own window.
+    Each window covers paras[lo:hi].  Windows are greedy: accumulate spans until
+    the next one would exceed max_chars *or* max_paras is already reached.
     """
     if not paras:
         return []
@@ -145,6 +218,71 @@ def build_paragraph_windows(
     return windows
 
 
+def _window_span(
+    paras: list[tuple[int, int]], window: tuple[int, int]
+) -> tuple[int, int]:
+    lo, hi = window
+    return paras[lo][0], paras[hi - 1][1]
+
+
+def _window_chars(paras: list[tuple[int, int]], window: tuple[int, int]) -> int:
+    start, end = _window_span(paras, window)
+    return end - start
+
+
+def _merge_window_ranges(
+    a: tuple[int, int], b: tuple[int, int]
+) -> tuple[int, int]:
+    return min(a[0], b[0]), max(a[1], b[1])
+
+
+def coalesce_short_windows(
+    paras: list[tuple[int, int]],
+    windows: list[tuple[int, int]],
+    *,
+    min_chars: int,
+    max_chars: int,
+    max_paras: int,
+) -> list[tuple[int, int]]:
+    """Merge short windows into a neighbor when the merged window still fits."""
+    if min_chars <= 0 or len(windows) <= 1:
+        return windows
+
+    coalesced: list[tuple[int, int]] = []
+    i = 0
+    while i < len(windows):
+        window = windows[i]
+        if _window_chars(paras, window) >= min_chars:
+            coalesced.append(window)
+            i += 1
+            continue
+
+        if i + 1 < len(windows):
+            merged = _merge_window_ranges(window, windows[i + 1])
+            if (
+                merged[1] - merged[0] <= max_paras
+                and _window_chars(paras, merged) <= max_chars
+            ):
+                coalesced.append(merged)
+                i += 2
+                continue
+
+        if coalesced:
+            merged = _merge_window_ranges(coalesced[-1], window)
+            if (
+                merged[1] - merged[0] <= max_paras
+                and _window_chars(paras, merged) <= max_chars
+            ):
+                coalesced[-1] = merged
+                i += 1
+                continue
+
+        coalesced.append(window)
+        i += 1
+
+    return coalesced
+
+
 # ---------------------------------------------------------------------------
 # SFT record building
 # ---------------------------------------------------------------------------
@@ -157,6 +295,68 @@ def filter_annotation(annotation: dict, ignore: set[str]) -> dict:
             for event in result["events"]
         ]
     return result
+
+
+def load_ontology_labels(path: pathlib.Path) -> list[str]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict) and isinstance(payload.get("events"), dict):
+        return list(payload["events"].keys())
+    if isinstance(payload, dict):
+        return list(payload.keys())
+    if isinstance(payload, list):
+        return [str(item) for item in payload]
+    raise ValueError(f"Unsupported ontology format at {path}")
+
+
+def _normalize_labels(raw_labels: object, *, key: str) -> list[str]:
+    if isinstance(raw_labels, str):
+        raw_labels = [raw_labels]
+    if not isinstance(raw_labels, list):
+        raise ValueError(f"{key} must be a string or list of strings")
+
+    labels: list[str] = []
+    seen: set[str] = set()
+    for index, label in enumerate(raw_labels):
+        if not isinstance(label, str):
+            raise ValueError(f"{key}[{index}] must be a string")
+        label = label.strip()
+        if not label:
+            raise ValueError(f"{key}[{index}] must be a non-empty string")
+        if label not in seen:
+            labels.append(label)
+            seen.add(label)
+    if not labels:
+        raise ValueError(f"{key} must contain at least one label")
+    return labels
+
+
+def row_labels(row: dict, default_labels: list[str], top_k: int | None) -> list[str]:
+    if "candidate" in row:
+        labels = _normalize_labels(row["candidate"], key="candidate")
+        if top_k is not None:
+            labels = labels[:top_k]
+    elif "candidates" in row:
+        labels = _normalize_labels(row["candidates"], key="candidates")
+        if top_k is not None:
+            labels = labels[:top_k]
+    else:
+        labels = list(default_labels)
+
+    if not labels:
+        raise ValueError("top-k removed all labels")
+    return labels
+
+
+def render_system_prompt(system_prompt: str, labels: list[str]) -> str:
+    rendered, count = re.subn(
+        r"\{\{ALLOWED_EVENT_TYPES\}\}",
+        "\n".join(labels),
+        system_prompt,
+        count=1,
+    )
+    if count != 1:
+        raise ValueError("system prompt must contain one {{ALLOWED_EVENT_TYPES}} placeholder")
+    return rendered
 
 
 def build_user_message(template: str, publish_date: str, article_text: str) -> str:
@@ -175,6 +375,7 @@ def _build_windowed_records(
     max_chars: int,
     max_paras: int,
     overlap: int,
+    min_chars: int = 0,
 ) -> list[dict]:
     source = row.get("source", {})
     annotation = row.get("annotation") or {}
@@ -185,11 +386,19 @@ def _build_windowed_records(
     if not paras:
         # Degenerate: treat whole text as one paragraph
         paras = [(0, len(text))] if text.strip() else []
+    paras = split_oversized_paragraphs(text, paras, max_chars=max_chars)
     if not paras:
         return []
 
     windows = build_paragraph_windows(
         paras, max_chars=max_chars, max_paras=max_paras, overlap=overlap
+    )
+    windows = coalesce_short_windows(
+        paras,
+        windows,
+        min_chars=min_chars,
+        max_chars=max_chars,
+        max_paras=max_paras,
     )
 
     events: list[dict] = annotation.get("events") or []
@@ -254,11 +463,16 @@ def _build_windowed_records(
             if paras[p_idx][1] >= ev_end:
                 new_hi = p_idx + 1
                 break
-        # Only expand (never shrink)
+        # Only expand (never shrink), and keep the configured bounds hard.
         new_lo = min(new_lo, lo)
         new_hi = max(new_hi, hi)
-        expanded_windows[home] = (new_lo, new_hi)
-        expanded_ranges[home] = (paras[new_lo][0], paras[new_hi - 1][1])
+        expanded_start, expanded_end = paras[new_lo][0], paras[new_hi - 1][1]
+        if (
+            expanded_end - expanded_start <= max_chars
+            and new_hi - new_lo <= max_paras
+        ):
+            expanded_windows[home] = (new_lo, new_hi)
+            expanded_ranges[home] = (expanded_start, expanded_end)
 
     # Assignment pass: each event goes into every window that fully contains it
     records = []
@@ -279,6 +493,9 @@ def _build_windowed_records(
         window_annotation = {**annotation, "events": assigned}
         user_msg = build_user_message(user_template, publish_date, window_text)
         assistant_msg = json.dumps(filter_annotation(window_annotation, ignore), ensure_ascii=False)
+
+        if min_chars > 0 and len(window_text) < min_chars and not assigned:
+            continue
 
         records.append({
             "system": system_prompt,
@@ -318,6 +535,19 @@ def main():
         ),
     )
     parser.add_argument(
+        "--ontology",
+        type=pathlib.Path,
+        default=DEFAULT_ONTOLOGY,
+        help="Default label ontology JSON (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--top-k-candidates",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit row candidate labels to the first N labels",
+    )
+    parser.add_argument(
         "--no-window",
         action="store_true",
         help="Disable windowing — one record per whole article",
@@ -326,7 +556,13 @@ def main():
         "--max-chars",
         type=int,
         default=3000,
-        help="Soft character cap per window (default: 3000)",
+        help="Target character cap per window; complete sentences are not cut (default: 3000)",
+    )
+    parser.add_argument(
+        "--min-chars",
+        type=int,
+        default=200,
+        help="Drop no-event windows shorter than this after merge attempts (default: 200; 0 disables)",
     )
     parser.add_argument(
         "--max-paras",
@@ -347,10 +583,22 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.top_k_candidates is not None and args.top_k_candidates < 1:
+        parser.error("--top-k-candidates must be >= 1")
+    if args.max_chars < 1:
+        parser.error("--max-chars must be >= 1")
+    if args.min_chars < 0:
+        parser.error("--min-chars must be >= 0")
+    if args.max_paras < 1:
+        parser.error("--max-paras must be >= 1")
+    if args.overlap_paras < 0:
+        parser.error("--overlap-paras must be >= 0")
+
     ignore = set(args.ignore)
+    default_labels = load_ontology_labels(args.ontology)
 
     prompt_dir = pathlib.Path(args.prompt_dir) if args.prompt_dir else HERE / "prompts" / "student"
-    system_prompt = (prompt_dir / "system_prompt.txt").read_text()
+    system_template = (prompt_dir / "system_prompt.txt").read_text()
     user_template = (prompt_dir / "user_prompt.txt").read_text()
 
     records = []
@@ -368,6 +616,15 @@ def main():
             annotation = row.get("annotation")
             if annotation is None:
                 print(f"Skipping line {lineno}: no annotation", file=sys.stderr)
+                continue
+
+            try:
+                system_prompt = render_system_prompt(
+                    system_template,
+                    row_labels(row, default_labels, args.top_k_candidates),
+                )
+            except ValueError as e:
+                print(f"Skipping line {lineno}: {e}", file=sys.stderr)
                 continue
 
             if args.no_window:
@@ -397,6 +654,7 @@ def main():
                         max_chars=args.max_chars,
                         max_paras=args.max_paras,
                         overlap=args.overlap_paras,
+                        min_chars=args.min_chars,
                     )
                 )
 
@@ -433,6 +691,9 @@ def _print_window_stats(records: list[dict]) -> None:
     if paras:
         print(_stats(paras, "paras/window"))
     print(_stats(events, "events/window"))
+    no_event_count = sum(1 for count in events if count == 0)
+    no_event_pct = no_event_count / len(records) * 100
+    print(f"windows without events: {no_event_count} ({no_event_pct:.1f}%)")
 
 
 def _print_token_stats(records: list[dict], tokenizer_name: str) -> None:

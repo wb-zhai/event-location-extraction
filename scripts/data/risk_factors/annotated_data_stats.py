@@ -4,6 +4,23 @@ from collections import Counter
 from pathlib import Path
 from statistics import median
 from typing import Any
+from urllib.parse import urlparse
+
+
+def get_text(record: dict[str, Any]) -> str:
+    """Return article text whether nested under "source" or at the top level."""
+    source = record.get("source")
+    if isinstance(source, dict) and "text" in source:
+        return source.get("text", "") or ""
+    return record.get("text", "") or ""
+
+
+def get_source_url(record: dict[str, Any]) -> str:
+    """Return source url whether nested under "source" or at the top level."""
+    source = record.get("source")
+    if isinstance(source, dict) and (source.get("source_url") or source.get("source_uri")):
+        return source.get("source_url") or source.get("source_uri") or ""
+    return record.get("source_url") or record.get("source_uri") or ""
 
 
 def percentile(sorted_values: list[int], pct: float) -> float:
@@ -179,7 +196,7 @@ if __name__ == "__main__":
     # count the average number of chars in the article text
     total_chars = 0
     for record in records:
-        text = record["source"].get("text", "")
+        text = get_text(record)
         total_chars += len(text)
     avg_chars = total_chars / total_articles if total_articles > 0 else 0
     print(f"average chars per article: {avg_chars:.2f}")
@@ -187,10 +204,21 @@ if __name__ == "__main__":
     # count the average number of words in the article text
     total_words = 0
     for record in records:
-        text = record["source"].get("text", "")
+        text = get_text(record)
         total_words += len(text.split())
     avg_words = total_words / total_articles if total_articles > 0 else 0
     print(f"average words per article: {avg_words:.2f}")
+
+    domain_counts: Counter[str] = Counter()
+    for record in records:
+        url = get_source_url(record)
+        parsed = urlparse(url)
+        domain = parsed.netloc or parsed.path.split("/")[0] or "(unknown)"
+        domain_counts[domain] += 1
+    print(f"domain distribution ({len(domain_counts)} unique):")
+    for domain, count in domain_counts.most_common(20):
+        pct = count / total_articles * 100
+        print(f"  {count:>5} ({pct:5.1f}%)  {domain}")
 
     print_length_distribution("trigger span", trigger_lengths)
     print_length_distribution("argument span", argument_lengths)

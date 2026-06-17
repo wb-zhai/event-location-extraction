@@ -32,7 +32,7 @@ Return exactly this structure:
       "affected_entity": "string | not_stated | not_applicable",
       "affected_group": "string | not_stated | not_applicable",
       "severity": "low | medium | high | extreme | not_stated",
-      "modality": "asserted | reported | projected | hedged",
+      "modality": "asserted | projected",
       "grounding_quote": "string"
     }
   ]
@@ -291,10 +291,8 @@ severity
 - If severity is not grounded, use "not_stated".
 
 modality
-- asserted = stated as fact in the article
-- reported = attributed to a source or authority
-- projected = projected or expected
-- hedged = uncertain, possible, suspected, conditional
+- asserted = stated as fact in the article, or attributed to a source or authority
+- projected = projected, expected, possible, uncertain, suspected, or conditional
 
 grounding_quote
 - Must be an exact supporting span from the article.

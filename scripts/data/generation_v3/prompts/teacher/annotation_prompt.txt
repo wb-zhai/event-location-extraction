@@ -32,7 +32,7 @@ Ground every event with one exact quote copied from the article.
       "affected_entity": "string | not_stated | not_applicable",
       "affected_group": "string | not_stated | not_applicable",
       "severity": "low | medium | high | extreme | not_stated",
-      "modality": "asserted | reported | projected | hedged",
+      "modality": "asserted | projected",
       "grounding_quote": "string"
     }
   ]
@@ -401,10 +401,8 @@ severity:
 - Base severity only on article wording and stated figures. Never infer severity from world knowledge.
 
 modality:
-- "asserted" if the article states the event as a fact.
-- "reported" if the event is attributed to a source, authority, official, report, data source, or organization.
-- "projected" if the event is expected, predicted, forecast, estimated, likely, warned about, or projected in the future.
-- "hedged" if the event is uncertain, possible, suspected, conditional, or explicitly not confirmed.
+- "asserted" if the article states the event as a fact, or attributes it to a source, authority, official, report, or organization.
+- "projected" if the event is expected, predicted, forecast, estimated, warned about, possible, uncertain, suspected, conditional, or explicitly not confirmed.
 
 grounding_quote:
 - Must be one exact, contiguous span copied from the article.
@@ -420,7 +418,7 @@ Example article sentence:
 "Published on 15 July 2018. Aid officials warned that food shortages are worsening in northern Gaza, while families who fled Rafah last month remain in makeshift shelters."
 
 Correct extraction pattern:
-- "food shortages are worsening in northern Gaza" supports event_type "food insecurity", event_location "northern Gaza", event_time "2018-07-15", time_status "ongoing", modality "reported".
+- "food shortages are worsening in northern Gaza" supports event_type "food insecurity", event_location "northern Gaza", event_time "2018-07-15", time_status "ongoing", modality "asserted".
 - "families who fled Rafah last month" supports event_type "flee", event_location "Rafah", event_time "2018-06", time_status "past".
 
 Do not extract "Aid officials warned" as an aid event. It is attribution, not an ontology event.

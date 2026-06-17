@@ -43,7 +43,7 @@ class FixedEvent(BaseModel):
     affected_entity: str
     affected_group: str
     severity: Literal["low", "medium", "high", "extreme", "not_stated"]
-    modality: Literal["asserted", "reported", "projected", "hedged"]
+    modality: Literal["asserted", "projected"]
     grounding_quote: str
 
 
@@ -185,7 +185,7 @@ def check_event(
 
     valid_time_status = {"past", "ongoing", "forecast", "not_stated"}
     valid_severity = {"low", "medium", "high", "extreme", "not_stated"}
-    valid_modality = {"asserted", "reported", "projected", "hedged"}
+    valid_modality = {"asserted", "projected"}
     if event.get("time_status") not in valid_time_status:
         errors.append(f"invalid time_status: {event.get('time_status')!r}")
     if event.get("severity") not in valid_severity:

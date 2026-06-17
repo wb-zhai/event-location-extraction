@@ -1,8 +1,12 @@
 import argparse
 import asyncio
+import collections
+import copy
 import json
 import logging
 import os
+import random
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,8 +30,11 @@ DEFAULT_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "system_prompt.txt"
 USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "user_prompt.txt"
+
+
 class AnnotationEvent(BaseModel):
     event_type: str
+    grounding_quote: str
     event_location_text: str
     event_location: str
     event_time_text: str
@@ -36,8 +43,7 @@ class AnnotationEvent(BaseModel):
     affected_entity: str
     affected_group: str
     severity: Literal["low", "medium", "high", "extreme", "not_stated"]
-    modality: Literal["asserted", "reported", "projected", "hedged"]
-    grounding_quote: str
+    modality: Literal["asserted", "projected"]
 
 
 class Annotation(BaseModel):
@@ -59,6 +65,10 @@ class BatchTask:
     key: str
     record: dict[str, Any]
     prompt: str
+    system_prompt: str
+    response_schema: dict[str, Any]
+    candidate_labels: list[str] | None = None
+    error: str | None = None
 
 
 def load_env_file(path: Path) -> None:
@@ -129,6 +139,120 @@ def render_prompt(template: str, record: dict[str, Any]) -> str:
     ).replace("{{ARTICLE_TEXT}}", article)
 
 
+def candidate_labels(
+    record: dict[str, Any], top_k: int | None = None
+) -> list[str] | None:
+    if "candidates" not in record:
+        return None
+
+    candidates = record["candidates"]
+    if not isinstance(candidates, list):
+        raise ValueError("candidates must be a list of strings")
+
+    if top_k is not None:
+        candidates = candidates[:top_k]
+
+    labels: list[str] = []
+    seen: set[str] = set()
+    for index, label in enumerate(candidates):
+        if not isinstance(label, str):
+            raise ValueError(f"candidates[{index}] must be a string")
+        label = label.strip()
+        if not label:
+            raise ValueError(f"candidates[{index}] must be a non-empty string")
+        if label not in seen:
+            labels.append(label)
+            seen.add(label)
+
+    if not labels:
+        raise ValueError("candidates must contain at least one label")
+    return labels
+
+
+def annotation_schema(labels: list[str] | None = None) -> dict[str, Any]:
+    if labels is None:
+        return _ANNOTATION_SCHEMA_DICT
+
+    schema = copy.deepcopy(_ANNOTATION_SCHEMA_DICT)
+    event_type_schema = schema["properties"]["events"]["items"]["properties"][
+        "event_type"
+    ]
+    event_type_schema["enum"] = labels
+    return schema
+
+
+def strip_output_schema_block(system_prompt: str) -> str:
+    return re.sub(
+        r"\n?<output_schema>.*?</output_schema>\n?",
+        "\n",
+        system_prompt,
+        flags=re.DOTALL,
+    ).strip()
+
+
+def replace_allowed_event_types(system_prompt: str, labels: list[str]) -> str:
+    replacement = (
+        "<allowed_event_types>\n" + "\n".join(labels) + "\n</allowed_event_types>"
+    )
+    updated, count = re.subn(
+        r"<allowed_event_types>.*?</allowed_event_types>",
+        replacement,
+        system_prompt,
+        count=1,
+        flags=re.DOTALL,
+    )
+    if count != 1:
+        raise ValueError("system prompt must contain one <allowed_event_types> block")
+    return updated
+
+
+def render_system_prompt(
+    system_prompt: str, record: dict[str, Any], top_k: int | None = None
+) -> tuple[str, list[str] | None]:
+    labels = candidate_labels(record, top_k=top_k)
+    rendered = strip_output_schema_block(system_prompt)
+    if labels is not None:
+        rendered = replace_allowed_event_types(rendered, labels)
+    return rendered, labels
+
+
+def validate_candidate_event_types(
+    annotation: dict[str, Any], labels: list[str] | None
+) -> None:
+    if labels is None:
+        return
+    allowed = set(labels)
+    for index, event in enumerate(annotation.get("events") or []):
+        event_type = event.get("event_type")
+        if event_type not in allowed:
+            raise ValueError(
+                f"events[{index}].event_type {event_type!r} is not in candidates"
+            )
+
+
+def apply_grounding_verification(
+    annotation: dict[str, Any], article_text: str
+) -> None:
+    _VERBATIM_FIELDS = ("grounding_quote", "event_location_text", "event_time_text")
+    article_text_lower = article_text.lower()
+    verified: list[dict[str, Any]] = []
+    unverified: list[dict[str, Any]] = []
+    for event in annotation.get("events") or []:
+        failed_field = None
+        for field in _VERBATIM_FIELDS:
+            value = event.get(field)
+            if value and value != "not_stated" and value.lower() not in article_text_lower:
+                failed_field = field
+                break
+        if failed_field is None:
+            verified.append(event)
+        else:
+            unverified.append({**event, "_unverified_field": failed_field})
+    annotation["events"] = verified
+    if unverified:
+        annotation["unverified_events"] = unverified
+
+
 def output_record(
     record: dict[str, Any],
     annotation: dict[str, Any],
@@ -136,13 +260,16 @@ def output_record(
     model: str,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "id": record.get("id"),
         "status": "ok",
         "source": source_record(record),
         "annotation": annotation,
         "llm": {"model": model, "metadata": metadata or {}},
     }
+    if "candidates" in record:
+        out["candidates"] = record["candidates"]
+    return out
 
 
 def error_record(record: dict[str, Any], error: str, *, model: str) -> dict[str, Any]:
@@ -168,6 +295,53 @@ def completed_output_ids(path: Path) -> set[str]:
     return completed
 
 
+def _stratified_sample(
+    records: list[dict[str, Any]], limit: int, *, key: str
+) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for record in records:
+        groups[str(record.get(key) or "")].append(record)
+
+    total = len(records)
+    group_keys = list(groups.keys())
+    floats = [limit * len(groups[k]) / total for k in group_keys]
+    floors = [int(f) for f in floats]
+    remainders = sorted(
+        range(len(group_keys)), key=lambda i: floats[i] - floors[i], reverse=True
+    )
+    for i in remainders[: limit - sum(floors)]:
+        floors[i] += 1
+
+    sampled: list[dict[str, Any]] = []
+    sampled_ids: set[int] = set()
+    for i, k in enumerate(group_keys):
+        chosen = random.sample(groups[k], min(floors[i], len(groups[k])))
+        sampled.extend(chosen)
+        sampled_ids.update(id(r) for r in chosen)
+
+    if len(sampled) < limit:
+        pool = [r for r in records if id(r) not in sampled_ids]
+        sampled.extend(random.sample(pool, min(limit - len(sampled), len(pool))))
+
+    return sampled
+
+
+def sample_records(
+    records: list[dict[str, Any]],
+    limit: int | None,
+    *,
+    random_sample: bool,
+    stratified: str | None,
+) -> list[dict[str, Any]]:
+    if limit is None or limit >= len(records):
+        return records
+    if stratified == "url":
+        return _stratified_sample(records, limit, key="source_url")
+    if random_sample:
+        return random.sample(records, limit)
+    return records[:limit]
+
+
 def append_jsonl(handle: Any, record: dict[str, Any]) -> None:
     handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     handle.flush()
@@ -178,27 +352,60 @@ async def generate_one(
     record: dict[str, Any],
     prompt: str,
     *,
+    system_prompt: str,
+    response_schema: dict[str, Any],
+    candidate_labels: list[str] | None = None,
     include_thoughts: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     # Pass the pre-built schema dict via override_settings so both sync and batch
     # paths send the same wire format (matching batch_request_config).
     async for response in client.generate(
         prompt,
+        system_prompt=system_prompt,
         override_settings={
             "response_mime_type": "application/json",
-            "response_schema": _ANNOTATION_SCHEMA_DICT,
+            "response_schema": response_schema,
         },
         add_cot_field=False,
         include_thoughts=include_thoughts,
         reasoning_effort=client.reasoning_effort,
     ):
         annotation = Annotation.model_validate(json.loads(response.text)).model_dump()
+        validate_candidate_event_types(annotation, candidate_labels)
+        apply_grounding_verification(
+            annotation,
+            f"Title: {source_title(record)}\n\n{source_text(record)}",
+        )
         return annotation, response.metadata
     raise RuntimeError("Gemini returned no response.")
 
 
+def _print_verification_stats(
+    n_records: int,
+    total_events: int,
+    total_unverified: int,
+    field_counts: collections.Counter,
+) -> None:
+    total = total_events + total_unverified
+    if not n_records or not total:
+        return
+    pct = 100 * total_unverified / total
+    avg = total_unverified / n_records
+    field_summary = ", ".join(
+        f"{field}: {count}" for field, count in sorted(field_counts.items())
+    )
+    print(
+        f"\nGrounding verification: {total_unverified}/{total} events unverified"
+        f" ({pct:.1f}%), avg {avg:.2f} per record"
+        + (f"\n  by field — {field_summary}" if field_summary else "")
+    )
+
+
 async def run_sync(
-    args: argparse.Namespace, records: list[dict[str, Any]], template: str, system_prompt: str
+    args: argparse.Namespace,
+    records: list[dict[str, Any]],
+    template: str,
+    system_prompt: str,
 ) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
@@ -224,11 +431,17 @@ async def run_sync(
     async def process_record(index: int, record: dict[str, Any]) -> dict[str, Any]:
         async with semaphore:
             try:
+                record_system_prompt, labels = render_system_prompt(
+                    system_prompt, record, top_k=args.top_k_candidates
+                )
                 annotation, metadata = await generate_one(
                     client,
                     record,
                     render_prompt(template, record),
-                    include_thoughts=args.include_thoughts,
+                    system_prompt=record_system_prompt,
+                    response_schema=annotation_schema(labels),
+                    candidate_labels=labels,
+                    include_thoughts=should_include_thoughts(args),
                 )
                 return output_record(
                     record, annotation, model=args.model, metadata=metadata
@@ -238,16 +451,29 @@ async def run_sync(
                 return error_record(record, str(exc), model=args.model)
 
     coroutines = [process_record(index, record) for index, record in pending]
+    n_ok = total_events = total_unverified = 0
+    field_counts: collections.Counter = collections.Counter()
     with args.output.open("a", encoding="utf-8") as handle:
         for future in tqdm(
             asyncio.as_completed(coroutines),
             total=len(coroutines),
             desc="annotating",
         ):
-            append_jsonl(handle, await future)
+            result = await future
+            append_jsonl(handle, result)
+            if result.get("status") == "ok":
+                n_ok += 1
+                ann = result.get("annotation") or {}
+                total_events += len(ann.get("events") or [])
+                for ev in ann.get("unverified_events") or []:
+                    total_unverified += 1
+                    field_counts[ev.get("_unverified_field") or "unknown"] += 1
+    _print_verification_stats(n_ok, total_events, total_unverified, field_counts)
 
 
-async def run_interactive(args: argparse.Namespace, template: str, system_prompt: str) -> None:
+async def run_interactive(
+    args: argparse.Namespace, template: str, system_prompt: str
+) -> None:
     if sys.stdin.isatty():
         print("Paste article text, then press Ctrl-D:", file=sys.stderr)
     text = sys.stdin.read().strip()
@@ -262,10 +488,14 @@ async def run_interactive(args: argparse.Namespace, template: str, system_prompt
         reasoning_effort=args.reasoning_effort,
     )
     record = {"id": "interactive", "source": {"title": args.title, "text": text}}
+    record_system_prompt, labels = render_system_prompt(system_prompt, record)
     annotation, metadata = await generate_one(
         client,
         record,
         render_prompt(template, record),
+        system_prompt=record_system_prompt,
+        response_schema=annotation_schema(labels),
+        candidate_labels=labels,
         include_thoughts=True,
     )
     traces = {
@@ -289,6 +519,14 @@ def thinking_budget(reasoning_effort: str | None) -> int:
         ]
 
 
+def reasoning_enabled(reasoning_effort: str | int | None) -> bool:
+    return reasoning_effort not in {None, "", "disable", 0, "0"}
+
+
+def should_include_thoughts(args: argparse.Namespace) -> bool:
+    return bool(args.include_thoughts) or reasoning_enabled(args.reasoning_effort)
+
+
 def thinking_level(reasoning_effort: str | None) -> str:
     if reasoning_effort in {"minimal", "low", "medium", "high"}:
         return reasoning_effort
@@ -303,7 +541,6 @@ def thinking_level(reasoning_effort: str | None) -> str:
 def batch_request_config(args: argparse.Namespace) -> dict[str, Any]:
     generation_config: dict[str, Any] = {
         "responseMimeType": "application/json",
-        "responseSchema": _ANNOTATION_SCHEMA_DICT,
         "maxOutputTokens": args.max_tokens,
         "temperature": args.temperature,
     }
@@ -315,20 +552,44 @@ def batch_request_config(args: argparse.Namespace) -> dict[str, Any]:
         generation_config["thinkingConfig"] = {
             "thinkingLevel": thinking_level(args.reasoning_effort)
         }
-    if args.include_thoughts:
+    if should_include_thoughts(args):
         generation_config.setdefault("thinkingConfig", {})["includeThoughts"] = True
     return {"generationConfig": generation_config}
 
 
-def build_batch_tasks(records: list[dict[str, Any]], template: str) -> list[BatchTask]:
-    return [
-        BatchTask(
-            key=record_id(record, index),
-            record=record,
-            prompt=render_prompt(template, record),
+def build_batch_tasks(
+    records: list[dict[str, Any]],
+    template: str,
+    system_prompt: str,
+    top_k_candidates: int | None = None,
+) -> list[BatchTask]:
+    tasks: list[BatchTask] = []
+    for index, record in enumerate(records):
+        key = record_id(record, index)
+        prompt = render_prompt(template, record)
+        try:
+            record_system_prompt, labels = render_system_prompt(
+                system_prompt, record, top_k=top_k_candidates
+            )
+            response_schema = annotation_schema(labels)
+            error = None
+        except Exception as exc:
+            record_system_prompt = ""
+            labels = None
+            response_schema = _ANNOTATION_SCHEMA_DICT
+            error = str(exc)
+        tasks.append(
+            BatchTask(
+                key=key,
+                record=record,
+                prompt=prompt,
+                system_prompt=record_system_prompt,
+                response_schema=response_schema,
+                candidate_labels=labels,
+                error=error,
+            )
         )
-        for index, record in enumerate(records)
-    ]
+    return tasks
 
 
 def chunked(items: list[Any], size: int) -> list[list[Any]]:
@@ -338,11 +599,16 @@ def chunked(items: list[Any], size: int) -> list[list[Any]]:
 def batch_request_line(
     task: BatchTask, request_config: dict[str, Any]
 ) -> dict[str, Any]:
+    generation_config = {
+        **request_config["generationConfig"],
+        "responseSchema": task.response_schema,
+    }
     return {
         "key": task.key,
         "request": {
             "contents": [{"role": "user", "parts": [{"text": task.prompt}]}],
-            **request_config,
+            "systemInstruction": {"parts": [{"text": task.system_prompt}]},
+            "generationConfig": generation_config,
         },
     }
 
@@ -494,6 +760,11 @@ async def execute_batch_chunk(
                 raise ValueError(str(line.get("error") or "Missing batch response."))
             annotation = json.loads(batch_response_text(response))
             annotation = Annotation.model_validate(annotation).model_dump()
+            validate_candidate_event_types(annotation, task.candidate_labels)
+            apply_grounding_verification(
+                annotation,
+                f"Title: {source_title(task.record)}\n\n{source_text(task.record)}",
+            )
             records.append(
                 output_record(
                     task.record,
@@ -520,7 +791,10 @@ async def execute_batch_chunk(
 
 
 async def run_batch(
-    args: argparse.Namespace, records: list[dict[str, Any]], template: str, system_prompt: str
+    args: argparse.Namespace,
+    records: list[dict[str, Any]],
+    template: str,
+    system_prompt: str,
 ) -> None:
     client = GeminiLLMClient(
         model_name=args.model,
@@ -534,9 +808,13 @@ async def run_batch(
     completed = completed_output_ids(args.output)
     tasks = [
         task
-        for task in build_batch_tasks(records, template)
+        for task in build_batch_tasks(
+            records, template, system_prompt, args.top_k_candidates
+        )
         if task.key not in completed
     ]
+    invalid_tasks = [task for task in tasks if task.error is not None]
+    tasks = [task for task in tasks if task.error is None]
     if completed:
         LOGGER.info(
             "Skipping %s records already present in %s", len(completed), args.output
@@ -566,7 +844,13 @@ async def run_batch(
     coroutines = [
         run_chunk(chunk_index, task_chunk) for chunk_index, task_chunk in chunks
     ]
+    n_ok = total_events = total_unverified = 0
+    field_counts: collections.Counter = collections.Counter()
     with args.output.open("a", encoding="utf-8") as handle:
+        for task in invalid_tasks:
+            append_jsonl(
+                handle, error_record(task.record, task.error or "", model=args.model)
+            )
         for future in tqdm(
             asyncio.as_completed(coroutines),
             total=len(coroutines),
@@ -575,6 +859,14 @@ async def run_batch(
             chunk_records, _seen = await future
             for result in chunk_records:
                 append_jsonl(handle, result)
+                if result.get("status") == "ok":
+                    n_ok += 1
+                    ann = result.get("annotation") or {}
+                    total_events += len(ann.get("events") or [])
+                    for ev in ann.get("unverified_events") or []:
+                        total_unverified += 1
+                        field_counts[ev.get("_unverified_field") or "unknown"] += 1
+    _print_verification_stats(n_ok, total_events, total_unverified, field_counts)
 
 
 def parse_args() -> argparse.Namespace:
@@ -588,6 +880,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-tokens", type=int, default=16384)
     parser.add_argument("--reasoning-effort", default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--random", action="store_true", dest="random_sample")
+    parser.add_argument("--stratified", default=None, choices=["url"])
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument("--title", default="")
     parser.add_argument("--include-thoughts", action="store_true")
@@ -595,6 +889,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=100)
     parser.add_argument("--batch-poll-interval-seconds", type=int, default=30)
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--top-k-candidates", type=int, default=None)
 
     args = parser.parse_args()
     if not args.interactive:
@@ -627,8 +922,12 @@ async def main() -> None:
         return
 
     records = load_input_records(args.input)
-    if args.limit is not None:
-        records = records[: args.limit]
+    records = sample_records(
+        records,
+        args.limit,
+        random_sample=args.random_sample,
+        stratified=args.stratified,
+    )
     if args.batch_api:
         await run_batch(args, records, template, system_prompt)
     else:

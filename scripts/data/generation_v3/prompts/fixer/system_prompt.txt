@@ -193,7 +193,7 @@ stolen food aid: Mentions food aid being looted, diverted, stolen, or seized bef
         "affected_entity": "string | not_stated | not_applicable",
         "affected_group": "string | not_stated | not_applicable",
         "severity": "low | medium | high | extreme | not_stated",
-        "modality": "asserted | reported | projected | hedged",
+        "modality": "asserted | projected",
         "grounding_quote": "exact verbatim quote from article_text that justifies the event"
       },
       "reason": "brief explanation of which label was chosen and why, or why the event cannot be mapped"
@@ -256,7 +256,7 @@ time_status: past (completed/historical) | ongoing (current/continuing) | foreca
 affected_entity: thing, system, asset, crop, infrastructure, or resource affected. "not_stated" if absent.
 affected_group: people or population group affected. Never put countries or organizations here. "not_stated" if absent.
 severity: low | medium | high | extreme | not_stated. Use severity language from article_text. Do not infer from numbers alone.
-modality: asserted (stated as fact) | reported (attributed to a source) | projected (expected/predicted) | hedged (possible/uncertain).
+modality: asserted (stated as fact, or attributed to a source) | projected (expected, predicted, possible, or uncertain).
 </field_rules>
 
 <alignment_rule>

@@ -29,7 +29,7 @@ SYSTEM_PROMPT_PATH = REPO_ROOT / "scripts" / "data" / "generation_v3" / "prompts
 
 VALID_TIME_STATUS = {"past", "ongoing", "forecast", "not_stated"}
 VALID_SEVERITY = {"low", "medium", "high", "extreme", "not_stated"}
-VALID_MODALITY = {"asserted", "reported", "projected", "hedged"}
+VALID_MODALITY = {"asserted", "projected"}
 VALID_DOC_RELEVANCE = {"relevant", "not_relevant"}
 
 

@@ -6,6 +6,8 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass, field
 import hashlib
+import multiprocessing
+import os
 import random
 import re
 import sys
@@ -81,6 +83,12 @@ RISK_FACTOR_SEED_WORDS = {
 GENERIC_TITLES = {"", "english", "untitled", "news", "article"}
 TEXT_SHINGLE_SIZE = 5
 TEXT_NEAR_DUPLICATE_THRESHOLD = 0.9
+# Sparse-shingle dedup: use one shingle per stride positions to bound memory and
+# lookup cost.  200 samples gives accurate Jaccard estimation at threshold 0.9.
+TEXT_SHINGLE_SAMPLE_SIZE = 200
+# Cap per-shingle posting list length to prevent O(n²) candidate expansion for
+# very common 5-grams (boilerplate phrases shared by many articles).
+_MAX_SHINGLE_POSTINGS = 8
 
 
 @dataclass
@@ -136,6 +144,79 @@ def normalized_source_key(source_url: str) -> str | None:
     return urlunsplit((scheme, netloc, path, query, ""))
 
 
+def source_domain(source_url: str) -> str:
+    """Return the normalised domain used for source stratification."""
+    url = source_url.strip()
+    if not url:
+        return ""
+    parsed = urlsplit(url)
+    netloc = parsed.netloc.lower()
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    return netloc or url.lower()
+
+
+def stratified_sample_by_source(
+    rows: list[dict],
+    take: int,
+    rng: random.Random,
+    *,
+    ref_domain_counts: Counter[str] | None = None,
+) -> list[dict]:
+    """Sample `take` rows from `rows`, preserving source-domain proportions.
+
+    Rows must already be in the desired selection order (shuffled or sorted by
+    score) — the function picks the first `quota` entries from each source group,
+    so the caller's ordering is respected within each group.
+
+    ref_domain_counts: if provided, use these counts (e.g. from the full
+    candidate pool) to compute per-domain quotas instead of the local
+    distribution of `rows`.  Prevents high-scoring sources from being
+    over-represented when a bucket skews toward a particular domain.
+    """
+    if take <= 0:
+        return []
+    if take >= len(rows):
+        return list(rows)
+
+    by_source: dict[str, list[dict]] = {}
+    for row in rows:
+        key = source_domain(str(row.get("source_url") or ""))
+        by_source.setdefault(key, []).append(row)
+
+    if ref_domain_counts is not None:
+        local_ref_total = sum(ref_domain_counts.get(k, 0) for k in by_source) or 1
+        alloc = {k: int(take * ref_domain_counts.get(k, 0) / local_ref_total) for k in by_source}
+        by_frac = sorted(
+            by_source.keys(),
+            key=lambda k: -(take * ref_domain_counts.get(k, 0) / local_ref_total - alloc[k]),
+        )
+    else:
+        total = len(rows)
+        alloc = {k: int(take * len(v) / total) for k, v in by_source.items()}
+        by_frac = sorted(
+            by_source.keys(),
+            key=lambda k: -(take * len(by_source[k]) / total - alloc[k]),
+        )
+
+    shortfall = take - sum(alloc.values())
+    for k in by_frac[:shortfall]:
+        alloc[k] += 1
+
+    selected: list[dict] = []
+    spill: list[dict] = []
+    for k, src_rows in by_source.items():
+        quota = alloc[k]
+        selected.extend(src_rows[:quota])
+        spill.extend(src_rows[quota:])
+
+    if len(selected) < take:
+        rng.shuffle(spill)
+        selected.extend(spill[: take - len(selected)])
+
+    return selected
+
+
 def source_key_is_article_specific(source_key: str | None) -> bool:
     if not source_key:
         return False
@@ -176,6 +257,26 @@ def text_shingles(text: str, size: int = TEXT_SHINGLE_SIZE) -> frozenset[str]:
     if len(tokens) < size:
         return frozenset(tokens)
     return frozenset(" ".join(tokens[index : index + size]) for index in range(len(tokens) - size + 1))
+
+
+def sparse_text_shingles(text: str) -> frozenset[str]:
+    """Return a deterministic stride-sampled subset of 5-grams.
+
+    Samples every stride-th shingle to keep at most TEXT_SHINGLE_SAMPLE_SIZE
+    entries.  Two near-duplicates (≥90 % true Jaccard) will still share ~90 %
+    of sampled shingles because their token sequences are nearly identical at
+    every stride position.
+    """
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    n = len(tokens)
+    if n < TEXT_SHINGLE_SIZE:
+        return frozenset(tokens)
+    total = n - TEXT_SHINGLE_SIZE + 1
+    stride = max(1, total // TEXT_SHINGLE_SAMPLE_SIZE)
+    return frozenset(
+        " ".join(tokens[i : i + TEXT_SHINGLE_SIZE])
+        for i in range(0, total, stride)
+    )
 
 
 def is_near_duplicate_text(
@@ -268,10 +369,12 @@ def keyword_terms(ontology_path: Path) -> list[tuple[str, float]]:
     return sorted(terms.items(), key=lambda item: (-item[1], item[0]))
 
 
-def keyword_quality_score(title: str, text: str, patterns: list[tuple[re.Pattern[str], float]]) -> float:
+def keyword_quality_score(title: str, text: str, patterns: list[tuple[str, re.Pattern[str], float]]) -> float:
     haystack = f"{title}\n{text}".lower()
     score = 0.0
-    for pattern, weight in patterns:
+    for term, pattern, weight in patterns:
+        if term not in haystack:  # fast C-level check before running the regex
+            continue
         hits = len(pattern.findall(haystack))
         if hits:
             score += weight * min(hits, 3)
@@ -289,12 +392,15 @@ def bucket_record(record: dict, terms: list[str]) -> str:
 
 
 def compact_sample_record(record: dict) -> dict:
+    source = record.get("source") if isinstance(record.get("source"), dict) else {}
     return {
         "id": str(record.get("id") or ""),
         "title": str(record.get("title") or ""),
         "text": str(record.get("text") or ""),
         "source_url": record.get("source_url") or "",
         "publish_date": record.get("publish_date") or "",
+        "cloud_uri": record.get("cloud_uri") or source.get("cloud_uri") or "",
+        "events": record.get("events") or [],
     }
 
 
@@ -309,6 +415,52 @@ def score_sort_key(row: dict) -> tuple[float, str]:
     )
 
 
+# ── Multiprocessing worker (must be module-level for pickling) ────────────────
+
+_wstate: dict = {}
+
+
+def _worker_init(
+    terms: list[str],
+    kw_patterns: list[tuple[str, re.Pattern[str], float]],
+    keyword_mode: bool,
+) -> None:
+    _wstate["terms"] = terms
+    _wstate["kw_patterns"] = kw_patterns
+    _wstate["keyword_mode"] = keyword_mode
+
+
+def _score_article(record: dict) -> dict | None:
+    """Score one article; returns None when quality filter rejects it."""
+    text = str(record.get("text") or "")
+    qs = quality_score(text)
+    if qs < 0:
+        return None
+    bucket = bucket_record(record, _wstate["terms"])
+    row: dict = {
+        **compact_sample_record(record),
+        "source_bucket": bucket,
+        "quality_score": qs,
+        "overall_score": overall_score(qs),
+    }
+    if _wstate["keyword_mode"]:
+        title = str(record.get("title") or "")
+        lower = f"{title}\n{text}".lower()
+        if any(seed in lower for seed in RISK_FACTOR_SEED_WORDS):
+            kw_score = keyword_quality_score(title, text, _wstate["kw_patterns"])
+        else:
+            kw_score = 0.0
+        row["keyword_quality_score"] = kw_score
+        row["overall_score"] = overall_score(qs, kw_score)
+        if kw_score >= 4.0:
+            row["source_bucket"] = "keyword_risk_factor"
+    row["_shingles"] = sparse_text_shingles(text)
+    return row
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def sample_records(
     records: list[dict],
     *,
@@ -317,6 +469,7 @@ def sample_records(
     seed: int,
     keyword: bool = False,
     order_by_score: bool = False,
+    workers: int = 1,
     summary: SamplingSummary | None = None,
 ) -> list[dict]:
     if summary is not None:
@@ -327,8 +480,8 @@ def sample_records(
     rng = random.Random(seed)
     terms = ontology_terms(ontology_path)
     keywords = keyword_terms(ontology_path) if keyword else []
-    keyword_patterns: list[tuple[re.Pattern[str], float]] = [
-        (re.compile(rf"(?<![a-z]){re.escape(term)}(?![a-z])"), weight)
+    keyword_patterns: list[tuple[str, re.Pattern[str], float]] = [
+        (term, re.compile(rf"(?<![a-z]){re.escape(term)}(?![a-z])"), weight)
         for term, weight in keywords
     ]
     buckets: dict[str, list[dict]] = {
@@ -338,39 +491,39 @@ def sample_records(
         "sibling_negative": [],
         "random_negative": [],
     }
+
+    # ── Scoring (parallelised) ────────────────────────────────────────────────
+    chunksize = max(1, len(records) // (workers * 8))
+    with multiprocessing.Pool(
+        workers,
+        initializer=_worker_init,
+        initargs=(terms, keyword_patterns, keyword),
+    ) as pool:
+        raw_results = list(tqdm(
+            pool.imap_unordered(_score_article, records, chunksize=chunksize),
+            total=len(records),
+            desc="Scoring articles",
+        ))
+
     candidates: list[dict] = []
-    for record in tqdm(records, desc="Scoring articles"):
-        text = str(record.get("text") or "")
-        score = quality_score(text)
-        if score < 0:
+    for row in raw_results:
+        if row is None:
             if summary is not None:
                 summary.quality_filtered_count += 1
-            continue
-        bucket = bucket_record(record, terms)
-        row = {
-            **compact_sample_record(record),
-            "source_bucket": bucket,
-            "quality_score": score,
-            "overall_score": overall_score(score),
-        }
-        if keyword:
-            keyword_score = keyword_quality_score(str(record.get("title") or ""), text, keyword_patterns)
-            row["keyword_quality_score"] = keyword_score
-            row["overall_score"] = overall_score(score, keyword_score)
-            if keyword_score >= 4.0:
-                row["source_bucket"] = "keyword_risk_factor"
-        candidates.append(row)
+        else:
+            candidates.append(row)
 
     if summary is not None:
         summary.scored_count = len(candidates)
 
+    # ── Near-duplicate removal (sequential — stateful index) ─────────────────
     seen = empty_article_identity_seen()
     seen_shingles: list[frozenset[str]] = []
     shingle_index: dict[str, list[int]] = {}
     candidates.sort(key=score_sort_key)
     for row in candidates:
         identity_keys = article_identity_keys(row)
-        shingles = text_shingles(str(row.get("text") or ""))
+        shingles: frozenset[str] = row.pop("_shingles", None) or sparse_text_shingles(str(row.get("text") or ""))
         if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
             if summary is not None:
                 summary.duplicate_removed_count += 1
@@ -379,7 +532,9 @@ def sample_records(
         idx = len(seen_shingles)
         seen_shingles.append(shingles)
         for s in shingles:
-            shingle_index.setdefault(s, []).append(idx)
+            posting = shingle_index.setdefault(s, [])
+            if len(posting) < _MAX_SHINGLE_POSTINGS:
+                posting.append(idx)
         buckets[row["source_bucket"]].append(row)
 
     if summary is not None:
@@ -417,14 +572,16 @@ def sample_records(
             "random_negative": 0.15,
         }
     )
-    selected: list[dict] = []
-    for bucket, fraction in mix.items():
-        take = int(limit * fraction)
-        selected.extend(buckets[bucket][:take])
-    selected_ids = {row["id"] for row in selected}
-    remainder = [row for rows in buckets.values() for row in rows if row["id"] not in selected_ids]
-    selected.extend(remainder[: max(limit - len(selected), 0)])
-    selected = selected[:limit]
+    # Domain counts across all candidates — used as the reference for per-bucket
+    # stratification so sources that score well don't get over-represented.
+    global_domain_counts: Counter[str] = Counter(
+        source_domain(str(row.get("source_url") or ""))
+        for bucket_rows in buckets.values()
+        for row in bucket_rows
+    )
+
+    all_candidates = [row for bucket_name in mix for row in buckets[bucket_name]]
+    selected = stratified_sample_by_source(all_candidates, limit, rng, ref_domain_counts=global_domain_counts)
     selected = sorted(selected, key=score_sort_key) if order_by_score else selected
     if summary is not None:
         summary.selected_count = len(selected)
@@ -523,6 +680,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Order output rows by overall_score descending, then id after sampling.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Worker processes for parallel scoring (default: all CPU cores).",
+    )
     return parser.parse_args()
 
 
@@ -541,6 +704,7 @@ def main() -> int:
         seed=args.seed,
         keyword=args.keyword,
         order_by_score=args.order_by_score,
+        workers=args.workers or os.cpu_count() or 1,
         summary=summary,
     )
     print_sampling_summary(summary)

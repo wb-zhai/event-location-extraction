@@ -132,6 +132,7 @@ def build_query(limit: int, excluded_uris: set[str] | None = None) -> str:
 {build_selected_articles_cte(limit, excluded_uris)}
 SELECT
     ad.uri,
+    ad.cloud_uri,
     ad.title,
     ad.body,
     ad.published_at,
@@ -172,6 +173,7 @@ def build_stratified_query(
 {build_stratified_selected_articles_cte(limit, per_factor_limit, excluded_uris)}
 SELECT
     ad.uri,
+    ad.cloud_uri,
     ad.title,
     ad.body,
     ad.published_at,
@@ -341,6 +343,7 @@ def build_article_record(article_rows: list[Mapping[str, Any]]) -> dict[str, Any
             "published_at": first_row["published_at"],
             "article_type": first_row["article_type"],
             "source_uri": first_row["source_uri"],
+            "cloud_uri": first_row["cloud_uri"],
         },
         "events": list(events.values()),
     }

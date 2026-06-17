@@ -132,6 +132,12 @@ def make_worker_args(**overrides: Any) -> argparse.Namespace:
         "relevance_max_chars": 3000,
         "relevance_confidence_threshold": 0.8,
         "example_sample_size": None,
+        "example_retrieval": gemini_event_gen.EXAMPLE_RETRIEVAL_RANDOM,
+        "example_top_k": None,
+        "label_retrieval": gemini_event_gen.LABEL_RETRIEVAL_OFF,
+        "label_top_k": 12,
+        "offset_repair_window_chars": 200,
+        "strict_generic_trigger_filter": False,
         "verbose": False,
         "mode": "quality_first",
         "batch_size": 1000,
@@ -167,6 +173,12 @@ def make_batch_args(**overrides: Any) -> argparse.Namespace:
         "relevance_max_chars": 3000,
         "relevance_confidence_threshold": 0.8,
         "example_sample_size": None,
+        "example_retrieval": gemini_event_gen.EXAMPLE_RETRIEVAL_RANDOM,
+        "example_top_k": None,
+        "label_retrieval": gemini_event_gen.LABEL_RETRIEVAL_OFF,
+        "label_top_k": 12,
+        "offset_repair_window_chars": 200,
+        "strict_generic_trigger_filter": False,
         "verbose": False,
         "mode": "quality_first",
         "batch_size": 1000,
@@ -357,6 +369,73 @@ def test_sample_examples_discards_windows_without_labels() -> None:
 
     assert len(sampled) == 1
     assert sampled[0]["expected_output"]["spans"][0]["label"] == "weather shocks"
+
+
+def test_build_example_retriever_prefers_lexically_relevant_windows() -> None:
+    drought = {
+        "text": "Drought devastated Somalia.",
+        "expected_output": {
+            "spans": [span("Drought", "weather shocks", 0, 8)]
+        },
+        "_compact_example_window": True,
+        "_example_index": 1,
+        "_window_index": 1,
+    }
+    flood = {
+        "text": "Flooding displaced families.",
+        "expected_output": {
+            "spans": [span("Flooding", "weather shocks", 0, 8)]
+        },
+        "_compact_example_window": True,
+        "_example_index": 2,
+        "_window_index": 1,
+    }
+    retriever = gemini_event_gen.build_example_retriever(
+        [drought, flood], gemini_event_gen.OUTPUT_MODE_SPANS
+    )
+
+    selected = gemini_event_gen.retrieve_examples_for_query(
+        "Somalia drought conditions worsened",
+        "title",
+        [drought, flood],
+        output_mode=gemini_event_gen.OUTPUT_MODE_SPANS,
+        sample_size=1,
+        retrieval_mode=gemini_event_gen.EXAMPLE_RETRIEVAL_BM25,
+        example_retriever=retriever,
+    )
+
+    assert selected == [drought]
+
+
+def test_build_label_retriever_prefers_matching_label() -> None:
+    examples = [
+        {
+            "text": "Drought devastated crops.",
+            "expected_output": {
+                "events": [event("Drought", "weather shocks", 0, 8)]
+            },
+            "_compact_example_window": True,
+            "_example_index": 1,
+            "_window_index": 1,
+        }
+    ]
+    ontology = {
+        "weather shocks": "Hazards like drought and flooding.",
+        "market disruption": "Trade and market access disruptions.",
+    }
+    retriever = gemini_event_gen.build_label_retriever(
+        ontology, examples, gemini_event_gen.OUTPUT_MODE_EVENTS_WITH_ARGS
+    )
+
+    narrowed = gemini_event_gen.retrieve_candidate_ontology(
+        ontology,
+        label_retriever=retriever,
+        title="Drought deepens",
+        text="Drought and poor rains harmed crops.",
+        top_k=1,
+    )
+
+    assert narrowed == {"weather shocks": "Hazards like drought and flooding."}
 
 
 def test_merge_self_consistency_spans_keeps_majority_only() -> None:
@@ -560,6 +639,20 @@ def test_clean_spans_filters_invalid_labels_and_offsets() -> None:
     )
 
     assert cleaned == [span("drought crisis", "weather shocks", 0, 14)]
+
+
+def test_clean_spans_drops_ambiguous_repairs() -> None:
+    text = "conflict escalated and conflict spread"
+
+    cleaned = gemini_event_gen.clean_spans(
+        {"spans": [span("conflict", "weather shocks", 10, 18)]},
+        text,
+        {"weather shocks"},
+        strict_offsets=True,
+        repair_window_chars=50,
+    )
+
+    assert cleaned == []
 
 
 def test_clean_relevance_decision_coerces_and_clamps() -> None:
@@ -798,6 +891,23 @@ def test_clean_events_with_args_drops_invalid_location_type() -> None:
     )
 
     assert cleaned[0]["arguments"] == []
+
+
+def test_filter_generic_trigger_events_drops_unanchored_single_word_triggers() -> None:
+    events = [
+        event("conflict", "conflicts and violence", 0, 8),
+        event(
+            "violence",
+            "conflicts and violence",
+            20,
+            28,
+            [argument("location", "Sudan", 30, 35)],
+        ),
+    ]
+
+    filtered = gemini_event_gen.filter_generic_trigger_events(events, enabled=True)
+
+    assert filtered == [events[1]]
 
 
 def test_normalizes_argument_roles_from_risk_ontology() -> None:
@@ -1207,12 +1317,11 @@ def test_generate_one_long_document_mode_supports_self_consistency() -> None:
         }
     ]
     long_document = result["llm"]["metadata"]["long_document"]
-    assert long_document["self_consistency"] == {
-        "enabled": True,
-        "samples_requested": 3,
-        "temperature": 0.7,
-        "min_successful_samples": 2,
-    }
+    assert long_document["self_consistency"]["enabled"] is True
+    assert long_document["self_consistency"]["samples_requested"] == 3
+    assert long_document["self_consistency"]["temperature"] == 0.7
+    assert long_document["self_consistency"]["min_successful_samples"] == 2
+    assert len(long_document["self_consistency"]["samples"]) == 3
     assert long_document["window_errors"] == []
     assert len(client.calls) == 6
     assert all(
@@ -1269,10 +1378,8 @@ def test_generate_one_self_consistency_partial_failures_succeeds() -> None:
     assert self_consistency["sample_errors"] == [
         {"sample": 1, "error": "sample failed"}
     ]
-    assert result["llm"]["metadata"] == {
-        "completion_tokens": 6,
-        "prompt_tokens": 30,
-    }
+    assert result["llm"]["metadata"]["completion_tokens"] == 6
+    assert result["llm"]["metadata"]["prompt_tokens"] == 30
     assert all(
         call["override_settings"] == {"temperature": 0.7} for call in client.calls
     )
@@ -2285,3 +2392,71 @@ def test_apply_pipeline_defaults_applies_batch_size_config(tmp_path: Path) -> No
     gemini_event_gen.apply_pipeline_defaults(args)
 
     assert args.batch_size == 77
+
+
+def test_apply_pipeline_defaults_precision_first_sets_stricter_windows(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("", encoding="utf-8")
+
+    args = argparse.Namespace(
+        input=Path("in.jsonl"),
+        output=Path("out.jsonl"),
+        config=config_path,
+        mode="precision_first",
+        ontology=Path("ontology.json"),
+        model="gemini-2.5-flash",
+        batch_api=False,
+        batch_size=1000,
+        batch_poll_interval_seconds=1,
+        batch_display_name=None,
+        workers=1,
+        temperature=0.0,
+        max_tokens=4096,
+        reasoning_effort="disable",
+        output_mode=None,
+        max_retries=0,
+        initial_backoff=0.0,
+        max_backoff=0.0,
+        limit=None,
+        random_sample=False,
+        examples=Path("examples.jsonl"),
+        example_sample_size=None,
+        example_retrieval=gemini_event_gen.EXAMPLE_RETRIEVAL_RANDOM,
+        example_top_k=None,
+        progress=False,
+        retry_failed=False,
+        overwrite=False,
+        strict_offsets=None,
+        self_consistency=None,
+        self_consistency_samples=None,
+        self_consistency_temperature=None,
+        self_consistency_min_successful_samples=3,
+        long_document_mode=None,
+        long_document_threshold_chars=None,
+        window_target_chars=None,
+        window_max_chars=None,
+        window_overlap_sentences=None,
+        label_retrieval=gemini_event_gen.LABEL_RETRIEVAL_OFF,
+        label_top_k=12,
+        offset_repair_window_chars=200,
+        strict_generic_trigger_filter=False,
+        enable_verifier=None,
+        enable_synthetic_gaps=None,
+        enable_relevance_filter=None,
+        relevance_model=None,
+        relevance_max_chars=3000,
+        relevance_confidence_threshold=0.8,
+        report=None,
+        system_prompt_file=None,
+        user_prompt_file=None,
+        env_file=Path(".env"),
+        verbose=False,
+        log_level="INFO",
+    )
+
+    gemini_event_gen.apply_pipeline_defaults(args)
+
+    assert args.enable_verifier is True
+    assert args.long_document_threshold_chars == 5000
+    assert args.window_target_chars == 4000
+    assert args.window_max_chars == 6000

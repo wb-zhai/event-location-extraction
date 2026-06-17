@@ -195,6 +195,32 @@ def test_normalize_prediction_dedupes_grounded_events() -> None:
     }
 
 
+def test_normalize_prediction_accepts_string_trigger_field() -> None:
+    document = "The harvest in southern province in Zambia has failed completely this year."
+    prediction = {
+        "events": [
+            {
+                "event_type": "low crop yield",
+                "trigger": "The harvest in southern province in Zambia has failed completely this year",
+            }
+        ]
+    }
+
+    assert sft_infer._normalize_prediction(document, prediction) == {
+        "events": [
+            {
+                "event_type": "low crop yield",
+                "trigger": {
+                    "start": 0,
+                    "end": 74,
+                    "text": "The harvest in southern province in Zambia has failed completely this year",
+                },
+                "arguments": [],
+            }
+        ]
+    }
+
+
 def test_normalize_prediction_anchors_with_context_when_offsets_missing() -> None:
     document = "before alpha baghdad omega after"
     prediction = {

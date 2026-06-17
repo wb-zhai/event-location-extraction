@@ -12,7 +12,7 @@ into the student's weights.
 
 ## Ontology
 
-Event labels are defined in a single JSON file (`ontologies/zhai/ontology.events.json`):
+Event labels are defined in a JSON file with the schema:
 
 ```json
 {
@@ -23,22 +23,30 @@ Event labels are defined in a single JSON file (`ontologies/zhai/ontology.events
 }
 ```
 
-The system prompts do **not** hardcode the label list. Instead they contain
-`{{ALLOWED_EVENT_TYPES}}` (teacher and student) or `{{ALLOWED_EVENT_TYPES_WITH_DESCRIPTIONS}}`
-(fixer) placeholders that are filled at runtime by `generate.py` / `fix_events.py`
-before the prompt is sent to the model. To swap the ontology, pass `--ontology <path>`
-to either script — no prompt file edits needed.
+Each script uses a different ontology file and placeholder format:
+
+| Script | Default ontology path | Placeholder format |
+| --- | --- | --- |
+| `generate.py` | baked into teacher system prompt | `<allowed_event_types>...</allowed_event_types>` XML block replaced when a per-record `candidates` list is present |
+| `validate.py` | `ontologies/zhai/science.json` | — (loads labels for validation checks) |
+| `fix_events.py` | `ontologies/zhai/science.json` (hardcoded) | — (loads labels for re-validation) |
+| `to_sft.py` | `ontologies/zhai/science.json` | `{{ALLOWED_EVENT_TYPES}}` in student system prompt |
+
+`validate.py` and `to_sft.py` accept `--ontology <path>` to swap the label file.
+For `generate.py`, per-record candidate label restriction is done via a `candidates` field
+in the input records (see `--top-k-candidates`).
 
 ---
 
 ## Files
 
 | File | Purpose |
-|---|---|
+| --- | --- |
 | `generate.py` | Step 1 — run the Gemini teacher to produce silver JSONL |
 | `validate.py` | Step 2 — validate and filter silver output |
 | `fix_events.py` | Step 2b — repair invalid events with a stronger model |
 | `merge.py` | Step 2c — assemble clean + fixed events into a single final JSONL |
+| `retrieve.py` | Utility — retrieve articles from the corpus for input to generation |
 | `costs.py` | Utility — report token usage and estimated cost for any pipeline JSONL |
 | `to_sft.py` | Step 3 — convert final JSONL to LlamaFactory Alpaca format |
 | `prompts/teacher/` | Teacher system + user prompt templates |
@@ -69,16 +77,26 @@ Key flags:
 | `--model` | `gemini-2.5-flash` | Use `gemini-3.1-pro-preview` for higher quality |
 | `--temperature` | `0.0` | **Override to `1.0`** for thinking models (Gemini 3 guidance) |
 | `--reasoning-effort` | `None` | `low` is sufficient for extraction; `medium` if recall is weak |
-| `--ontology` | `ontologies/zhai/ontology.events.json` | JSON file with `{"events": {"label": "description"}}` |
 | `--batch-api` | off | Recommended for large runs; polls until complete |
 | `--batch-size` | 100 | Requests per batch chunk |
+| `--batch-poll-interval-seconds` | 30 | Seconds between batch job status polls |
 | `--workers` | 4 | Parallel async workers for sync mode |
 | `--limit` | None | Cap number of records (useful for smoke tests) |
-| `--interactive` | off | Single-record interactive mode for debugging |
+| `--random` | off | Random sample when `--limit` is set |
+| `--stratified` | None | `url` — stratified sample by source URL when `--limit` is set |
+| `--top-k-candidates` | None | Restrict allowed event types to the first N entries in each record's `candidates` list |
+| `--include-thoughts` | off | Store model thinking traces in output metadata |
+| `--interactive` | off | Single-record interactive mode for debugging (reads article text from stdin) |
 
 Output is appended JSONL with one record per article. Each record has `source`
 (title, text, publish_date, source_url) and `annotation` (document_relevance +
-events array).
+events array). Events that fail grounding verification are moved to
+`annotation.unverified_events` (each tagged with `_unverified_field`) rather than
+being silently dropped — they survive in the output for later inspection, but
+`validate.py` will re-reject them.
+
+The script resumes automatically: records whose `id` is already present with
+`status=ok` in the output file are skipped.
 
 ---
 
@@ -97,7 +115,7 @@ Emits two files:
 
 Each event is checked for:
 
-- **Ontology**: `event_type` must be in `ontologies/zhai/ontology.events.json`
+- **Ontology**: `event_type` must be in the ontology (default: `ontologies/zhai/science.json`)
 - **Grounding**: `grounding_quote`, `event_location_text`, `event_time_text` must be
   exact substrings of `source.text`
 - **Enum validity**: `time_status`, `severity`, `modality` must be allowed values
@@ -109,8 +127,8 @@ investigate if grounding failures are high.
 Optional flags:
 
 ```bash
---ontology     <path>   # default: ontologies/zhai/ontology.events.json
---system-prompt <path>  # cross-checks ontology against <allowed_event_types> in prompt
+--ontology     <path>   # default: ontologies/zhai/science.json
+--system-prompt <path>  # cross-checks ontology against <allowed_event_types> in teacher prompt
 ```
 
 ---
@@ -132,6 +150,10 @@ python scripts/data/generation_v3/fix_events.py \
   --reasoning-effort low
 ```
 
+The fixer re-validates fixed events against
+`ontologies/zhai/science.json` (hardcoded). The ontology
+path cannot currently be changed without editing the script.
+
 Key flags:
 
 | Flag | Default | Notes |
@@ -140,9 +162,9 @@ Key flags:
 | `--model` | `gemini-3.1-pro-preview` | Use any Gemini model |
 | `--temperature` | `0.0` | Override to `1.0` for Gemini 3 thinking models |
 | `--reasoning-effort` | `None` | `low` / `medium` / `high` |
-| `--ontology` | `ontologies/zhai/ontology.events.json` | JSON file with `{"events": {"label": "description"}}` |
 | `--batch-api` | off | Use Gemini Batch API for large runs |
 | `--batch-size` | 100 | Tasks per batch chunk |
+| `--batch-poll-interval-seconds` | 30 | Seconds between batch job status polls |
 | `--workers` | 4 | Parallel async workers (sync mode) |
 | `--limit` | None | Cap number of input rows (smoke tests) |
 
@@ -152,6 +174,7 @@ Output is JSONL with one record per input invalid event:
 {
   "row": 0,
   "doc_id": "...",
+  "publish_date": "...",
   "original_event": { ... },
   "errors": [ ... ],
   "decision": "fixed" | "dropped",
@@ -192,7 +215,7 @@ The `--fixed` flag is optional — omit it if there are no invalid events to mer
 **Intermediate files to inspect:**
 
 | File | What to look for |
-|---|---|
+| --- | --- |
 | `silver.validated.invalid.jsonl` | Off-ontology types, hallucinated grounding quotes |
 | `silver.fixed.jsonl` | Dropped events + `reason` field reveal ontology gaps |
 
@@ -216,6 +239,9 @@ python scripts/data/generation_v3/costs.py \
 python scripts/data/generation_v3/costs.py \
   dataset/zhai/v3/silver.jsonl \
   dataset/zhai/v3/silver.fixed.jsonl --dedup-key doc_id
+
+# Use Batch API pricing (~50% off input/output) instead of standard pricing
+python scripts/data/generation_v3/costs.py dataset/zhai/v3/silver.jsonl --batch
 ```
 
 Model pricing is a plain dict at the top of `costs.py` — edit it when rates change.
@@ -246,7 +272,7 @@ Produces a JSON array in LlamaFactory **Alpaca** format:
 
 The output is the `annotation` JSON with intermediate/verbose fields stripped.
 Defaults strip: `document_relevance`, `event_location_text`, `event_time_text`,
-`affected_group`, `affected_entity`.
+`affected_group`, `affected_entity`, `severity`.
 
 ---
 
@@ -260,13 +286,17 @@ whether the event's grounding spans (`grounding_quote`, `event_location_text`,
 **Key behaviours:**
 
 - Windows are built greedily: paragraphs are accumulated until the next one
-  would exceed `--max-chars` or `--max-paras` is already reached. An oversized
-  single paragraph always forms its own window.
+  would exceed `--max-chars` or `--max-paras` is already reached. Oversized
+  paragraphs are split into complete sentence spans before windowing; a single
+  sentence longer than `--max-chars` remains intact rather than being cut.
+- Short windows are merged into a neighboring window when the merged window
+  still fits. Remaining no-event windows shorter than `--min-chars` are dropped.
 - Consecutive windows share `--overlap-paras` paragraphs.
 - An event appearing in the overlap region is emitted in **every** window that
   contains it (mild duplication; correct by construction).
 - An event whose location/time text falls outside the grounding-quote's paragraph
-  causes the window to expand minimally to include it — the event is never dropped.
+  causes the window to expand minimally only if the expanded window still fits
+  `--max-chars` and `--max-paras`.
 - Windows with no events are kept as negative examples (`"events": []`).
 
 Window character and event statistics are printed after conversion. Pass
@@ -276,11 +306,14 @@ Window character and event statistics are printed after conversion. Pass
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--max-chars` | `3000` | Soft char cap per window (single oversized para may exceed it) |
+| `--max-chars` | `3000` | Target char cap per window; complete sentences are not cut |
+| `--min-chars` | `200` | Drop no-event windows shorter than this after merge attempts; `0` disables |
 | `--max-paras` | `15` | Hard paragraph cap per window |
 | `--overlap-paras` | `1` | Paragraphs shared between consecutive windows |
 | `--no-window` | off | Disable windowing — one record per whole article |
 | `--prompt-dir` | `prompts/student` | Directory containing `system_prompt.txt` and `user_prompt.txt` |
+| `--ontology` | `ontologies/zhai/science.json` | Label list JSON; used to fill `{{ALLOWED_EVENT_TYPES}}` in the student system prompt |
+| `--top-k-candidates` | None | Limit per-record candidate label list to the first N entries |
 
 **Examples:**
 
@@ -331,16 +364,15 @@ Register the output in LlamaFactory's `dataset_info.json`:
 The following steps from the distillation plan are pending:
 
 | Step | Description |
-|---|---|
+| --- | --- |
 | 4 | Train/dev/test split by document id (80/10/10) |
-| 5b | `student_system_prompt.txt` — compact prompt (role + schema + 69 labels, no few-shot or verbose rules) |
 | 6 | LlamaFactory LoRA training — Qwen3-4B, `lora_target all`, rank 32, lr 2e-4, 2 epochs |
 | 7 | vLLM inference + eval (event-type P/R/F1, grounding rate, JSON-valid rate) |
 
-For the student prompt, the plan recommends keeping the 69-label list (closed label
-set = genuine conditioning) but dropping the verbose location/time/field rules and
-all 9 few-shot examples — those become internalized from the training examples.
-The student and teacher must use the **same prompt byte-for-byte at train and inference**.
+The student prompt (`prompts/student/`) is implemented. It keeps the label list
+(closed label set = genuine conditioning) but drops the verbose location/time/field
+rules and few-shot examples — those become internalized from the training examples.
+The student must use the **same prompt byte-for-byte at train and inference**.
 
 ---
 

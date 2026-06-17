@@ -17,6 +17,7 @@ ArgumentSpanAnnotation = tuple[int, int, int, int]
 EventTextAnnotation = tuple[str, str]
 ArgumentDetachedSpanAnnotation = tuple[str, str, int, int]
 ArgumentTextAnnotation = tuple[str, str, str]
+LocationSpanAnnotation = tuple[int, int]
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -248,6 +249,106 @@ def _argument_detached_spans(
 
 def _normalize_span_text(text: str) -> str:
     return " ".join(text.casefold().split())
+
+
+EventLocationPair = tuple[str, str]
+
+
+def _event_location_pairs(events: list[dict[str, Any]]) -> set[EventLocationPair]:
+    """Collect unique (event_type, normalized_location_text) pairs from events."""
+    pairs: set[EventLocationPair] = set()
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        ev_type = ev.get("event_type", "")
+        if not isinstance(ev_type, str) or not ev_type:
+            continue
+        for arg in ev.get("arguments", []) or []:
+            if not isinstance(arg, dict) or arg.get("role") != "location":
+                continue
+            span = arg.get("span", {})
+            text = span.get("text", "") if isinstance(span, dict) else ""
+            if isinstance(text, str) and text.strip():
+                pairs.add((ev_type, _normalize_span_text(text)))
+    return pairs
+
+
+def _prf_f2(tp: int, fp: int, fn: int) -> tuple[float, float, float, float]:
+    """Return (precision, recall, f1, f2). F2 weights recall twice as much as precision."""
+    p = tp / (tp + fp) if tp + fp else 0.0
+    r = tp / (tp + fn) if tp + fn else 0.0
+    f1 = 2 * p * r / (p + r) if p + r else 0.0
+    f2 = 5 * p * r / (4 * p + r) if 4 * p + r else 0.0
+    return p, r, f1, f2
+
+
+def _conditional_fp(
+    gold_pairs: set[EventLocationPair],
+    pred_pairs: set[EventLocationPair],
+) -> int:
+    """Count FP only for predictions whose event_type is absent from gold entirely."""
+    gold_types = {et for et, _ in gold_pairs}
+    return sum(1 for et, _ in pred_pairs - gold_pairs if et not in gold_types)
+
+
+def _location_spans(
+    doc_text: str, events: list[dict[str, Any]]
+) -> set[LocationSpanAnnotation]:
+    """Collect location argument spans, resolved to character offsets in doc_text."""
+    spans: set[LocationSpanAnnotation] = set()
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        for arg in ev.get("arguments", []) or []:
+            if not isinstance(arg, dict) or arg.get("role") != "location":
+                continue
+            span, _ = _resolve_span(doc_text, _anchor_payload(arg))
+            if span is not None:
+                spans.add(span)
+    return spans
+
+
+def _unique_location_texts(events: list[dict[str, Any]]) -> set[str]:
+    """Collect deduplicated normalized location texts, ignoring event type and span position."""
+    texts: set[str] = set()
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        for arg in ev.get("arguments", []) or []:
+            if not isinstance(arg, dict) or arg.get("role") != "location":
+                continue
+            span = arg.get("span", {})
+            text = span.get("text", "") if isinstance(span, dict) else ""
+            if isinstance(text, str) and text.strip():
+                texts.add(_normalize_span_text(text))
+    return texts
+
+
+def _match_weak_location_spans(
+    gold: set[LocationSpanAnnotation], pred: set[LocationSpanAnnotation]
+) -> tuple[int, int, int]:
+    available_gold = set(gold)
+    matched = 0
+
+    for pred_start, pred_end in pred:
+        best_gold = None
+        best_overlap = 0.0
+
+        for gold_start, gold_end in available_gold:
+            overlap_ratio = _span_overlap_ratio(
+                (pred_start, pred_end), (gold_start, gold_end)
+            )
+            if overlap_ratio >= _WEAK_MATCH_THRESHOLD and overlap_ratio > best_overlap:
+                best_overlap = overlap_ratio
+                best_gold = (gold_start, gold_end)
+
+        if best_gold is None:
+            continue
+
+        available_gold.remove(best_gold)
+        matched += 1
+
+    return matched, len(pred) - matched, len(gold) - matched
 
 
 def _event_span_texts(
@@ -672,6 +773,26 @@ def _metric_dict(tp: int, fp: int, fn: int) -> dict[str, float]:
     }
 
 
+def _pair_metric_dict(
+    tp: int, fp: int, fn: int, conditional_fp: int
+) -> dict[str, Any]:
+    precision, recall, f1, f2 = _prf_f2(tp, fp, fn)
+    cond_precision, _, cond_f1, cond_f2 = _prf_f2(tp, conditional_fp, fn)
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "f2": f2,
+        "conditional_precision": cond_precision,
+        "conditional_f1": cond_f1,
+        "conditional_f2": cond_f2,
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "conditional_fp": conditional_fp,
+    }
+
+
 def evaluate(
     gold_rows: list[dict[str, Any]], pred_rows: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -695,6 +816,10 @@ def evaluate(
     doc_arg_text_tp = doc_arg_text_fp = doc_arg_text_fn = 0
     doc_weak_arg_text_tp = doc_weak_arg_text_fp = doc_weak_arg_text_fn = 0
     event_level_tp = event_level_fp = event_level_fn = 0
+    pair_tp = pair_fp = pair_fn = pair_conditional_fp = 0
+    loc_span_tp = loc_span_fp = loc_span_fn = 0
+    loc_weak_span_tp = loc_weak_span_fp = loc_weak_span_fn = 0
+    loc_unique_text_tp = loc_unique_text_fp = loc_unique_text_fn = 0
     gold_doc_events, pred_doc_events = _document_event_groups(gold_rows, pred_rows)
     doc_keys = _document_group_keys(gold_rows)
     gold_doc_event_texts: dict[str, set[EventTextAnnotation]] = {}
@@ -829,6 +954,38 @@ def evaluate(
         if g_event_types == p_event_types:
             event_level_em_docs += 1
 
+        g_pairs = _event_location_pairs(g_events)
+        p_pairs = _event_location_pairs(p_events)
+        pair_tp += len(g_pairs & p_pairs)
+        pair_fp += len(p_pairs - g_pairs)
+        pair_fn += len(g_pairs - p_pairs)
+        pair_conditional_fp += _conditional_fp(g_pairs, p_pairs)
+
+        g_loc_spans = _location_spans(text, g_events)
+        p_loc_spans = _location_spans(text, p_events)
+        doc_loc_span_tp, doc_loc_span_fp, doc_loc_span_fn = _score_annotation_sets(
+            g_loc_spans, p_loc_spans
+        )
+        loc_span_tp += doc_loc_span_tp
+        loc_span_fp += doc_loc_span_fp
+        loc_span_fn += doc_loc_span_fn
+
+        doc_loc_weak_tp, doc_loc_weak_fp, doc_loc_weak_fn = _match_weak_location_spans(
+            g_loc_spans, p_loc_spans
+        )
+        loc_weak_span_tp += doc_loc_weak_tp
+        loc_weak_span_fp += doc_loc_weak_fp
+        loc_weak_span_fn += doc_loc_weak_fn
+
+        g_loc_texts = _unique_location_texts(g_events)
+        p_loc_texts = _unique_location_texts(p_events)
+        doc_loc_text_tp, doc_loc_text_fp, doc_loc_text_fn = _score_annotation_sets(
+            g_loc_texts, p_loc_texts
+        )
+        loc_unique_text_tp += doc_loc_text_tp
+        loc_unique_text_fp += doc_loc_text_fp
+        loc_unique_text_fn += doc_loc_text_fn
+
     for doc_key, g_event_texts in gold_doc_event_texts.items():
         p_event_texts = pred_doc_event_texts.get(doc_key, set())
         doc_text_tp, doc_text_fp, doc_text_fn = _score_annotation_sets(
@@ -945,6 +1102,16 @@ def evaluate(
                 doc_weak_arg_text_fn,
             ),
         },
+        "location": {
+            "strict": _metric_dict(loc_span_tp, loc_span_fp, loc_span_fn),
+            "weak": _metric_dict(loc_weak_span_tp, loc_weak_span_fp, loc_weak_span_fn),
+            "unique_text": _metric_dict(
+                loc_unique_text_tp, loc_unique_text_fp, loc_unique_text_fn
+            ),
+        },
+        "event_location_pair": _pair_metric_dict(
+            pair_tp, pair_fp, pair_fn, pair_conditional_fp
+        ),
         "exact_match": {
             "document": doc_em,
         },

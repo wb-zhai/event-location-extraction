@@ -13,10 +13,10 @@ def parse_kb(kb_path: str):
 
 
 events = parse_kb(
-    "/Users/ric/Projects/Job/event-location-extraction/ontologies/zhai/raw.json"
+    "/Users/ric/Projects/Job/event-location-extraction/ontologies/zhai/raw_papers.json"
 )
 with open(
-    "/Users/ric/Projects/Job/event-location-extraction/ontologies/zhai/ontology.json",
+    "/Users/ric/Projects/Job/event-location-extraction/ontologies/zhai/ontology.papers.json",
     "w",
 ) as f:
     json.dump({"events": events}, f, indent=2)
