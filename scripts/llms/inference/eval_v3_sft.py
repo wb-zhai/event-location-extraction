@@ -53,8 +53,33 @@ def _norm_loc(s: str) -> str:
     return s.strip()
 
 
+def _split_locs(s: str) -> list[str]:
+    """Split a ';'-separated location string into individual normalised parts."""
+    parts = []
+    for part in s.split(";"):
+        n = _norm_loc(part.strip())
+        if n and n != "not_stated":
+            parts.append(n)
+    return parts
+
+
 def _quote_sim(a: str, b: str) -> float:
     return SequenceMatcher(None, _norm(a), _norm(b)).ratio()
+
+
+# ---------------------------------------------------------------------------
+# Cluster map helpers
+# ---------------------------------------------------------------------------
+
+def _load_cluster_map(path: Path) -> dict[str, str]:
+    """Load {normalized_event_name -> cluster} from a Studio results JSON."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {_norm(entry["name"]): entry["cluster"] for entry in data}
+
+
+def _to_cluster(event_type: str, cluster_map: dict[str, str]) -> str:
+    """Return the cluster for an event type, falling back to the type itself."""
+    return cluster_map.get(_norm(event_type), _norm(event_type))
 
 
 # ---------------------------------------------------------------------------
@@ -65,19 +90,28 @@ _LOC_FUZZY_THRESHOLD = 0.85
 
 
 def _loc_match(gold: str, pred: str, tier: str) -> bool:
-    """Compare two location strings. tier='exact' or 'relaxed'."""
+    """Compare two location strings, supporting ';'-separated multiple locations."""
     gn = _norm_loc(gold)
     pn = _norm_loc(pred)
     if gn == "not_stated" or pn == "not_stated":
         return gn == pn
+    g_parts = _split_locs(gold)
+    p_parts = _split_locs(pred)
+    if not g_parts and not p_parts:
+        return True
+    if not g_parts or not p_parts:
+        return False
     if tier == "exact":
-        return gn == pn
-    # relaxed: equality, substring, or SequenceMatcher >= threshold
-    if gn == pn:
-        return True
-    if gn in pn or pn in gn:
-        return True
-    return SequenceMatcher(None, gn, pn).ratio() >= _LOC_FUZZY_THRESHOLD
+        return set(g_parts) == set(p_parts)
+    # relaxed: every part in each side must fuzzy-match some part on the other side
+    def _single(a: str, b: str) -> bool:
+        if a == b or a in b or b in a:
+            return True
+        return SequenceMatcher(None, a, b).ratio() >= _LOC_FUZZY_THRESHOLD
+    return (
+        all(any(_single(g, p) for p in p_parts) for g in g_parts)
+        and all(any(_single(p, g) for g in g_parts) for p in p_parts)
+    )
 
 
 def _parse_iso_parts(s: str) -> list[str]:
@@ -113,10 +147,17 @@ def _time_match(gold: str, pred: str, tier: str) -> bool:
 _QUOTE_MATCH_THRESHOLD = 0.5
 
 
-def _event_sim(gold: dict, pred: dict) -> float:
+def _event_sim(
+    gold: dict, pred: dict,
+    cluster_map: dict[str, str] | None = None,
+) -> float:
     """Similarity score for matching a predicted event to a gold event."""
-    gt = _norm(gold.get("event_type", ""))
-    pt = _norm(pred.get("event_type", ""))
+    if cluster_map is not None:
+        gt = _to_cluster(gold.get("event_type", ""), cluster_map)
+        pt = _to_cluster(pred.get("event_type", ""), cluster_map)
+    else:
+        gt = _norm(gold.get("event_type", ""))
+        pt = _norm(pred.get("event_type", ""))
     if gt != pt:
         return 0.0
     return _quote_sim(
@@ -126,7 +167,8 @@ def _event_sim(gold: dict, pred: dict) -> float:
 
 
 def _match_events(
-    gold: list[dict], pred: list[dict], tier: str
+    gold: list[dict], pred: list[dict], tier: str,
+    cluster_map: dict[str, str] | None = None,
 ) -> tuple[list[tuple[dict, dict]], list[dict], list[dict]]:
     """
     Greedy one-to-one bipartite matching by descending similarity.
@@ -138,7 +180,7 @@ def _match_events(
     sims: list[tuple[float, int, int]] = []
     for gi, g in enumerate(gold):
         for pi, p in enumerate(pred):
-            s = _event_sim(g, p)
+            s = _event_sim(g, p, cluster_map=cluster_map)
             if s >= threshold:
                 sims.append((s, gi, pi))
     sims.sort(key=lambda x: -x[0])
@@ -183,12 +225,22 @@ def _macro_average(per_doc: list[dict[str, float]]) -> dict[str, float]:
 # Core evaluation
 # ---------------------------------------------------------------------------
 
-def evaluate(records: list[dict[str, Any]]) -> dict[str, Any]:
+def evaluate(
+    records: list[dict[str, Any]],
+    cluster_map: dict[str, str] | None = None,
+) -> dict[str, Any]:
     # accumulators keyed by (family, tier)
     acc: dict[tuple[str, str], dict[str, int]] = {}
     macro_acc: dict[tuple[str, str], list[dict]] = {}
 
     families = ["event", "event_type", "event_type_set", "location", "event_location", "event_time"]
+    if cluster_map is not None:
+        families = [
+            "event", "event_type", "event_type_set",
+            "cluster_event", "cluster_type", "cluster_type_set",
+            "location", "event_location", "cluster_event_location",
+            "event_time",
+        ]
     tiers = ["exact", "relaxed"]
     for fam in families:
         for tier in tiers:
@@ -214,6 +266,37 @@ def evaluate(records: list[dict[str, Any]]) -> dict[str, Any]:
             acc[("event", tier)]["fp"] += fp
             acc[("event", tier)]["fn"] += fn
             macro_acc[("event", tier)].append(_prf(tp, fp, fn))
+
+            # ---------------------------------------------------------------
+            # 1b. Cluster-level event extraction & event-location pairing
+            # ---------------------------------------------------------------
+            if cluster_map is not None:
+                c_pairs, c_unmatched_g, c_unmatched_p = _match_events(
+                    gold, pred, tier, cluster_map=cluster_map
+                )
+                c_tp = len(c_pairs)
+                c_fp = len(c_unmatched_p)
+                c_fn = len(c_unmatched_g)
+                acc[("cluster_event", tier)]["tp"] += c_tp
+                acc[("cluster_event", tier)]["fp"] += c_fp
+                acc[("cluster_event", tier)]["fn"] += c_fn
+                macro_acc[("cluster_event", tier)].append(_prf(c_tp, c_fp, c_fn))
+
+                cel_tp = sum(
+                    1
+                    for g, p in c_pairs
+                    if _loc_match(
+                        g.get("event_location", ""), p.get("event_location", ""), tier
+                    )
+                )
+                cel_fp = c_tp - cel_tp + c_fp
+                cel_fn = c_tp - cel_tp + c_fn
+                acc[("cluster_event_location", tier)]["tp"] += cel_tp
+                acc[("cluster_event_location", tier)]["fp"] += cel_fp
+                acc[("cluster_event_location", tier)]["fn"] += cel_fn
+                macro_acc[("cluster_event_location", tier)].append(
+                    _prf(cel_tp, cel_fp, cel_fn)
+                )
 
             # ---------------------------------------------------------------
             # 2. Event type (multiset per doc)
@@ -250,17 +333,49 @@ def evaluate(records: list[dict[str, Any]]) -> dict[str, Any]:
             macro_acc[("event_type_set", tier)].append(_prf(set_tp, set_fp, set_fn))
 
             # ---------------------------------------------------------------
+            # 2c-2d. Cluster-level type metrics (only when cluster_map given)
+            # ---------------------------------------------------------------
+            if cluster_map is not None:
+                gold_clusters = [_to_cluster(e.get("event_type", ""), cluster_map) for e in gold]
+                pred_clusters = [_to_cluster(e.get("event_type", ""), cluster_map) for e in pred]
+
+                gc_bag = list(gold_clusters)
+                pc_bag = list(pred_clusters)
+                ct_tp = 0
+                for t in list(pc_bag):
+                    if t in gc_bag:
+                        ct_tp += 1
+                        gc_bag.remove(t)
+                        pc_bag.remove(t)
+                ct_fp = len(pc_bag)
+                ct_fn = len(gc_bag)
+                acc[("cluster_type", tier)]["tp"] += ct_tp
+                acc[("cluster_type", tier)]["fp"] += ct_fp
+                acc[("cluster_type", tier)]["fn"] += ct_fn
+                macro_acc[("cluster_type", tier)].append(_prf(ct_tp, ct_fp, ct_fn))
+
+                gold_cluster_set = {_to_cluster(e.get("event_type", ""), cluster_map) for e in gold}
+                pred_cluster_set = {_to_cluster(e.get("event_type", ""), cluster_map) for e in pred}
+                cs_tp = len(gold_cluster_set & pred_cluster_set)
+                cs_fp = len(pred_cluster_set - gold_cluster_set)
+                cs_fn = len(gold_cluster_set - pred_cluster_set)
+                acc[("cluster_type_set", tier)]["tp"] += cs_tp
+                acc[("cluster_type_set", tier)]["fp"] += cs_fp
+                acc[("cluster_type_set", tier)]["fn"] += cs_fn
+                macro_acc[("cluster_type_set", tier)].append(_prf(cs_tp, cs_fp, cs_fn))
+
+            # ---------------------------------------------------------------
             # 3. Location extraction (per-doc set, ignoring not_stated)
             # ---------------------------------------------------------------
             gold_locs = [
-                _norm_loc(e.get("event_location", ""))
+                loc
                 for e in gold
-                if _norm(e.get("event_location", "")) not in ("not_stated", "")
+                for loc in _split_locs(e.get("event_location", ""))
             ]
             pred_locs = [
-                _norm_loc(e.get("event_location", ""))
+                loc
                 for e in pred
-                if _norm(e.get("event_location", "")) not in ("not_stated", "")
+                for loc in _split_locs(e.get("event_location", ""))
             ]
 
             gl_remaining = list(gold_locs)
@@ -348,12 +463,16 @@ _FAMILY_LABELS = {
     "event": "Event extraction",
     "event_type": "Event type (multiset)",
     "event_type_set": "Event type (doc-level set)",
+    "cluster_event": "Cluster event extraction",
+    "cluster_type": "Cluster type (multiset)",
+    "cluster_type_set": "Cluster type (doc-level set)",
     "location": "Location extraction",
     "event_location": "Event-location pairing",
+    "cluster_event_location": "Cluster event-location pairing",
     "event_time": "Event-time pairing",
 }
 
-_COL_W = 28  # width of metric name column
+_COL_W = 32  # width of metric name column
 _NUM_W = 7   # width of each number column
 
 
@@ -386,6 +505,8 @@ def _format_report(metrics: dict[str, Any], n_records: int) -> str:
     lines.append("\n  MICRO  (pooled counts)\n")
     lines.append(_header())
     for fam, label in _FAMILY_LABELS.items():
+        if fam not in metrics:
+            continue
         mu_r = metrics[fam]["relaxed"]["micro"]
         mu_e = metrics[fam]["exact"]["micro"]
         counts = f"TP={mu_r['tp']:4d}  FP={mu_r['fp']:4d}  FN={mu_r['fn']:4d}"
@@ -398,6 +519,8 @@ def _format_report(metrics: dict[str, Any], n_records: int) -> str:
     lines.append("\n\n  MACRO  (per-document average)\n")
     lines.append(_header())
     for fam, label in _FAMILY_LABELS.items():
+        if fam not in metrics:
+            continue
         ma_r = metrics[fam]["relaxed"]["macro"]
         ma_e = metrics[fam]["exact"]["macro"]
         lines.append(_row(label,
@@ -436,12 +559,27 @@ def main() -> None:
         default=None,
         help="Optional path to write unmatched events per document.",
     )
+    parser.add_argument(
+        "--cluster",
+        type=Path,
+        default=None,
+        metavar="CLUSTER_JSON",
+        help=(
+            "Optional Studio results JSON mapping event names to clusters. "
+            "When provided, adds cluster-level type metrics to the report."
+        ),
+    )
     args = parser.parse_args()
+
+    cluster_map: dict[str, str] | None = None
+    if args.cluster:
+        cluster_map = _load_cluster_map(args.cluster)
+        print(f"Loaded cluster map with {len(cluster_map)} entries from {args.cluster}")
 
     records = _load_jsonl(args.pred_jsonl)
     print(f"Loaded {len(records)} records from {args.pred_jsonl}")
 
-    metrics = evaluate(records)
+    metrics = evaluate(records, cluster_map=cluster_map)
 
     print(_format_report(metrics, len(records)))
 
