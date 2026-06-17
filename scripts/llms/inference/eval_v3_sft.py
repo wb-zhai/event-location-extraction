@@ -1,0 +1,463 @@
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import statistics
+from difflib import SequenceMatcher
+from pathlib import Path
+from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# I/O helpers
+# ---------------------------------------------------------------------------
+
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+def _gold_events(rec: dict[str, Any]) -> list[dict[str, Any]]:
+    events = rec.get("annotation", {}).get("events", [])
+    return [e for e in events if isinstance(e, dict)]
+
+
+def _pred_events(rec: dict[str, Any]) -> list[dict[str, Any]]:
+    events = rec.get("predictions", [])
+    return [e for e in events if isinstance(e, dict)]
+
+
+# ---------------------------------------------------------------------------
+# Text normalisation helpers
+# ---------------------------------------------------------------------------
+
+_DIRECTION_PREFIX = re.compile(
+    r"^(northern?|southern?|eastern?|western?|central)\s+",
+    re.IGNORECASE,
+)
+
+
+def _norm(s: str) -> str:
+    return " ".join(s.lower().split())
+
+
+def _norm_loc(s: str) -> str:
+    s = _norm(s)
+    s = _DIRECTION_PREFIX.sub("", s)
+    return s.strip()
+
+
+def _quote_sim(a: str, b: str) -> float:
+    return SequenceMatcher(None, _norm(a), _norm(b)).ratio()
+
+
+# ---------------------------------------------------------------------------
+# Field-level comparisons
+# ---------------------------------------------------------------------------
+
+_LOC_FUZZY_THRESHOLD = 0.85
+
+
+def _loc_match(gold: str, pred: str, tier: str) -> bool:
+    """Compare two location strings. tier='exact' or 'relaxed'."""
+    gn = _norm_loc(gold)
+    pn = _norm_loc(pred)
+    if gn == "not_stated" or pn == "not_stated":
+        return gn == pn
+    if tier == "exact":
+        return gn == pn
+    # relaxed: equality, substring, or SequenceMatcher >= threshold
+    if gn == pn:
+        return True
+    if gn in pn or pn in gn:
+        return True
+    return SequenceMatcher(None, gn, pn).ratio() >= _LOC_FUZZY_THRESHOLD
+
+
+def _parse_iso_parts(s: str) -> list[str]:
+    """Split an ISO 8601 date or range into year prefixes."""
+    parts = s.split("/")
+    years = []
+    for p in parts:
+        if p and p != "not_stated":
+            years.append(p[:4])  # first 4 chars = year
+    return years
+
+
+def _time_match(gold: str, pred: str, tier: str) -> bool:
+    """Compare two event_time strings. tier='exact' or 'relaxed'."""
+    gn = _norm(gold)
+    pn = _norm(pred)
+    if gn == pn:
+        return True
+    if tier == "exact":
+        return False
+    # relaxed: same-year prefix counts
+    g_years = _parse_iso_parts(gn)
+    p_years = _parse_iso_parts(pn)
+    if not g_years and not p_years:
+        return gn == pn  # both not_stated handled above already
+    return bool(set(g_years) & set(p_years))
+
+
+# ---------------------------------------------------------------------------
+# Event matching (alignment)
+# ---------------------------------------------------------------------------
+
+_QUOTE_MATCH_THRESHOLD = 0.5
+
+
+def _event_sim(gold: dict, pred: dict) -> float:
+    """Similarity score for matching a predicted event to a gold event."""
+    gt = _norm(gold.get("event_type", ""))
+    pt = _norm(pred.get("event_type", ""))
+    if gt != pt:
+        return 0.0
+    return _quote_sim(
+        gold.get("grounding_quote", ""),
+        pred.get("grounding_quote", ""),
+    )
+
+
+def _match_events(
+    gold: list[dict], pred: list[dict], tier: str
+) -> tuple[list[tuple[dict, dict]], list[dict], list[dict]]:
+    """
+    Greedy one-to-one bipartite matching by descending similarity.
+    Returns (matched_pairs, unmatched_gold, unmatched_pred).
+    tier='exact' requires quote_sim==1.0; 'relaxed' requires >=0.5.
+    """
+    threshold = 1.0 if tier == "exact" else _QUOTE_MATCH_THRESHOLD
+    # build all (sim, gi, pi) triples
+    sims: list[tuple[float, int, int]] = []
+    for gi, g in enumerate(gold):
+        for pi, p in enumerate(pred):
+            s = _event_sim(g, p)
+            if s >= threshold:
+                sims.append((s, gi, pi))
+    sims.sort(key=lambda x: -x[0])
+
+    matched_g: set[int] = set()
+    matched_p: set[int] = set()
+    pairs: list[tuple[dict, dict]] = []
+    for s, gi, pi in sims:
+        if gi in matched_g or pi in matched_p:
+            continue
+        pairs.append((gold[gi], pred[pi]))
+        matched_g.add(gi)
+        matched_p.add(pi)
+
+    unmatched_gold = [g for i, g in enumerate(gold) if i not in matched_g]
+    unmatched_pred = [p for i, p in enumerate(pred) if i not in matched_p]
+    return pairs, unmatched_gold, unmatched_pred
+
+
+# ---------------------------------------------------------------------------
+# Metric aggregation
+# ---------------------------------------------------------------------------
+
+def _prf(tp: int, fp: int, fn: int) -> dict[str, float]:
+    p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+    return {"precision": p, "recall": r, "f1": f1, "tp": tp, "fp": fp, "fn": fn}
+
+
+def _macro_average(per_doc: list[dict[str, float]]) -> dict[str, float]:
+    if not per_doc:
+        return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
+    return {
+        "precision": statistics.mean(d["precision"] for d in per_doc),
+        "recall": statistics.mean(d["recall"] for d in per_doc),
+        "f1": statistics.mean(d["f1"] for d in per_doc),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Core evaluation
+# ---------------------------------------------------------------------------
+
+def evaluate(records: list[dict[str, Any]]) -> dict[str, Any]:
+    # accumulators keyed by (family, tier)
+    acc: dict[tuple[str, str], dict[str, int]] = {}
+    macro_acc: dict[tuple[str, str], list[dict]] = {}
+
+    families = ["event", "event_type", "event_type_set", "location", "event_location", "event_time"]
+    tiers = ["exact", "relaxed"]
+    for fam in families:
+        for tier in tiers:
+            acc[(fam, tier)] = {"tp": 0, "fp": 0, "fn": 0}
+            macro_acc[(fam, tier)] = []
+
+    error_rows: list[dict] = []
+
+    for rec in records:
+        gold = _gold_events(rec)
+        pred = _pred_events(rec)
+        doc_id = rec.get("id", "")
+
+        for tier in tiers:
+            # ---------------------------------------------------------------
+            # 1. Event extraction overall
+            # ---------------------------------------------------------------
+            pairs, unmatched_g, unmatched_p = _match_events(gold, pred, tier)
+            tp = len(pairs)
+            fp = len(unmatched_p)
+            fn = len(unmatched_g)
+            acc[("event", tier)]["tp"] += tp
+            acc[("event", tier)]["fp"] += fp
+            acc[("event", tier)]["fn"] += fn
+            macro_acc[("event", tier)].append(_prf(tp, fp, fn))
+
+            # ---------------------------------------------------------------
+            # 2. Event type (multiset per doc)
+            # ---------------------------------------------------------------
+            gold_types = [_norm(e.get("event_type", "")) for e in gold]
+            pred_types = [_norm(e.get("event_type", "")) for e in pred]
+
+            gt_bag = list(gold_types)
+            pt_bag = list(pred_types)
+            type_tp = 0
+            for t in list(pt_bag):
+                if t in gt_bag:
+                    type_tp += 1
+                    gt_bag.remove(t)
+                    pt_bag.remove(t)
+            type_fp = len(pt_bag)
+            type_fn = len(gt_bag)
+            acc[("event_type", tier)]["tp"] += type_tp
+            acc[("event_type", tier)]["fp"] += type_fp
+            acc[("event_type", tier)]["fn"] += type_fn
+            macro_acc[("event_type", tier)].append(_prf(type_tp, type_fp, type_fn))
+
+            # ---------------------------------------------------------------
+            # 2b. Event type set (doc-level, ignoring duplicate types)
+            # ---------------------------------------------------------------
+            gold_type_set = {_norm(e.get("event_type", "")) for e in gold}
+            pred_type_set = {_norm(e.get("event_type", "")) for e in pred}
+            set_tp = len(gold_type_set & pred_type_set)
+            set_fp = len(pred_type_set - gold_type_set)
+            set_fn = len(gold_type_set - pred_type_set)
+            acc[("event_type_set", tier)]["tp"] += set_tp
+            acc[("event_type_set", tier)]["fp"] += set_fp
+            acc[("event_type_set", tier)]["fn"] += set_fn
+            macro_acc[("event_type_set", tier)].append(_prf(set_tp, set_fp, set_fn))
+
+            # ---------------------------------------------------------------
+            # 3. Location extraction (per-doc set, ignoring not_stated)
+            # ---------------------------------------------------------------
+            gold_locs = [
+                _norm_loc(e.get("event_location", ""))
+                for e in gold
+                if _norm(e.get("event_location", "")) not in ("not_stated", "")
+            ]
+            pred_locs = [
+                _norm_loc(e.get("event_location", ""))
+                for e in pred
+                if _norm(e.get("event_location", "")) not in ("not_stated", "")
+            ]
+
+            gl_remaining = list(gold_locs)
+            loc_tp = 0
+            for pl in pred_locs:
+                for i, gl in enumerate(gl_remaining):
+                    if _loc_match(gl, pl, tier):
+                        loc_tp += 1
+                        gl_remaining.pop(i)
+                        break
+            loc_fp = len(pred_locs) - loc_tp
+            loc_fn = len(gl_remaining)
+            acc[("location", tier)]["tp"] += loc_tp
+            acc[("location", tier)]["fp"] += loc_fp
+            acc[("location", tier)]["fn"] += loc_fn
+            macro_acc[("location", tier)].append(_prf(loc_tp, loc_fp, loc_fn))
+
+            # ---------------------------------------------------------------
+            # 4. Event-location pairing (conditioned on matched events)
+            # ---------------------------------------------------------------
+            el_tp = sum(
+                1
+                for g, p in pairs
+                if _loc_match(
+                    g.get("event_location", ""), p.get("event_location", ""), tier
+                )
+            )
+            el_fp = tp - el_tp + fp  # wrong-location matched + fully unmatched pred
+            el_fn = tp - el_tp + fn  # wrong-location matched + fully unmatched gold
+            acc[("event_location", tier)]["tp"] += el_tp
+            acc[("event_location", tier)]["fp"] += el_fp
+            acc[("event_location", tier)]["fn"] += el_fn
+            macro_acc[("event_location", tier)].append(_prf(el_tp, el_fp, el_fn))
+
+            # ---------------------------------------------------------------
+            # 5. Event-time pairing (conditioned on matched events)
+            # ---------------------------------------------------------------
+            et_tp = sum(
+                1
+                for g, p in pairs
+                if _time_match(
+                    g.get("event_time", "not_stated"),
+                    p.get("event_time", "not_stated"),
+                    tier,
+                )
+            )
+            et_fp = tp - et_tp + fp
+            et_fn = tp - et_tp + fn
+            acc[("event_time", tier)]["tp"] += et_tp
+            acc[("event_time", tier)]["fp"] += et_fp
+            acc[("event_time", tier)]["fn"] += et_fn
+            macro_acc[("event_time", tier)].append(_prf(et_tp, et_fp, et_fn))
+
+            # ---------------------------------------------------------------
+            # Error logging (relaxed tier only, keep it once)
+            # ---------------------------------------------------------------
+            if tier == "relaxed" and (unmatched_g or unmatched_p):
+                error_rows.append(
+                    {
+                        "doc_id": doc_id,
+                        "unmatched_gold": unmatched_g,
+                        "unmatched_pred": unmatched_p,
+                    }
+                )
+
+    # Build final metrics dict
+    metrics: dict[str, Any] = {}
+    for fam in families:
+        metrics[fam] = {}
+        for tier in tiers:
+            a = acc[(fam, tier)]
+            micro = _prf(a["tp"], a["fp"], a["fn"])
+            macro = _macro_average(macro_acc[(fam, tier)])
+            metrics[fam][tier] = {"micro": micro, "macro": macro}
+
+    metrics["_errors"] = error_rows
+    return metrics
+
+
+# ---------------------------------------------------------------------------
+# Report formatting
+# ---------------------------------------------------------------------------
+
+_FAMILY_LABELS = {
+    "event": "Event extraction",
+    "event_type": "Event type (multiset)",
+    "event_type_set": "Event type (doc-level set)",
+    "location": "Location extraction",
+    "event_location": "Event-location pairing",
+    "event_time": "Event-time pairing",
+}
+
+_COL_W = 28  # width of metric name column
+_NUM_W = 7   # width of each number column
+
+
+def _row(label: str, r_p: float, r_r: float, r_f1: float,
+         e_p: float, e_r: float, e_f1: float, suffix: str = "") -> str:
+    def pct(v: float) -> str:
+        return f"{v * 100:5.1f}"
+    return (
+        f"  {label:<{_COL_W}}"
+        f"  {pct(r_p)}  {pct(r_r)}  {pct(r_f1)}"
+        f"    {pct(e_p)}  {pct(e_r)}  {pct(e_f1)}"
+        + (f"   {suffix}" if suffix else "")
+    )
+
+
+def _header() -> str:
+    h1 = f"  {'Metric':<{_COL_W}}  {'── RELAXED ──────────':21}    {'── EXACT ────────────':21}"
+    h2 = f"  {'':{'<'}{_COL_W}}  {'Prec':>5}  {'Rec':>5}  {'F1':>5}    {'Prec':>5}  {'Rec':>5}  {'F1':>5}"
+    sep = "  " + "-" * (_COL_W + 48)
+    return "\n".join([h1, h2, sep])
+
+
+def _format_report(metrics: dict[str, Any], n_records: int) -> str:
+    lines: list[str] = []
+    lines.append("=" * 72)
+    lines.append(f"EVALUATION REPORT  ({n_records} records)")
+    lines.append("=" * 72)
+
+    # ── micro table ────────────────────────────────────────────────────────
+    lines.append("\n  MICRO  (pooled counts)\n")
+    lines.append(_header())
+    for fam, label in _FAMILY_LABELS.items():
+        mu_r = metrics[fam]["relaxed"]["micro"]
+        mu_e = metrics[fam]["exact"]["micro"]
+        counts = f"TP={mu_r['tp']:4d}  FP={mu_r['fp']:4d}  FN={mu_r['fn']:4d}"
+        lines.append(_row(label,
+                          mu_r["precision"], mu_r["recall"], mu_r["f1"],
+                          mu_e["precision"], mu_e["recall"], mu_e["f1"],
+                          suffix=counts))
+
+    # ── macro table ────────────────────────────────────────────────────────
+    lines.append("\n\n  MACRO  (per-document average)\n")
+    lines.append(_header())
+    for fam, label in _FAMILY_LABELS.items():
+        ma_r = metrics[fam]["relaxed"]["macro"]
+        ma_e = metrics[fam]["exact"]["macro"]
+        lines.append(_row(label,
+                          ma_r["precision"], ma_r["recall"], ma_r["f1"],
+                          ma_e["precision"], ma_e["recall"], ma_e["f1"]))
+
+    n_err = len(metrics["_errors"])
+    lines.append(f"\n{'=' * 72}")
+    lines.append(f"  Docs with unmatched events (relaxed): {n_err} / {n_records}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Evaluate distilled event-location extraction model predictions."
+    )
+    parser.add_argument(
+        "--pred-jsonl",
+        required=True,
+        type=Path,
+        help="Predictions JSONL file (contains both annotation and predictions fields).",
+    )
+    parser.add_argument(
+        "--report-json",
+        type=Path,
+        default=None,
+        help="Optional path to write the full metrics dict as JSON.",
+    )
+    parser.add_argument(
+        "--errors-jsonl",
+        type=Path,
+        default=None,
+        help="Optional path to write unmatched events per document.",
+    )
+    args = parser.parse_args()
+
+    records = _load_jsonl(args.pred_jsonl)
+    print(f"Loaded {len(records)} records from {args.pred_jsonl}")
+
+    metrics = evaluate(records)
+
+    print(_format_report(metrics, len(records)))
+
+    if args.report_json:
+        args.report_json.parent.mkdir(parents=True, exist_ok=True)
+        out = {k: v for k, v in metrics.items() if k != "_errors"}
+        args.report_json.write_text(json.dumps(out, indent=2))
+        print(f"Metrics written to {args.report_json}")
+
+    if args.errors_jsonl:
+        args.errors_jsonl.parent.mkdir(parents=True, exist_ok=True)
+        with open(args.errors_jsonl, "w", encoding="utf-8") as f:
+            for row in metrics["_errors"]:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        print(f"Error rows written to {args.errors_jsonl}")
+
+
+if __name__ == "__main__":
+    main()

@@ -17,6 +17,7 @@ import sys
 from typing import Iterator
 
 import fire
+from json_repair import repair_json
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
@@ -81,6 +82,12 @@ def _parse_json_output(text: str) -> dict:
             return json.loads(match.group())
         except json.JSONDecodeError:
             pass
+    try:
+        repaired = repair_json(text, return_objects=True)
+        if isinstance(repaired, dict):
+            return repaired
+    except Exception:
+        pass
     return {"events": [], "_parse_error": text[:300]}
 
 
@@ -103,6 +110,25 @@ def _resolve_events(window_preds: list[dict]) -> list[dict]:
 def _batched(items: list, size: int) -> Iterator[list]:
     for i in range(0, len(items), size):
         yield items[i : i + size]
+
+
+def _batched_by_tokens(
+    prompts: list[str],
+    token_lengths: list[int],
+    budget: int,
+) -> Iterator[list[str]]:
+    """Yield prompt chunks where sum(input_tokens) <= budget."""
+    chunk: list[str] = []
+    chunk_tokens = 0
+    for prompt, n_tok in zip(prompts, token_lengths):
+        if chunk and chunk_tokens + n_tok > budget:
+            yield chunk
+            chunk = []
+            chunk_tokens = 0
+        chunk.append(prompt)
+        chunk_tokens += n_tok
+    if chunk:
+        yield chunk
 
 
 def _build_windows(
@@ -147,7 +173,7 @@ def _build_windows(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg},
         ]
-        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
         result.append({
             "prompt": prompt,
             "window_start": ws,
@@ -177,15 +203,18 @@ def vllm_infer(
     overlap_paras: int = 1,
     # Sampling
     temperature: float = 0.0,
-    max_new_tokens: int = 1024,
-    repetition_penalty: float = 1.0,
+    max_new_tokens: int = 12588,
+    top_p: float = 0.8,
+    top_k: int = 0,
+    repetition_penalty: float = 1.05,
     skip_special_tokens: bool = True,
     seed: int | None = None,
     # Engine
     max_model_len: int | None = None,
     gpu_memory_utilization: float = 0.95,
     tensor_parallel_size: int = 1,
-    batch_size: int = 64,
+    batch_size: int = 1_000,
+    max_tokens_per_call: int | None = None,
 ):
     """Batch event extraction inference using vLLM (no LlamaFactory)."""
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
@@ -207,7 +236,7 @@ def vllm_infer(
         "disable_log_stats": True,
     }
     if max_model_len is not None:
-        engine_kwargs["max_model_len"] = max_model_len
+        engine_kwargs["max_model_len"] = max_model_len + max_new_tokens
 
     llm = LLM(**engine_kwargs)
 
@@ -219,6 +248,8 @@ def vllm_infer(
     sampling_params = SamplingParams(
         temperature=temperature,
         max_tokens=max_new_tokens,
+        top_p=top_p,
+        top_k=top_k,
         repetition_penalty=repetition_penalty,
         skip_special_tokens=skip_special_tokens,
         seed=seed,
@@ -239,6 +270,7 @@ def vllm_infer(
 
     # Recovery
     output_path = pathlib.Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     processed_keys = _load_processed_keys(output_path)
     if processed_keys:
         print(f"Skipping {len(processed_keys)} already-processed articles (found in {output_path})")
@@ -246,13 +278,31 @@ def vllm_infer(
     pending = [row for row in articles if _article_key(row) not in processed_keys]
     print(f"Processing {len(pending)} / {len(articles)} articles")
 
+    _tokens_per_call = max_tokens_per_call if max_tokens_per_call is not None else (
+        max_model_len if max_model_len is not None else 32768
+    )
+
     n_batches = (len(pending) + batch_size - 1) // batch_size
+    pbar = tqdm(total=len(pending) * 2, unit="article")
+    _first_prompt_printed = False
 
     with open(output_path, "a", encoding="utf-8") as out_f:
-        for batch in tqdm(_batched(pending, batch_size), desc="Batches", total=n_batches):
-            # Build windows for every article in this batch
+        for b_idx, batch in enumerate(_batched(pending, batch_size)):
+
+            # --- Window building ---
+            pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Building")
             article_windows: list[list[dict]] = []
-            for row in batch:
+            all_prompts: list[str] = []
+            all_token_lengths: list[int] = []
+            prompt_map: list[tuple[int, int]] = []
+
+            for a_idx, row in enumerate(batch):
+                src = row.get("source") or {}
+                aid = (
+                    row.get("id") or row.get("article_id")
+                    or src.get("url") or src.get("id")
+                    or _article_key(row)[:12]
+                )
                 try:
                     windows = _build_windows(
                         row, system_template, user_template, default_labels, tokenizer,
@@ -260,47 +310,77 @@ def vllm_infer(
                         min_chars=min_chars, top_k_candidates=top_k_candidates,
                     )
                 except Exception as e:
-                    print(f"Window error: {e}", file=sys.stderr)
+                    pbar.write(f"Window error for {aid}: {e}")
                     windows = []
                 article_windows.append(windows)
-
-            # Collect all prompts with article/window index
-            all_prompts: list[str] = []
-            prompt_map: list[tuple[int, int]] = []
-            for a_idx, windows in enumerate(article_windows):
+                win_tokens = []
                 for w_idx, w in enumerate(windows):
+                    n_tok = len(tokenizer.encode(w["prompt"], add_special_tokens=False))
                     all_prompts.append(w["prompt"])
+                    all_token_lengths.append(n_tok)
                     prompt_map.append((a_idx, w_idx))
+                    win_tokens.append(n_tok)
+                pbar.update(1)
 
-            # Single vLLM call for the entire batch
-            if all_prompts:
-                results = llm.generate(all_prompts, sampling_params, lora_request=lora_request)
-            else:
-                results = []
+            total_input = sum(all_token_lengths)
+            max_input = max(all_token_lengths) if all_token_lengths else 0
+            pbar.write(
+                f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
+                f"{len(all_prompts)} prompts, {total_input} input tokens, "
+                f"max_input_tokens={max_input} "
+                f"(max_new_tokens={max_new_tokens}, budget={_tokens_per_call} input tok/call)"
+            )
 
-            # Map outputs back to articles
-            article_preds: list[list[dict]] = [[] for _ in batch]
-            for (a_idx, w_idx), result in zip(prompt_map, results):
-                pred_text = result.outputs[0].text
-                w = article_windows[a_idx][w_idx]
-                article_preds[a_idx].append({
-                    "window_start": w["window_start"],
-                    "window_end": w["window_end"],
-                    "window_text": w["window_text"],
-                    "prediction": _parse_json_output(pred_text),
-                })
+            if all_prompts and not _first_prompt_printed:
+                pbar.write("\n" + "=" * 80)
+                pbar.write("DEBUG — first rendered prompt:")
+                pbar.write("=" * 80)
+                pbar.write(all_prompts[0])
+                pbar.write("=" * 80 + "\n")
+                _first_prompt_printed = True
 
-            # Write one output line per article immediately
-            for row, win_preds in zip(batch, article_preds):
-                out_row = {
-                    **row,
-                    "window_predictions": win_preds,
-                    "predictions": _resolve_events(win_preds),
-                }
-                out_f.write(json.dumps(out_row, ensure_ascii=False) + "\n")
-            out_f.flush()
-            gc.collect()
+            # --- Inference ---
+            pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Inference")
+            article_preds: list[list[dict | None]] = [[None] * len(w) for w in article_windows]
+            results_count = [0] * len(batch)
+            window_count = [len(w) for w in article_windows]
 
+            for a_idx, row in enumerate(batch):
+                if window_count[a_idx] == 0:
+                    out_f.write(json.dumps({**row, "window_predictions": [], "predictions": []}, ensure_ascii=False) + "\n")
+                    pbar.update(1)
+
+            prompt_idx = 0
+            for prompt_chunk in _batched_by_tokens(all_prompts, all_token_lengths, _tokens_per_call):
+                chunk_results = llm.generate(prompt_chunk, sampling_params, lora_request=lora_request, use_tqdm=False)
+
+                touched: set[int] = set()
+                for i, result in enumerate(chunk_results):
+                    a_idx, w_idx = prompt_map[prompt_idx + i]
+                    w = article_windows[a_idx][w_idx]
+                    article_preds[a_idx][w_idx] = {
+                        "window_start": w["window_start"],
+                        "window_end": w["window_end"],
+                        "window_text": w["window_text"],
+                        "prediction": _parse_json_output(result.outputs[0].text),
+                    }
+                    results_count[a_idx] += 1
+                    touched.add(a_idx)
+                prompt_idx += len(prompt_chunk)
+
+                for a_idx in sorted(touched):
+                    if results_count[a_idx] == window_count[a_idx]:
+                        win_preds = article_preds[a_idx]
+                        out_f.write(json.dumps(
+                            {**batch[a_idx], "window_predictions": win_preds, "predictions": _resolve_events(win_preds)},
+                            ensure_ascii=False,
+                        ) + "\n")
+                        pbar.update(1)
+
+                out_f.flush()
+                gc.collect()
+
+    pbar.close()
     print(f"Done. Results saved to {output_path}")
 
 
