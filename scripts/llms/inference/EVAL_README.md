@@ -10,11 +10,16 @@ predictions for one document.
 python scripts/llms/inference/eval_v3_sft.py \
   --pred-jsonl dataset/risk-factor/run-15062025/predictions/quick_dev.jsonl \
   [--report-json /tmp/report.json] \
-  [--errors-jsonl /tmp/errors.jsonl]
+  [--errors-jsonl /tmp/errors.jsonl] \
+  [--cluster ontologies/risk-factors/studio_results_20260427_1018.json]
 ```
 
-`--report-json` dumps the full nested metrics dict.  
-`--errors-jsonl` dumps one row per document that had unmatched events, useful for error analysis.
+| Flag | Description |
+|------|-------------|
+| `--pred-jsonl` | Predictions JSONL file (required). Each record must contain both `annotation` and `predictions` fields. |
+| `--report-json` | Write the full nested metrics dict as JSON. |
+| `--errors-jsonl` | Write one row per document that had unmatched events; useful for error analysis. |
+| `--cluster` | Studio results JSON mapping event names to cluster labels. When provided, adds four additional cluster-level metric families to the report (see below). |
 
 ---
 
@@ -34,9 +39,9 @@ Each table has two column groups:
 
 ---
 
-## The six metric families
+## Core metric families (always computed)
 
-### 1. Event extraction (overall)
+### 1. Event extraction
 
 Measures whether the model finds the right events at all.
 
@@ -88,8 +93,11 @@ string equality).
 Measures whether the model extracts the correct place names, independent of which
 event they are attached to.
 
-Per document, compares the **sets** of `event_location` values (ignoring
-`"not_stated"`). A predicted location matches a gold location if:
+`event_location` values may contain multiple locations separated by `";"` (e.g.
+`"Rome; Milan"`). Each semicolon-separated part is split out and treated as an
+independent entry in the per-document bag before comparison.
+
+A predicted location matches a gold location if:
 
 | Tier | Matching rule |
 |------|--------------|
@@ -107,17 +115,21 @@ Per document, compares the **sets** of `event_location` values (ignoring
 Measures whether the model correctly associates a location **with the right event**.
 This is harder than location extraction alone.
 
-**Conditioned on Step 1**: among event pairs that were already matched (TP events),
-counts how many also have a correct location (same rules as family 3). Events that
-were not matched at all still contribute to FP/FN, so a missed event is not
-double-penalized — it already appears in the event extraction score.
+**Conditioned on family 1**: among event pairs that were already matched (TP events),
+counts how many also have a correct location (same matching rules as family 4).
+Multi-location values (semicolon-separated) are handled as sets: for the exact tier
+both sets must be equal; for the relaxed tier every location in each set must
+fuzzy-match some location in the other set.
+
+Events that were not matched at all still contribute to FP/FN, so a missed event is
+not double-penalized — it already appears in the event extraction score.
 
 ---
 
 ### 6. Event-time pairing
 
 Measures whether the model correctly associates a time expression **with the right
-event**. Same conditioning as event-location.
+event**. Same conditioning as event-location (family 5).
 
 `event_time` values are ISO 8601 strings (`"2018-01/2018-10"`, `"2015"`, `"not_stated"`).
 
@@ -131,9 +143,48 @@ event**. Same conditioning as event-location.
 
 ---
 
-## Interpreting the numbers
+## Cluster metric families (require `--cluster`)
 
-A few things to keep in mind when reading the scorecard:
+When `--cluster` is passed, each event's `event_type` is mapped to a coarser cluster
+label (e.g. `"displaced"` → `"forced displacement"`) before comparison. This adds
+four extra rows to the report.
+
+### 7. Cluster event extraction
+
+Like family 1, but the bipartite matching uses **cluster labels** instead of
+fine-grained types. Two events that differ in fine-grained type but share the same
+cluster (e.g. gold `"drought"` vs pred `"floods"`, both `"weather shocks"`) can now
+match, provided their grounding quotes also overlap.
+
+---
+
+### 8. Cluster type (multiset)
+
+Like family 2 (event type multiset) but each `event_type` is replaced by its cluster
+label before the bag comparison. Tells you whether the model covers the right broad
+categories regardless of exact type naming.
+
+---
+
+### 9. Cluster type (doc-level set)
+
+Like family 3 (event type set) but using cluster labels. Answers *"did the model
+cover all distinct risk-factor clusters mentioned in this document?"*
+
+As with families 2–3, exact and relaxed scores are identical.
+
+---
+
+### 10. Cluster event-location pairing
+
+Like family 5 (event-location pairing) but **conditioned on the cluster-level event
+matching** from family 7. A cluster-matched pair counts as TP if the predicted
+location also matches the gold location. This is typically higher than family 5
+because the looser event matching produces more aligned pairs.
+
+---
+
+## Interpreting the numbers
 
 **Relaxed ≫ exact on event extraction** is expected. The model often extends
 the grounding quote to include location or time context, which is semantically
@@ -148,9 +199,17 @@ credit for covering a category at least once, so documents with repeated event
 types (e.g. multiple displacement events) will score higher on the set metric
 even if the model underestimates the count.
 
+**Cluster metrics ≥ fine-grained equivalents** is expected. Collapsing types to
+clusters removes synonymy penalties (e.g. `"drought"` vs `"failed rains"`), so
+scores are always at least as high as their fine-grained counterparts.
+
 **Location > event-location pairing** is expected. The model might extract
 the correct locations overall but associate them with the wrong events (or miss
 some events entirely).
+
+**Cluster event-location ≥ event-location pairing** is expected for the same
+reason cluster event extraction is higher: the looser matching surfaces more
+aligned pairs, giving the location comparison more TP opportunities.
 
 **Macro vs micro divergence** tells you about consistency. If macro F1 is much
 higher than micro, the model is strong on short documents but struggles on

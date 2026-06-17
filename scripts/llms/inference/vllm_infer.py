@@ -350,9 +350,20 @@ def vllm_infer(
                     out_f.write(json.dumps({**row, "window_predictions": [], "predictions": []}, ensure_ascii=False) + "\n")
                     pbar.update(1)
 
+            _first_generation_printed = False
             prompt_idx = 0
             for prompt_chunk in _batched_by_tokens(all_prompts, all_token_lengths, _tokens_per_call):
                 chunk_results = llm.generate(prompt_chunk, sampling_params, lora_request=lora_request, use_tqdm=False)
+
+                if not _first_generation_printed and chunk_results:
+                    first_out = chunk_results[0].outputs[0]
+                    decoded = tokenizer.decode(first_out.token_ids, skip_special_tokens=False)
+                    pbar.write("\n" + "=" * 80)
+                    pbar.write("DEBUG — first generation (with special tokens):")
+                    pbar.write("=" * 80)
+                    pbar.write(decoded)
+                    pbar.write("=" * 80 + "\n")
+                    _first_generation_printed = True
 
                 touched: set[int] = set()
                 for i, result in enumerate(chunk_results):
