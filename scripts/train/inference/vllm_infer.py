@@ -179,7 +179,7 @@ def vllm_infer(
     top_k_candidates: int | None = None,
     shard_index: int = 0,
     num_shards: int = 1,
-    # Windowing (mirrors to_sft.py defaults)
+    # Windowing
     max_chars: int = 3000,
     min_chars: int = 200,
     max_paras: int = 15,
@@ -199,7 +199,7 @@ def vllm_infer(
     batch_size: int = 1_000,
     max_num_seqs: int | None = None,
 ):
-    """Batch event extraction inference using vLLM (no LlamaFactory)."""
+    """Batch event extraction inference using vLLM."""
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
     prompt_dir_path = pathlib.Path(prompt_dir) if prompt_dir else DEFAULT_PROMPT_DIR
 
