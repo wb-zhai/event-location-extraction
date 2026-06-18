@@ -1,3 +1,126 @@
+# Inference & Evaluation Guide
+
+## Running inference
+
+Batch inference is handled by [vllm_infer.py](../llamafactory/vllm_infer.py). It uses [vLLM](https://github.com/vllm-project/vllm) for high-throughput generation and reads input through LlamaFactory's dataset pipeline, so the dataset must be registered in LlamaFactory's `data/dataset_info.json` before running.
+
+### Basic usage
+
+```bash
+python scripts/train/llamafactory/vllm_infer.py \
+  --model_name_or_path <hf-repo-or-local-path> \
+  --template qwen3 \
+  --dataset my_eval_dataset \
+  --dataset_dir data \
+  --save_name outputs/predictions.jsonl \
+  --max_new_tokens 2048
+```
+
+With a LoRA adapter:
+
+```bash
+python scripts/train/llamafactory/vllm_infer.py \
+  --model_name_or_path <base-model> \
+  --adapter_name_or_path <adapter-path> \
+  --template qwen3 \
+  --dataset my_eval_dataset \
+  --dataset_dir data \
+  --save_name outputs/predictions.jsonl
+```
+
+### Multi-GPU tensor parallelism
+
+vLLM automatically uses all visible GPUs for tensor parallelism. To restrict GPUs or run pipeline-parallel across fewer GPUs per stage:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 python scripts/train/llamafactory/vllm_infer.py \
+  --model_name_or_path <model> \
+  --template qwen3 \
+  --dataset my_eval_dataset \
+  --pipeline_parallel_size 2 \
+  --save_name outputs/predictions.jsonl
+```
+
+### Key arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `model_name_or_path` | required | HuggingFace repo or local path |
+| `adapter_name_or_path` | `None` | Path to a LoRA adapter directory |
+| `dataset` | `alpaca_en_demo` | Dataset name registered in `dataset_info.json` |
+| `dataset_dir` | `data` | Directory containing `dataset_info.json` |
+| `template` | `default` | Chat template (e.g. `qwen3`, `llama3`, `mistral`) |
+| `cutoff_len` | `2048` | Maximum input token length |
+| `max_new_tokens` | `1024` | Maximum tokens to generate |
+| `temperature` | `0.95` | Sampling temperature |
+| `top_p` | `0.7` | Top-p nucleus sampling |
+| `top_k` | `50` | Top-k sampling |
+| `min_p` | `0.0` | Min-p sampling threshold |
+| `repetition_penalty` | `1.0` | Repetition penalty |
+| `enable_thinking` | `True` | Enable thinking tokens (Qwen3 / reasoning models) |
+| `pipeline_parallel_size` | `1` | Number of pipeline parallel stages |
+| `batch_size` | `1024` | Number of prompts per vLLM call |
+| `save_name` | `generated_predictions.jsonl` | Output JSONL path |
+| `matrix_save_name` | `None` | If set, computes BLEU/ROUGE and saves metrics JSON here |
+| `seed` | `None` | Random seed for reproducibility |
+
+### Output format
+
+Each line of the output JSONL contains the decoded prompt, the model prediction, and the gold label:
+
+```json
+{"prompt": "...", "predict": "{\"events\": [...]}", "label": "{\"events\": [...]}"}
+```
+
+### Optional BLEU/ROUGE metrics
+
+Pass `--matrix_save_name outputs/metrics.json` to compute BLEU-4 and ROUGE scores over all predictions after generation. The resulting file follows LlamaFactory's `trainer.save_metrics` format:
+
+```json
+{
+  "predict_bleu-4": 4.35,
+  "predict_rouge-1": 21.87,
+  "predict_rouge-l": 10.84,
+  "predict_runtime": 131.66,
+  "predict_samples_per_second": 0.076
+}
+```
+
+---
+
+## Windowing strategy
+
+News articles can exceed the model's context window. Long documents are split into overlapping windows using [scripts/data/generation/windowing.py](../../data/generation/windowing.py), which keeps all offsets aligned with the original article throughout.
+
+### How it works
+
+1. **Sentence splitting** — The article is split into sentence-like *units* on paragraph breaks and sentence-ending punctuation. Each unit records its `start_char` / `end_char` in the original article. Units longer than `max_chars` are further split on whitespace.
+
+2. **Core groups** — Units are greedily packed into *core groups* so that each group spans at most `target_chars` characters (default 6 000). The core is the region the model is expected to extract events from.
+
+3. **Overlap expansion** — Each core group is extended by up to `overlap_sentences` sentences (default 2) in both directions without exceeding `max_chars` (default 9 000). The overlap gives the model context for events that straddle a window boundary, and it is flagged via `overlap_prev` / `overlap_next` on the `ArticleWindow` dataclass.
+
+4. **Offset projection** — Because every window is an exact substring (`text = article[start_char:end_char]`), offsets predicted relative to the window are projected back to article-level offsets by adding `window.start_char`.
+
+```python
+from scripts.data.generation.windowing import build_article_windows
+
+windows = build_article_windows(
+    text=article,
+    target_chars=6000,   # target core size
+    max_chars=9000,      # hard cap including overlap
+    overlap_sentences=2, # sentences of shared context per side
+)
+for w in windows:
+    print(f"window {w.window_index}/{w.window_count}: "
+          f"chars {w.start_char}–{w.end_char} "
+          f"(core {w.core_start_char}–{w.core_end_char})")
+```
+
+When merging predictions across windows, keep only events whose trigger falls within the *core* region (`core_start_char ≤ trigger.start < core_end_char`) to avoid duplicates from the overlap.
+
+---
+
 # eval_v3_sft.py — Evaluation Guide
 
 Evaluates a distilled event-location extraction model against annotated gold data.
