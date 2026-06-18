@@ -10,11 +10,11 @@ from typing import Any
 import torch
 from unsloth import FastLanguageModel
 from unsloth.chat_templates import train_on_responses_only
-from datasets import load_dataset
+from src.datasets import load_dataset
 from trl import SFTConfig, SFTTrainer
 from transformers import TrainerCallback
 
-from src.data.dataset import (
+from src.data.encoder_dataset import (
     DEFAULT_CANDIDATE_SAMPLING_SEED,
     _apply_training_candidate_transform,
     _build_candidate_labels,
@@ -145,9 +145,7 @@ def _select_label_descriptions(
 ) -> list[str] | dict[str, str]:
     if not include_descriptions or descriptions is None:
         return labels
-    return {
-        label: descriptions.get(label, "") for label in labels
-    }
+    return {label: descriptions.get(label, "") for label in labels}
 
 
 def _format_prompt_candidates(candidates: list[str] | dict[str, str]) -> str:
@@ -159,7 +157,9 @@ def _format_prompt_candidates(candidates: list[str] | dict[str, str]) -> str:
     return " | ".join(candidates)
 
 
-def _extract_passage_event_candidates(row: dict[str, Any]) -> list[tuple[str, str]] | None:
+def _extract_passage_event_candidates(
+    row: dict[str, Any],
+) -> list[tuple[str, str]] | None:
     passages = row.get("passages")
     if not isinstance(passages, list):
         return None
@@ -187,7 +187,9 @@ def _extract_passage_event_candidates(row: dict[str, Any]) -> list[tuple[str, st
     return candidates or None
 
 
-def _enrich_events(document: str, events: list[dict[str, Any]], *, events_only: bool = False) -> list[dict[str, Any]]:
+def _enrich_events(
+    document: str, events: list[dict[str, Any]], *, events_only: bool = False
+) -> list[dict[str, Any]]:
     enriched: list[dict[str, Any]] = []
     for event in events:
         trigger = _coerce_span(
@@ -201,7 +203,7 @@ def _enrich_events(document: str, events: list[dict[str, Any]], *, events_only: 
             "event_type": event.get("event_type", ""),
             "trigger": trigger,
         }
-        
+
         if not events_only:
             out_event["arguments"] = []
             for arg in event.get("arguments", []):
@@ -262,11 +264,7 @@ def _extract_required_labels(
 
         for argument in event.get("arguments", []):
             role = argument.get("role")
-            if (
-                isinstance(role, str)
-                and role
-                and role not in seen_argument_role_labels
-            ):
+            if isinstance(role, str) and role and role not in seen_argument_role_labels:
                 seen_argument_role_labels.add(role)
                 argument_role_labels.append(role)
 
@@ -476,9 +474,7 @@ def _resolve_event_descriptions_for_row(
 ) -> dict[str, str] | None:
     passage_event_candidates = _extract_passage_event_candidates(row)
     if passage_event_candidates is not None:
-        return {
-            label: description for label, description in passage_event_candidates
-        }
+        return {label: description for label, description in passage_event_candidates}
     if ontology is None:
         return None
     return ontology.event_descriptions
@@ -512,22 +508,14 @@ def _chat_text(
         _format_prompt_candidates(
             _select_label_descriptions(
                 argument_role_labels,
-                (
-                    ontology.argument_role_descriptions
-                    if ontology is not None
-                    else None
-                ),
+                (ontology.argument_role_descriptions if ontology is not None else None),
                 include_descriptions=include_descriptions,
             )
         ),
         _format_prompt_candidates(
             _select_label_descriptions(
                 location_type_labels,
-                (
-                    ontology.location_type_descriptions
-                    if ontology is not None
-                    else None
-                ),
+                (ontology.location_type_descriptions if ontology is not None else None),
                 include_descriptions=include_descriptions,
             )
         ),
@@ -566,22 +554,14 @@ def _chat_parts(
         _format_prompt_candidates(
             _select_label_descriptions(
                 argument_role_labels,
-                (
-                    ontology.argument_role_descriptions
-                    if ontology is not None
-                    else None
-                ),
+                (ontology.argument_role_descriptions if ontology is not None else None),
                 include_descriptions=include_descriptions,
             )
         ),
         _format_prompt_candidates(
             _select_label_descriptions(
                 location_type_labels,
-                (
-                    ontology.location_type_descriptions
-                    if ontology is not None
-                    else None
-                ),
+                (ontology.location_type_descriptions if ontology is not None else None),
                 include_descriptions=include_descriptions,
             )
         ),
@@ -613,21 +593,27 @@ def _format_row(
 ) -> dict[str, str]:
     document = row["question"]
     raw_events = row["answer"]["events"]
-    answer_obj = {"events": _enrich_events(document, raw_events, events_only=events_only)}
+    answer_obj = {
+        "events": _enrich_events(document, raw_events, events_only=events_only)
+    }
     event_descriptions = _resolve_event_descriptions_for_row(row, ontology)
-    event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
-        row,
-        ontology=ontology,
-        num_event_candidates=num_event_candidates,
-        num_relation_candidates=num_relation_candidates,
-        is_training=is_training,
-        candidate_shuffle_probability=candidate_shuffle_probability,
-        gold_candidate_dropout_probability=gold_candidate_dropout_probability,
-        random_seed=random_seed,
-        candidate_rng=(
-            candidate_rng if candidate_rng is not None else random.Random(random_seed)
-        ),
-        index=index,
+    event_labels, argument_role_labels, location_type_labels = (
+        _resolve_candidate_labels(
+            row,
+            ontology=ontology,
+            num_event_candidates=num_event_candidates,
+            num_relation_candidates=num_relation_candidates,
+            is_training=is_training,
+            candidate_shuffle_probability=candidate_shuffle_probability,
+            gold_candidate_dropout_probability=gold_candidate_dropout_probability,
+            random_seed=random_seed,
+            candidate_rng=(
+                candidate_rng
+                if candidate_rng is not None
+                else random.Random(random_seed)
+            ),
+            index=index,
+        )
     )
     text = _chat_text(
         tokenizer,
@@ -708,19 +694,23 @@ def _build_sample_preview(
 ) -> tuple[list[dict[str, str]], str]:
     document = row["question"]
     raw_events = row["answer"]["events"]
-    answer_obj = {"events": _enrich_events(document, raw_events, events_only=events_only)}
+    answer_obj = {
+        "events": _enrich_events(document, raw_events, events_only=events_only)
+    }
     event_descriptions = _resolve_event_descriptions_for_row(row, ontology)
-    event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
-        row,
-        ontology=ontology,
-        num_event_candidates=num_event_candidates,
-        num_relation_candidates=num_relation_candidates,
-        is_training=is_training,
-        candidate_shuffle_probability=candidate_shuffle_probability,
-        gold_candidate_dropout_probability=gold_candidate_dropout_probability,
-        random_seed=random_seed,
-        candidate_rng=random.Random(random_seed),
-        index=index,
+    event_labels, argument_role_labels, location_type_labels = (
+        _resolve_candidate_labels(
+            row,
+            ontology=ontology,
+            num_event_candidates=num_event_candidates,
+            num_relation_candidates=num_relation_candidates,
+            is_training=is_training,
+            candidate_shuffle_probability=candidate_shuffle_probability,
+            gold_candidate_dropout_probability=gold_candidate_dropout_probability,
+            random_seed=random_seed,
+            candidate_rng=random.Random(random_seed),
+            index=index,
+        )
     )
     return _chat_parts(
         tokenizer,
@@ -738,7 +728,9 @@ def _build_sample_preview(
     )
 
 
-def _select_rows_for_generation_checks(dataset, max_samples: int) -> list[tuple[int, dict[str, Any]]]:
+def _select_rows_for_generation_checks(
+    dataset, max_samples: int
+) -> list[tuple[int, dict[str, Any]]]:
     if max_samples <= 0:
         raise ValueError(f"max_samples must be > 0, got {max_samples}")
     sample_count = min(len(dataset), max_samples)
@@ -758,17 +750,19 @@ def _build_generation_eval_samples(
     samples: list[SftGenerationEvalSample] = []
     for row_index, row in _select_rows_for_generation_checks(dataset, max_samples):
         event_descriptions = _resolve_event_descriptions_for_row(row, ontology)
-        event_labels, argument_role_labels, location_type_labels = _resolve_candidate_labels(
-            row,
-            ontology=ontology,
-            num_event_candidates=num_event_candidates,
-            num_relation_candidates=num_relation_candidates,
-            is_training=False,
-            candidate_shuffle_probability=0.0,
-            gold_candidate_dropout_probability=0.0,
-            random_seed=random_seed,
-            candidate_rng=random.Random(random_seed),
-            index=row_index,
+        event_labels, argument_role_labels, location_type_labels = (
+            _resolve_candidate_labels(
+                row,
+                ontology=ontology,
+                num_event_candidates=num_event_candidates,
+                num_relation_candidates=num_relation_candidates,
+                is_training=False,
+                candidate_shuffle_probability=0.0,
+                gold_candidate_dropout_probability=0.0,
+                random_seed=random_seed,
+                candidate_rng=random.Random(random_seed),
+                index=row_index,
+            )
         )
         samples.append(
             SftGenerationEvalSample(
@@ -1141,7 +1135,9 @@ def _print_dataset_max_sequence_length_before_filtering(
     split_name: str,
 ) -> None:
     if len(dataset) == 0:
-        print(f"{split_name} max sequence length before filtering (tokens): dataset is empty")
+        print(
+            f"{split_name} max sequence length before filtering (tokens): dataset is empty"
+        )
         return
     max_length = max(dataset["seq_length"])
     print(f"{split_name} max sequence length before filtering (tokens): {max_length}")
@@ -1152,17 +1148,19 @@ def _response_only(trainer: SFTTrainer, model_name: str) -> SFTTrainer:
         print("Applying response-only training template for LFM model")
         return train_on_responses_only(
             trainer,
-            instruction_part = "<|im_start|>user\n",
-            response_part = "<|im_start|>assistant\n",
+            instruction_part="<|im_start|>user\n",
+            response_part="<|im_start|>assistant\n",
         )
     if "qwen3.5" in model_name.lower():
-        print("Applying response-only training template for Qwen3.5 model in no-thinking mode")
+        print(
+            "Applying response-only training template for Qwen3.5 model in no-thinking mode"
+        )
         return train_on_responses_only(
             trainer,
-            instruction_part = "<|im_start|>user\n",
-            response_part = "<|im_start|>assistant\n",
+            instruction_part="<|im_start|>user\n",
+            response_part="<|im_start|>assistant\n",
         )
-    
+
     raise ValueError(
         "Response-only training template is not defined for the specified model. "
         "Supported models for response-only training: LFM, Qwen3.5."
@@ -1356,7 +1354,7 @@ def main(argv: list[str] | None = None) -> None:
             lora_alpha=args.lora_r,
             lora_dropout=0.0,
             bias="none",
-            use_gradient_checkpointing=False, #"unsloth",
+            use_gradient_checkpointing=False,  # "unsloth",
             random_state=3407,
             max_seq_length=args.max_seq_length,
             finetune_vision_layers=False,

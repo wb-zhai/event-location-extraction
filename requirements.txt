@@ -1,6 +1,4 @@
-unsloth==2026.5.7
-json-repair
-gradio
+# unsloth==2026.5.7
 # torch>=2.10.0
 # transformers>=5.5,<5.6
 # accelerate>=1.1.0
@@ -11,7 +9,6 @@ gradio
 # tqdm
 # dotenv
 # # llm inference
-# google-genai
 # langextract
 # jinja2
 # openai
@@ -19,3 +16,32 @@ gradio
 # trafilatura
 # # db
 # sqlalchemy
+
+# Inference
+torch>=2.11.0,<2.12.0
+vllm==0.23.0
+sentence-transformers==5.6.0
+
+# LLMs
+google-genai==2.8.0
+
+# General utilities
+json-repair
+gradio
+art==6.5
+overrides>=7.7.0,<8.0.0
+pprintpp==0.4.0
+colorama==0.4.6
+termcolor==3.2.0
+rich==15.0.0
+python-dotenv==1.2.2
+
+# Database connectors and cloud platform libraries
+google-cloud-aiplatform==1.158.0
+cloud-sql-python-connector[pymysql]==1.20.3
+sqlalchemy==2.0.49
+
+# Dev
+black>=26.1.0,<27.0.0
+ruff>=0.14.14,<0.15.0
+pytest>=9.1.0,<10.0.0

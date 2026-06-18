@@ -112,25 +112,6 @@ def _batched(items: list, size: int) -> Iterator[list]:
         yield items[i : i + size]
 
 
-def _batched_by_tokens(
-    prompts: list[str],
-    token_lengths: list[int],
-    budget: int,
-) -> Iterator[list[str]]:
-    """Yield prompt chunks where sum(input_tokens) <= budget."""
-    chunk: list[str] = []
-    chunk_tokens = 0
-    for prompt, n_tok in zip(prompts, token_lengths):
-        if chunk and chunk_tokens + n_tok > budget:
-            yield chunk
-            chunk = []
-            chunk_tokens = 0
-        chunk.append(prompt)
-        chunk_tokens += n_tok
-    if chunk:
-        yield chunk
-
-
 def _build_windows(
     row: dict,
     system_template: str,
@@ -196,6 +177,8 @@ def vllm_infer(
     prompt_dir: str | None = None,
     ontology: str | None = None,
     top_k_candidates: int | None = None,
+    shard_index: int = 0,
+    num_shards: int = 1,
     # Windowing (mirrors to_sft.py defaults)
     max_chars: int = 3000,
     min_chars: int = 200,
@@ -203,7 +186,7 @@ def vllm_infer(
     overlap_paras: int = 1,
     # Sampling
     temperature: float = 0.0,
-    max_new_tokens: int = 12588,
+    max_new_tokens: int = 4096,
     top_p: float = 0.8,
     top_k: int = 0,
     repetition_penalty: float = 1.05,
@@ -214,7 +197,7 @@ def vllm_infer(
     gpu_memory_utilization: float = 0.95,
     tensor_parallel_size: int = 1,
     batch_size: int = 1_000,
-    max_tokens_per_call: int | None = None,
+    max_num_seqs: int | None = None,
 ):
     """Batch event extraction inference using vLLM (no LlamaFactory)."""
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
@@ -229,14 +212,18 @@ def vllm_infer(
     engine_kwargs: dict = {
         "model": model_name_or_path,
         "enable_lora": adapter_name_or_path is not None,
+        "max_lora_rank": 64,
         "trust_remote_code": True,
         "tensor_parallel_size": tensor_parallel_size,
         "gpu_memory_utilization": gpu_memory_utilization,
         "enable_prefix_caching": True,
         "disable_log_stats": True,
+        "language_model_only": True,
     }
     if max_model_len is not None:
         engine_kwargs["max_model_len"] = max_model_len + max_new_tokens
+    if max_num_seqs is not None:
+        engine_kwargs["max_num_seqs"] = max_num_seqs
 
     llm = LLM(**engine_kwargs)
 
@@ -268,6 +255,11 @@ def vllm_infer(
             except json.JSONDecodeError as e:
                 print(f"Skipping line {lineno}: {e}", file=sys.stderr)
 
+    # Sharding (stride so load is balanced across shards)
+    if num_shards > 1:
+        articles = articles[shard_index::num_shards]
+        print(f"Shard {shard_index}/{num_shards}: {len(articles)} articles")
+
     # Recovery
     output_path = pathlib.Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,6 +273,7 @@ def vllm_infer(
     n_batches = (len(pending) + batch_size - 1) // batch_size
     pbar = tqdm(total=len(pending) * 2, unit="article")
     _first_prompt_printed = False
+    _first_generation_printed = False
 
     with open(output_path, "a", encoding="utf-8") as out_f:
         for b_idx, batch in enumerate(_batched(pending, batch_size)):
@@ -289,7 +282,6 @@ def vllm_infer(
             pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Building")
             article_windows: list[list[dict]] = []
             all_prompts: list[str] = []
-            all_token_lengths: list[int] = []
             prompt_map: list[tuple[int, int]] = []
 
             for a_idx, row in enumerate(batch):
@@ -311,25 +303,13 @@ def vllm_infer(
                 article_windows.append(windows)
                 for w_idx, w in enumerate(windows):
                     all_prompts.append(w["prompt"])
-                    if max_tokens_per_call is not None:
-                        all_token_lengths.append(len(tokenizer.encode(w["prompt"], add_special_tokens=False)))
                     prompt_map.append((a_idx, w_idx))
                 pbar.update(1)
 
-            if max_tokens_per_call is not None:
-                total_input = sum(all_token_lengths)
-                max_input = max(all_token_lengths) if all_token_lengths else 0
-                pbar.write(
-                    f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
-                    f"{len(all_prompts)} prompts, {total_input} input tokens, "
-                    f"max_input_tokens={max_input} "
-                    f"(max_new_tokens={max_new_tokens}, budget={max_tokens_per_call} input tok/call)"
-                )
-            else:
-                pbar.write(
-                    f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
-                    f"{len(all_prompts)} prompts (max_new_tokens={max_new_tokens})"
-                )
+            pbar.write(
+                f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
+                f"{len(all_prompts)} prompts (max_new_tokens={max_new_tokens})"
+            )
 
             if all_prompts and not _first_prompt_printed:
                 pbar.write("\n" + "=" * 80)
@@ -349,39 +329,28 @@ def vllm_infer(
                     pbar.update(1)
 
             if all_prompts:
-                # Split only when explicitly requested; otherwise give all prompts to vLLM at once
-                # so its internal scheduler can maximally parallelize across the GPU.
-                chunks = (
-                    list(_batched_by_tokens(all_prompts, all_token_lengths, max_tokens_per_call))
-                    if max_tokens_per_call is not None
-                    else [all_prompts]
-                )
+                # Hand all prompts to vLLM at once so its continuous-batching
+                # scheduler can maximally parallelize across the GPU.
+                results = llm.generate(all_prompts, sampling_params, lora_request=lora_request)
 
-                _first_generation_printed = False
-                prompt_idx = 0
-                for chunk in chunks:
-                    chunk_results = llm.generate(chunk, sampling_params, lora_request=lora_request, use_tqdm=len(chunks) == 1)
+                if results and not _first_generation_printed:
+                    decoded = tokenizer.decode(results[0].outputs[0].token_ids, skip_special_tokens=False)
+                    pbar.write("\n" + "=" * 80)
+                    pbar.write("DEBUG — first generation (with special tokens):")
+                    pbar.write("=" * 80)
+                    pbar.write(decoded)
+                    pbar.write("=" * 80 + "\n")
+                    _first_generation_printed = True
 
-                    if not _first_generation_printed and chunk_results:
-                        first_out = chunk_results[0].outputs[0]
-                        decoded = tokenizer.decode(first_out.token_ids, skip_special_tokens=False)
-                        pbar.write("\n" + "=" * 80)
-                        pbar.write("DEBUG — first generation (with special tokens):")
-                        pbar.write("=" * 80)
-                        pbar.write(decoded)
-                        pbar.write("=" * 80 + "\n")
-                        _first_generation_printed = True
-
-                    for i, result in enumerate(chunk_results):
-                        a_idx, w_idx = prompt_map[prompt_idx + i]
-                        w = article_windows[a_idx][w_idx]
-                        article_preds[a_idx][w_idx] = {
-                            "window_start": w["window_start"],
-                            "window_end": w["window_end"],
-                            "window_text": w["window_text"],
-                            "prediction": _parse_json_output(result.outputs[0].text),
-                        }
-                    prompt_idx += len(chunk)
+                for i, result in enumerate(results):
+                    a_idx, w_idx = prompt_map[i]
+                    w = article_windows[a_idx][w_idx]
+                    article_preds[a_idx][w_idx] = {
+                        "window_start": w["window_start"],
+                        "window_end": w["window_end"],
+                        "window_text": w["window_text"],
+                        "prediction": _parse_json_output(result.outputs[0].text),
+                    }
 
                 for a_idx, row in enumerate(batch):
                     if article_windows[a_idx]:

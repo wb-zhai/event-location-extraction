@@ -68,7 +68,7 @@ def load_model(model_path: str, max_model_len_val: int, max_new_tokens: int) -> 
             "gpu_memory_utilization": 0.95,
             "enable_prefix_caching": True,
             "disable_log_stats": True,
-            "language-model-only": True,
+            "language_model_only": True,
         }
         max_model_len = int(max_model_len_val) if max_model_len_val > 0 else None
         if max_model_len is not None:

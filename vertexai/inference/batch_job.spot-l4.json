@@ -1,0 +1,53 @@
+{
+  "taskGroups": [
+    {
+      "taskCount": "TASK_COUNT",
+      "parallelism": "TASK_COUNT",
+      "taskSpec": {
+        "maxRetryCount": 3,
+        "runnables": [
+          {
+            "container": {
+              "imageUri": "IMAGE_URI",
+              "entrypoint": "/bin/bash",
+              "commands": ["/entrypoint.sh"]
+            },
+            "environment": {
+              "variables": {
+                "INPUT_GCS": "INPUT_GCS",
+                "OUTPUT_GCS_PREFIX": "OUTPUT_GCS_PREFIX",
+                "MODEL_GCS": "MODEL_GCS",
+                "MAX_NEW_TOKENS": "MAX_NEW_TOKENS",
+                "BATCH_SIZE": "BATCH_SIZE"
+              }
+            }
+          }
+        ],
+        "resources": {
+          "cpuMilli": "8000",
+          "memoryMib": "32000"
+        }
+      }
+    }
+  ],
+  "allocationPolicy": {
+    "instances": [
+      {
+        "installGpuDrivers": true,
+        "policy": {
+          "machineType": "g2-standard-8",
+          "accelerators": [
+            {
+              "type": "nvidia-l4",
+              "count": "1"
+            }
+          ],
+          "provisioningModel": "SPOT"
+        }
+      }
+    ]
+  },
+  "logsPolicy": {
+    "destination": "CLOUD_LOGGING"
+  }
+}

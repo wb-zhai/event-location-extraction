@@ -27,7 +27,9 @@ def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
             try:
                 records.append(json.loads(payload))
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON on line {line_number} in {path}") from exc
+                raise ValueError(
+                    f"Invalid JSON on line {line_number} in {path}"
+                ) from exc
     return records
 
 
@@ -274,7 +276,9 @@ def select_balancing_subset(
         "pool_event_type_counts": dict(pool_counts.most_common()),
         "overlap_labels": overlap_labels,
         "pool_overlap_event_type_counts": pool_overlap_counts,
-        "selected_event_type_counts": dict(event_type_counts(selected_records).most_common()),
+        "selected_event_type_counts": dict(
+            event_type_counts(selected_records).most_common()
+        ),
         "combined_event_type_counts": dict(current_counts.most_common()),
         "remaining_deficits": remaining_deficits(),
         "selected_documents": len(selected_records),
@@ -377,8 +381,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         required=False,
         help="Existing parsed JSONL dataset. If omitted, self-balance the pool dataset.",
     )
-    parser.add_argument("--pool", required=True, help="Raw JSONL pool to subsample from.")
-    parser.add_argument("--output", required=True, help="Selected subset output JSONL path.")
+    parser.add_argument(
+        "--pool", required=True, help="Raw JSONL pool to subsample from."
+    )
+    parser.add_argument(
+        "--output", required=True, help="Selected subset output JSONL path."
+    )
     parser.add_argument(
         "--report-output",
         required=False,
@@ -414,7 +422,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "target for any single label. Default 0 enforces hard caps."
         ),
     )
-    parser.add_argument("--seed", type=int, default=13, help="Random seed for tie-breaking.")
+    parser.add_argument(
+        "--seed", type=int, default=13, help="Random seed for tie-breaking."
+    )
     return parser
 
 
@@ -425,7 +435,9 @@ def main(argv: list[str] | None = None) -> int:
     pool_records = read_jsonl(args.pool)
     if args.reference:
         if args.target_strategy == "min":
-            raise ValueError("--target-strategy=min is only supported when --reference is omitted")
+            raise ValueError(
+                "--target-strategy=min is only supported when --reference is omitted"
+            )
         reference_records = read_jsonl(args.reference)
         reference_counts = event_type_counts(reference_records)
         target_count = choose_target_count(
@@ -444,7 +456,9 @@ def main(argv: list[str] | None = None) -> int:
         report["mode"] = "reference_balanced"
     else:
         if args.target_strategy == "max" and args.target_count is None:
-            raise ValueError("--target-strategy=max requires --reference; use min or median for self-balancing")
+            raise ValueError(
+                "--target-strategy=max requires --reference; use min or median for self-balancing"
+            )
         target_count = choose_self_balanced_target_count(
             event_type_counts(pool_records),
             strategy=args.target_strategy,
@@ -466,7 +480,9 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     write_jsonl(output_path, selected_records)
-    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     print(f"Selected {len(selected_records)} documents")
     if report.get("mode") == "reference_balanced" and not report["overlap_labels"]:

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 import re
 
-
 TOKEN_PATTERN = re.compile(r"\S+")
 
 
@@ -305,12 +304,18 @@ class TextAnchorResolver:
         right_context: str | None,
     ) -> list[tuple[int, int, float]]:
         left_matches = (
-            [(m.start(), m.end()) for m in re.finditer(re.escape(left_context), source_text)]
+            [
+                (m.start(), m.end())
+                for m in re.finditer(re.escape(left_context), source_text)
+            ]
             if left_context
             else [(0, 0)]
         )
         right_matches = (
-            [(m.start(), m.end()) for m in re.finditer(re.escape(right_context), source_text)]
+            [
+                (m.start(), m.end())
+                for m in re.finditer(re.escape(right_context), source_text)
+            ]
             if right_context
             else [(len(source_text), len(source_text))]
         )
