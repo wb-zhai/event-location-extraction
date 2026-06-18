@@ -31,7 +31,6 @@ def _e(key: str, fallback: str | None = None) -> str | None:
 
 
 def prompt(label: str, default: str | None = None, secret: bool = False) -> str:
-    """Prompt user for input; skip entirely if default is already set."""
     if default:
         print(f"  {label}: (from .env)")
         return default
@@ -68,22 +67,67 @@ def find_country(cur, country_name: str) -> list[dict]:
     return cur.fetchall()
 
 
-def fetch_articles(cur, adm0_code: str) -> list[dict]:
-    """Fetch article URIs and their adm_codes for a country (string-match method 1)."""
+def count_articles(cur, adm0_code: str) -> int:
     cur.execute(
         """
-        SELECT DISTINCT
-            a.article_uri,
-            a.adm_code
+        SELECT COUNT(DISTINCT a.article_uri)
         FROM public.article_location_tags AS a
         JOIN public.geo_taxonomy AS geo ON a.adm_code = geo.adm_code
         WHERE geo.adm0_code = %s
           AND a.tag_method_id = 1
-        ORDER BY a.article_uri
         """,
         (adm0_code,),
     )
-    return cur.fetchall()
+    return cur.fetchone()["count"]
+
+
+def stream_articles(conn, adm0_code: str):
+    """Stream one row per article with aggregated adm_codes."""
+    with conn.cursor(name="article_stream", cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.itersize = 500
+        cur.execute(
+            """
+            SELECT DISTINCT ON (tags.article_uri)
+                tags.article_uri AS uri,
+                tags.adm_codes,
+                ad.cloud_uri,
+                ad.title,
+                ad.body,
+                ad.published_at,
+                ad.article_type,
+                ad.source_uri
+            FROM (
+                SELECT
+                    a.article_uri,
+                    array_agg(DISTINCT a.adm_code ORDER BY a.adm_code) AS adm_codes
+                FROM public.article_location_tags AS a
+                JOIN public.geo_taxonomy AS geo ON a.adm_code = geo.adm_code
+                WHERE geo.adm0_code = %s
+                  AND a.tag_method_id = 1
+                GROUP BY a.article_uri
+            ) tags
+            JOIN public.article_downloads AS ad ON ad.uri = tags.article_uri
+            ORDER BY tags.article_uri
+            """,
+            (adm0_code,),
+        )
+        yield from cur
+
+
+def build_record(row: dict) -> dict:
+    return {
+        "id": str(row["uri"]),
+        "status": "ok",
+        "source": {
+            "title": str(row["title"] or ""),
+            "text": str(row["body"] or ""),
+            "published_at": row["published_at"],
+            "article_type": row["article_type"],
+            "source_uri": row["source_uri"],
+            "cloud_uri": row["cloud_uri"],
+        },
+        "adm_codes": list(row["adm_codes"] or []),
+    }
 
 
 def main() -> None:
@@ -131,31 +175,31 @@ def main() -> None:
 
             adm0_code = chosen["adm0_code"]
 
-            # Output path
-            print("\n--- Output ---")
-            default_output = f"dataset/{adm0_code.lower()}_articles.jsonl"
-            output_path = Path(prompt("Output file", default_output))
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            print(f"\nCounting articles for {chosen['adm_name']}...")
+            total = count_articles(cur, adm0_code)
+            print(f"Found {total} unique articles.")
 
-            # Fetch
-            print(f"\nFetching articles for {chosen['adm_name']} ({adm0_code})...")
-            rows = fetch_articles(cur, adm0_code)
-            print(f"Found {len(rows)} rows.")
-
-            if not rows:
+            if total == 0:
                 print("Nothing to write.")
                 return
 
-            # Group adm_codes per article_uri
-            articles: dict[str, list[str]] = {}
-            for row in rows:
-                articles.setdefault(row["article_uri"], []).append(row["adm_code"])
+        # Output path
+        print("\n--- Output ---")
+        default_output = f"dataset/country/{adm0_code.lower()}_articles.jsonl"
+        output_path = Path(prompt("Output file", default_output))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with output_path.open("w") as f:
-                for uri, adm_codes in articles.items():
-                    f.write(json.dumps({"article_uri": uri, "adm_codes": adm_codes}) + "\n")
+        # Stream and write
+        print("\nDownloading...")
+        written = 0
+        with output_path.open("w", encoding="utf-8") as f:
+            for row in stream_articles(conn, adm0_code):
+                f.write(json.dumps(build_record(row), ensure_ascii=False, default=str, separators=(",", ":")) + "\n")
+                written += 1
+                if written % 500 == 0:
+                    print(f"  {written}/{total}", end="\r", file=sys.stderr, flush=True)
 
-            print(f"Wrote {len(articles)} articles to {output_path}")
+        print(f"\nWrote {written} articles to {output_path}")
 
     conn.close()
 
