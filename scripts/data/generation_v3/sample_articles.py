@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v2.io_utils import iter_jsonl, load_json_tolerant, load_records, resolve_path, write_jsonl
+from scripts.data.generation_v3.io_utils import iter_jsonl, load_json_tolerant, load_records, resolve_path, write_jsonl
 
 FOOD_INSECURITY_KEYWORDS: tuple[tuple[str, float], ...] = (
     ("food insecurity", 4.0),

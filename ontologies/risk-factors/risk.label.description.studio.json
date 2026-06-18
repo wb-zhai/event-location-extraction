@@ -1,0 +1,1338 @@
+[
+  {
+    "id": "669",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land seizures",
+    "cluster": "land-related issues",
+    "description": "Mentions land being confiscated, expropriated, or forcibly taken from owners or users."
+  },
+  {
+    "id": "670",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "slashed export",
+    "cluster": "economic issues",
+    "description": "Mentions sharp reductions in exports or export earnings affecting the economy."
+  },
+  {
+    "id": "671",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "price rise",
+    "cluster": "economic issues",
+    "description": "Mentions rising prices in general, especially when linked to essential goods or household stress."
+  },
+  {
+    "id": "672",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "mass hunger",
+    "cluster": "food crisis",
+    "description": "Mentions hunger affecting very large populations at scale."
+  },
+  {
+    "id": "673",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cyclone",
+    "cluster": "weather shocks",
+    "description": "Mentions cyclones, hurricanes, typhoons, or tropical storms causing damaging wind, rain, storm surge, or destruction."
+  },
+  {
+    "id": "674",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "failed crops",
+    "cluster": "agricultural production issues",
+    "description": "Mentions crops failing, not maturing, producing poorly, or being lost before harvest."
+  },
+  {
+    "id": "675",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "disruption to farming",
+    "cluster": "agricultural production issues",
+    "description": "Mentions farming activities being interrupted by insecurity, weather, displacement, labor shortages, or lack of inputs."
+  },
+  {
+    "id": "676",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "massive starvation",
+    "cluster": "food crisis",
+    "description": "Mentions starvation on a very large scale, including widespread deaths or extreme deprivation."
+  },
+  {
+    "id": "677",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "abnormally low rainfall",
+    "cluster": "weather shocks",
+    "description": "Mentions rainfall far below seasonal norms, often linked to crop failure, water shortages, or deteriorating pastoral conditions."
+  },
+  {
+    "id": "678",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "withheld relief",
+    "cluster": "humanitarian aid",
+    "description": "Mentions aid or relief being delayed, blocked, denied, diverted, or intentionally not delivered."
+  },
+  {
+    "id": "679",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international alarm",
+    "cluster": "humanitarian aid",
+    "description": "Mentions strong international concern, warning, or alarm over a worsening situation."
+  },
+  {
+    "id": "680",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "reduced national output",
+    "cluster": "economic issues",
+    "description": "Mentions decline in a country's total production, output, or economic activity."
+  },
+  {
+    "id": "681",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "oppressive regimes",
+    "cluster": "political instability",
+    "description": "Mentions oppressive governments marked by coercion, repression, denial of rights, or authoritarian control."
+  },
+  {
+    "id": "682",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "pests",
+    "cluster": "pests and diseases",
+    "description": "Mentions agricultural pests or infestations harming crops, seeds, stored food, or pasture, excluding labels that name a specific pest."
+  },
+  {
+    "id": "683",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "continued deterioration",
+    "cluster": "other",
+    "description": "Mentions worsening conditions over time without a single dominant cause."
+  },
+  {
+    "id": "684",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "forests destroyed",
+    "cluster": "land-related issues",
+    "description": "Mentions forests being destroyed, cleared, burned, or heavily degraded."
+  },
+  {
+    "id": "685",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "man-made disaster",
+    "cluster": "other",
+    "description": "Mentions disaster caused primarily by human action, policy, conflict, or negligence."
+  },
+  {
+    "id": "686",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "food insecurity",
+    "cluster": "food crisis",
+    "description": "Mentions inadequate access to sufficient, safe, or stable food, including acute or chronic food insecurity."
+  },
+  {
+    "id": "687",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "harvests are devastated",
+    "cluster": "agricultural production issues",
+    "description": "Mentions harvests, yields, or crop output being severely damaged, lost, or destroyed."
+  },
+  {
+    "id": "688",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "humanitarian situation",
+    "cluster": "humanitarian aid",
+    "description": "Mentions the overall humanitarian condition, especially severity of needs and suffering."
+  },
+  {
+    "id": "689",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "economic impoverishment",
+    "cluster": "economic issues",
+    "description": "Mentions deepening poverty, impoverishment, or chronic decline in economic well-being."
+  },
+  {
+    "id": "690",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "clan battle",
+    "cluster": "conflicts and violence",
+    "description": "Mentions fighting or violent clashes between clans."
+  },
+  {
+    "id": "691",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "population crisis",
+    "cluster": "other",
+    "description": "Mentions large-scale population distress or demographic strain not better captured by a more specific label."
+  },
+  {
+    "id": "692",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "aid appeal",
+    "cluster": "humanitarian aid",
+    "description": "Mentions formal humanitarian appeals for emergency assistance or funding."
+  },
+  {
+    "id": "693",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "weather extremes",
+    "cluster": "weather shocks",
+    "description": "Mentions unusually severe or extreme weather conditions in broad terms without naming a specific hazard."
+  },
+  {
+    "id": "694",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "anti-western policies",
+    "cluster": "political instability",
+    "description": "Mentions state policies framed as anti-Western, especially when tied to isolation, sanctions, or political rupture."
+  },
+  {
+    "id": "695",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rinderpest",
+    "cluster": "pests and diseases",
+    "description": "Mentions rinderpest specifically, including outbreaks or effects on cattle and pastoral livelihoods."
+  },
+  {
+    "id": "696",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "inadequate rainfall",
+    "cluster": "weather shocks",
+    "description": "Mentions rainfall insufficient to meet seasonal or agricultural needs, falling below expected levels."
+  },
+  {
+    "id": "697",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of authority",
+    "cluster": "political instability",
+    "description": "Mentions absence of effective governing authority, weak state control, or administrative vacuum."
+  },
+  {
+    "id": "698",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "acute hunger",
+    "cluster": "food crisis",
+    "description": "Mentions severe and immediate hunger at emergency levels requiring urgent assistance."
+  },
+  {
+    "id": "699",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "foreign troops",
+    "cluster": "conflicts and violence",
+    "description": "Mentions troops from another country deployed in conflict, occupation, intervention, or security operations."
+  },
+  {
+    "id": "700",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "increased external debt",
+    "cluster": "economic issues",
+    "description": "Mentions rising foreign debt, external borrowing burdens, or debt obligations to international creditors."
+  },
+  {
+    "id": "701",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "drought",
+    "cluster": "weather shocks",
+    "description": "Mentions drought or severe seasonal rainfall deficit causing water stress, crop failure, or livelihood damage."
+  },
+  {
+    "id": "702",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "conflict",
+    "cluster": "conflicts and violence",
+    "description": "Mentions armed conflict, violent clashes, or warfare in general when no more specific violence label applies."
+  },
+  {
+    "id": "703",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "failed rains",
+    "cluster": "weather shocks",
+    "description": "Mentions seasonal rains that did not arrive or performed poorly, leading to crop failure or water shortages."
+  },
+  {
+    "id": "704",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "makeshift camps",
+    "cluster": "forced displacement",
+    "description": "Mentions temporary camps, improvised shelters, or informal settlements housing displaced people."
+  },
+  {
+    "id": "705",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "civilians uprooted",
+    "cluster": "forced displacement",
+    "description": "Mentions civilians being forcibly uprooted or displaced from their homes due to conflict, disaster, or violence."
+  },
+  {
+    "id": "706",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "dysfunction",
+    "cluster": "food crisis",
+    "description": "Mentions severe breakdown or dysfunction in systems supporting survival, services, or food access."
+  },
+  {
+    "id": "707",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "foreign aid",
+    "cluster": "humanitarian aid",
+    "description": "Mentions external assistance provided by foreign governments, international organizations, or donors."
+  },
+  {
+    "id": "708",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "violent suppression",
+    "cluster": "conflicts and violence",
+    "description": "Mentions authorities or armed actors suppressing dissent, protest, or communities through force."
+  },
+  {
+    "id": "709",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "military dictatorship",
+    "cluster": "political instability",
+    "description": "Mentions dictatorship under military rule with civilian political authority suppressed."
+  },
+  {
+    "id": "710",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "climatic hazards",
+    "cluster": "weather shocks",
+    "description": "Mentions climate-related hazards broadly, including droughts, floods, storms, and temperature extremes."
+  },
+  {
+    "id": "711",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "migration",
+    "cluster": "forced displacement",
+    "description": "Mentions crisis-driven migration or movement of people away from affected areas."
+  },
+  {
+    "id": "712",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land grab",
+    "cluster": "land-related issues",
+    "description": "Mentions land grabbing or acquisition of land through coercive, elite-driven, or unjust means."
+  },
+  {
+    "id": "713",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "terrorism",
+    "cluster": "conflicts and violence",
+    "description": "Mentions terrorist actors, terrorist attacks, or violence explicitly described as terrorism."
+  },
+  {
+    "id": "714",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "bombing campaign",
+    "cluster": "conflicts and violence",
+    "description": "Mentions repeated or organized bombing over time, including strategic bombardment or a sustained explosives campaign."
+  },
+  {
+    "id": "715",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "collapsing economy",
+    "cluster": "economic issues",
+    "description": "Mentions an economy in severe decline or collapse, with failing markets, shrinking output, or widespread financial breakdown."
+  },
+  {
+    "id": "716",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "military junta",
+    "cluster": "political instability",
+    "description": "Mentions rule by a governing military council or military leaders after seizure of power."
+  },
+  {
+    "id": "717",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "climate change",
+    "cluster": "environmental issues",
+    "description": "Mentions long-term climate change, global warming, or climate-driven shifts affecting risk or livelihoods."
+  },
+  {
+    "id": "718",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rising inflation",
+    "cluster": "economic issues",
+    "description": "Mentions inflation, rapidly rising prices, or declining purchasing power affecting households or food access."
+  },
+  {
+    "id": "719",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international terrorists",
+    "cluster": "conflicts and violence",
+    "description": "Mentions transnational terrorist groups, foreign terrorist networks, or cross-border extremist actors."
+  },
+  {
+    "id": "720",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cycle of poverty",
+    "cluster": "economic issues",
+    "description": "Mentions persistent or self-reinforcing poverty trapping households or communities over time."
+  },
+  {
+    "id": "721",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "bad harvests",
+    "cluster": "agricultural production issues",
+    "description": "Mentions poor harvest outcomes or below-normal seasonal agricultural production."
+  },
+  {
+    "id": "722",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "destructive pattern",
+    "cluster": "conflicts and violence",
+    "description": "Mentions a recurring harmful pattern of shocks, violence, or disruption."
+  },
+  {
+    "id": "723",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "price of food",
+    "cluster": "economic issues",
+    "description": "Mentions food prices, especially when unusually high cost or affordability is highlighted."
+  },
+  {
+    "id": "724",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "corrupt government",
+    "cluster": "political instability",
+    "description": "Mentions a government characterized as corrupt, predatory, or abusing public office."
+  },
+  {
+    "id": "725",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "militia groups",
+    "cluster": "conflicts and violence",
+    "description": "Mentions militias, paramilitary groups, or irregular armed groups involved in violence or insecurity."
+  },
+  {
+    "id": "726",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "poor soil quality",
+    "cluster": "land-related issues",
+    "description": "Mentions infertile, degraded, eroded, or low-quality soil limiting agricultural production."
+  },
+  {
+    "id": "727",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cattle plague",
+    "cluster": "pests and diseases",
+    "description": "Mentions cattle plague, especially disease-related references affecting herds and livestock survival."
+  },
+  {
+    "id": "728",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "food assistance",
+    "cluster": "humanitarian aid",
+    "description": "Mentions food aid, ration distribution, feeding programs, or direct food support."
+  },
+  {
+    "id": "729",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "continued strife",
+    "cluster": "conflicts and violence",
+    "description": "Mentions ongoing unrest, violence, or instability persisting over time."
+  },
+  {
+    "id": "730",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "ecological crisis",
+    "cluster": "environmental issues",
+    "description": "Mentions broad ecological crisis involving ecosystem collapse, biodiversity loss, or resource depletion."
+  },
+  {
+    "id": "731",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "hunger crises",
+    "cluster": "food crisis",
+    "description": "Mentions repeated or multiple hunger emergencies affecting populations or regions."
+  },
+  {
+    "id": "732",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rising food prices",
+    "cluster": "economic issues",
+    "description": "Mentions food prices increasing over time and worsening affordability or access."
+  },
+  {
+    "id": "733",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "restricted humanitarian access",
+    "cluster": "humanitarian aid",
+    "description": "Mentions denial or obstruction of humanitarian access, including blocked corridors or bureaucratic restrictions."
+  },
+  {
+    "id": "734",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "water availability",
+    "cluster": "weather shocks",
+    "description": "Mentions reduced, limited, or stressed water availability for people, livestock, or agriculture."
+  },
+  {
+    "id": "735",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "alarming level",
+    "cluster": "other",
+    "description": "Mentions a problem reaching an alarming or critical threshold without enough specificity for a narrower label."
+  },
+  {
+    "id": "736",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "police torture",
+    "cluster": "conflicts and violence",
+    "description": "Mentions torture or severe mistreatment carried out by police or security forces."
+  },
+  {
+    "id": "737",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "potato blight",
+    "cluster": "pests and diseases",
+    "description": "Mentions potato blight specifically, including disease damaging potato crops."
+  },
+  {
+    "id": "738",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "the offensive",
+    "cluster": "conflicts and violence",
+    "description": "Mentions a military offensive, assault, or major push by armed forces to seize territory or defeat opponents."
+  },
+  {
+    "id": "739",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land invasions",
+    "cluster": "land-related issues",
+    "description": "Mentions forcible occupation or takeover of land by groups, settlers, armed actors, or political supporters."
+  },
+  {
+    "id": "740",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "clan warfare",
+    "cluster": "conflicts and violence",
+    "description": "Mentions organized warfare or sustained violent conflict between clans."
+  },
+  {
+    "id": "741",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "stolen food aid",
+    "cluster": "humanitarian aid",
+    "description": "Mentions food aid being looted, diverted, stolen, or seized before reaching intended recipients."
+  },
+  {
+    "id": "742",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "politically engineered",
+    "cluster": "political instability",
+    "description": "Mentions a crisis or harmful condition described as intentionally created, manipulated, or worsened by political actors."
+  },
+  {
+    "id": "743",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "scanty rainfall",
+    "cluster": "weather shocks",
+    "description": "Mentions rainfall being scarce, sparse, or insufficient for crops, pasture, or water needs."
+  },
+  {
+    "id": "744",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "water distribution shortages",
+    "cluster": "agricultural production issues",
+    "description": "Mentions shortages or failures in water delivery, irrigation supply, or distribution systems affecting people, farming, or livestock."
+  },
+  {
+    "id": "745",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cattle death",
+    "cluster": "agricultural production issues",
+    "description": "Mentions cattle dying in significant numbers due to drought, disease, starvation, lack of water, or related shocks."
+  },
+  {
+    "id": "746",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "asylum seekers",
+    "cluster": "forced displacement",
+    "description": "Mentions people seeking asylum or applying for protection in another country."
+  },
+  {
+    "id": "747",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "major offensive",
+    "cluster": "conflicts and violence",
+    "description": "Mentions a large-scale military offensive involving major troop movement, territorial aims, or intensified combat."
+  },
+  {
+    "id": "748",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "without international aid",
+    "cluster": "humanitarian aid",
+    "description": "Mentions survival, recovery, or meeting basic needs being impossible without external international assistance."
+  },
+  {
+    "id": "749",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "prolonged dry spell",
+    "cluster": "weather shocks",
+    "description": "Mentions an extended period of unusually dry weather with little rain, especially when it harms crops, pasture, or water access."
+  },
+  {
+    "id": "750",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rise",
+    "cluster": "economic issues",
+    "description": "Mentions an increase in an adverse economic variable when context indicates prices, costs, or market stress."
+  },
+  {
+    "id": "751",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "restricted relief flights",
+    "cluster": "humanitarian aid",
+    "description": "Mentions relief flights being blocked, limited, suspended, or unable to reach affected areas."
+  },
+  {
+    "id": "752",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "civil strife",
+    "cluster": "conflicts and violence",
+    "description": "Mentions internal unrest, violent disorder, or instability within a society or state."
+  },
+  {
+    "id": "753",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "aid workers died",
+    "cluster": "humanitarian aid",
+    "description": "Mentions aid workers being killed or dying while engaged in humanitarian work."
+  },
+  {
+    "id": "754",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rival warlords",
+    "cluster": "conflicts and violence",
+    "description": "Mentions competing warlords or faction leaders fighting for territory, authority, or resources."
+  },
+  {
+    "id": "755",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land reform",
+    "cluster": "land-related issues",
+    "description": "Mentions land reform policies, redistribution, or restructuring of land ownership or access."
+  },
+  {
+    "id": "756",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of roads",
+    "cluster": "agricultural production issues",
+    "description": "Mentions inadequate roads, impassable routes, or road scarcity limiting transport, farming, or market access."
+  },
+  {
+    "id": "757",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "pushing peasants off",
+    "cluster": "land-related issues",
+    "description": "Mentions peasants or rural communities being pushed off or forced from their land by elites, armed actors, or policy."
+  },
+  {
+    "id": "758",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "locusts",
+    "cluster": "pests and diseases",
+    "description": "Mentions locust infestations or swarms damaging crops, pasture, or agricultural production."
+  },
+  {
+    "id": "759",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "gangs of bandits",
+    "cluster": "conflicts and violence",
+    "description": "Mentions organized bandit groups carrying out raids, theft, or violent predation."
+  },
+  {
+    "id": "760",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "repression",
+    "cluster": "conflicts and violence",
+    "description": "Mentions systematic repression by authorities, including crackdowns, intimidation, arrests, or coercion."
+  },
+  {
+    "id": "761",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "humanitarian disaster",
+    "cluster": "humanitarian aid",
+    "description": "Mentions a major humanitarian emergency marked by large-scale suffering and unmet survival needs."
+  },
+  {
+    "id": "762",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "years of warfare",
+    "cluster": "conflicts and violence",
+    "description": "Mentions warfare continuing over many years, emphasizing long duration and cumulative damage."
+  },
+  {
+    "id": "763",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "floods",
+    "cluster": "weather shocks",
+    "description": "Mentions flooding, inundation, overflowing rivers, flash floods, or submerged land causing damage or displacement."
+  },
+  {
+    "id": "764",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "unable to sow",
+    "cluster": "agricultural production issues",
+    "description": "Mentions farmers being unable to plant or sow due to insecurity, drought, lack of inputs, or displacement."
+  },
+  {
+    "id": "765",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "transport bottleneck",
+    "cluster": "agricultural production issues",
+    "description": "Mentions logistical choke points or transport constraints affecting movement of goods or agricultural supply."
+  },
+  {
+    "id": "766",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "pirates",
+    "cluster": "conflicts and violence",
+    "description": "Mentions piracy, pirate attacks, or armed robbery at sea affecting trade, aid, or livelihoods."
+  },
+  {
+    "id": "767",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "reduced imports",
+    "cluster": "economic issues",
+    "description": "Mentions a reduction in imports or imported goods that constrains supply, markets, or food availability."
+  },
+  {
+    "id": "768",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "apathy",
+    "cluster": "food crisis",
+    "description": "Mentions severe apathy, lethargy, or loss of responsiveness associated with starvation or extreme deprivation."
+  },
+  {
+    "id": "769",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "coup",
+    "cluster": "political instability",
+    "description": "Mentions a coup or sudden unconstitutional seizure of power, including coup d'etat."
+  },
+  {
+    "id": "770",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "epidemics",
+    "cluster": "pests and diseases",
+    "description": "Mentions widespread disease outbreaks or epidemics affecting human populations, crops, or livestock."
+  },
+  {
+    "id": "771",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "siege",
+    "cluster": "conflicts and violence",
+    "description": "Mentions siege conditions, encirclement, or the blocking of movement, supplies, or access to pressure a town, city, or population."
+  },
+  {
+    "id": "772",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "power struggle",
+    "cluster": "political instability",
+    "description": "Mentions political or military competition for state control, leadership, or authority."
+  },
+  {
+    "id": "773",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "livestock had died",
+    "cluster": "agricultural production issues",
+    "description": "Mentions livestock that have died in significant numbers due to drought, disease, starvation, or neglect."
+  },
+  {
+    "id": "774",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "blockade",
+    "cluster": "conflicts and violence",
+    "description": "Mentions blockades preventing movement of goods, aid, people, or commercial traffic."
+  },
+  {
+    "id": "775",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "burning houses",
+    "cluster": "land-related issues",
+    "description": "Mentions homes or settlements being burned, often during raids, forced displacement, or land-related violence."
+  },
+  {
+    "id": "776",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "brain drain",
+    "cluster": "economic issues",
+    "description": "Mentions loss of skilled workers or educated people leaving a country, harming institutions or the economy."
+  },
+  {
+    "id": "777",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "severe rains",
+    "cluster": "weather shocks",
+    "description": "Mentions unusually heavy or intense rainfall causing damage, disruption, erosion, flooding, or crop loss."
+  },
+  {
+    "id": "778",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "infrastructure damage",
+    "cluster": "agricultural production issues",
+    "description": "Mentions damage to roads, bridges, irrigation, markets, storage, or other infrastructure affecting livelihoods or food systems."
+  },
+  {
+    "id": "779",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "land degradation",
+    "cluster": "land-related issues",
+    "description": "Mentions deterioration of land quality, such as erosion, salinization, nutrient loss, or declining productivity."
+  },
+  {
+    "id": "780",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "human rights abuses",
+    "cluster": "conflicts and violence",
+    "description": "Mentions killings, torture, disappearances, arbitrary detention, or other serious rights violations."
+  },
+  {
+    "id": "781",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of cultivation",
+    "cluster": "agricultural production issues",
+    "description": "Mentions farmland not being cultivated, left unplanted, or underused during crisis conditions."
+  },
+  {
+    "id": "782",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "harvest decline",
+    "cluster": "agricultural production issues",
+    "description": "Mentions harvest quantity declining compared with normal levels or previous periods."
+  },
+  {
+    "id": "783",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "flee",
+    "cluster": "forced displacement",
+    "description": "Mentions people fleeing, escaping, or running from violence, disaster, persecution, or hunger."
+  },
+  {
+    "id": "784",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "economic crisis",
+    "cluster": "economic issues",
+    "description": "Mentions broad economic crisis, instability, recession, currency stress, or widespread financial hardship."
+  },
+  {
+    "id": "785",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "greenhouse gases",
+    "cluster": "environmental issues",
+    "description": "Mentions greenhouse gas emissions or atmospheric pollutants driving climate or environmental harm."
+  },
+  {
+    "id": "786",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "prolonged fighting",
+    "cluster": "conflicts and violence",
+    "description": "Mentions sustained or long-running fighting, conflict, or violence over an extended period."
+  },
+  {
+    "id": "787",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "tragedy",
+    "cluster": "other",
+    "description": "Mentions a grave human disaster in broad terms when no clearer label applies."
+  },
+  {
+    "id": "788",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "slave trade",
+    "cluster": "other",
+    "description": "Mentions enslavement, slave trading, or trafficking in persons."
+  },
+  {
+    "id": "789",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "environmental degradation",
+    "cluster": "environmental issues",
+    "description": "Mentions deterioration of the natural environment, such as degraded ecosystems, damaged soils, depleted water sources, or declining ecological conditions."
+  },
+  {
+    "id": "790",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "infant mortality",
+    "cluster": "food crisis",
+    "description": "Mentions deaths of infants, especially when elevated mortality is linked to hunger, deprivation, or crisis."
+  },
+  {
+    "id": "791",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "catastrophe",
+    "cluster": "other",
+    "description": "Mentions catastrophe or disaster in severe but nonspecific terms when no more precise label fits."
+  },
+  {
+    "id": "792",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "wreaked havoc",
+    "cluster": "other",
+    "description": "Mentions a destructive event causing widespread damage or disruption without enough detail for a narrower label."
+  },
+  {
+    "id": "793",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "internal strife",
+    "cluster": "conflicts and violence",
+    "description": "Mentions domestic conflict or internal instability within a country."
+  },
+  {
+    "id": "794",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "malnourished",
+    "cluster": "food crisis",
+    "description": "Mentions people being malnourished, undernourished, wasted, or clinically affected by poor nutrition."
+  },
+  {
+    "id": "795",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "secession",
+    "cluster": "political instability",
+    "description": "Mentions secessionist efforts, breakaway movements, or attempts to separate from an existing state."
+  },
+  {
+    "id": "796",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "natural disaster",
+    "cluster": "environmental issues",
+    "description": "Mentions a destructive natural hazard in general terms when no more specific hazard label is clearly stated."
+  },
+  {
+    "id": "797",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "life-threatening hunger",
+    "cluster": "food crisis",
+    "description": "Mentions hunger severe enough to endanger life or immediate physical survival."
+  },
+  {
+    "id": "798",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "air attack",
+    "cluster": "conflicts and violence",
+    "description": "Mentions attacks carried out from the air, including airstrikes, aerial bombardment, or drone strikes."
+  },
+  {
+    "id": "799",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "corruption",
+    "cluster": "political instability",
+    "description": "Mentions bribery, embezzlement, patronage, theft of public resources, or corrupt practices."
+  },
+  {
+    "id": "800",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "call for donations",
+    "cluster": "humanitarian aid",
+    "description": "Mentions public appeals for donations, fundraising, or support for relief efforts."
+  },
+  {
+    "id": "801",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "collapse of government",
+    "cluster": "political instability",
+    "description": "Mentions state collapse or breakdown of governing institutions."
+  },
+  {
+    "id": "802",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international intervention",
+    "cluster": "humanitarian aid",
+    "description": "Mentions military, diplomatic, peacekeeping, or humanitarian intervention by external states or international bodies."
+  },
+  {
+    "id": "803",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "refugees",
+    "cluster": "forced displacement",
+    "description": "Mentions refugees who crossed borders or are explicitly described as refugees."
+  },
+  {
+    "id": "804",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "disrupted trade",
+    "cluster": "economic issues",
+    "description": "Mentions trade flows being interrupted, reduced, blocked, or made unreliable."
+  },
+  {
+    "id": "805",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of agricultural infrastructure",
+    "cluster": "agricultural production issues",
+    "description": "Mentions missing or inadequate agricultural infrastructure such as storage, irrigation, machinery, or farm support systems."
+  },
+  {
+    "id": "806",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "rebel insurgency",
+    "cluster": "conflicts and violence",
+    "description": "Mentions sustained armed insurgency by rebel groups against the state or other authorities."
+  },
+  {
+    "id": "807",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "brutal government",
+    "cluster": "conflicts and violence",
+    "description": "Mentions a government using extreme violence, cruelty, or abusive force against populations."
+  },
+  {
+    "id": "808",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "looting",
+    "cluster": "conflicts and violence",
+    "description": "Mentions looting, pillaging, or theft of homes, goods, warehouses, or aid supplies during unrest or conflict."
+  },
+  {
+    "id": "809",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "displaced",
+    "cluster": "forced displacement",
+    "description": "Mentions people being displaced from their homes, including internal displacement and forced relocation."
+  },
+  {
+    "id": "810",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "food crisis",
+    "cluster": "food crisis",
+    "description": "Mentions a serious food crisis marked by widespread shortages, hunger, or inability to meet food needs."
+  },
+  {
+    "id": "811",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of rains",
+    "cluster": "weather shocks",
+    "description": "Mentions absence or severe shortage of rains leading to crop failure, water stress, or pasture loss."
+  },
+  {
+    "id": "812",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "lack of alternatives",
+    "cluster": "other",
+    "description": "Mentions absence of viable coping options, livelihood substitutes, or escape routes."
+  },
+  {
+    "id": "813",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "regimes were toppled",
+    "cluster": "political instability",
+    "description": "Mentions regimes being overthrown, brought down, or removed from power."
+  },
+  {
+    "id": "814",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "jihadist groups",
+    "cluster": "conflicts and violence",
+    "description": "Mentions jihadist or Islamist militant groups involved in insurgency, attacks, or territorial control."
+  },
+  {
+    "id": "815",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "toll on livestock",
+    "cluster": "agricultural production issues",
+    "description": "Mentions severe negative effects on livestock, including weakness, losses, reduced productivity, or mortality."
+  },
+  {
+    "id": "816",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "shortage of rains",
+    "cluster": "weather shocks",
+    "description": "Mentions a shortage or deficit of rainfall, especially when it harms crops, livestock, or water supply."
+  },
+  {
+    "id": "817",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "devastated the economy",
+    "cluster": "economic issues",
+    "description": "Mentions a shock severely damaging the economy, markets, employment, or national income."
+  },
+  {
+    "id": "818",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "self reliance",
+    "cluster": "humanitarian aid",
+    "description": "Mentions efforts or expectations for affected populations to become self-reliant rather than dependent on aid."
+  },
+  {
+    "id": "819",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "cholera outbreak",
+    "cluster": "pests and diseases",
+    "description": "Mentions an outbreak or epidemic of cholera."
+  },
+  {
+    "id": "820",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "international embargo",
+    "cluster": "humanitarian aid",
+    "description": "Mentions externally imposed embargoes or trade restrictions limiting access to goods, markets, or supplies."
+  },
+  {
+    "id": "821",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "farmland",
+    "cluster": "land-related issues",
+    "description": "Mentions farmland, agricultural land access, or conditions affecting cultivated land used for food production."
+  },
+  {
+    "id": "822",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "totalitarian",
+    "cluster": "political instability",
+    "description": "Mentions totalitarian rule or near-total political domination by a repressive state."
+  },
+  {
+    "id": "823",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "authoritarian",
+    "cluster": "political instability",
+    "description": "Mentions authoritarian governance, concentrated political control, or restricted political freedoms."
+  },
+  {
+    "id": "824",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "dictators",
+    "cluster": "political instability",
+    "description": "Mentions dictators or personalist rulers exercising unchecked political control."
+  },
+  {
+    "id": "825",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "clans",
+    "cluster": "conflicts and violence",
+    "description": "Mentions clans as organized social or armed groups involved in rivalry, control, or conflict dynamics."
+  },
+  {
+    "id": "826",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "gastrointestinal",
+    "cluster": "food crisis",
+    "description": "Mentions severe gastrointestinal suffering linked to hunger, starvation, or inability to retain food, rather than general disease discussion."
+  },
+  {
+    "id": "827",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "terrorist",
+    "cluster": "conflicts and violence",
+    "description": "Mentions terrorist actors, terrorist attacks, or violence explicitly described as terrorism."
+  },
+  {
+    "id": "828",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "warlord",
+    "cluster": "conflicts and violence",
+    "description": "Mentions a warlord as an armed local power holder controlling territory, fighters, or resources outside normal state authority."
+  },
+  {
+    "id": "829",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "d'etat",
+    "cluster": "political instability",
+    "description": "Mentions a coup d'etat or the forcible seizure of power from a government."
+  },
+  {
+    "id": "830",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "overthrow",
+    "cluster": "political instability",
+    "description": "Mentions the removal or toppling of a government, ruler, or regime by force or political action."
+  },
+  {
+    "id": "831",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "convoys",
+    "cluster": "conflicts and violence",
+    "description": "Mentions aid or supply convoys, especially when they are blocked, attacked, or required for access."
+  },
+  {
+    "id": "832",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "carbon",
+    "cluster": "environmental issues",
+    "description": "Mentions carbon emissions, carbon release, or carbon-related environmental harm."
+  },
+  {
+    "id": "833",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "mayhem",
+    "cluster": "conflicts and violence",
+    "description": "Mentions chaotic violence, lawlessness, or disorder causing insecurity and disruption."
+  },
+  {
+    "id": "834",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "dehydrated",
+    "cluster": "food crisis",
+    "description": "Mentions dehydration or severe bodily water loss associated with hunger or survival crisis."
+  },
+  {
+    "id": "835",
+    "created_at": "2025-10-06T14:06:18.70778Z",
+    "updated_at": "2025-10-06T14:06:18.70778Z",
+    "name": "mismanagement",
+    "cluster": "political instability",
+    "description": "Mentions poor governance, bad administration, or policy failure contributing to crisis outcomes."
+  }
+]

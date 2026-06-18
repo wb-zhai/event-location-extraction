@@ -24,7 +24,7 @@ from scripts.data.generation_v2.gemini_common import (
     interactive_response_format,
     run_interactive_tasks,
 )
-from scripts.data.generation_v2.io_utils import completed_task_keys, has_completed_task_keys, iter_jsonl, prune_retryable_error_rows
+from scripts.data.generation_v3.io_utils import completed_task_keys, has_completed_task_keys, iter_jsonl, prune_retryable_error_rows
 from scripts.data.generation_v2.recover_annotations import recover_file, recover_offsets, recover_record
 from scripts.data.generation_v2.sample_articles import (
     SamplingSummary,
