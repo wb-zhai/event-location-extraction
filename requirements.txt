@@ -35,6 +35,7 @@ colorama==0.4.6
 termcolor==3.2.0
 rich==15.0.0
 python-dotenv==1.2.2
+fire
 
 # Database connectors and cloud platform libraries
 google-cloud-aiplatform==1.158.0
