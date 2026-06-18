@@ -60,17 +60,21 @@ def main() -> None:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
                 f"""
+                WITH article_countries AS (
+                    SELECT DISTINCT a.article_uri, geo.adm0_code
+                    FROM public.article_location_tags AS a
+                    JOIN public.geo_taxonomy AS geo ON a.adm_code = geo.adm_code
+                    WHERE a.tag_method_id = 1
+                )
                 SELECT
                     g0.adm_name AS country,
-                    g0.adm0_code,
-                    COUNT(DISTINCT a.article_uri) AS article_count
-                FROM public.article_location_tags AS a
-                JOIN public.geo_taxonomy AS geo ON a.adm_code = geo.adm_code
+                    ac.adm0_code,
+                    COUNT(*) AS article_count
+                FROM article_countries ac
                 JOIN public.geo_taxonomy AS g0
-                    ON g0.adm0_code = geo.adm0_code
+                    ON g0.adm0_code = ac.adm0_code
                     AND g0.adm_level = 0
-                WHERE a.tag_method_id = 1
-                GROUP BY g0.adm_name, g0.adm0_code
+                GROUP BY g0.adm_name, ac.adm0_code
                 ORDER BY article_count {order}
                 {limit_clause}
                 """

@@ -67,6 +67,11 @@ def resolve_location(query: str, session: requests.Session) -> dict | None:
         "lon": coords[0],
     }
 
+    if "osm_id" in props:
+        result["osm_id"] = props["osm_id"]
+    if "osm_type" in props:
+        result["osm_type"] = props["osm_type"]
+
     if "country" in props:
         result["country"] = props["country"]
     if "countrycode" in props:
