@@ -162,10 +162,17 @@ python scripts/train/inference/eval_v3_sft.py \
 
 ## Output format
 
-The report prints two tables:
+The report prints P/R/F1 tables plus conditional accuracy tables:
 
 - **MICRO** — pooled TP/FP/FN across all documents (standard NLP micro-average).
 - **MACRO** — P/R/F1 computed per document then averaged; gives equal weight to each document regardless of how many events it contains.
+- **MICRO CONDITIONAL ACCURACY** — pooled correctness among already matched events.
+- **MACRO CONDITIONAL ACCURACY** — conditional accuracy computed per document and then averaged.
+
+For linked fields such as `event_location` and `event_time`, the conditional
+accuracy rows are usually the clearest performance view. The end-to-end P/R/F1
+rows are stricter diagnostics because they include event detection and grounding
+errors in addition to linked-field errors.
 
 Each table has two column groups:
 
@@ -228,7 +235,8 @@ string equality).
 ### 4. Location extraction
 
 Measures whether the model extracts the correct place names, independent of which
-event they are attached to.
+event they are attached to. This is useful as a diagnostic, but it does not answer
+whether locations are attached to the right event.
 
 `event_location` values may contain multiple locations separated by `";"` (e.g.
 `"Rome; Milan"`). Each semicolon-separated part is split out and treated as an
@@ -247,26 +255,37 @@ A predicted location matches a gold location if:
 
 ---
 
-### 5. Event-location pairing
+### 5. Event-location linking
 
 Measures whether the model correctly associates a location **with the right event**.
-This is harder than location extraction alone.
+For reporting linked-location quality, prefer the conditional accuracy rows:
+they only evaluate event pairs that were already matched by event type and quote.
 
-**Conditioned on family 1**: among event pairs that were already matched (TP events),
-counts how many also have a correct location (same matching rules as family 4).
-Multi-location values (semicolon-separated) are handled as sets: for the exact tier
-both sets must be equal; for the relaxed tier every location in each set must
-fuzzy-match some location in the other set.
+Among matched event pairs, the evaluator checks whether the predicted
+`event_location` matches the gold `event_location` using the same location rules
+as family 4. Multi-location values (semicolon-separated) are handled as sets: for
+the exact tier both sets must be equal; for the relaxed tier every location in each
+set must fuzzy-match some location in the other set.
 
-Events that were not matched at all still contribute to FP/FN, so a missed event is
-not double-penalized — it already appears in the event extraction score.
+The P/R/F1 row named `End-to-end event-location` is stricter: unmatched events
+still contribute to FP/FN. That makes it an end-to-end score covering event
+detection, quote grounding, and location linking together.
+
+The conditional accuracy rows isolate location linking:
+
+| Metric | Meaning |
+|--------|---------|
+| **Location on matched events** | Among event pairs already matched by family 1, how often does `event_location` also match? Includes `not_stated` ↔ `not_stated`. |
+| **Location on matched events (gold stated)** | Same, but only for matched gold events with an actual stated location. This focuses on geographic extraction/linking and excludes correct absence predictions. |
 
 ---
 
-### 6. Event-time pairing
+### 6. Event-time linking
 
 Measures whether the model correctly associates a time expression **with the right
-event**. Same conditioning as event-location (family 5).
+event**. As with location, prefer the conditional accuracy rows for reporting
+linked-time quality. The end-to-end P/R/F1 row is stricter because event detection,
+quote grounding, and time linking all affect the final number.
 
 `event_time` values are ISO 8601 strings (`"2018-01/2018-10"`, `"2015"`, `"not_stated"`).
 
@@ -277,6 +296,13 @@ event**. Same conditioning as event-location (family 5).
 
 > The relaxed rule avoids penalizing the model for predicting the correct year but
 > getting the month/day granularity wrong, which is often ambiguous from the source text.
+
+The conditional accuracy rows isolate time linking:
+
+| Metric | Meaning |
+|--------|---------|
+| **Time on matched events** | Among event pairs already matched by family 1, how often does `event_time` also match? Includes `not_stated` ↔ `not_stated`. |
+| **Time on matched events (gold stated)** | Same, but only for matched gold events with an actual stated time. This focuses on extracting/linking concrete temporal expressions and excludes correct absence predictions. |
 
 ---
 
@@ -312,12 +338,21 @@ As with families 2–3, exact and relaxed scores are identical.
 
 ---
 
-### 10. Cluster event-location pairing
+### 10. Cluster event-location linking
 
-Like family 5 (event-location pairing) but **conditioned on the cluster-level event
-matching** from family 7. A cluster-matched pair counts as TP if the predicted
-location also matches the gold location. This is typically higher than family 5
-because the looser event matching produces more aligned pairs.
+Like family 5, but the alignment step uses **cluster-level event matching** from
+family 7. The conditional cluster rows ask: once events are aligned by cluster and
+quote, how often does the linked location match?
+
+### 11. Cluster event-time linking
+
+Like family 6, but the alignment step uses cluster-level event matching from family
+7. The conditional cluster rows ask: once events are aligned by cluster and quote,
+how often does the linked time match?
+
+The conditional accuracy table also includes cluster versions of the location and
+time on matched events metrics. These use cluster-level event matching as the
+alignment step before checking the linked field.
 
 ---
 
@@ -340,13 +375,26 @@ even if the model underestimates the count.
 clusters removes synonymy penalties (e.g. `"drought"` vs `"failed rains"`), so
 scores are always at least as high as their fine-grained counterparts.
 
-**Location > event-location pairing** is expected. The model might extract
-the correct locations overall but associate them with the wrong events (or miss
-some events entirely).
+**Standalone location extraction and end-to-end event-location are diagnostics.**
+Standalone location extraction ignores event links, while end-to-end
+event-location includes event detection and grounding errors. Neither is the
+cleanest linked-location number.
 
-**Cluster event-location ≥ event-location pairing** is expected for the same
-reason cluster event extraction is higher: the looser matching surfaces more
-aligned pairs, giving the location comparison more TP opportunities.
+**Location on matched events** is the cleaner location-linking number. It removes
+missed/spurious events from the denominator and asks: once the event alignment is
+already correct, did the model attach the right location?
+
+**Time on matched events** plays the same role for time. It is the cleaner
+time-linking number because missed/spurious events are removed from the
+denominator.
+
+**Cluster location/time on matched events** uses looser event alignment before
+checking the linked field. These rows are useful when fine-grained event labels
+are noisy or synonym-heavy.
+
+**Gold stated** rows exclude `not_stated` gold fields. They are the better view
+when you want to measure extraction/linking of concrete places or times, rather
+than correct absence predictions.
 
 **Macro vs micro divergence** tells you about consistency. If macro F1 is much
 higher than micro, the model is strong on short documents but struggles on

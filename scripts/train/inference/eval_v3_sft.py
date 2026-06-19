@@ -211,6 +211,11 @@ def _prf(tp: int, fp: int, fn: int) -> dict[str, float]:
     return {"precision": p, "recall": r, "f1": f1, "tp": tp, "fp": fp, "fn": fn}
 
 
+def _accuracy(correct: int, total: int) -> dict[str, float]:
+    acc = correct / total if total > 0 else 0.0
+    return {"accuracy": acc, "correct": correct, "total": total}
+
+
 def _macro_average(per_doc: list[dict[str, float]]) -> dict[str, float]:
     if not per_doc:
         return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
@@ -219,6 +224,12 @@ def _macro_average(per_doc: list[dict[str, float]]) -> dict[str, float]:
         "recall": statistics.mean(d["recall"] for d in per_doc),
         "f1": statistics.mean(d["f1"] for d in per_doc),
     }
+
+
+def _macro_accuracy(per_doc: list[dict[str, float]]) -> dict[str, float]:
+    if not per_doc:
+        return {"accuracy": 0.0}
+    return {"accuracy": statistics.mean(d["accuracy"] for d in per_doc)}
 
 
 # ---------------------------------------------------------------------------
@@ -232,20 +243,40 @@ def evaluate(
     # accumulators keyed by (family, tier)
     acc: dict[tuple[str, str], dict[str, int]] = {}
     macro_acc: dict[tuple[str, str], list[dict]] = {}
+    accuracy_acc: dict[tuple[str, str], dict[str, int]] = {}
+    macro_accuracy_acc: dict[tuple[str, str], list[dict]] = {}
 
     families = ["event", "event_type", "event_type_set", "location", "event_location", "event_time"]
+    accuracy_families = [
+        "location_on_matched_events",
+        "location_on_matched_events_gold_stated",
+        "time_on_matched_events",
+        "time_on_matched_events_gold_stated",
+    ]
     if cluster_map is not None:
         families = [
             "event", "event_type", "event_type_set",
             "cluster_event", "cluster_type", "cluster_type_set",
             "location", "event_location", "cluster_event_location",
-            "event_time",
+            "event_time", "cluster_event_time",
         ]
+        accuracy_families.extend(
+            [
+                "cluster_location_on_matched_events",
+                "cluster_location_on_matched_events_gold_stated",
+                "cluster_time_on_matched_events",
+                "cluster_time_on_matched_events_gold_stated",
+            ]
+        )
     tiers = ["exact", "relaxed"]
     for fam in families:
         for tier in tiers:
             acc[(fam, tier)] = {"tp": 0, "fp": 0, "fn": 0}
             macro_acc[(fam, tier)] = []
+    for fam in accuracy_families:
+        for tier in tiers:
+            accuracy_acc[(fam, tier)] = {"correct": 0, "total": 0}
+            macro_accuracy_acc[(fam, tier)] = []
 
     error_rows: list[dict] = []
 
@@ -297,6 +328,74 @@ def evaluate(
                 macro_acc[("cluster_event_location", tier)].append(
                     _prf(cel_tp, cel_fp, cel_fn)
                 )
+
+                c_stated_pairs = [
+                    (g, p)
+                    for g, p in c_pairs
+                    if _split_locs(g.get("event_location", ""))
+                ]
+                c_stated_correct = sum(
+                    1
+                    for g, p in c_stated_pairs
+                    if _loc_match(
+                        g.get("event_location", ""), p.get("event_location", ""), tier
+                    )
+                )
+                for fam, correct, total in [
+                    ("cluster_location_on_matched_events", cel_tp, len(c_pairs)),
+                    (
+                        "cluster_location_on_matched_events_gold_stated",
+                        c_stated_correct,
+                        len(c_stated_pairs),
+                    ),
+                ]:
+                    accuracy_acc[(fam, tier)]["correct"] += correct
+                    accuracy_acc[(fam, tier)]["total"] += total
+                    macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
+
+                cet_tp = sum(
+                    1
+                    for g, p in c_pairs
+                    if _time_match(
+                        g.get("event_time", "not_stated"),
+                        p.get("event_time", "not_stated"),
+                        tier,
+                    )
+                )
+                cet_fp = c_tp - cet_tp + c_fp
+                cet_fn = c_tp - cet_tp + c_fn
+                acc[("cluster_event_time", tier)]["tp"] += cet_tp
+                acc[("cluster_event_time", tier)]["fp"] += cet_fp
+                acc[("cluster_event_time", tier)]["fn"] += cet_fn
+                macro_acc[("cluster_event_time", tier)].append(
+                    _prf(cet_tp, cet_fp, cet_fn)
+                )
+
+                c_time_stated_pairs = [
+                    (g, p)
+                    for g, p in c_pairs
+                    if _norm(g.get("event_time", "not_stated")) != "not_stated"
+                ]
+                c_time_stated_correct = sum(
+                    1
+                    for g, p in c_time_stated_pairs
+                    if _time_match(
+                        g.get("event_time", "not_stated"),
+                        p.get("event_time", "not_stated"),
+                        tier,
+                    )
+                )
+                for fam, correct, total in [
+                    ("cluster_time_on_matched_events", cet_tp, len(c_pairs)),
+                    (
+                        "cluster_time_on_matched_events_gold_stated",
+                        c_time_stated_correct,
+                        len(c_time_stated_pairs),
+                    ),
+                ]:
+                    accuracy_acc[(fam, tier)]["correct"] += correct
+                    accuracy_acc[(fam, tier)]["total"] += total
+                    macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
 
             # ---------------------------------------------------------------
             # 2. Event type (multiset per doc)
@@ -410,6 +509,30 @@ def evaluate(
             acc[("event_location", tier)]["fn"] += el_fn
             macro_acc[("event_location", tier)].append(_prf(el_tp, el_fp, el_fn))
 
+            stated_pairs = [
+                (g, p)
+                for g, p in pairs
+                if _split_locs(g.get("event_location", ""))
+            ]
+            stated_correct = sum(
+                1
+                for g, p in stated_pairs
+                if _loc_match(
+                    g.get("event_location", ""), p.get("event_location", ""), tier
+                )
+            )
+            for fam, correct, total in [
+                ("location_on_matched_events", el_tp, len(pairs)),
+                (
+                    "location_on_matched_events_gold_stated",
+                    stated_correct,
+                    len(stated_pairs),
+                ),
+            ]:
+                accuracy_acc[(fam, tier)]["correct"] += correct
+                accuracy_acc[(fam, tier)]["total"] += total
+                macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
+
             # ---------------------------------------------------------------
             # 5. Event-time pairing (conditioned on matched events)
             # ---------------------------------------------------------------
@@ -428,6 +551,32 @@ def evaluate(
             acc[("event_time", tier)]["fp"] += et_fp
             acc[("event_time", tier)]["fn"] += et_fn
             macro_acc[("event_time", tier)].append(_prf(et_tp, et_fp, et_fn))
+
+            time_stated_pairs = [
+                (g, p)
+                for g, p in pairs
+                if _norm(g.get("event_time", "not_stated")) != "not_stated"
+            ]
+            time_stated_correct = sum(
+                1
+                for g, p in time_stated_pairs
+                if _time_match(
+                    g.get("event_time", "not_stated"),
+                    p.get("event_time", "not_stated"),
+                    tier,
+                )
+            )
+            for fam, correct, total in [
+                ("time_on_matched_events", et_tp, len(pairs)),
+                (
+                    "time_on_matched_events_gold_stated",
+                    time_stated_correct,
+                    len(time_stated_pairs),
+                ),
+            ]:
+                accuracy_acc[(fam, tier)]["correct"] += correct
+                accuracy_acc[(fam, tier)]["total"] += total
+                macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
 
             # ---------------------------------------------------------------
             # Error logging (relaxed tier only, keep it once)
@@ -451,6 +600,14 @@ def evaluate(
             macro = _macro_average(macro_acc[(fam, tier)])
             metrics[fam][tier] = {"micro": micro, "macro": macro}
 
+    for fam in accuracy_families:
+        metrics[fam] = {}
+        for tier in tiers:
+            a = accuracy_acc[(fam, tier)]
+            micro = _accuracy(a["correct"], a["total"])
+            macro = _macro_accuracy(macro_accuracy_acc[(fam, tier)])
+            metrics[fam][tier] = {"micro": micro, "macro": macro}
+
     metrics["_errors"] = error_rows
     return metrics
 
@@ -467,12 +624,28 @@ _FAMILY_LABELS = {
     "cluster_type": "Cluster type (multiset)",
     "cluster_type_set": "Cluster type (doc-level set)",
     "location": "Location extraction",
-    "event_location": "Event-location pairing",
-    "cluster_event_location": "Cluster event-location pairing",
-    "event_time": "Event-time pairing",
+    "event_location": "End-to-end event-location",
+    "cluster_event_location": "Cluster end-to-end event-location",
+    "event_time": "End-to-end event-time",
+    "cluster_event_time": "Cluster end-to-end event-time",
 }
 
-_COL_W = 32  # width of metric name column
+_ACCURACY_LABELS = {
+    "location_on_matched_events": "Location on matched events",
+    "location_on_matched_events_gold_stated": "Location on matched events (gold stated)",
+    "cluster_location_on_matched_events": "Cluster location on matched events",
+    "cluster_location_on_matched_events_gold_stated": (
+        "Cluster location on matched events (gold stated)"
+    ),
+    "time_on_matched_events": "Time on matched events",
+    "time_on_matched_events_gold_stated": "Time on matched events (gold stated)",
+    "cluster_time_on_matched_events": "Cluster time on matched events",
+    "cluster_time_on_matched_events_gold_stated": (
+        "Cluster time on matched events (gold stated)"
+    ),
+}
+
+_COL_W = 52  # width of metric name column
 _NUM_W = 7   # width of each number column
 
 
@@ -493,6 +666,28 @@ def _header() -> str:
     h2 = f"  {'':{'<'}{_COL_W}}  {'Prec':>5}  {'Rec':>5}  {'F1':>5}    {'Prec':>5}  {'Rec':>5}  {'F1':>5}"
     sep = "  " + "-" * (_COL_W + 48)
     return "\n".join([h1, h2, sep])
+
+
+def _accuracy_row(
+    label: str,
+    r_acc: float,
+    e_acc: float,
+    suffix: str = "",
+) -> str:
+    def pct(v: float) -> str:
+        return f"{v * 100:5.1f}"
+    return (
+        f"  {label:<{_COL_W}}"
+        f"  {pct(r_acc)}"
+        f"    {pct(e_acc)}"
+        + (f"   {suffix}" if suffix else "")
+    )
+
+
+def _accuracy_header() -> str:
+    h1 = f"  {'Metric':<{_COL_W}}  {'RELAXED':>5}    {'EXACT':>5}"
+    sep = "  " + "-" * (_COL_W + 21)
+    return "\n".join([h1, sep])
 
 
 def _format_report(metrics: dict[str, Any], n_records: int) -> str:
@@ -526,6 +721,34 @@ def _format_report(metrics: dict[str, Any], n_records: int) -> str:
         lines.append(_row(label,
                           ma_r["precision"], ma_r["recall"], ma_r["f1"],
                           ma_e["precision"], ma_e["recall"], ma_e["f1"]))
+
+    accuracy_labels = {
+        fam: label
+        for fam, label in _ACCURACY_LABELS.items()
+        if fam in metrics
+    }
+    if accuracy_labels:
+        lines.append("\n\n  MICRO CONDITIONAL ACCURACY  (pooled matched events)\n")
+        lines.append(_accuracy_header())
+        for fam, label in accuracy_labels.items():
+            mu_r = metrics[fam]["relaxed"]["micro"]
+            mu_e = metrics[fam]["exact"]["micro"]
+            counts = f"correct={mu_r['correct']:4d}  total={mu_r['total']:4d}"
+            lines.append(
+                _accuracy_row(
+                    label,
+                    mu_r["accuracy"],
+                    mu_e["accuracy"],
+                    suffix=counts,
+                )
+            )
+
+        lines.append("\n\n  MACRO CONDITIONAL ACCURACY  (per-document average)\n")
+        lines.append(_accuracy_header())
+        for fam, label in accuracy_labels.items():
+            ma_r = metrics[fam]["relaxed"]["macro"]
+            ma_e = metrics[fam]["exact"]["macro"]
+            lines.append(_accuracy_row(label, ma_r["accuracy"], ma_e["accuracy"]))
 
     n_err = len(metrics["_errors"])
     lines.append(f"\n{'=' * 72}")

@@ -154,9 +154,16 @@ def _build_windows(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg},
         ]
-        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+        prompt_token_ids = tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        prompt = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
         result.append({
             "prompt": prompt,
+            "prompt_token_ids": prompt_token_ids,
             "window_start": ws,
             "window_end": we,
             "window_text": window_text,
@@ -281,7 +288,7 @@ def vllm_infer(
             # --- Window building ---
             pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Building")
             article_windows: list[list[dict]] = []
-            all_prompts: list[str] = []
+            vllm_inputs: list[dict] = []
             prompt_map: list[tuple[int, int]] = []
 
             for a_idx, row in enumerate(batch):
@@ -302,20 +309,21 @@ def vllm_infer(
                     windows = []
                 article_windows.append(windows)
                 for w_idx, w in enumerate(windows):
-                    all_prompts.append(w["prompt"])
+                    vllm_inputs.append({"prompt_token_ids": w["prompt_token_ids"]})
                     prompt_map.append((a_idx, w_idx))
                 pbar.update(1)
 
             pbar.write(
                 f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
-                f"{len(all_prompts)} prompts (max_new_tokens={max_new_tokens})"
+                f"{len(vllm_inputs)} prompts (max_new_tokens={max_new_tokens})"
             )
 
-            if all_prompts and not _first_prompt_printed:
+            if vllm_inputs and not _first_prompt_printed:
                 pbar.write("\n" + "=" * 80)
                 pbar.write("DEBUG — first rendered prompt:")
                 pbar.write("=" * 80)
-                pbar.write(all_prompts[0])
+                first_a_idx, first_w_idx = prompt_map[0]
+                pbar.write(article_windows[first_a_idx][first_w_idx]["prompt"])
                 pbar.write("=" * 80 + "\n")
                 _first_prompt_printed = True
 
@@ -328,10 +336,10 @@ def vllm_infer(
                     out_f.write(json.dumps({**row, "window_predictions": [], "predictions": []}, ensure_ascii=False) + "\n")
                     pbar.update(1)
 
-            if all_prompts:
+            if vllm_inputs:
                 # Hand all prompts to vLLM at once so its continuous-batching
                 # scheduler can maximally parallelize across the GPU.
-                results = llm.generate(all_prompts, sampling_params, lora_request=lora_request)
+                results = llm.generate(vllm_inputs, sampling_params, lora_request=lora_request)
 
                 if results and not _first_generation_printed:
                     decoded = tokenizer.decode(results[0].outputs[0].token_ids, skip_special_tokens=False)
