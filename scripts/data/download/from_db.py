@@ -2,15 +2,21 @@
 
 Usage:
     python scripts/data/download/from_db.py
+    python scripts/data/download/from_db.py --output path/to/articles.jsonl
+    python scripts/data/download/from_db.py --output gs://bucket/path/articles.jsonl
 
 Requires psycopg2:
     pip install psycopg2-binary
 """
 
+import argparse
+from contextlib import contextmanager
 import json
 import os
 import sys
 from pathlib import Path
+from typing import TextIO
+from urllib.parse import urlparse
 
 try:
     import psycopg2
@@ -130,7 +136,57 @@ def build_record(row: dict) -> dict:
     }
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Download articles from the database for a selected country.",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help=(
+            "Path to write the JSONL output file. Supports local paths and gs://bucket/object. "
+            "Defaults to dataset/country/{country_code}_articles.jsonl."
+        ),
+    )
+    parser.add_argument(
+        "--outoput",
+        dest="output",
+        help=argparse.SUPPRESS,
+    )
+    return parser.parse_args()
+
+
+def parse_gcs_uri(uri: str) -> tuple[str, str]:
+    parsed = urlparse(uri)
+    if parsed.scheme != "gs" or not parsed.netloc or not parsed.path.strip("/"):
+        raise ValueError(f"Invalid GCS URI: {uri}. Expected gs://bucket/path/to/file.jsonl")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+@contextmanager
+def open_output(path_or_uri: str) -> TextIO:
+    if path_or_uri.startswith("gs://"):
+        try:
+            from google.cloud import storage
+        except ImportError:
+            print("google-cloud-storage is not installed. Run: pip install google-cloud-storage")
+            sys.exit(1)
+
+        bucket_name, blob_name = parse_gcs_uri(path_or_uri)
+        client = storage.Client()
+        blob = client.bucket(bucket_name).blob(blob_name)
+        with blob.open("w", encoding="utf-8") as f:
+            yield f
+        return
+
+    output_path = Path(path_or_uri)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
+        yield f
+
+
 def main() -> None:
+    args = parse_args()
     params = get_connection_params()
 
     print("\nConnecting to database...")
@@ -186,13 +242,12 @@ def main() -> None:
         # Output path
         print("\n--- Output ---")
         default_output = f"dataset/country/{adm0_code.lower()}_articles.jsonl"
-        output_path = Path(prompt("Output file", default_output))
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = args.output or prompt("Output file", default_output)
 
         # Stream and write
         print("\nDownloading...")
         written = 0
-        with output_path.open("w", encoding="utf-8") as f:
+        with open_output(output_path) as f:
             for row in stream_articles(conn, adm0_code):
                 f.write(json.dumps(build_record(row), ensure_ascii=False, default=str, separators=(",", ":")) + "\n")
                 written += 1
