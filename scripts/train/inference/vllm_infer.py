@@ -160,6 +160,11 @@ def _build_windows(
             add_generation_prompt=True,
             enable_thinking=False,
         )
+        if not isinstance(prompt_token_ids, (list, tuple)):
+            if hasattr(prompt_token_ids, "input_ids"):
+                prompt_token_ids = prompt_token_ids.input_ids
+            elif hasattr(prompt_token_ids, "__getitem__") and "input_ids" in prompt_token_ids:
+                prompt_token_ids = prompt_token_ids["input_ids"]
         if hasattr(prompt_token_ids, "tolist"):
             prompt_token_ids = prompt_token_ids.tolist()
         else:
