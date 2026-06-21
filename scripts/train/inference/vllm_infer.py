@@ -205,6 +205,7 @@ def vllm_infer(
     tensor_parallel_size: int = 1,
     batch_size: int = 1_000,
     max_num_seqs: int | None = None,
+    quantization: str | None = None,
 ):
     """Batch event extraction inference using vLLM."""
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
@@ -231,6 +232,8 @@ def vllm_infer(
         engine_kwargs["max_model_len"] = max_model_len + max_new_tokens
     if max_num_seqs is not None:
         engine_kwargs["max_num_seqs"] = max_num_seqs
+    if quantization is not None:
+        engine_kwargs["quantization"] = quantization
 
     llm = LLM(**engine_kwargs)
 
