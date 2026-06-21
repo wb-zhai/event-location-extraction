@@ -160,6 +160,10 @@ def _build_windows(
             add_generation_prompt=True,
             enable_thinking=False,
         )
+        if hasattr(prompt_token_ids, "tolist"):
+            prompt_token_ids = prompt_token_ids.tolist()
+        else:
+            prompt_token_ids = [int(t) for t in prompt_token_ids]
         prompt = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
         result.append({
             "prompt": prompt,
