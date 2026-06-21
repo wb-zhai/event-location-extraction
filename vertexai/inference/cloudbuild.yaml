@@ -1,0 +1,24 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - vertexai/inference/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/event-extraction/event-infer:${_TAG}
+      - .
+    timeout: 3600s
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/event-extraction/event-infer:${_TAG}
+
+substitutions:
+  _REGION: us-central1
+  _TAG: latest
+
+options:
+  machineType: E2_HIGHCPU_8
+  diskSizeGb: 100
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 3600s

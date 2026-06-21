@@ -72,11 +72,11 @@ trap "rm -f ${TMP_CONFIG}" EXIT
 sed \
     -e "s|TASK_COUNT|${SHARDS}|g" \
     -e "s|IMAGE_URI|${IMAGE}|g" \
-    -e "s|INPUT_GCS|${INPUT_GCS}|g" \
-    -e "s|OUTPUT_GCS_PREFIX|${OUTPUT_GCS}|g" \
-    -e "s|MODEL_GCS|${MODEL_GCS}|g" \
-    -e "s|MAX_NEW_TOKENS|${MAX_NEW_TOKENS}|g" \
-    -e "s|BATCH_SIZE|${BATCH_SIZE}|g" \
+    -e "s|VAL_INPUT_GCS|${INPUT_GCS}|g" \
+    -e "s|VAL_OUTPUT_GCS_PREFIX|${OUTPUT_GCS}|g" \
+    -e "s|VAL_MODEL_GCS|${MODEL_GCS}|g" \
+    -e "s|VAL_MAX_NEW_TOKENS|${MAX_NEW_TOKENS}|g" \
+    -e "s|VAL_BATCH_SIZE|${BATCH_SIZE}|g" \
     "${TEMPLATE}" > "${TMP_CONFIG}"
 
 echo "=== Job config (${TIER}, ${SHARDS} shards) ==="

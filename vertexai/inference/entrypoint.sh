@@ -33,7 +33,9 @@ LOCAL_INPUT=/local/input.jsonl
 LOCAL_OUTPUT=/local/shard-${TASK_INDEX}.jsonl
 REMOTE_OUTPUT="${OUTPUT_GCS_PREFIX}/shard-${TASK_INDEX}.jsonl"
 
-mkdir -p /local
+# LOCAL_MODEL must exist as a directory before the multi-file `gsutil cp` below,
+# otherwise gsutil treats it as a single-file destination and errors out.
+mkdir -p "${LOCAL_MODEL}"
 
 # --- 1. Pull model (parallel, ~8 GB, ~1-2 min) ---
 echo "[entrypoint] downloading model from ${MODEL_GCS}"
@@ -72,7 +74,7 @@ EXTRA_ARGS=""
 
 # --- 6. Run inference ---
 echo "[entrypoint] starting inference"
-python /app/scripts/train/inference/vllm_infer.py \
+python3 /app/scripts/train/inference/vllm_infer.py \
     --model_name_or_path "${LOCAL_MODEL}" \
     --input               "${LOCAL_INPUT}" \
     --output              "${LOCAL_OUTPUT}" \

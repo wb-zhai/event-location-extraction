@@ -5,8 +5,7 @@ Each task is an independent GPU VM (one shard). Outputs are merged after all tas
 
 ## Prerequisites
 
-- `gcloud` CLI authenticated (`gcloud auth login`, `gcloud auth configure-docker`)
-- Artifact Registry repo for Docker images
+- `gcloud` CLI authenticated — run `gcloud auth login`
 - GCS bucket for model weights, input data, and outputs
 - GPU quota in your target region for your chosen tier (check before large jobs)
 
@@ -27,16 +26,16 @@ gsutil cp /path/to/input.jsonl gs://BUCKET/data/input.jsonl
 
 ## Step 2 — Build and push the Docker image
 
-Build context must be the **repo root**:
+Run the setup script from the **repo root** (one-time; idempotent):
 
 ```bash
-REGION=us-central1
-PROJECT=my-gcp-project
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/my-repo/event-infer:latest"
-
-docker build -t "${IMAGE}" -f vertexai/inference/Dockerfile .
-docker push "${IMAGE}"
+bash vertexai/inference/setup.sh
 ```
+
+This creates the Artifact Registry repo if needed, then submits a Cloud Build job to build and push the image.
+Reads `vertexai/inference/.env` automatically; override with `--project`, `--region`, or `--tag`.
+
+Add `--local` to build with local Docker instead of Cloud Build.
 
 ---
 

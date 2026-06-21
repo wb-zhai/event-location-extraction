@@ -252,7 +252,7 @@ def main() -> None:
                 f.write(json.dumps(build_record(row), ensure_ascii=False, default=str, separators=(",", ":")) + "\n")
                 written += 1
                 if written % 500 == 0:
-                    print(f"  {written}/{total}", end="\r", file=sys.stderr, flush=True)
+                    print(f"  {written}/{total}\033[K", end="\r", file=sys.stderr, flush=True)
 
         print(f"\nWrote {written} articles to {output_path}")
 
