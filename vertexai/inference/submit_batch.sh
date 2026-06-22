@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./submit_batch.sh \
-#     --tier        spot-l4          # spot-l4 | l4 | a100
+#     --tier        spot-l4          # spot-l4 | spot-a100 | flex-l4 | flex-a100 | l4 | a100
 #     --shards      20               # number of parallel GPU tasks
 #     --image       REGION-docker.pkg.dev/PROJECT/REPO/event-infer:TAG
 #     --input       gs://BUCKET/data/input.jsonl

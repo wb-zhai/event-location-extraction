@@ -46,7 +46,7 @@ cd vertexai/inference
 chmod +x submit_batch.sh merge_shards.sh
 
 ./submit_batch.sh \
-    --tier    spot-l4 \          # spot-l4 | l4 | a100
+    --tier    spot-l4 \          # spot-l4 | spot-a100 | flex-l4 | flex-a100 | l4 | a100
     --shards  20 \               # number of parallel GPU tasks
     --image   "${IMAGE}" \
     --input   gs://BUCKET/data/input.jsonl \
@@ -70,6 +70,9 @@ Cost is flat in N (you pay total GPU-hours regardless). Use more shards to finis
 | `--tier` | Machine | GPU | Spot? | ~$/GPU-h | Notes |
 |---|---|---|---|---|---|
 | `spot-l4` | g2-standard-8 | 1× L4 24GB | Yes | ~$0.30 | Cheapest; auto-retries on preemption |
+| `spot-a100` | a2-highgpu-1g | 1× A100 40GB | Yes | ~$1.10 | Fast + cheap; preemptible, auto-retries |
+| `flex-l4` | g2-standard-8 | 1× L4 24GB | Flex | ~$0.54 | Lower interruption risk than spot; GCP queues until capacity available |
+| `flex-a100` | a2-highgpu-1g | 1× A100 40GB | Flex | ~$2.20 | Best A100 availability; lower interruption risk than spot |
 | `l4` | g2-standard-8 | 1× L4 24GB | No | ~$0.85 | No interruptions |
 | `a100` | a2-highgpu-1g | 1× A100 40GB | No | ~$3.50 | Faster per-GPU, fewer nodes needed |
 
@@ -111,7 +114,7 @@ Both layers together mean a preempted task loses at most ~90 s of work and retri
 
 ## Troubleshooting
 
-**"Quota exceeded"** — request quota for `NVIDIA_L4_GPUS` (or `NVIDIA_A100_GPUS`) in your region via IAM & Admin → Quotas.
+**"Quota exceeded"** — request quota for `NVIDIA_L4_GPUS` (or `NVIDIA_A100_GPUS` / `PREEMPTIBLE_NVIDIA_A100_GPUS` for spot-a100) in your region via IAM & Admin → Quotas.
 
 **Image not found** — confirm the Artifact Registry repo exists and the image was pushed successfully.
 
