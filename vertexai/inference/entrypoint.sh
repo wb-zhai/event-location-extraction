@@ -70,9 +70,14 @@ trap "kill ${SYNC_PID} 2>/dev/null || true" EXIT
 
 # --- 5. Build extra args ---
 EXTRA_ARGS=""
-[[ -n "${MAX_MODEL_LEN:-}" ]]      && EXTRA_ARGS+=" --max_model_len ${MAX_MODEL_LEN}"
-[[ -n "${TOP_K_CANDIDATES:-}" ]]   && EXTRA_ARGS+=" --top_k_candidates ${TOP_K_CANDIDATES}"
-[[ -n "${QUANTIZATION:-}" ]]       && EXTRA_ARGS+=" --quantization ${QUANTIZATION}"
+[[ -n "${MAX_MODEL_LEN:-}" ]]           && EXTRA_ARGS+=" --max_model_len ${MAX_MODEL_LEN}"
+[[ -n "${TOP_K_CANDIDATES:-}" ]]        && EXTRA_ARGS+=" --top_k_candidates ${TOP_K_CANDIDATES}"
+[[ -n "${QUANTIZATION:-}" ]]            && EXTRA_ARGS+=" --quantization ${QUANTIZATION}"
+[[ -n "${RETRIEVER_MODEL_NAME:-}" ]]    && EXTRA_ARGS+=" --retriever_model_name ${RETRIEVER_MODEL_NAME}"
+[[ -n "${RETRIEVER_INDEX:-}" ]]         && EXTRA_ARGS+=" --retriever_index ${RETRIEVER_INDEX}"
+[[ -n "${RETRIEVER_GPU_MEM_UTIL:-}" ]]  && EXTRA_ARGS+=" --retriever_gpu_memory_utilization ${RETRIEVER_GPU_MEM_UTIL}"
+[[ -n "${RETRIEVER_QUERY_MODE:-}" ]]    && EXTRA_ARGS+=" --retriever_query_mode ${RETRIEVER_QUERY_MODE}"
+[[ -n "${RETRIEVER_MAX_MODEL_LEN:-}" ]] && EXTRA_ARGS+=" --retriever_max_model_len ${RETRIEVER_MAX_MODEL_LEN}"
 
 # --- 6. Run inference ---
 echo "[entrypoint] starting inference"

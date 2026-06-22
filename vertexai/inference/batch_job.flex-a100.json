@@ -5,6 +5,7 @@
       "parallelism": "TASK_COUNT",
       "taskSpec": {
         "maxRetryCount": 1,
+        "maxRunDuration": "VAL_MAX_RUN_DURATION",
         "runnables": [
           {
             "script": {
@@ -32,8 +33,8 @@
           }
         ],
         "computeResource": {
-          "cpuMilli": "8000",
-          "memoryMib": "32000"
+          "cpuMilli": "12000",
+          "memoryMib": "85000"
         }
       }
     }
@@ -43,14 +44,14 @@
       {
         "installGpuDrivers": false,
         "policy": {
-          "machineType": "g2-standard-8",
+          "machineType": "a2-highgpu-1g",
           "accelerators": [
             {
-              "type": "nvidia-l4",
+              "type": "nvidia-tesla-a100",
               "count": "1"
             }
           ],
-          "provisioningModel": "STANDARD",
+          "provisioningModel": "FLEX_START",
           "bootDisk": {
             "image": "projects/deeplearning-platform-release/global/images/family/common-cu129-ubuntu-2204-nvidia-580",
             "sizeGb": "200",

@@ -37,10 +37,21 @@ REGION="${GCP_REGION:-us-central1}"
 JOB_ID="${JOB_ID:-infer-$(date -u +%Y%m%d-%H%M%S)}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-4096}"
 BATCH_SIZE="${BATCH_SIZE:-500}"
+# Wall-clock cap per task. REQUIRED for FLEX_START tiers: GCE rejects a flex-start
+# VM that has a maxRunDuration but no instance-termination action, and Batch's
+# implicit 7-day default has none — so an explicit finite value here makes Batch
+# attach the termination action. Max for flex-start is 604800 (7 days).
+MAX_RUN_DURATION="${MAX_RUN_DURATION:-86400s}"
 MAX_CHARS="${MAX_CHARS:-3000}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-}"
 TOP_K_CANDIDATES="${TOP_K_CANDIDATES:-}"
 QUANTIZATION="${QUANTIZATION:-}"
+GPU_MEMORY_UTIL="${GPU_MEMORY_UTIL:-}"
+RETRIEVER_MODEL_NAME="${RETRIEVER_MODEL_NAME:-}"
+RETRIEVER_INDEX="${RETRIEVER_INDEX:-}"
+RETRIEVER_GPU_MEM_UTIL="${RETRIEVER_GPU_MEM_UTIL:-}"
+RETRIEVER_QUERY_MODE="${RETRIEVER_QUERY_MODE:-}"
+RETRIEVER_MAX_MODEL_LEN="${RETRIEVER_MAX_MODEL_LEN:-}"
 
 # ---- Parse args ----
 while [[ $# -gt 0 ]]; do
@@ -56,10 +67,17 @@ while [[ $# -gt 0 ]]; do
         --job-id)          JOB_ID="$2";          shift 2 ;;
         --max-new-tokens)     MAX_NEW_TOKENS="$2";     shift 2 ;;
         --batch-size)         BATCH_SIZE="$2";         shift 2 ;;
+        --max-run-duration)   MAX_RUN_DURATION="$2";   shift 2 ;;
         --max-chars)          MAX_CHARS="$2";          shift 2 ;;
         --max-model-len)      MAX_MODEL_LEN="$2";      shift 2 ;;
         --top-k-candidates)   TOP_K_CANDIDATES="$2";   shift 2 ;;
-        --quantization)       QUANTIZATION="$2";       shift 2 ;;
+        --quantization)            QUANTIZATION="$2";            shift 2 ;;
+        --gpu-memory-util)         GPU_MEMORY_UTIL="$2";         shift 2 ;;
+        --retriever-model-name)    RETRIEVER_MODEL_NAME="$2";    shift 2 ;;
+        --retriever-index)         RETRIEVER_INDEX="$2";         shift 2 ;;
+        --retriever-gpu-mem-util)  RETRIEVER_GPU_MEM_UTIL="$2";  shift 2 ;;
+        --retriever-query-mode)    RETRIEVER_QUERY_MODE="$2";    shift 2 ;;
+        --retriever-max-model-len) RETRIEVER_MAX_MODEL_LEN="$2"; shift 2 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -78,8 +96,9 @@ TMP_CONFIG="$(mktemp /tmp/batch_job_XXXXXX.json)"
 trap "rm -f ${TMP_CONFIG}" EXIT
 
 sed \
-    -e "s|TASK_COUNT|${SHARDS}|g" \
+    -e "s|\"TASK_COUNT\"|\"${SHARDS}\"|g" \
     -e "s|IMAGE_URI|${IMAGE}|g" \
+    -e "s|VAL_MAX_RUN_DURATION|${MAX_RUN_DURATION}|g" \
     -e "s|VAL_INPUT_GCS|${INPUT_GCS}|g" \
     -e "s|VAL_OUTPUT_GCS_PREFIX|${OUTPUT_GCS}|g" \
     -e "s|VAL_MODEL_GCS|${MODEL_GCS}|g" \
@@ -89,6 +108,12 @@ sed \
     -e "s|VAL_MAX_MODEL_LEN|${MAX_MODEL_LEN}|g" \
     -e "s|VAL_TOP_K_CANDIDATES|${TOP_K_CANDIDATES}|g" \
     -e "s|VAL_QUANTIZATION|${QUANTIZATION}|g" \
+    -e "s|VAL_GPU_MEMORY_UTIL|${GPU_MEMORY_UTIL}|g" \
+    -e "s|VAL_RETRIEVER_MODEL_NAME|${RETRIEVER_MODEL_NAME}|g" \
+    -e "s|VAL_RETRIEVER_INDEX|${RETRIEVER_INDEX}|g" \
+    -e "s|VAL_RETRIEVER_GPU_MEM_UTIL|${RETRIEVER_GPU_MEM_UTIL}|g" \
+    -e "s|VAL_RETRIEVER_QUERY_MODE|${RETRIEVER_QUERY_MODE}|g" \
+    -e "s|VAL_RETRIEVER_MAX_MODEL_LEN|${RETRIEVER_MAX_MODEL_LEN}|g" \
     "${TEMPLATE}" > "${TMP_CONFIG}"
 
 echo "=== Job config (${TIER}, ${SHARDS} shards) ==="
