@@ -329,6 +329,8 @@ def vllm_infer(
 
     # top_k used when candidates come from the retriever; falls back to top_k_candidates
     _retriever_prompt_top_k = retriever_top_k_candidates if retriever_top_k_candidates is not None else top_k_candidates
+    # retrieve at least as many as the prompt needs so top_k_candidates actually filters
+    _effective_retriever_k = max(retriever_top_k, _retriever_prompt_top_k) if _retriever_prompt_top_k is not None else retriever_top_k
 
     with open(output_path, "a", encoding="utf-8") as out_f:
         for b_idx, batch in enumerate(_batched(pending, batch_size)):
@@ -341,7 +343,7 @@ def vllm_infer(
                 query_embeddings = torch.stack(
                     [out.outputs.data.to(torch.float32).cpu() for out in pooling_outputs]
                 )
-                retrieval_results = retriever_indexer.search(query_embeddings, retriever_top_k)
+                retrieval_results = retriever_indexer.search(query_embeddings, _effective_retriever_k)
                 for row, passages in zip(batch, retrieval_results):
                     row["candidates"] = [p["document"]["text"] for p in passages]
 
@@ -389,7 +391,7 @@ def vllm_infer(
                     window_embeddings = torch.stack(
                         [out.outputs.data.to(torch.float32).cpu() for out in pooling_outputs]
                     )
-                    window_retrieval = retriever_indexer.search(window_embeddings, retriever_top_k)
+                    window_retrieval = retriever_indexer.search(window_embeddings, _effective_retriever_k)
                     for (a_idx, w_idx), passages in zip(_win_index, window_retrieval):
                         w = article_windows[a_idx][w_idx]
                         row = batch[a_idx]
