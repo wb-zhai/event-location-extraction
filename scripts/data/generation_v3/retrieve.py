@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies/zhai/risk.label.description.training.json"
 DEFAULT_MODEL = "gemini-embedding-001"
-MAX_TEXT_CHARS = 8000
+DEFAULT_MAX_TEXT_CHARS = 8000
 # https://ai.google.dev/gemini-api/docs/pricing — verify before use
 PRICE_PER_1K_TOKENS = {"gemini-embedding-001": 0.00015}
 
@@ -54,6 +54,37 @@ def _embed(client: genai.Client, texts: list[str], task_type: str, model: str, b
     return np.concatenate(results, axis=0)
 
 
+def _text_windows(text: str, window_size: int) -> list[str]:
+    if len(text) <= window_size:
+        return [text]
+    return [text[i : i + window_size] for i in range(0, len(text), window_size) if text[i : i + window_size]]
+
+
+def _embed_per_window(
+    client: genai.Client,
+    records: list[dict],
+    model: str,
+    batch_size: int,
+    workers: int,
+    max_text_chars: int,
+) -> list[np.ndarray]:
+    """Embed each record as one vector per text window; return list of (n_windows, dim) arrays."""
+    window_texts: list[str] = []
+    window_record_idx: list[int] = []
+    for r_idx, r in enumerate(records):
+        for w in _text_windows(r.get("text", ""), max_text_chars):
+            window_texts.append(w)
+            window_record_idx.append(r_idx)
+
+    all_vecs = _embed(client, window_texts, "RETRIEVAL_QUERY", model, batch_size, workers)
+
+    per_record: list[list[np.ndarray]] = [[] for _ in records]
+    for vec, r_idx in zip(all_vecs, window_record_idx):
+        per_record[r_idx].append(vec)
+
+    return [np.stack(vecs) for vecs in per_record]
+
+
 def build_index(client: genai.Client, ontology_path: Path, index_path: Path, model: str, batch_size: int):
     events = json.loads(ontology_path.read_text())["events"]
     labels = list(events.keys())
@@ -82,6 +113,10 @@ def main():
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--batch-size", default=50, type=int)
     parser.add_argument("--workers", default=1, type=int, help="Parallel Gemini API calls")
+    parser.add_argument("--max-text-chars", default=DEFAULT_MAX_TEXT_CHARS, type=int,
+                        help="Max characters of article text passed to the embedding model")
+    parser.add_argument("--query-mode", default="full_doc", choices=["full_doc", "per_window"],
+                        help="full_doc: embed truncated article once; per_window: embed each chunk and take max score")
     parser.add_argument("--overwrite", action="store_true", help="Ignore existing output and start over")
     args = parser.parse_args()
 
@@ -114,17 +149,31 @@ def main():
         LOGGER.info("Nothing to do — all %d records already processed.", len(records))
         return
 
-    texts = [r.get("text", "")[:MAX_TEXT_CHARS] for r in pending]
-    LOGGER.info("Embedding %d articles (workers=%d)...", len(texts), args.workers)
-    article_tokens = client.models.count_tokens(model=args.model, contents=texts).total_tokens
-    article_vectors = _embed(client, texts, "RETRIEVAL_QUERY", args.model, args.batch_size, args.workers)
-
+    LOGGER.info("Embedding %d articles in %s mode (workers=%d)...", len(pending), args.query_mode, args.workers)
     with args.output.open(write_mode) as out:
-        for record, qvec in tqdm(zip(pending, article_vectors), total=len(pending)):
-            scores = label_vectors @ qvec
-            top_indices = np.argsort(scores)[::-1][: args.top_k]
-            record["candidates"] = [labels[i] for i in top_indices]
-            out.write(json.dumps(record) + "\n")
+        if args.query_mode == "per_window":
+            per_record_vecs = _embed_per_window(
+                client, pending, args.model, args.batch_size, args.workers, args.max_text_chars
+            )
+            all_windows = [
+                w for r in pending for w in _text_windows(r.get("text", ""), args.max_text_chars)
+            ]
+            article_tokens = client.models.count_tokens(model=args.model, contents=all_windows).total_tokens if all_windows else 0
+            for record, window_vecs in tqdm(zip(pending, per_record_vecs), total=len(pending)):
+                # scores shape: (n_windows, n_labels) → take max across windows
+                scores = (label_vectors @ window_vecs.T).max(axis=1)
+                top_indices = np.argsort(scores)[::-1][: args.top_k]
+                record["candidates"] = [labels[i] for i in top_indices]
+                out.write(json.dumps(record) + "\n")
+        else:
+            texts = [r.get("text", "")[:args.max_text_chars] for r in pending]
+            article_tokens = client.models.count_tokens(model=args.model, contents=texts).total_tokens
+            article_vectors = _embed(client, texts, "RETRIEVAL_QUERY", args.model, args.batch_size, args.workers)
+            for record, qvec in tqdm(zip(pending, article_vectors), total=len(pending)):
+                scores = label_vectors @ qvec
+                top_indices = np.argsort(scores)[::-1][: args.top_k]
+                record["candidates"] = [labels[i] for i in top_indices]
+                out.write(json.dumps(record) + "\n")
 
     total_tokens = index_tokens + article_tokens
     price = PRICE_PER_1K_TOKENS.get(args.model, 0.0)

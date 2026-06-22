@@ -4,7 +4,7 @@
       "taskCount": "TASK_COUNT",
       "parallelism": "TASK_COUNT",
       "taskSpec": {
-        "maxRetryCount": 1,
+        "maxRetryCount": 2,
         "maxRunDuration": "VAL_MAX_RUN_DURATION",
         "runnables": [
           {

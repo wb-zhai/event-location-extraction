@@ -16,6 +16,7 @@ import re
 import sys
 from typing import Iterator
 
+import torch
 import fire
 from json_repair import repair_json
 from tqdm import tqdm
@@ -112,6 +113,20 @@ def _batched(items: list, size: int) -> Iterator[list]:
         yield items[i : i + size]
 
 
+def _apply_chat_template(tokenizer, messages: list[dict]) -> list[int]:
+    token_ids = tokenizer.apply_chat_template(
+        messages, tokenize=True, add_generation_prompt=True, enable_thinking=False,
+    )
+    if not isinstance(token_ids, (list, tuple)):
+        if hasattr(token_ids, "input_ids"):
+            token_ids = token_ids.input_ids
+        elif hasattr(token_ids, "__getitem__") and "input_ids" in token_ids:
+            token_ids = token_ids["input_ids"]
+    if hasattr(token_ids, "tolist"):
+        return token_ids.tolist()
+    return [int(t) for t in token_ids]
+
+
 def _build_windows(
     row: dict,
     system_template: str,
@@ -154,21 +169,7 @@ def _build_windows(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg},
         ]
-        prompt_token_ids = tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            enable_thinking=False,
-        )
-        if not isinstance(prompt_token_ids, (list, tuple)):
-            if hasattr(prompt_token_ids, "input_ids"):
-                prompt_token_ids = prompt_token_ids.input_ids
-            elif hasattr(prompt_token_ids, "__getitem__") and "input_ids" in prompt_token_ids:
-                prompt_token_ids = prompt_token_ids["input_ids"]
-        if hasattr(prompt_token_ids, "tolist"):
-            prompt_token_ids = prompt_token_ids.tolist()
-        else:
-            prompt_token_ids = [int(t) for t in prompt_token_ids]
+        prompt_token_ids = _apply_chat_template(tokenizer, messages)
         prompt = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
         result.append({
             "prompt": prompt,
@@ -215,6 +216,15 @@ def vllm_infer(
     batch_size: int = 1_000,
     max_num_seqs: int | None = None,
     quantization: str | None = None,
+    # Retriever (optional)
+    retriever_model_name: str | None = None,
+    retriever_index: str | None = None,
+    index_device: str = "cpu",
+    retriever_top_k: int = 10,
+    retriever_top_k_candidates: int | None = None,
+    retriever_gpu_memory_utilization: float = 0.1,
+    retriever_max_model_len: int | None = None,
+    retriever_query_mode: str = "full_doc",
 ):
     """Batch event extraction inference using vLLM."""
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
@@ -245,6 +255,29 @@ def vllm_infer(
         engine_kwargs["quantization"] = quantization
 
     llm = LLM(**engine_kwargs)
+
+    retriever_llm = None
+    retriever_indexer = None
+    if retriever_model_name is not None:
+        if retriever_index is None:
+            raise ValueError("retriever_index is required when retriever_model_name is set")
+        if gpu_memory_utilization + retriever_gpu_memory_utilization > 1.0:
+            raise ValueError(
+                f"gpu_memory_utilization ({gpu_memory_utilization}) + "
+                f"retriever_gpu_memory_utilization ({retriever_gpu_memory_utilization}) "
+                f"exceeds 1.0"
+            )
+        from src.index.inmemory import InMemoryIndexer
+        retriever_indexer = InMemoryIndexer.from_pretrained(retriever_index, device=index_device)
+        _retriever_kwargs: dict = {
+            "model": retriever_model_name,
+            "runner": "pooling",
+            "trust_remote_code": True,
+            "gpu_memory_utilization": retriever_gpu_memory_utilization,
+        }
+        if retriever_max_model_len is not None:
+            _retriever_kwargs["max_model_len"] = retriever_max_model_len
+        retriever_llm = LLM(**_retriever_kwargs)
 
     lora_request = None
     if adapter_name_or_path is not None:
@@ -294,14 +327,36 @@ def vllm_infer(
     _first_prompt_printed = False
     _first_generation_printed = False
 
+    # top_k used when candidates come from the retriever; falls back to top_k_candidates
+    _retriever_prompt_top_k = retriever_top_k_candidates if retriever_top_k_candidates is not None else top_k_candidates
+    # retrieve at least as many as the prompt needs so top_k_candidates actually filters
+    _effective_retriever_k = max(retriever_top_k, _retriever_prompt_top_k) if _retriever_prompt_top_k is not None else retriever_top_k
+
     with open(output_path, "a", encoding="utf-8") as out_f:
         for b_idx, batch in enumerate(_batched(pending, batch_size)):
 
+            # --- Full-doc retrieval (before windowing) ---
+            if retriever_llm is not None and retriever_query_mode == "full_doc":
+                pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Retrieving")
+                texts = [(row.get("source") or {}).get("text") or "" for row in batch]
+                pooling_outputs = retriever_llm.encode(texts, pooling_task="embed")
+                query_embeddings = torch.stack(
+                    [out.outputs.data.to(torch.float32).cpu() for out in pooling_outputs]
+                )
+                retrieval_results = retriever_indexer.search(query_embeddings, _effective_retriever_k)
+                for row, passages in zip(batch, retrieval_results):
+                    row["candidates"] = [p["document"]["text"] for p in passages]
+
             # --- Window building ---
+            # full_doc retrieval has already set row["candidates"] → use _retriever_prompt_top_k.
+            # per_window retrieval happens after, so only pre-built candidates are present → use top_k_candidates.
+            _window_top_k = (
+                _retriever_prompt_top_k
+                if retriever_llm is not None and retriever_query_mode == "full_doc"
+                else top_k_candidates
+            )
             pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Building")
             article_windows: list[list[dict]] = []
-            vllm_inputs: list[dict] = []
-            prompt_map: list[tuple[int, int]] = []
 
             for a_idx, row in enumerate(batch):
                 src = row.get("source") or {}
@@ -314,16 +369,53 @@ def vllm_infer(
                     windows = _build_windows(
                         row, system_template, user_template, default_labels, tokenizer,
                         max_chars=max_chars, max_paras=max_paras, overlap=overlap_paras,
-                        min_chars=min_chars, top_k_candidates=top_k_candidates,
+                        min_chars=min_chars, top_k_candidates=_window_top_k,
                     )
                 except Exception as e:
                     pbar.write(f"Window error for {aid}: {e}")
                     windows = []
                 article_windows.append(windows)
+                pbar.update(1)
+
+            # --- Per-window retrieval (after windowing) ---
+            if retriever_llm is not None and retriever_query_mode == "per_window":
+                pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Retrieving per window")
+                _win_texts: list[str] = []
+                _win_index: list[tuple[int, int]] = []
+                for a_idx, windows in enumerate(article_windows):
+                    for w_idx, w in enumerate(windows):
+                        _win_texts.append(w["window_text"])
+                        _win_index.append((a_idx, w_idx))
+                if _win_texts:
+                    pooling_outputs = retriever_llm.encode(_win_texts, pooling_task="embed")
+                    window_embeddings = torch.stack(
+                        [out.outputs.data.to(torch.float32).cpu() for out in pooling_outputs]
+                    )
+                    window_retrieval = retriever_indexer.search(window_embeddings, _effective_retriever_k)
+                    for (a_idx, w_idx), passages in zip(_win_index, window_retrieval):
+                        w = article_windows[a_idx][w_idx]
+                        row = batch[a_idx]
+                        src = row.get("source") or {}
+                        publish_date = src.get("publish_date") or ""
+                        row_with_cands = {**row, "candidates": [p["document"]["text"] for p in passages]}
+                        labels = row_labels(row_with_cands, default_labels, _retriever_prompt_top_k)
+                        system_prompt = render_system_prompt(system_template, labels)
+                        user_msg = build_user_message(user_template, publish_date, w["window_text"])
+                        messages = [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_msg},
+                        ]
+                        prompt_token_ids = _apply_chat_template(tokenizer, messages)
+                        w["prompt_token_ids"] = prompt_token_ids
+                        w["prompt"] = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
+
+            # --- Build vLLM inputs ---
+            vllm_inputs: list[dict] = []
+            prompt_map: list[tuple[int, int]] = []
+            for a_idx, windows in enumerate(article_windows):
                 for w_idx, w in enumerate(windows):
                     vllm_inputs.append({"prompt_token_ids": w["prompt_token_ids"]})
                     prompt_map.append((a_idx, w_idx))
-                pbar.update(1)
 
             pbar.write(
                 f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
