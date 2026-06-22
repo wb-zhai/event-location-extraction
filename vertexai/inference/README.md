@@ -56,6 +56,33 @@ chmod +x submit_batch.sh merge_shards.sh
     --region  "${REGION}"
 ```
 
+### Optional inference flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--max-new-tokens` | `4096` | Max tokens to generate per window |
+| `--max-model-len` | vLLM auto | Total context length (prompt + output); set to limit VRAM |
+| `--max-chars` | `3000` | Max characters per text window |
+| `--top-k-candidates` | all | Number of ontology labels to include per article |
+| `--quantization` | none | vLLM quantization mode (e.g. `fp8`) |
+| `--batch-size` | `500` | Articles per vLLM batch |
+
+Example with all tuning flags:
+
+```bash
+./submit_batch.sh \
+    --tier              spot-l4 \
+    --shards            1 \
+    --input             gs://BUCKET/data/input.jsonl \
+    --output            gs://BUCKET/output/run-001 \
+    --model             gs://BUCKET/models/qwen3-4b-merged \
+    --max-new-tokens    2048 \
+    --max-model-len     8192 \
+    --max-chars         3000 \
+    --top-k-candidates  70 \
+    --quantization      fp8
+```
+
 ### Choosing `--shards` (at ~1.3 s/article on L4)
 
 | Articles | 20 shards | 45 shards | 90 shards |

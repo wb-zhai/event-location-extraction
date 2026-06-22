@@ -37,6 +37,10 @@ REGION="${GCP_REGION:-us-central1}"
 JOB_ID="${JOB_ID:-infer-$(date -u +%Y%m%d-%H%M%S)}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-4096}"
 BATCH_SIZE="${BATCH_SIZE:-500}"
+MAX_CHARS="${MAX_CHARS:-3000}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-}"
+TOP_K_CANDIDATES="${TOP_K_CANDIDATES:-}"
+QUANTIZATION="${QUANTIZATION:-}"
 
 # ---- Parse args ----
 while [[ $# -gt 0 ]]; do
@@ -50,8 +54,12 @@ while [[ $# -gt 0 ]]; do
         --project)         PROJECT="$2";         shift 2 ;;
         --region)          REGION="$2";          shift 2 ;;
         --job-id)          JOB_ID="$2";          shift 2 ;;
-        --max-new-tokens)  MAX_NEW_TOKENS="$2";  shift 2 ;;
-        --batch-size)      BATCH_SIZE="$2";      shift 2 ;;
+        --max-new-tokens)     MAX_NEW_TOKENS="$2";     shift 2 ;;
+        --batch-size)         BATCH_SIZE="$2";         shift 2 ;;
+        --max-chars)          MAX_CHARS="$2";          shift 2 ;;
+        --max-model-len)      MAX_MODEL_LEN="$2";      shift 2 ;;
+        --top-k-candidates)   TOP_K_CANDIDATES="$2";   shift 2 ;;
+        --quantization)       QUANTIZATION="$2";       shift 2 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -77,6 +85,10 @@ sed \
     -e "s|VAL_MODEL_GCS|${MODEL_GCS}|g" \
     -e "s|VAL_MAX_NEW_TOKENS|${MAX_NEW_TOKENS}|g" \
     -e "s|VAL_BATCH_SIZE|${BATCH_SIZE}|g" \
+    -e "s|VAL_MAX_CHARS|${MAX_CHARS}|g" \
+    -e "s|VAL_MAX_MODEL_LEN|${MAX_MODEL_LEN}|g" \
+    -e "s|VAL_TOP_K_CANDIDATES|${TOP_K_CANDIDATES}|g" \
+    -e "s|VAL_QUANTIZATION|${QUANTIZATION}|g" \
     "${TEMPLATE}" > "${TMP_CONFIG}"
 
 echo "=== Job config (${TIER}, ${SHARDS} shards) ==="

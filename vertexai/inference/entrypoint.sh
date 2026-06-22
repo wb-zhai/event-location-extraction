@@ -16,6 +16,7 @@
 #   TOP_K_CANDIDATES   (default: not set)
 #   GPU_MEMORY_UTIL    (default 0.95)
 #   TEMPERATURE        (default 0.0)
+#   QUANTIZATION       (default: not set, e.g. fp8)
 #
 # Cloud Batch injects:
 #   BATCH_TASK_INDEX   0-based task index
@@ -71,6 +72,7 @@ trap "kill ${SYNC_PID} 2>/dev/null || true" EXIT
 EXTRA_ARGS=""
 [[ -n "${MAX_MODEL_LEN:-}" ]]      && EXTRA_ARGS+=" --max_model_len ${MAX_MODEL_LEN}"
 [[ -n "${TOP_K_CANDIDATES:-}" ]]   && EXTRA_ARGS+=" --top_k_candidates ${TOP_K_CANDIDATES}"
+[[ -n "${QUANTIZATION:-}" ]]       && EXTRA_ARGS+=" --quantization ${QUANTIZATION}"
 
 # --- 6. Run inference ---
 echo "[entrypoint] starting inference"
