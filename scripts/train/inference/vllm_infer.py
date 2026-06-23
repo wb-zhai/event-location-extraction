@@ -139,6 +139,7 @@ def _build_windows(
     overlap: int,
     min_chars: int,
     top_k_candidates: int | None,
+    render_prompt: bool = True,
 ) -> list[dict]:
     source = row.get("source") or {}
     text = source.get("text") or ""
@@ -147,8 +148,12 @@ def _build_windows(
     if not text.strip():
         return []
 
-    labels = row_labels(row, default_labels, top_k_candidates)
-    system_prompt = render_system_prompt(system_template, labels)
+    # In per-window retrieval mode the caller re-renders the prompt per window
+    # after retrieval, so skip the (throwaway) prompt build here.
+    system_prompt = None
+    if render_prompt:
+        labels = row_labels(row, default_labels, top_k_candidates)
+        system_prompt = render_system_prompt(system_template, labels)
 
     paras = split_paragraphs(text) or [(0, len(text))]
     paras = split_oversized_paragraphs(text, paras, max_chars=max_chars)
@@ -164,20 +169,21 @@ def _build_windows(
     for lo, hi in windows:
         ws, we = paras[lo][0], paras[hi - 1][1]
         window_text = text[ws:we]
-        user_msg = build_user_message(user_template, publish_date, window_text)
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_msg},
-        ]
-        prompt_token_ids = _apply_chat_template(tokenizer, messages)
-        prompt = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
-        result.append({
-            "prompt": prompt,
-            "prompt_token_ids": prompt_token_ids,
+        win: dict = {
             "window_start": ws,
             "window_end": we,
             "window_text": window_text,
-        })
+        }
+        if render_prompt:
+            user_msg = build_user_message(user_template, publish_date, window_text)
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ]
+            prompt_token_ids = _apply_chat_template(tokenizer, messages)
+            win["prompt_token_ids"] = prompt_token_ids
+            win["prompt"] = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
+        result.append(win)
 
     return result
 
@@ -225,6 +231,18 @@ def vllm_infer(
     retriever_query_mode: str = "full_doc",
 ):
     """Batch event extraction inference using vLLM."""
+    # Validate retriever config up front so misconfiguration fails fast, before
+    # the (slow) main model load below.
+    if retriever_model_name is not None:
+        if retriever_index is None:
+            raise ValueError("retriever_index is required when retriever_model_name is set")
+        if gpu_memory_utilization + retriever_gpu_memory_utilization > 1.0:
+            raise ValueError(
+                f"gpu_memory_utilization ({gpu_memory_utilization}) + "
+                f"retriever_gpu_memory_utilization ({retriever_gpu_memory_utilization}) "
+                f"exceeds 1.0"
+            )
+
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
     prompt_dir_path = pathlib.Path(prompt_dir) if prompt_dir else DEFAULT_PROMPT_DIR
 
@@ -257,14 +275,6 @@ def vllm_infer(
     retriever_llm = None
     retriever_indexer = None
     if retriever_model_name is not None:
-        if retriever_index is None:
-            raise ValueError("retriever_index is required when retriever_model_name is set")
-        if gpu_memory_utilization + retriever_gpu_memory_utilization > 1.0:
-            raise ValueError(
-                f"gpu_memory_utilization ({gpu_memory_utilization}) + "
-                f"retriever_gpu_memory_utilization ({retriever_gpu_memory_utilization}) "
-                f"exceeds 1.0"
-            )
         from src.index.inmemory import InMemoryIndexer
         retriever_indexer = InMemoryIndexer.from_pretrained(retriever_index, device=index_device)
         _retriever_kwargs: dict = {
@@ -351,6 +361,11 @@ def vllm_infer(
                     row["candidates"] = [p["document"]["text"] for p in passages]
 
             # --- Window building ---
+            # Skip prompt rendering when per-window retrieval will re-render each
+            # window's prompt after this pass (avoids a wasted render per window).
+            _render_prompt = not (
+                retriever_llm is not None and retriever_query_mode == "per_window"
+            )
             pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Building")
             article_windows: list[list[dict]] = []
 
@@ -366,6 +381,7 @@ def vllm_infer(
                         row, system_template, user_template, default_labels, tokenizer,
                         max_chars=max_chars, max_paras=max_paras, overlap=overlap_paras,
                         min_chars=min_chars, top_k_candidates=top_k_candidates,
+                        render_prompt=_render_prompt,
                     )
                 except Exception as e:
                     pbar.write(f"Window error for {aid}: {e}")
