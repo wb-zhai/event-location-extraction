@@ -183,11 +183,11 @@ Both layers together mean a preempted task loses at most ~90 s of work and retri
 
 ```
 bash vertexai/inference/submit_batch.sh \
-    --tier              flex-a100 \
+    --tier              spot-a100 \
     --shards            20 \
     --job-id            south-sudan-a100-$(date -u +%Y%m%d-%H%M%S) \
     --input             gs://zhai-risk-factor-extraction/data/db/south_sudan_articles.jsonl \
-    --output            gs://zhai-risk-factor-extraction/data/db/predictions/south_sudan_articles \
+    --output            gs://zhai-risk-factor-extraction/data/db/predictions/south_sudan_articles_a100 \
     --model             gs://zhai-risk-factor-extraction/vertexai/experiments/qwen3_5-lora-a100-40gb-20260617-151840/merged \
     --max-new-tokens           4096 \
     --max-model-len            12238 \
@@ -195,8 +195,8 @@ bash vertexai/inference/submit_batch.sh \
     --top-k-candidates         90 \
     --quantization             fp8 \
     --gpu-memory-util          0.75 \
-    --retriever-model-name     microsoft/harrier-oss-v1-0.6b \
-    --retriever-index          zhai-risk-factor-extraction/vertexai/index/science/index/harrier-oss-v1-0.6b \
+    --retriever-model-name     gs://zhai-risk-factor-extraction/vertexai/retrievers/harrier-oss-v1-0.6b \
+    --retriever-index          gs://zhai-risk-factor-extraction/vertexai/index/science/index/harrier-oss-v1-0.6b \
     --retriever-gpu-mem-util   0.15 \
     --retriever-query-mode     per_window \
     --retriever-max-model-len  4096

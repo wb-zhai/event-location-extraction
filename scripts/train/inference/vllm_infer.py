@@ -220,8 +220,6 @@ def vllm_infer(
     retriever_model_name: str | None = None,
     retriever_index: str | None = None,
     index_device: str = "cpu",
-    retriever_top_k: int = 10,
-    retriever_top_k_candidates: int | None = None,
     retriever_gpu_memory_utilization: float = 0.1,
     retriever_max_model_len: int | None = None,
     retriever_query_mode: str = "full_doc",
@@ -327,10 +325,15 @@ def vllm_infer(
     _first_prompt_printed = False
     _first_generation_printed = False
 
-    # top_k used when candidates come from the retriever; falls back to top_k_candidates
-    _retriever_prompt_top_k = retriever_top_k_candidates if retriever_top_k_candidates is not None else top_k_candidates
-    # retrieve at least as many as the prompt needs so top_k_candidates actually filters
-    _effective_retriever_k = max(retriever_top_k, _retriever_prompt_top_k) if _retriever_prompt_top_k is not None else retriever_top_k
+    # top_k_candidates doubles as both the prompt candidate filter and the number
+    # of passages pulled from the index. When unset, retrieve the whole index so
+    # nothing is dropped (row_labels then keeps all of them too).
+    if top_k_candidates is not None:
+        _effective_retriever_k = top_k_candidates
+    elif retriever_indexer is not None and retriever_indexer.embeddings is not None:
+        _effective_retriever_k = retriever_indexer.embeddings.shape[0]
+    else:
+        _effective_retriever_k = 0
 
     with open(output_path, "a", encoding="utf-8") as out_f:
         for b_idx, batch in enumerate(_batched(pending, batch_size)):
@@ -348,13 +351,6 @@ def vllm_infer(
                     row["candidates"] = [p["document"]["text"] for p in passages]
 
             # --- Window building ---
-            # full_doc retrieval has already set row["candidates"] → use _retriever_prompt_top_k.
-            # per_window retrieval happens after, so only pre-built candidates are present → use top_k_candidates.
-            _window_top_k = (
-                _retriever_prompt_top_k
-                if retriever_llm is not None and retriever_query_mode == "full_doc"
-                else top_k_candidates
-            )
             pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Building")
             article_windows: list[list[dict]] = []
 
@@ -369,7 +365,7 @@ def vllm_infer(
                     windows = _build_windows(
                         row, system_template, user_template, default_labels, tokenizer,
                         max_chars=max_chars, max_paras=max_paras, overlap=overlap_paras,
-                        min_chars=min_chars, top_k_candidates=_window_top_k,
+                        min_chars=min_chars, top_k_candidates=top_k_candidates,
                     )
                 except Exception as e:
                     pbar.write(f"Window error for {aid}: {e}")
@@ -398,7 +394,7 @@ def vllm_infer(
                         src = row.get("source") or {}
                         publish_date = src.get("publish_date") or ""
                         row_with_cands = {**row, "candidates": [p["document"]["text"] for p in passages]}
-                        labels = row_labels(row_with_cands, default_labels, _retriever_prompt_top_k)
+                        labels = row_labels(row_with_cands, default_labels, top_k_candidates)
                         system_prompt = render_system_prompt(system_template, labels)
                         user_msg = build_user_message(user_template, publish_date, w["window_text"])
                         messages = [
