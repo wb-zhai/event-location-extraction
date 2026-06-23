@@ -12,7 +12,7 @@ usage() {
     exit 1
 }
 
-WORKERS=1
+WORKERS=10
 DELAY=0.0
 PATTERN="*.jsonl"
 
@@ -57,8 +57,9 @@ for input_file in "${files[@]}"; do
     # strip .jsonl, add .geo.jsonl
     base="${filename%.jsonl}"
     output_file="$OUTPUT_DIR/${base}.geo.jsonl"
+    workers="$WORKERS"
 
-    echo "[$count/$total] $filename → $(basename "$output_file")" >&2
+    echo "[$count/$total] $filename → $(basename "$output_file") (workers=$workers, delay=$DELAY)" >&2
 
     python "$GEO_SCRIPT" "$input_file" -o "$output_file" \
         --workers "$WORKERS" \

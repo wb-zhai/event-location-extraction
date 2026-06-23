@@ -26,7 +26,8 @@ from requests.adapters import HTTPAdapter
 from tqdm import tqdm
 from urllib3.util.retry import Retry
 
-PHOTON_URL = "https://photon.komoot.io/api/"
+# PHOTON_URL = "https://photon.komoot.io/api/"
+PHOTON_URL = "http://localhost:2322/api"
 
 PHOTON_TYPE_TO_OURS = {
     "country": "country",
@@ -40,6 +41,76 @@ PHOTON_TYPE_TO_OURS = {
     "district": "district",
     "municipality": "district",
 }
+
+# OSM object type is the best proxy for geographic scope available in the API response:
+# relations (R) cover large areas, nodes (N) are single points.
+_OSM_TYPE_IMPORTANCE = {"R": 1.0, "W": 0.6, "N": 0.3}
+
+# Geographic type scope as a secondary importance signal.
+_GEO_SCOPE_IMPORTANCE = {
+    "continent": 1.0,
+    "country": 0.9,
+    "state": 0.7,
+    "county": 0.55,
+    "borough": 0.55,
+    "municipality": 0.55,
+    "district": 0.55,
+    "city": 0.5,
+    "town": 0.4,
+    "village": 0.3,
+    "suburb": 0.25,
+}
+
+
+def _importance_proxy(props: dict) -> float:
+    """Approximate Nominatim importance from OSM type and place type."""
+    osm = _OSM_TYPE_IMPORTANCE.get(props.get("osm_type", "N"), 0.3)
+    geo = _GEO_SCOPE_IMPORTANCE.get(props.get("type", ""), 0.3)
+    return 0.7 * osm + 0.3 * geo
+
+
+def _reranker_factor(query: str, name: str) -> float:
+    """
+    Replicates Photon's QueryReranker multiplier.
+
+    Photon applies this factor to the existing OpenSearch score after importance
+    weighting, so a high-importance non-matching result can still beat a low-
+    importance exact match.  We replicate the same multiplier tiers:
+      1.0  exact match
+      0.9  name starts with query at a word boundary  ("Africa X" for "Africa")
+      0.8  name starts with query (no boundary)
+      0.8× word-level char ratio (a word in name equals the full query)
+      0.5  no recognisable match (importance alone determines rank)
+    """
+    q = query.lower().strip()
+    n = name.lower().strip()
+
+    if n == q:
+        return 1.0
+
+    # Word-boundary prefix: name begins with "query " (space after = boundary)
+    if n.startswith(q + " "):
+        return 0.9
+
+    # Partial prefix: name begins with query but not at a word boundary
+    if n.startswith(q):
+        return 0.8
+
+    # Word-level: one or more words in name contain the full query string
+    matched_chars = sum(len(w) for w in n.split() if q in w)
+    if matched_chars:
+        return 0.8 * min(matched_chars / max(len(q), 1), 1.0)
+
+    return 0.5
+
+
+def _feature_score(feat: dict, query: str) -> float:
+    """Composite score replicating Photon's importance × reranker pipeline."""
+    props = feat["properties"]
+    imp = _importance_proxy(props)
+    factor = _reranker_factor(query, props.get("name", ""))
+    return factor * imp
+
 
 _thread_local = threading.local()
 
@@ -58,7 +129,7 @@ def resolve_location(query: str) -> dict | None:
     """Query Photon for a single location string, return a geotaxonomy dict."""
     session = _get_session()
     try:
-        resp = session.get(PHOTON_URL, params={"q": query, "limit": 1}, timeout=10)
+        resp = session.get(PHOTON_URL, params={"q": query, "limit": 10}, timeout=10)
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"  WARNING: request failed for '{query}': {e}", file=sys.stderr)
@@ -69,8 +140,9 @@ def resolve_location(query: str) -> dict | None:
     if not features:
         return None
 
-    props = features[0]["properties"]
-    coords = features[0]["geometry"]["coordinates"]
+    best = max(features, key=lambda f: _feature_score(f, query))
+    props = best["properties"]
+    coords = best["geometry"]["coordinates"]
     photon_type = props.get("type", "")
     our_type = PHOTON_TYPE_TO_OURS.get(photon_type, photon_type)
 
