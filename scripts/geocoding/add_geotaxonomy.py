@@ -56,6 +56,7 @@ def _admin_level_to_ours(level: int) -> str:
         return "province"
     return "district"
 
+
 # OSM object type is the best proxy for geographic scope available in the API response:
 # relations (R) cover large areas, nodes (N) are single points.
 _OSM_TYPE_IMPORTANCE = {"R": 1.0, "W": 0.6, "N": 0.3}
@@ -133,7 +134,9 @@ def _get_session() -> requests.Session:
     if not hasattr(_thread_local, "session"):
         s = requests.Session()
         s.headers.update({"User-Agent": "event-location-extraction/1.0"})
-        retry = Retry(total=4, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
+        retry = Retry(
+            total=4, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504]
+        )
         s.mount("https://", HTTPAdapter(max_retries=retry))
         _thread_local.session = s
     return _thread_local.session
@@ -240,7 +243,9 @@ def process_events(
         event["geotaxonomy"] = resolve_event_location(loc, cache, cache_lock, delay)
 
 
-def process_obj(line: str, cache: dict, cache_lock: threading.Lock, delay: float) -> str:
+def process_obj(
+    line: str, cache: dict, cache_lock: threading.Lock, delay: float
+) -> str:
     obj = json.loads(line)
 
     annotation = obj.get("annotation")
@@ -273,7 +278,9 @@ def main() -> None:
     args = parser.parse_args()
 
     input_path = Path(args.input)
-    output_path = Path(args.output) if args.output else input_path.with_suffix(".geo.jsonl")
+    output_path = (
+        Path(args.output) if args.output else input_path.with_suffix(".geo.jsonl")
+    )
 
     cache: dict = {}
     cache_lock = threading.Lock()
@@ -289,7 +296,9 @@ def main() -> None:
                 lambda line: process_obj(line, cache, cache_lock, args.delay),
                 fin,
             )
-            for result in tqdm(results, total=total, desc="geocoding", unit="line", file=sys.stderr):
+            for result in tqdm(
+                results, total=total, desc="geocoding", unit="line", file=sys.stderr
+            ):
                 fout.write(result + "\n")
 
     print(f"Done. Cache size: {len(cache)}", file=sys.stderr)
