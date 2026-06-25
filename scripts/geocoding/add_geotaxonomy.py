@@ -6,11 +6,12 @@ Reads annotation.events and predictions event dicts, resolves each
 event_location string via the Photon geocoding API, and writes a
 geotaxonomy key back to each event.
 
-Photon admin level → our taxonomy:
-  type=country  (admin_level 2) → "country"
-  type=state    (admin_level 4) → "province"
-  type=county   (admin_level 6) → "district"
-  type=city/town/village/...    → "city" / "town" / etc.
+Photon admin_level → our taxonomy (in-between levels rounded up to coarser):
+  admin_level ≤ 3  → "country"   (2 = country, 3 rounded up to country)
+  admin_level 4–5  → "province"  (4 = state, 5 rounded up to province)
+  admin_level ≥ 6  → "district"  (6 = county/district)
+
+Non-admin types (city, town, village, …) use PHOTON_TYPE_TO_OURS directly.
 """
 
 import argparse
@@ -41,6 +42,19 @@ PHOTON_TYPE_TO_OURS = {
     "district": "district",
     "municipality": "district",
 }
+
+
+def _admin_level_to_ours(level: int) -> str:
+    """Map a Photon admin_level integer to our 3-tier taxonomy.
+
+    Levels that fall between our anchor points are rounded up to the coarser
+    (higher-hierarchy) tier: 3 → country, 5 → province.
+    """
+    if level <= 3:
+        return "country"
+    if level <= 5:
+        return "province"
+    return "district"
 
 # OSM object type is the best proxy for geographic scope available in the API response:
 # relations (R) cover large areas, nodes (N) are single points.
@@ -144,12 +158,16 @@ def resolve_location(query: str) -> dict | None:
     props = best["properties"]
     coords = best["geometry"]["coordinates"]
     photon_type = props.get("type", "")
-    our_type = PHOTON_TYPE_TO_OURS.get(photon_type, photon_type)
+    admin_level = props.get("admin_level")
+    if admin_level is not None:
+        our_type = _admin_level_to_ours(int(admin_level))
+    else:
+        our_type = PHOTON_TYPE_TO_OURS.get(photon_type, photon_type)
 
     result: dict = {
         "query": query,
         "resolved_name": props.get("name", query),
-        "type": our_type,
+        "zhai": our_type,
         "photon_type": photon_type,
         "lat": coords[1],
         "lon": coords[0],
