@@ -1,10 +1,15 @@
 # add_geotaxonomy.py
 
-Enriches event location strings in a JSONL predictions file with structured geo taxonomy data by resolving each location through the [Photon geocoding API](https://photon.komoot.io/).
+Enriches event location strings in a JSONL predictions file with structured geo taxonomy data by resolving each location through the [Photon geocoding API](https://photon.komoot.io/) and then performing a spatial join against World Bank administrative boundary files.
 
 ## What it does
 
-For every line in the input JSONL, the script reads `annotation.events` and `predictions` event dicts, extracts each `event_location` string, geocodes it, and writes a `geotaxonomy` key back onto the event. The output is a new JSONL file with the same structure but with `geotaxonomy` fields added.
+Processing runs in two phases:
+
+1. **Geocoding** — for every line in the input JSONL, the script reads `annotation.events` and `predictions` event dicts, extracts each `event_location` string, queries Photon (up to 10 candidates, picking the best by composite score), and writes a `geotaxonomy` key back onto the event.
+2. **Spatial join** — after all lines are geocoded, the resolved coordinates are looked up in three `geotaxonomy_prewb_{0,1,2}.geojson` boundary files (run in parallel processes) to add `adm_code` and `adm_level` to each geotaxonomy entry.
+
+The output is a new JSONL file with the same structure but with `geotaxonomy` fields added.
 
 ### Geotaxonomy schema
 
@@ -14,7 +19,7 @@ Each resolved location in the `geotaxonomy` list looks like:
 {
   "query": "Berlin",
   "resolved_name": "Berlin",
-  "type": "city",
+  "zhai": "city",
   "photon_type": "city",
   "lat": 52.5170365,
   "lon": 13.3888599,
@@ -23,13 +28,25 @@ Each resolved location in the `geotaxonomy` list looks like:
   "country": "Germany",
   "countrycode": "DE",
   "province": "Berlin",
-  "district": "Berlin"
+  "district": "Berlin",
+  "adm_code": "DEU",
+  "adm_level": 0
 }
 ```
 
-The `type` field is mapped from Photon's OSM place type to the project taxonomy:
+The `zhai` field is the place type in the project taxonomy. For features that carry a Photon `admin_level` integer it is mapped by level; all other types use the direct name mapping:
 
-| Photon type | Our type |
+**Admin-level mapping** (for boundaries that carry an `admin_level` property):
+
+| Photon `admin_level` | `zhai` |
+| --- | --- |
+| ≤ 3 | `country` (levels between anchor points round up to the coarser tier) |
+| 4–5 | `province` |
+| ≥ 6 | `district` |
+
+**Direct type mapping** (for non-admin features like cities, villages, etc.):
+
+| Photon type | `zhai` |
 | --- | --- |
 | `country` | `country` |
 | `state` | `province` |
@@ -43,18 +60,24 @@ Semicolon-separated location strings (e.g. `"Paris; Lyon"`) are split and each p
 ## Requirements
 
 - Python 3.10+
-- `requests`, `tqdm`
+- `requests`, `tqdm`, `pandas`, `geopandas`, `google-cloud-storage`
 - A running **Photon** instance at `http://localhost:2322` (see note below)
 
 Install Python dependencies:
 
 ```bash
-pip install requests tqdm
+pip install requests tqdm pandas geopandas google-cloud-storage
 ```
 
 ### Photon server
 
-The script defaults to a **local** Photon instance (`http://localhost:2322`). To use the public Photon API instead, change `PHOTON_URL` at the top of the script to `https://photon.komoot.io/api/` and respect their rate-limit (use `--delay 1.0` and `--workers 1`).
+The script defaults to a **local** Photon instance (`http://localhost:2322/api`). To use the public Photon API instead, change `PHOTON_URL` at the top of the script to `https://photon.komoot.io/api/` and respect their rate-limit (use `--delay 1.0` and `--workers 1`).
+
+### Boundary files
+
+The spatial join requires `geotaxonomy_prewb_0.geojson`, `geotaxonomy_prewb_1.geojson`, and `geotaxonomy_prewb_2.geojson` (country, province, and district-level World Bank boundaries). By default the script looks for them in `dataset/geotaxonomy/` at the repository root. Override with `--geotaxonomy-dir`.
+
+If a file is missing locally, `geotaxonomy_utils.py` will attempt to download it from the GCS bucket `zhai-data-geotaxonomy`.
 
 ## Usage
 
@@ -75,6 +98,7 @@ python add_geotaxonomy.py input.jsonl -o output.jsonl
 | `-o`, `--output` | `<input>.geo.jsonl` | Output file path |
 | `--workers` | `1` | Parallel geocoding threads |
 | `--delay` | `0.1` | Seconds between requests per thread |
+| `--geotaxonomy-dir` | `dataset/geotaxonomy/` | Directory containing `geotaxonomy_prewb_{0,1,2}.geojson` files |
 
 ### Batch processing a directory
 
@@ -84,7 +108,8 @@ python add_geotaxonomy.py input.jsonl -o output.jsonl
 ./run_geotaxonomy.sh [options] <input_dir> <output_dir>
 
 # Options:
-#   --workers N    Parallel threads per file (default: 10)
+#   --workers N    Parallel geocoding threads per file (default: 10)
+#   --parallel N   Number of files to process in parallel (default: 4)
 #   --delay N      Seconds between requests per thread (default: 0.0)
 #   --pattern P    Glob pattern for input files (default: *.jsonl)
 ```
@@ -92,7 +117,7 @@ python add_geotaxonomy.py input.jsonl -o output.jsonl
 Example:
 
 ```bash
-./run_geotaxonomy.sh --workers 10 data/predictions/ data/predictions-geo/
+./run_geotaxonomy.sh --workers 10 --parallel 4 data/predictions/ data/predictions-geo/
 ```
 
 ## Ranking
@@ -163,6 +188,18 @@ Resolved locations are cached in-memory for the duration of a run. Duplicate loc
 
 ---
 
+# geotaxonomy_utils.py
+
+Utility module used by `add_geotaxonomy.py` for the spatial join phase.
+
+Key functions:
+
+- **`get_latlon_to_id_from_path(df, path, cols, lat_col, lon_col)`** — loads a GeoJSON boundary file and performs a point-in-polygon `sjoin` to attach the requested columns to each coordinate pair.
+- **`load_geotaxonomy(path, cols)`** — loads a GeoJSON file from disk; if it does not exist locally, downloads it from the GCS bucket `zhai-data-geotaxonomy`.
+- **`geocode_df_from_path(...)`** — convenience wrapper that converts lat/lon columns to numeric, runs the spatial join, and merges the result back onto the input DataFrame.
+
+---
+
 # to_csv_ingest.py
 
 Converts `.geo.jsonl` prediction files (produced by `add_geotaxonomy.py`) into two flat CSVs ready for database ingestion.
@@ -174,13 +211,12 @@ Converts `.geo.jsonl` prediction files (produced by `add_geotaxonomy.py`) into t
 | `risk_matches.csv` | `article_uri, risk_id` | One row per unique (article, risk factor) pair |
 | `locations.csv` | `article_uri, adm_code` | One row per unique (article, administrative region) pair |
 
-`article_uri` is the `source.cloud_uri` value from the JSONL record. `risk_id` and `adm_code` are foreign keys into the `risk_factors` and `geo_taxonomy` reference tables respectively.
+`article_uri` is the `id` field from the JSONL record. `risk_id` and `adm_code` are foreign keys into the `risk_factors` and `geo_taxonomy` reference tables respectively. Geotaxonomy entries without an `adm_code` are written with `adm_code = NULL`.
 
 ## Validation
 
 - Every `event_type` in the input must match a `name` in `res/risk_factors.csv` — the script exits with an error if one is missing.
-- Every resolved `adm_code` in a geotaxonomy entry must appear in `res/geo_taxonomy.csv` — the script exits with an error if one is missing.
-- Geotaxonomy entries without an `adm_code` (unresolvable locations) are silently skipped.
+- Every non-NULL `adm_code` in a geotaxonomy entry must appear in `res/geo_taxonomy.csv` — the script exits with an error if one is missing.
 
 ## Usage
 
