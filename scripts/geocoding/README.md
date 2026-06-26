@@ -160,3 +160,49 @@ The top-scoring candidate is written to `geotaxonomy`.
 ## Caching
 
 Resolved locations are cached in-memory for the duration of a run. Duplicate location strings within a file are only geocoded once.
+
+---
+
+# to_csv_ingest.py
+
+Converts `.geo.jsonl` prediction files (produced by `add_geotaxonomy.py`) into two flat CSVs ready for database ingestion.
+
+## Output
+
+| File | Columns | Description |
+| --- | --- | --- |
+| `risk_matches.csv` | `article_uri, risk_id` | One row per unique (article, risk factor) pair |
+| `locations.csv` | `article_uri, adm_code` | One row per unique (article, administrative region) pair |
+
+`article_uri` is the `source.cloud_uri` value from the JSONL record. `risk_id` and `adm_code` are foreign keys into the `risk_factors` and `geo_taxonomy` reference tables respectively.
+
+## Validation
+
+- Every `event_type` in the input must match a `name` in `res/risk_factors.csv` — the script exits with an error if one is missing.
+- Every resolved `adm_code` in a geotaxonomy entry must appear in `res/geo_taxonomy.csv` — the script exits with an error if one is missing.
+- Geotaxonomy entries without an `adm_code` (unresolvable locations) are silently skipped.
+
+## Usage
+
+### Single file
+
+```bash
+python to_csv_ingest.py path/to/shard.geo.jsonl
+# Output: risk_matches.csv and locations.csv written next to the input file
+```
+
+### Folder (merges all shards)
+
+```bash
+python to_csv_ingest.py path/to/predictions_dir/
+# Reads all *.geo.jsonl files in the folder and writes merged CSVs into the same folder
+```
+
+### Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `input` | — | Path to a `.geo.jsonl` file or a folder of them (required) |
+| `--out-dir` | input file/folder directory | Directory where output CSVs are written |
+| `--risk-factors` | `res/risk_factors.csv` | Override risk factors reference file |
+| `--geo-taxonomy` | `res/geo_taxonomy.csv` | Override geo taxonomy reference file |

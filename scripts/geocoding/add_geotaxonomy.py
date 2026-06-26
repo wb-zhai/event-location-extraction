@@ -16,16 +16,21 @@ Non-admin types (city, town, village, …) use PHOTON_TYPE_TO_OURS directly.
 
 import argparse
 import json
+import os
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
 from tqdm import tqdm
 from urllib3.util.retry import Retry
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from geotaxonomy_utils import get_latlon_to_id_from_path
 
 # PHOTON_URL = "https://photon.komoot.io/api/"
 PHOTON_URL = "http://localhost:2322/api"
@@ -245,7 +250,7 @@ def process_events(
 
 def process_obj(
     line: str, cache: dict, cache_lock: threading.Lock, delay: float
-) -> str:
+) -> dict:
     obj = json.loads(line)
 
     annotation = obj.get("annotation")
@@ -254,7 +259,66 @@ def process_obj(
 
     process_events(obj.get("predictions", []), cache, cache_lock, delay)
 
-    return json.dumps(obj, ensure_ascii=False)
+    return obj
+
+
+def _collect_all_geo_dicts(all_objs: list[dict]) -> list[dict]:
+    geo_dicts = []
+    for obj in all_objs:
+        annotation = obj.get("annotation")
+        if isinstance(annotation, dict):
+            for event in annotation.get("events", []):
+                geo_dicts.extend(event.get("geotaxonomy", []))
+        for event in obj.get("predictions", []):
+            geo_dicts.extend(event.get("geotaxonomy", []))
+    return geo_dicts
+
+
+_ZHAI_TO_LEVEL = {"country": 0, "province": 1}  # everything else → 2
+
+
+def _build_adm_code_lookup(
+    geo_dicts: list[dict],
+    geotaxonomy_dir: str,
+) -> dict[tuple[float, float], str]:
+    # Group unique (lat, lon) pairs by the admin level that matches their zhai type
+    level_to_rows: dict[int, list[dict]] = {0: [], 1: [], 2: []}
+    seen: set[tuple[float, float]] = set()
+    for g in geo_dicts:
+        key = (g["lat"], g["lon"])
+        if key in seen:
+            continue
+        seen.add(key)
+        level = _ZHAI_TO_LEVEL.get(g.get("zhai", ""), 2)
+        level_to_rows[level].append({"lat": g["lat"], "lon": g["lon"]})
+
+    active_levels = [lvl for lvl in [0, 1, 2] if level_to_rows[lvl]]
+    lookup: dict[tuple[float, float], dict[str, object]] = {}
+    for level in tqdm(active_levels, desc="spatial join", unit="level", file=sys.stderr):
+        df = pd.DataFrame(level_to_rows[level])
+        path = os.path.join(geotaxonomy_dir, f"geotaxonomy_prewb_{level}.geojson")
+        try:
+            result_df = get_latlon_to_id_from_path(df, path, ["adm_code", "adm_level"], "lat", "lon")
+        except Exception as e:
+            print(f"  WARNING: adm_code level {level} lookup failed: {e}", file=sys.stderr)
+            continue
+        for row in result_df.itertuples(index=False):
+            lookup[(row.latitude, row.longitude)] = {
+                "adm_code": row.adm_code,
+                "adm_level": row.adm_level,
+            }
+
+    return lookup
+
+
+def _enrich_geo_dicts_with_adm_codes(
+    geo_dicts: list[dict],
+    lookup: dict[tuple[float, float], dict[str, object]],
+) -> None:
+    for geo in geo_dicts:
+        entry = lookup.get((geo.get("lat"), geo.get("lon")))
+        if entry is not None:
+            geo.update(entry)
 
 
 def main() -> None:
@@ -275,6 +339,11 @@ def main() -> None:
         default=1,
         help="Number of parallel geocoding threads (default: 1)",
     )
+    parser.add_argument(
+        "--geotaxonomy-dir",
+        default=str(Path(__file__).parent.parent.parent / "dataset" / "geotaxonomy"),
+        help="Directory containing geotaxonomy_prewb_0/1/2.geojson files",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -285,23 +354,40 @@ def main() -> None:
     cache: dict = {}
     cache_lock = threading.Lock()
 
-    total = sum(1 for _ in input_path.open())
+    lines = list(input_path.open())
     print(f"Input:  {input_path}", file=sys.stderr)
     print(f"Output: {output_path}", file=sys.stderr)
     print(f"Workers: {args.workers}", file=sys.stderr)
 
+    # Phase 1 — geocode all lines via Photon
+    all_objs: list[dict] = []
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        with input_path.open() as fin, output_path.open("w") as fout:
-            results = executor.map(
-                lambda line: process_obj(line, cache, cache_lock, args.delay),
-                fin,
-            )
-            for result in tqdm(
-                results, total=total, desc="geocoding", unit="line", file=sys.stderr
-            ):
-                fout.write(result + "\n")
+        for obj in tqdm(
+            executor.map(
+                lambda line: process_obj(line, cache, cache_lock, args.delay), lines
+            ),
+            total=len(lines),
+            desc="geocoding",
+            unit="line",
+            file=sys.stderr,
+        ):
+            all_objs.append(obj)
 
-    print(f"Done. Cache size: {len(cache)}", file=sys.stderr)
+    print(f"Geocoding done. Cache size: {len(cache)}", file=sys.stderr)
+
+    # Phase 2 — batch spatial join to add adm_code_0/1/2
+    all_geo_dicts = _collect_all_geo_dicts(all_objs)
+    if all_geo_dicts:
+        n_unique = len({(g["lat"], g["lon"]) for g in all_geo_dicts})
+        print(f"Spatial join: {n_unique} unique coordinates...", file=sys.stderr)
+        adm_lookup = _build_adm_code_lookup(all_geo_dicts, args.geotaxonomy_dir)
+        _enrich_geo_dicts_with_adm_codes(all_geo_dicts, adm_lookup)
+
+    with output_path.open("w") as fout:
+        for obj in all_objs:
+            fout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
+    print(f"Done.", file=sys.stderr)
 
 
 if __name__ == "__main__":

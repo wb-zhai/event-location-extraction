@@ -8,6 +8,7 @@ Recovery: re-running on an existing output file skips already-processed articles
 """
 from __future__ import annotations
 
+import copy
 import gc
 import hashlib
 import json
@@ -22,6 +23,7 @@ from json_repair import repair_json
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
+from vllm.sampling_params import GuidedDecodingParams
 
 HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -41,6 +43,61 @@ from scripts.data.generation_v3.to_sft import (  # noqa: E402
     split_oversized_paragraphs,
     split_paragraphs,
 )
+
+
+# ---------------------------------------------------------------------------
+# Structured-output schema
+# ---------------------------------------------------------------------------
+
+_BASE_ANNOTATION_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "document_relevance": {"type": "string", "enum": ["relevant", "not_relevant"]},
+        "events": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "event_type": {"type": "string"},
+                    "grounding_quote": {"type": "string"},
+                    "event_location_text": {"type": "string"},
+                    "event_location": {"type": "string"},
+                    "event_time_text": {"type": "string"},
+                    "event_time": {"type": "string"},
+                    "time_status": {
+                        "type": "string",
+                        "enum": ["past", "ongoing", "forecast", "not_stated"],
+                    },
+                    "affected_entity": {"type": "string"},
+                    "affected_group": {"type": "string"},
+                    "severity": {
+                        "type": "string",
+                        "enum": ["low", "medium", "high", "extreme", "not_stated"],
+                    },
+                    "modality": {"type": "string", "enum": ["asserted", "projected"]},
+                },
+                "required": [
+                    "event_type", "grounding_quote", "event_location_text", "event_location",
+                    "event_time_text", "event_time", "time_status", "affected_entity",
+                    "affected_group", "severity", "modality",
+                ],
+            },
+        },
+    },
+    "required": ["document_relevance", "events"],
+}
+
+_schema_cache: dict = {}
+
+
+def _annotation_schema(labels: list[str] | None) -> dict:
+    key = tuple(labels) if labels else None
+    if key not in _schema_cache:
+        schema = copy.deepcopy(_BASE_ANNOTATION_SCHEMA)
+        if labels:
+            schema["properties"]["events"]["items"]["properties"]["event_type"]["enum"] = list(labels)
+        _schema_cache[key] = schema
+    return _schema_cache[key]
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +240,7 @@ def _build_windows(
             prompt_token_ids = _apply_chat_template(tokenizer, messages)
             win["prompt_token_ids"] = prompt_token_ids
             win["prompt"] = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
+            win["labels"] = labels
         result.append(win)
 
     return result
@@ -229,6 +287,9 @@ def vllm_infer(
     retriever_gpu_memory_utilization: float = 0.1,
     retriever_max_model_len: int | None = None,
     retriever_query_mode: str = "full_doc",
+    # Structured output
+    use_guided_decoding: bool = True,
+    guided_decoding_backend: str = "outlines",
 ):
     """Batch event extraction inference using vLLM."""
     # Validate retriever config up front so misconfiguration fails fast, before
@@ -412,6 +473,7 @@ def vllm_infer(
                         row_with_cands = {**row, "candidates": [p["document"]["text"] for p in passages]}
                         labels = row_labels(row_with_cands, default_labels, top_k_candidates)
                         system_prompt = render_system_prompt(system_template, labels)
+                        w["labels"] = labels
                         user_msg = build_user_message(user_template, publish_date, w["window_text"])
                         messages = [
                             {"role": "system", "content": system_prompt},
@@ -423,11 +485,27 @@ def vllm_infer(
 
             # --- Build vLLM inputs ---
             vllm_inputs: list[dict] = []
+            per_window_params: list[SamplingParams] = []
             prompt_map: list[tuple[int, int]] = []
             for a_idx, windows in enumerate(article_windows):
                 for w_idx, w in enumerate(windows):
                     vllm_inputs.append({"prompt_token_ids": w["prompt_token_ids"]})
                     prompt_map.append((a_idx, w_idx))
+                    if use_guided_decoding:
+                        guided = GuidedDecodingParams(
+                            json=_annotation_schema(w.get("labels")),
+                            backend=guided_decoding_backend,
+                        )
+                        per_window_params.append(SamplingParams(
+                            temperature=temperature,
+                            max_tokens=max_new_tokens,
+                            top_p=top_p,
+                            top_k=top_k,
+                            repetition_penalty=repetition_penalty,
+                            skip_special_tokens=skip_special_tokens,
+                            seed=seed,
+                            guided_decoding=guided,
+                        ))
 
             pbar.write(
                 f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
@@ -455,7 +533,8 @@ def vllm_infer(
             if vllm_inputs:
                 # Hand all prompts to vLLM at once so its continuous-batching
                 # scheduler can maximally parallelize across the GPU.
-                results = llm.generate(vllm_inputs, sampling_params, lora_request=lora_request)
+                _params = per_window_params if use_guided_decoding else sampling_params
+                results = llm.generate(vllm_inputs, _params, lora_request=lora_request)
 
                 if results and not _first_generation_printed:
                     decoded = tokenizer.decode(results[0].outputs[0].token_ids, skip_special_tokens=False)
