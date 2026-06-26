@@ -20,7 +20,7 @@ import os
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -112,12 +112,13 @@ def _reranker_factor(query: str, name: str) -> float:
     if n.startswith(q + " "):
         return 0.9
 
-    # Partial prefix: name begins with query but not at a word boundary
-    if n.startswith(q):
+    # Partial prefix: name begins with query and next char is a word boundary
+    if n.startswith(q) and (len(n) == len(q) or n[len(q)] in (" ", "-", "/")):
         return 0.8
 
-    # Word-level: one or more words in name contain the full query string
-    matched_chars = sum(len(w) for w in n.split() if q in w)
+    # Word-level: a word in name exactly equals the full query string.
+    # Use equality (not substring) so "Libyan" doesn't match query "Libya".
+    matched_chars = sum(len(w) for w in n.split() if w == q)
     if matched_chars:
         return 0.8 * min(matched_chars / max(len(q), 1), 1.0)
 
@@ -151,7 +152,7 @@ def resolve_location(query: str) -> dict | None:
     """Query Photon for a single location string, return a geotaxonomy dict."""
     session = _get_session()
     try:
-        resp = session.get(PHOTON_URL, params={"q": query, "limit": 10}, timeout=10)
+        resp = session.get(PHOTON_URL, params={"q": query, "limit": 10, "lang": "en"}, timeout=10)
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"  WARNING: request failed for '{query}': {e}", file=sys.stderr)
@@ -277,10 +278,29 @@ def _collect_all_geo_dicts(all_objs: list[dict]) -> list[dict]:
 _ZHAI_TO_LEVEL = {"country": 0, "province": 1}  # everything else → 2
 
 
+def _spatial_join_one_level(
+    level: int, rows: list[dict], geotaxonomy_dir: str
+) -> tuple[int, list[tuple], list[str]]:
+    """Run spatial join for one admin level. Top-level so it is picklable for ProcessPoolExecutor."""
+    warnings: list[str] = []
+    df = pd.DataFrame(rows)
+    path = os.path.join(geotaxonomy_dir, f"geotaxonomy_prewb_{level}.geojson")
+    try:
+        result_df = get_latlon_to_id_from_path(df, path, ["adm_code", "adm_level"], "lat", "lon")
+        rows_out = [
+            (row.latitude, row.longitude, row.adm_code, row.adm_level)
+            for row in result_df.itertuples(index=False)
+        ]
+    except Exception as e:
+        warnings.append(f"  WARNING: adm_code level {level} lookup failed: {e}")
+        rows_out = []
+    return level, rows_out, warnings
+
+
 def _build_adm_code_lookup(
     geo_dicts: list[dict],
     geotaxonomy_dir: str,
-) -> dict[tuple[float, float], str]:
+) -> dict[tuple[float, float], dict[str, object]]:
     # Group unique (lat, lon) pairs by the admin level that matches their zhai type
     level_to_rows: dict[int, list[dict]] = {0: [], 1: [], 2: []}
     seen: set[tuple[float, float]] = set()
@@ -294,19 +314,27 @@ def _build_adm_code_lookup(
 
     active_levels = [lvl for lvl in [0, 1, 2] if level_to_rows[lvl]]
     lookup: dict[tuple[float, float], dict[str, object]] = {}
-    for level in tqdm(active_levels, desc="spatial join", unit="level", file=sys.stderr):
-        df = pd.DataFrame(level_to_rows[level])
-        path = os.path.join(geotaxonomy_dir, f"geotaxonomy_prewb_{level}.geojson")
-        try:
-            result_df = get_latlon_to_id_from_path(df, path, ["adm_code", "adm_level"], "lat", "lon")
-        except Exception as e:
-            print(f"  WARNING: adm_code level {level} lookup failed: {e}", file=sys.stderr)
-            continue
-        for row in result_df.itertuples(index=False):
-            lookup[(row.latitude, row.longitude)] = {
-                "adm_code": row.adm_code,
-                "adm_level": row.adm_level,
-            }
+
+    # The three levels are fully independent — run them in parallel processes to
+    # overlap GeoJSON loading and the CPU-bound sjoin work.
+    n_workers = len(active_levels)
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        future_to_level = {
+            executor.submit(_spatial_join_one_level, lvl, level_to_rows[lvl], geotaxonomy_dir): lvl
+            for lvl in active_levels
+        }
+        for future in tqdm(
+            as_completed(future_to_level),
+            total=len(active_levels),
+            desc="spatial join",
+            unit="level",
+            file=sys.stderr,
+        ):
+            _, rows_out, warnings = future.result()
+            for w in warnings:
+                print(w, file=sys.stderr)
+            for lat, lon, adm_code, adm_level in rows_out:
+                lookup[(lat, lon)] = {"adm_code": adm_code, "adm_level": adm_level}
 
     return lookup
 
@@ -317,8 +345,8 @@ def _enrich_geo_dicts_with_adm_codes(
 ) -> None:
     for geo in geo_dicts:
         entry = lookup.get((geo.get("lat"), geo.get("lon")))
-        if entry is not None:
-            geo.update(entry)
+        geo["adm_code"] = entry["adm_code"] if entry is not None else None
+        geo["adm_level"] = entry["adm_level"] if entry is not None else None
 
 
 def main() -> None:

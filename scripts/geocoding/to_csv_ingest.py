@@ -50,10 +50,8 @@ def process(
                 risk_matches.add((article_uri, risk_id))
 
                 for geo in pred.get("geotaxonomy", []):
-                    adm_code = geo.get("adm_code")
-                    if adm_code is None:
-                        continue
-                    if adm_code not in valid_adm_codes:
+                    adm_code = geo.get("adm_code") or "NULL"
+                    if adm_code != "NULL" and adm_code not in valid_adm_codes:
                         print(
                             f"Error: unknown adm_code '{adm_code}' "
                             f"(line {lineno}, article {article_uri})",

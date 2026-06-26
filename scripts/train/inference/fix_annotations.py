@@ -1112,9 +1112,9 @@ def _fix_shard(
             rec = json.loads(line)
             for wp in rec.get("window_predictions", []):
                 pred = wp.get("prediction", {})
-                pred["events"], s = _remap_events(pred.get("events", []), valid_set, mapping)
-                stats += s
+                pred["events"], _ = _remap_events(pred.get("events", []), valid_set, mapping)
             if "predictions" in rec:
+                # Count stats only from the merged top-level field to avoid double-counting
                 rec["predictions"], s = _remap_events(rec["predictions"], valid_set, mapping)
                 stats += s
             fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
