@@ -106,7 +106,13 @@ def print_stats(path: str):
         for g in all_geo
         if g.get("resolved_name", "").strip()
     )
-    geo_type_counts = Counter(g.get("type", "unknown") for g in all_geo)
+    geo_type_counts = Counter(g.get("zhai", "unknown") for g in all_geo)
+    adm_code_counts = Counter(
+        g.get("adm_code", "unknown") for g in all_geo if g.get("adm_code")
+    )
+    adm_level_counts = Counter(
+        g.get("adm_level", "unknown") for g in all_geo if g.get("adm_level") is not None
+    )
     n_events_with_geo = sum(1 for e in all_events if e.get("geotaxonomy"))
 
     # ----------------------------------------------------------------
@@ -148,13 +154,31 @@ def print_stats(path: str):
             print(f"  {name:<40} {count:>7,}  {pct:>5.1f}%")
 
         print()
-        print("Geo resolution type breakdown:")
+        print("Geo type breakdown (zhai):")
         print(f"  {'Type':<20} {'Count':>7}  {'%':>6}")
         print(f"  {'-'*20} {'-'*7}  {'-'*6}")
         total_geo = sum(geo_type_counts.values())
         for gtype, count in geo_type_counts.most_common():
             pct = count / total_geo * 100 if total_geo else 0
             print(f"  {gtype:<20} {count:>7,}  {pct:>5.1f}%")
+
+        print()
+        print("Top 20 adm_code counts:")
+        print(f"  {'adm_code':<20} {'Count':>7}  {'%':>6}")
+        print(f"  {'-'*20} {'-'*7}  {'-'*6}")
+        total_adm_code = sum(adm_code_counts.values())
+        for code, count in adm_code_counts.most_common(20):
+            pct = count / total_adm_code * 100 if total_adm_code else 0
+            print(f"  {code:<20} {count:>7,}  {pct:>5.1f}%")
+
+        print()
+        print("adm_level counts:")
+        print(f"  {'adm_level':<20} {'Count':>7}  {'%':>6}")
+        print(f"  {'-'*20} {'-'*7}  {'-'*6}")
+        total_adm_level = sum(adm_level_counts.values())
+        for level, count in sorted(adm_level_counts.items()):
+            pct = count / total_adm_level * 100 if total_adm_level else 0
+            print(f"  {str(level):<20} {count:>7,}  {pct:>5.1f}%")
 
 
 if __name__ == "__main__":
