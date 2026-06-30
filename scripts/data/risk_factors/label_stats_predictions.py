@@ -92,6 +92,12 @@ def print_stats(path: str):
         if e.get("event_location", "").strip()
     )
 
+    location_article_counts: Counter = Counter()
+    for r in records:
+        for loc in {e.get("event_location", "").strip() for e in r.get("predictions", [])}:
+            if loc:
+                location_article_counts[loc] += 1
+
     locs_per_article = [len(r.get("predictions", [])) for r in records if r.get("predictions")]
     avg_locs = sum(locs_per_article) / len(locs_per_article) if locs_per_article else 0.0
 
@@ -106,6 +112,16 @@ def print_stats(path: str):
         for g in all_geo
         if g.get("resolved_name", "").strip()
     )
+
+    resolved_article_counts: Counter = Counter()
+    for r in records:
+        seen: set = set()
+        for e in r.get("predictions", []):
+            for g in e.get("geotaxonomy", []):
+                name = g.get("resolved_name", "").strip()
+                if name and name not in seen:
+                    seen.add(name)
+                    resolved_article_counts[name] += 1
     geo_type_counts = Counter(g.get("zhai", "unknown") for g in all_geo)
     adm_code_counts = Counter(
         g.get("adm_code", "unknown") for g in all_geo if g.get("adm_code")
@@ -135,23 +151,45 @@ def print_stats(path: str):
         print(f"  {label:<35} {count:>7,}  {pct:>5.1f}%")
 
     print()
-    print("Top 10 event_location (raw string):")
-    print(f"  {'Location':<40} {'Count':>7}  {'%':>6}")
-    print(f"  {'-'*40} {'-'*7}  {'-'*6}")
+    print("Top 10 event_location (raw string, by event count):")
+    print(f"  {'Location':<40} {'Events':>7}  {'%':>6}  {'Articles':>8}")
+    print(f"  {'-'*40} {'-'*7}  {'-'*6}  {'-'*8}")
     total_locs = sum(location_counts.values())
     for loc, count in location_counts.most_common(10):
         pct = count / total_locs * 100 if total_locs else 0
-        print(f"  {loc:<40} {count:>7,}  {pct:>5.1f}%")
+        arts = location_article_counts.get(loc, 0)
+        print(f"  {loc:<40} {count:>7,}  {pct:>5.1f}%  {arts:>8,}")
+
+    print()
+    print("Top 10 event_location (raw string, by article count):")
+    print(f"  {'Location':<40} {'Articles':>8}  {'%':>6}  {'Events':>7}")
+    print(f"  {'-'*40} {'-'*8}  {'-'*6}  {'-'*7}")
+    total_loc_arts = len([r for r in records if any(e.get("event_location", "").strip() for e in r.get("predictions", []))])
+    for loc, arts in location_article_counts.most_common(10):
+        pct = arts / total_loc_arts * 100 if total_loc_arts else 0
+        evts = location_counts.get(loc, 0)
+        print(f"  {loc:<40} {arts:>8,}  {pct:>5.1f}%  {evts:>7,}")
 
     if has_geo:
         print()
-        print("Top 10 resolved_name (geo):")
-        print(f"  {'Resolved name':<40} {'Count':>7}  {'%':>6}")
-        print(f"  {'-'*40} {'-'*7}  {'-'*6}")
+        print("Top 10 resolved_name (geo, by event count):")
+        print(f"  {'Resolved name':<40} {'Events':>7}  {'%':>6}  {'Articles':>8}")
+        print(f"  {'-'*40} {'-'*7}  {'-'*6}  {'-'*8}")
         total_resolved = sum(resolved_counts.values())
         for name, count in resolved_counts.most_common(10):
             pct = count / total_resolved * 100 if total_resolved else 0
-            print(f"  {name:<40} {count:>7,}  {pct:>5.1f}%")
+            arts = resolved_article_counts.get(name, 0)
+            print(f"  {name:<40} {count:>7,}  {pct:>5.1f}%  {arts:>8,}")
+
+        print()
+        print("Top 10 resolved_name (geo, by article count):")
+        print(f"  {'Resolved name':<40} {'Articles':>8}  {'%':>6}  {'Events':>7}")
+        print(f"  {'-'*40} {'-'*8}  {'-'*6}  {'-'*7}")
+        total_resolved_arts = len([r for r in records if any(e.get("geotaxonomy") for e in r.get("predictions", []))])
+        for name, arts in resolved_article_counts.most_common(10):
+            pct = arts / total_resolved_arts * 100 if total_resolved_arts else 0
+            evts = resolved_counts.get(name, 0)
+            print(f"  {name:<40} {arts:>8,}  {pct:>5.1f}%  {evts:>7,}")
 
         print()
         print("Geo type breakdown (zhai):")
