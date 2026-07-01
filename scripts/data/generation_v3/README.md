@@ -42,6 +42,7 @@ in the input records (see `--top-k-candidates`).
 
 | File | Purpose |
 | --- | --- |
+| `relevance_filter.py` | Step 0 — pre-filter articles before sending to the teacher |
 | `generate.py` | Step 1 — run the Gemini teacher to produce silver JSONL |
 | `validate.py` | Step 2 — validate and filter silver output |
 | `fix_events.py` | Step 2b — repair invalid events with a stronger model |
@@ -56,6 +57,63 @@ in the input records (see `--top-k-candidates`).
 ---
 
 ## Pipeline
+
+### Step 0 — Relevance filtering
+
+Pre-filters a raw article corpus before running the expensive teacher generation step.
+Three filtering modes can be composed: a cheap first pass (keyword or regex) followed by
+an optional LLM second pass on the survivors.
+
+```bash
+# Keyword pre-filter (default keyword list, write all records + relevance metadata)
+python scripts/data/generation_v3/relevance_filter.py \
+  --input  dataset/zhai/v3/articles.jsonl \
+  --output dataset/zhai/v3/articles.filtered.jsonl
+
+# Regex pre-filter — faster than the keyword list
+python scripts/data/generation_v3/relevance_filter.py \
+  --input  dataset/zhai/v3/articles.jsonl \
+  --output dataset/zhai/v3/articles.filtered.jsonl \
+  --use-regex --filter-only
+
+# LLM-only filter (skips keyword/regex pre-pass)
+python scripts/data/generation_v3/relevance_filter.py \
+  --input  dataset/zhai/v3/articles.jsonl \
+  --output dataset/zhai/v3/articles.filtered.jsonl \
+  --use-llm --filter-only
+
+# Regex pre-pass then LLM on survivors
+python scripts/data/generation_v3/relevance_filter.py \
+  --input  dataset/zhai/v3/articles.jsonl \
+  --output dataset/zhai/v3/articles.filtered.jsonl \
+  --use-regex --use-llm --filter-only
+```
+
+**How the modes compose:**
+
+1. If `--use-regex` is set, the compiled `food_insecurity_regex` is checked first. Articles that don't match are marked filtered immediately (no LLM call).
+2. Otherwise, if `--keywords` is set (or the default keyword list is used), a case-insensitive substring check is run. Non-matching articles are marked filtered.
+3. If `--use-llm` is set and the article was not already filtered by step 1/2, Gemini classifies the article with a structured `{is_relevant, confidence, reason}` response. An article is filtered only when `is_relevant=false` and `confidence ≥ --confidence-threshold`.
+
+Every output record gets a `relevance` field. With `--filter-only`, records marked filtered are omitted from the output entirely.
+
+Key flags:
+
+| Flag | Default | Notes |
+| --- | --- | --- |
+| `--use-regex` | off | Use the built-in `food_insecurity_regex` as a fast first-pass filter |
+| `--keywords` | built-in list | Space-separated keywords for substring matching; ignored when `--use-regex` is set |
+| `--use-llm` | off | Run Gemini relevance classification on articles that survive the pre-pass |
+| `--model` | `gemini-2.5-flash` | Gemini model for LLM mode |
+| `--max-chars` | `1000` | Article preview length sent to the LLM (title + first N chars) |
+| `--confidence-threshold` | `0.0` | Minimum LLM confidence to act on an `is_relevant=false` decision |
+| `--filter-only` | off | Omit filtered records from output (default: write all records with metadata) |
+| `--concurrency` | `10` | Parallel async workers for LLM mode |
+| `--verbose` | off | Log each LLM prompt and response |
+
+The LLM filter favors recall: the system prompt instructs the model to mark borderline articles relevant. The `--confidence-threshold` flag lets you tighten this — at `0.8` the LLM must be quite confident before dropping an article.
+
+---
 
 ### Step 1 — Teacher generation
 
