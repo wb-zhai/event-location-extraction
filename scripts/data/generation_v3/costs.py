@@ -12,26 +12,51 @@ from typing import Any
 
 # USD per 1M tokens. Update as pricing changes.
 # Each model has "standard" and "batch" tiers (batch = Gemini Batch API, ~50% off input/output).
-PRICING: dict[str, dict[str, dict[str, float]]] = {
+# Each tier has "low"/"high" rates for prompts <=TIER_THRESHOLD / >TIER_THRESHOLD tokens
+# (models without a context-size price break just repeat the same rates in both).
+# Thinking tokens are billed at the output rate (no separate thinking price).
+TIER_THRESHOLD = 200_000
+
+PRICING: dict[str, dict[str, dict[str, dict[str, float]]]] = {
     "gemini-2.5-flash": {
-        "standard": {"input": 0.075,  "output": 0.30,  "cached": 0.01875, "thinking": 0.10},
-        "batch":    {"input": 0.0375, "output": 0.15,  "cached": 0.01875, "thinking": 0.05},
-    },
-    "gemini-2.5-flash-preview-05-20": {
-        "standard": {"input": 0.075,  "output": 0.30,  "cached": 0.01875, "thinking": 0.10},
-        "batch":    {"input": 0.0375, "output": 0.15,  "cached": 0.01875, "thinking": 0.05},
+        "standard": {
+            "low":  {"input": 0.30,  "output": 2.50, "cached": 0.03,  "thinking": 2.50},
+            "high": {"input": 0.30,  "output": 2.50, "cached": 0.03,  "thinking": 2.50},
+        },
+        "batch": {
+            "low":  {"input": 0.15,  "output": 1.25, "cached": 0.03,  "thinking": 1.25},
+            "high": {"input": 0.15,  "output": 1.25, "cached": 0.03,  "thinking": 1.25},
+        },
     },
     "gemini-2.5-pro": {
-        "standard": {"input": 1.25,   "output": 10.0,  "cached": 0.31,    "thinking": 3.50},
-        "batch":    {"input": 0.625,  "output": 5.0,   "cached": 0.31,    "thinking": 1.75},
-    },
-    "gemini-2.5-pro-preview-05-06": {
-        "standard": {"input": 1.25,   "output": 10.0,  "cached": 0.31,    "thinking": 3.50},
-        "batch":    {"input": 0.625,  "output": 5.0,   "cached": 0.31,    "thinking": 1.75},
+        "standard": {
+            "low":  {"input": 1.25,  "output": 10.0, "cached": 0.125, "thinking": 10.0},
+            "high": {"input": 2.50,  "output": 15.0, "cached": 0.25,  "thinking": 15.0},
+        },
+        "batch": {
+            "low":  {"input": 0.625, "output": 5.0,  "cached": 0.125, "thinking": 5.0},
+            "high": {"input": 1.25,  "output": 7.50, "cached": 0.25,  "thinking": 7.50},
+        },
     },
     "gemini-3.1-pro-preview": {
-        "standard": {"input": 2.50,   "output": 15.0,  "cached": 0.625,   "thinking": 3.50},
-        "batch":    {"input": 1.25,   "output": 7.50,  "cached": 0.625,   "thinking": 1.75},
+        "standard": {
+            "low":  {"input": 2.00, "output": 12.0, "cached": 0.20, "thinking": 12.0},
+            "high": {"input": 4.00, "output": 18.0, "cached": 0.40, "thinking": 18.0},
+        },
+        "batch": {
+            "low":  {"input": 1.00, "output": 6.0,  "cached": 0.20, "thinking": 6.0},
+            "high": {"input": 2.00, "output": 9.0,  "cached": 0.40, "thinking": 9.0},
+        },
+    },
+    "gemini-3-flash-preview": {
+        "standard": {
+            "low":  {"input": 0.50, "output": 3.00, "cached": 0.05, "thinking": 3.00},
+            "high": {"input": 0.50, "output": 3.00, "cached": 0.05, "thinking": 3.00},
+        },
+        "batch": {
+            "low":  {"input": 0.25, "output": 1.50, "cached": 0.05, "thinking": 1.50},
+            "high": {"input": 0.25, "output": 1.50, "cached": 0.05, "thinking": 1.50},
+        },
     },
 }
 
@@ -55,17 +80,25 @@ def _extract_tokens(record: dict[str, Any]) -> tuple[str, int, int, int, int] | 
     )
 
 
+def _new_stats() -> dict[str, int]:
+    return {"records": 0, "prompt": 0, "completion": 0, "cached": 0, "thinking": 0}
+
+
 def aggregate(
     records: list[dict[str, Any]],
     dedup_key: str | None = None,
-) -> dict[str, dict[str, int]]:
-    """Aggregate token counts by model.
+) -> dict[str, dict[str, Any]]:
+    """Aggregate token counts by model, split into "low"/"high" price-tier buckets.
+
+    The >200k pricing tier applies per LLM call based on that call's own prompt size, so
+    each record is bucketed by its own prompt token count before summing, in addition to
+    the overall per-model totals used for the report table.
 
     dedup_key: if set, only count the first record for each (model, record[dedup_key]) pair.
     Use dedup_key='doc_id' for fix_events.py per-article output to avoid counting the same
     LLM call multiple times (once per invalid event in the article).
     """
-    totals: dict[str, dict[str, int]] = {}
+    totals: dict[str, dict[str, Any]] = {}
     seen: set[tuple[str, str]] = set()
 
     for record in records:
@@ -81,12 +114,14 @@ def aggregate(
             seen.add(key)
 
         if model not in totals:
-            totals[model] = {"records": 0, "prompt": 0, "completion": 0, "cached": 0, "thinking": 0}
-        totals[model]["records"] += 1
-        totals[model]["prompt"] += prompt
-        totals[model]["completion"] += completion
-        totals[model]["cached"] += cached
-        totals[model]["thinking"] += thinking
+            totals[model] = {**_new_stats(), "low": _new_stats(), "high": _new_stats()}
+        bucket = totals[model]["high" if prompt > TIER_THRESHOLD else "low"]
+        for target in (totals[model], bucket):
+            target["records"] += 1
+            target["prompt"] += prompt
+            target["completion"] += completion
+            target["cached"] += cached
+            target["thinking"] += thinking
 
     return totals
 
@@ -101,7 +136,7 @@ def _fmt(n: int) -> str:
     return str(n)
 
 
-def report(label: str, totals: dict[str, dict[str, int]], *, batch: bool = False) -> None:
+def report(label: str, totals: dict[str, dict[str, Any]], *, batch: bool = False) -> None:
     tier = "batch" if batch else "standard"
     tier_label = " [batch pricing]" if batch else ""
 
@@ -137,29 +172,30 @@ def report(label: str, totals: dict[str, dict[str, int]], *, batch: bool = False
     print()
     for model, d in sorted(totals.items()):
         tiers = PRICING.get(model)
-        rates = tiers.get(tier) if tiers else None
-        if rates is None:
+        rates_by_bucket = tiers.get(tier) if tiers else None
+        if rates_by_bucket is None:
             print(f"  {model}: pricing unknown — update PRICING dict in costs.py")
             has_unknown = True
             continue
-        cost = (
-            d["prompt"] / 1e6 * rates["input"]
-            + d["completion"] / 1e6 * rates["output"]
-            + d["cached"] / 1e6 * rates["cached"]
-            + d["thinking"] / 1e6 * rates["thinking"]
-        )
+
+        cost = 0.0
+        parts = []
+        for lbl, tok, rate_key in [
+            ("input", "prompt", "input"),
+            ("output", "completion", "output"),
+            ("cached", "cached", "cached"),
+            ("thinking", "thinking", "thinking"),
+        ]:
+            type_cost = sum(
+                d[bucket][tok] / 1e6 * rates_by_bucket[bucket][rate_key] for bucket in ("low", "high")
+            )
+            cost += type_cost
+            if d[tok]:
+                parts.append(f"{lbl}=${type_cost:.4f}")
         total_cost += cost
-        parts = [
-            f"{lbl}=${d[tok] / 1e6 * rates[rate_key]:.4f}"
-            for lbl, tok, rate_key in [
-                ("input", "prompt", "input"),
-                ("output", "completion", "output"),
-                ("cached", "cached", "cached"),
-                ("thinking", "thinking", "thinking"),
-            ]
-            if d[tok]
-        ]
-        print(f"  {model}: {' + '.join(parts)} → ${cost:.4f}")
+
+        tier_note = f" ({_fmt(d['high']['prompt'])} tokens at >200k rate)" if d["high"]["records"] else ""
+        print(f"  {model}: {' + '.join(parts)} → ${cost:.4f}{tier_note}")
 
     suffix = " (known models only)" if has_unknown else ""
     print(f"  Total{suffix}: ${total_cost:.4f}")

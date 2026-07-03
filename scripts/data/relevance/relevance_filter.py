@@ -188,10 +188,11 @@ async def classify_article_relevance(
         override_settings={"temperature": 0.0},
         response_format={
             "reason": str,
-            "confidence": float,
             "is_relevant": bool,
+            "confidence": float,
         },
         add_cot_field=False,
+        reasoning_effort="minimal" if "3" in client.model_name else None,
     ):
         response = candidate
         break
@@ -320,7 +321,6 @@ _RELEVANCE_RESPONSE_SCHEMA = {
     },
     "required": ["reason", "confidence", "is_relevant"],
 }
-
 
 @dataclass
 class _BatchTask:
