@@ -122,13 +122,25 @@ def main() -> None:
     print(f"Accuracy (agreement rate): {accuracy:.3f} ({agree}/{n})")
     print(f"Cohen's kappa: {kappa:.3f}")
     print()
-    header = f"{'':>14}" + "".join(f"{('b: ' + lbl):>16}" for lbl in labels)
-    print(header)
-    for a_label in labels:
-        row = f"{('a: ' + a_label):>14}"
-        for b_label in labels:
-            row += f"{confusion[(a_label, b_label)]:>16}"
-        print(row)
+    print("Agreement breakdown:")
+    for label in labels:
+        count = confusion[(label, label)]
+        pct = count / n * 100 if n else 0.0
+        print(f"  Both said '{label}': {count} ({pct:.1f}%)")
+
+    disagreement_pairs = sorted(
+        (
+            (count, a_label, b_label)
+            for (a_label, b_label), count in confusion.items()
+            if a_label != b_label and count > 0
+        ),
+        reverse=True,
+    )
+    if disagreement_pairs:
+        print("Disagreements:")
+        for count, a_label, b_label in disagreement_pairs:
+            pct = count / n * 100 if n else 0.0
+            print(f"  {a_name} said '{a_label}', {b_name} said '{b_label}': {count} ({pct:.1f}%)")
 
     if args.disagreements:
         with args.disagreements.open("w", encoding="utf-8") as f:

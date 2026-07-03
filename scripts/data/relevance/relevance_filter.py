@@ -41,9 +41,11 @@ The pipeline extracts events in these categories:
 </event_categories>
 
 <policy>
-- Favor recall over precision.
+- Favor recall over precision, but base the decision on what the article substantively reports, not on incidental mentions.
+- A category term appearing in a quote, anecdote, historical aside, or rhetorical comparison does NOT make an article relevant unless the article itself is reporting on a current, concrete instance of that category.
+- Opinion/analysis pieces are relevant only if they are substantively about a concrete event or situation in one of the categories, not general commentary (e.g. domestic politics, culture, sports, entertainment, personal profiles) that merely touches a related theme in passing.
 - If the article is borderline, ambiguous, or only partially visible in the preview, mark it relevant.
-- Mark it irrelevant only when the title and preview strongly indicate the article is outside all of the event categories above.
+- Mark it irrelevant when the title and preview strongly indicate the article is outside all of the event categories above, or when the only category-related content is a passing mention rather than the article's actual subject.
 - Use only the provided title and article preview.
 </policy>
 """
@@ -63,9 +65,10 @@ Return whether this article should proceed to the full food-security risk/event 
 </task>
 
 <decision_rule>
-- is_relevant=true if the article likely contains evidence of any of the following event categories: agricultural production issues, conflicts and violence, economic issues, environmental issues, food crisis, forced displacement, humanitarian aid, land-related issues, pests and diseases, political instability, or weather shocks.
-- If uncertain, return is_relevant=true.
-- is_relevant=false only when the article is clearly unrelated to all of the above categories.
+- is_relevant=true if the article substantively reports on at least one of the following event categories: agricultural production issues, conflicts and violence, economic issues, environmental issues, food crisis, forced displacement, humanitarian aid, land-related issues, pests and diseases, political instability, or weather shocks.
+- A passing mention, historical anecdote, or rhetorical comparison that uses category-related language does not count as evidence.
+- If uncertain whether the article's actual reported content falls in-scope, return is_relevant=true.
+- is_relevant=false when the article is clearly unrelated to all of the above categories, or when category-related terms appear only incidentally rather than as the article's actual subject.
 </decision_rule>
 """
 
