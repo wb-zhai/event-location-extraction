@@ -25,6 +25,9 @@ sentence-transformers==5.6.0
 # LLMs
 google-genai==2.8.0
 
+# Annotation
+argilla>=2.8,<3.0
+
 # General utilities
 json-repair
 gradio
