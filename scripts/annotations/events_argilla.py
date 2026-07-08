@@ -1,21 +1,15 @@
 """Push articles into Argilla for human event-annotation review, and export the
 resulting human-corrected event structures alongside the model's predictions.
 
-The annotator reads the article, highlights each event mention in the text and
-tags it with an event_type as a visual grounding aid. The exported event
-structures are edited in a tab-separated table (`event_details_table`), one row
-per event, so annotators can paste into a spreadsheet instead of repairing a
-large hand-edited JSON list.
-
-Older datasets that still have the previous `event_details_json` question are
-supported on export as a legacy fallback via `merge_spans_and_details`.
+The annotator reads the article and edits a single JSON field
+(`event_details_json`) holding the full list of event objects for that
+article — no span highlighting, no separate table. This is the simplest UI
+for annotators: one field to read, one field to edit.
 
 See scripts/annotations/README.md for setup and usage.
 """
 
 import argparse
-import csv
-import io
 import json
 import os
 import re
@@ -36,16 +30,9 @@ from scripts.data.relevance.relevance_filter import _record_key
 
 RELEVANT_DECISIONS = {"relevant", "partially_relevant"}
 
-RELEVANCE_QUESTION_NAME = "document_relevance"
-EVENT_SPANS_QUESTION_NAME = "event_spans"
-EVENT_DETAILS_TABLE_QUESTION_NAME = "event_details_table"
 EVENT_DETAILS_JSON_QUESTION_NAME = "event_details_json"
-EVENT_DETAILS_QUESTION_NAME = EVENT_DETAILS_TABLE_QUESTION_NAME
 DEFAULT_WORKSPACE = "default"
 
-# The 9 event fields not captured by the event_spans highlight (which covers
-# event_type + grounding_quote). Order here is the order used in exported/
-# reconstructed event dicts.
 DETAIL_FIELDS = [
     "event_location_text",
     "event_location",
@@ -65,11 +52,23 @@ CHOICE_DETAIL_FIELDS = {
 }
 VERBATIM_FIELDS = ["event_location_text", "event_time_text"]
 MISSING_TEXT_VALUES = {"", "not_stated"}
-EVENT_TABLE_FIELDS = EVENT_FIELDS
-EVENT_TABLE_HEADER = "\t".join(EVENT_TABLE_FIELDS)
-EVENT_TABLE_TEMPLATE = f"""```text
-{EVENT_TABLE_HEADER}
-drought	Hammered by four droughts in a row	in the Horn of Africa	not_stated	not_stated	not_stated	past	not_stated	not_stated	not_stated	asserted
+
+EVENT_JSON_TEMPLATE = """```json
+[
+  {
+    "event_type": "drought",
+    "grounding_quote": "Hammered by four droughts in a row",
+    "event_location_text": "in the Horn of Africa",
+    "event_location": "not_stated",
+    "event_time_text": "not_stated",
+    "event_time": "not_stated",
+    "time_status": "past",
+    "affected_entity": "not_stated",
+    "affected_group": "not_stated",
+    "severity": "not_stated",
+    "modality": "asserted"
+  }
+]
 ```"""
 
 SYSTEM_PROMPT_PATH = (
@@ -95,25 +94,21 @@ def load_allowed_event_types() -> list[str]:
 
 # Argilla caps dataset guidelines at 10,000 characters; the full teacher system
 # prompt (with few-shot examples etc.) runs ~22,000. This condensed version
-# keeps the schema/field rules and explains the span+table workflow, and points
+# keeps the schema/field rules and explains the JSON-edit workflow, and points
 # annotators at the full file for edge cases.
 GUIDELINES_TEMPLATE = """Validate, correct, and add to the extracted events for this article.
 See {prompt_path} for the full extraction spec (few-shot examples, edge-case rules)
 this condensed version is drawn from.
 
 <workflow>
-1. In the article text, highlight each event mention ({event_spans_question!r} question) \
-and tag it with its event_type from the dropdown (must be one of allowed_event_types below).
-   The highlighted span becomes that event's grounding_quote — copy/typing it is not needed.
-2. In {event_details_question!r}, edit the tab-separated event table. The first line must stay \
-the header. Each following line is one exported event. You can paste the table into a spreadsheet, \
-edit cells, then paste it back.
-3. To remove an event, delete its table row. To add an event, add a row. Highlighting its \
-grounding_quote in {event_spans_question!r} is useful for review but export reads the table rows.
-4. Submit only the header line for {event_details_question!r} if the document has no valid events.
+1. Read the article text.
+2. Edit the {event_details_question!r} JSON field: a JSON list of event objects, one per
+   event in the article. Fix values on existing entries, delete entries that aren't valid
+   events, or add new entries for events the model missed.
+3. Submit `[]` if the document has no valid events.
 </workflow>
 
-<output_schema (per event, after export parses the table)>
+<output_schema (per event)>
 {{
   "event_type": "string (must exactly match one of allowed_event_types below)",
   "grounding_quote": "exact contiguous quote from the article that justifies event_type",
@@ -152,16 +147,9 @@ event_time: resolve relative expressions (e.g. "last month") using the article's
 def load_guidelines(allowed_event_types: list[str]) -> str:
     return GUIDELINES_TEMPLATE.format(
         prompt_path=SYSTEM_PROMPT_PATH.relative_to(REPO_ROOT),
-        event_spans_question=EVENT_SPANS_QUESTION_NAME,
-        event_details_question=EVENT_DETAILS_QUESTION_NAME,
+        event_details_question=EVENT_DETAILS_JSON_QUESTION_NAME,
         allowed_event_types="\n".join(allowed_event_types),
     )
-
-
-DOCUMENT_RELEVANCE_LABELS = {
-    "relevant": "Relevant",
-    "not_relevant": "Not relevant",
-}
 
 
 def iter_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -201,33 +189,16 @@ def build_settings():
             rg.TextField(name="text"),
         ],
         questions=[
-            rg.LabelQuestion(
-                name=RELEVANCE_QUESTION_NAME,
-                labels=DOCUMENT_RELEVANCE_LABELS,
-                title="Is this document relevant (does it contain at least one valid event)?",
-            ),
-            rg.SpanQuestion(
-                name=EVENT_SPANS_QUESTION_NAME,
-                field="text",
-                labels=allowed_event_types,
-                allow_overlapping=True,
-                required=False,
-                title="Highlight each event mention and tag its event_type",
-                description=(
-                    "Optional visual aid for review. The exported events come from the "
-                    f"{EVENT_DETAILS_TABLE_QUESTION_NAME!r} table below."
-                ),
-            ),
             rg.TextQuestion(
-                name=EVENT_DETAILS_TABLE_QUESTION_NAME,
-                title="Event table (TSV, one event per row)",
+                name=EVENT_DETAILS_JSON_QUESTION_NAME,
+                title="Events (JSON list, one object per event)",
                 description=(
-                    "Keep the header line. Edit one tab-separated row per event; paste into a "
-                    "spreadsheet if that is easier. Delete rows to remove events, add rows to "
-                    "add events, and use 'not_stated' for missing values.\n\n"
-                    f"{EVENT_TABLE_TEMPLATE}\n\n"
-                    "Export writes validation errors for missing/extra columns, invalid choices, "
-                    "off-ontology event_type values, and non-verbatim quote fields."
+                    "Edit the JSON list directly: fix values, delete invalid entries, add "
+                    "missing events. Submit `[]` if there are no valid events.\n\n"
+                    f"{EVENT_JSON_TEMPLATE}\n\n"
+                    "Export writes validation errors for invalid JSON, missing/extra keys, "
+                    "invalid choices, off-ontology event_type values, and non-verbatim quote "
+                    "fields."
                 ),
                 use_markdown=True,
             ),
@@ -268,7 +239,7 @@ def get_or_create_dataset(client, name: str, workspace: str, update_settings: bo
         else:
             print(
                 "[dataset] existing schema was left unchanged; use --update-settings "
-                "to apply the event table UI.",
+                "to apply the JSON events UI.",
                 flush=True,
             )
         return dataset
@@ -289,7 +260,7 @@ def extract_title_text(record: dict[str, Any]) -> tuple[str, str]:
 
 
 def keep_by_relevance(rec: dict[str, Any]) -> bool:
-    """Filter on rec["relevance"]["decision"] (not annotation.document_relevance):
+    """Filter on rec["relevance"]["decision"] (the upstream Gemini relevance gate):
     keep relevant/partially_relevant, and keep records with no relevance label at all."""
     relevance = rec.get("relevance")
     if not isinstance(relevance, dict):
@@ -311,7 +282,10 @@ def split_matched_unmatched(
     events: list[Any], text: str
 ) -> tuple[list[tuple[int, int, str, dict[str, Any]]], list[dict[str, Any]]]:
     """Split model events into (matched, unmatched) by whether grounding_quote is
-    found verbatim in text. matched entries are (start, end, event_type, detail_dict)."""
+    found verbatim in text. matched entries are (start, end, event_type, detail_dict).
+
+    Used by events_label_studio.py's span-based UI; events_argilla.py itself no
+    longer needs the split since its JSON field doesn't use spans."""
     matched = []
     unmatched = []
     for ev in events:
@@ -329,54 +303,8 @@ def split_matched_unmatched(
     return matched, unmatched
 
 
-def clean_table_cell(value: Any) -> str:
-    return str(value if value is not None else "not_stated").replace("\t", " ").replace("\r", " ").replace("\n", " ").strip()
-
-
-def format_events_table(events: list[dict[str, Any]]) -> str:
-    output = io.StringIO()
-    writer = csv.DictWriter(
-        output,
-        fieldnames=EVENT_TABLE_FIELDS,
-        delimiter="\t",
-        lineterminator="\n",
-        extrasaction="ignore",
-    )
-    writer.writeheader()
-    for event in events:
-        writer.writerow({field: clean_table_cell(event.get(field, "not_stated")) for field in EVENT_TABLE_FIELDS})
-    return output.getvalue().rstrip("\n")
-
-
-def parse_events_table(value: str | None) -> tuple[list[dict[str, str]], list[str]]:
-    if value is None or not value.strip():
-        return [], []
-
-    reader = csv.DictReader(io.StringIO(value), delimiter="\t")
-    if reader.fieldnames is None:
-        return [], []
-
-    fieldnames = [field.strip() if field is not None else "" for field in reader.fieldnames]
-    errors: list[str] = []
-    missing = [field for field in EVENT_TABLE_FIELDS if field not in fieldnames]
-    extra = [field for field in fieldnames if field and field not in EVENT_TABLE_FIELDS]
-    for field in missing:
-        errors.append(f"{EVENT_DETAILS_TABLE_QUESTION_NAME}: missing column {field!r}")
-    for field in extra:
-        errors.append(f"{EVENT_DETAILS_TABLE_QUESTION_NAME}: unexpected column {field!r}")
-
-    events: list[dict[str, str]] = []
-    for row_number, row in enumerate(reader, start=2):
-        if row.get(None):
-            errors.append(
-                f"{EVENT_DETAILS_TABLE_QUESTION_NAME}: row {row_number} has too many cells; "
-                "check for extra tabs"
-            )
-        event = {field: (row.get(field) or "").strip() for field in EVENT_TABLE_FIELDS}
-        if not any(event.values()):
-            continue
-        events.append(event)
-    return events, errors
+def normalize_event(ev: dict[str, Any]) -> dict[str, str]:
+    return {field: str(ev.get(field) or "not_stated") for field in EVENT_FIELDS}
 
 
 def build_record(rec: dict[str, Any], max_chars: int):
@@ -388,9 +316,7 @@ def build_record(rec: dict[str, Any], max_chars: int):
     if not isinstance(annotation, dict):
         annotation = {}
 
-    document_relevance = annotation.get("document_relevance")
-    events = annotation.get("events") or []
-    matched, unmatched = split_matched_unmatched(events, text)
+    events = [normalize_event(ev) for ev in (annotation.get("events") or []) if isinstance(ev, dict)]
 
     metadata: dict[str, Any] = {}
     adm0_code = rec.get("adm0_code")
@@ -405,41 +331,13 @@ def build_record(rec: dict[str, Any], max_chars: int):
     if quality_score is not None:
         metadata["quality_score"] = float(quality_score)
 
-    suggestions = []
-    if document_relevance in DOCUMENT_RELEVANCE_LABELS:
-        suggestions.append(
-            rg.Suggestion(
-                RELEVANCE_QUESTION_NAME,
-                value=document_relevance,
-                agent=model_name(rec),
-            )
-        )
-    if matched:
-        suggestions.append(
-            rg.Suggestion(
-                EVENT_SPANS_QUESTION_NAME,
-                value=[
-                    {"start": start, "end": end, "label": event_type}
-                    for start, end, event_type, _ in matched
-                ],
-                agent=model_name(rec),
-            )
-        )
-    table_events = [
-        {
-            "event_type": event_type,
-            "grounding_quote": text[start:end],
-            **detail,
-        }
-        for start, end, event_type, detail in matched
-    ] + unmatched
-    suggestions.append(
+    suggestions = [
         rg.Suggestion(
-            EVENT_DETAILS_TABLE_QUESTION_NAME,
-            value=format_events_table(table_events),
+            EVENT_DETAILS_JSON_QUESTION_NAME,
+            value=json.dumps(events, indent=2, ensure_ascii=False),
             agent=model_name(rec),
         )
-    )
+    ]
 
     return rg.Record(
         fields={
@@ -482,114 +380,12 @@ def push(args: argparse.Namespace) -> None:
     )
 
 
-def merge_spans_and_details(
-    text: str, spans: list[dict[str, Any]], details: list[Any]
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Reconstruct full event dicts from a SpanQuestion response and the
-    companion detail JSON list. Positional entries (no explicit event_type/
-    grounding_quote keys) are zipped in span order; entries with both those
-    keys are treated as explicit (unmatched-at-push-time) events kept as-is."""
-    warnings: list[str] = []
-    spans_sorted = sorted(spans, key=lambda s: s.get("start", 0))
-
-    positional: list[dict[str, Any]] = []
-    explicit: list[dict[str, Any]] = []
-    for entry in details:
-        if isinstance(entry, dict) and "event_type" in entry and "grounding_quote" in entry:
-            explicit.append(entry)
-        elif isinstance(entry, dict):
-            positional.append(entry)
-        else:
-            warnings.append(f"skipped non-object detail entry: {entry!r}")
-
-    if len(positional) != len(spans_sorted):
-        warnings.append(
-            f"{len(spans_sorted)} highlighted span(s) but {len(positional)} positional "
-            "detail entry/entries — extra/missing entries may be misaligned."
-        )
-
-    events: list[dict[str, Any]] = []
-    for i, span in enumerate(spans_sorted):
-        detail = positional[i] if i < len(positional) else {}
-        events.append(
-            {
-                "event_type": span.get("label"),
-                "grounding_quote": text[span["start"] : span["end"]],
-                **{field: detail.get(field, "not_stated") for field in DETAIL_FIELDS},
-            }
-        )
-    for detail in positional[len(spans_sorted) :]:
-        warnings.append("extra positional detail entry with no matching span; kept under _orphan_detail")
-        events.append({"_orphan_detail": detail})
-    for entry in explicit:
-        events.append(
-            {
-                "event_type": entry.get("event_type"),
-                "grounding_quote": entry.get("grounding_quote"),
-                **{field: entry.get(field, "not_stated") for field in DETAIL_FIELDS},
-            }
-        )
-    return events, warnings
-
-
-def validate_detail_dictionaries(details: Any) -> list[str]:
-    errors: list[str] = []
-    if not isinstance(details, list):
-        return [f"{EVENT_DETAILS_JSON_QUESTION_NAME} must be a JSON list; got {type(details).__name__}"]
-
-    detail_keys = set(DETAIL_FIELDS)
-    event_keys = set(EVENT_FIELDS)
-    for i, entry in enumerate(details):
-        if not isinstance(entry, dict):
-            errors.append(f"detail {i}: must be an object")
-            continue
-
-        has_event_type = "event_type" in entry
-        has_grounding_quote = "grounding_quote" in entry
-        if has_event_type != has_grounding_quote:
-            errors.append(
-                f"detail {i}: include both event_type and grounding_quote for an explicit "
-                "unhighlighted event, or neither for a positional highlighted-span detail"
-            )
-
-        required_keys = event_keys if has_event_type and has_grounding_quote else detail_keys
-        keys = set(entry.keys())
-        for field in sorted(required_keys - keys):
-            errors.append(f"detail {i}: missing required key {field!r}")
-        for field in sorted(keys - required_keys):
-            errors.append(f"detail {i}: unexpected key {field!r}")
-
-        for field in sorted(keys & required_keys):
-            value = entry[field]
-            if not isinstance(value, str):
-                errors.append(f"detail {i}: {field} must be a string; got {type(value).__name__}")
-            elif value == "":
-                errors.append(f"detail {i}: {field} is empty; use 'not_stated' when missing")
-
-        for field, choices in CHOICE_DETAIL_FIELDS.items():
-            value = entry.get(field)
-            if isinstance(value, str) and value not in choices:
-                errors.append(f"detail {i}: {field} must be one of {choices}; got {value!r}")
-    return errors
-
-
 def validate_events_annotation(
-    document_relevance: str | None,
     events: list[dict[str, Any]],
     text: str,
     allowed_event_types: set[str],
 ) -> list[str]:
     errors: list[str] = []
-    relevance_choices = list(DOCUMENT_RELEVANCE_LABELS)
-    if document_relevance not in relevance_choices:
-        errors.append(
-            f"document_relevance must be one of {relevance_choices}; got {document_relevance!r}"
-        )
-    if document_relevance == "not_relevant" and events:
-        errors.append("document_relevance is not_relevant but events is not empty")
-    if document_relevance == "relevant" and not events:
-        errors.append("document_relevance is relevant but events is empty")
-
     required_keys = set(EVENT_FIELDS)
     for i, event in enumerate(events):
         if not isinstance(event, dict):
@@ -685,67 +481,45 @@ def export(args: argparse.Namespace) -> None:
     rows = []
     invalid_rows = []
     parse_errors = 0
-    merge_warning_count = 0
     validation_error_count = 0
     for record in dataset.records(with_suggestions=True, with_responses=True):
-        spans_value = submitted_value(record, EVENT_SPANS_QUESTION_NAME) or []
-        table_value = submitted_value(record, EVENT_DETAILS_TABLE_QUESTION_NAME)
-        legacy_json_value = submitted_value(record, EVENT_DETAILS_JSON_QUESTION_NAME)
-        relevance_value = submitted_value(record, RELEVANCE_QUESTION_NAME)
+        json_value = submitted_value(record, EVENT_DETAILS_JSON_QUESTION_NAME)
 
-        if args.only_submitted and table_value is None and legacy_json_value is None:
+        if args.only_submitted and json_value is None:
             continue
 
         text = record.fields.get("text", "")
 
-        details_parsed = None
         parse_error = None
         events: list[dict[str, Any]] = []
-        merge_warnings: list[str] = []
-        detail_errors: list[str] = []
-        table_errors: list[str] = []
-        if table_value is not None:
-            events, table_errors = parse_events_table(table_value)
-        elif legacy_json_value is not None:
+        if json_value is not None:
             try:
-                details_parsed = json.loads(legacy_json_value)
+                parsed = json.loads(json_value)
             except json.JSONDecodeError as exc:
                 parse_error = str(exc)
                 parse_errors += 1
             else:
-                detail_errors = validate_detail_dictionaries(details_parsed)
-                if isinstance(details_parsed, list):
-                    events, merge_warnings = merge_spans_and_details(
-                        text, spans_value, details_parsed
+                if isinstance(parsed, list):
+                    events = parsed
+                else:
+                    parse_error = (
+                        f"{EVENT_DETAILS_JSON_QUESTION_NAME} must be a JSON list; "
+                        f"got {type(parsed).__name__}"
                     )
-                    if merge_warnings:
-                        merge_warning_count += 1
+                    parse_errors += 1
 
-        model_table_suggestion = get_suggestion(record, EVENT_DETAILS_TABLE_QUESTION_NAME)
-        model_details_suggestion = get_suggestion(record, EVENT_DETAILS_JSON_QUESTION_NAME)
-        model_spans_suggestion = get_suggestion(record, EVENT_SPANS_QUESTION_NAME)
+        model_suggestion = get_suggestion(record, EVENT_DETAILS_JSON_QUESTION_NAME)
         model_events = None
-        if model_table_suggestion is not None:
-            model_events, _ = parse_events_table(model_table_suggestion.value)
-        elif model_details_suggestion is not None:
-            model_events, _ = merge_spans_and_details(
-                text,
-                model_spans_suggestion.value if model_spans_suggestion else [],
-                json.loads(model_details_suggestion.value),
-            )
+        if model_suggestion is not None:
+            model_events = json.loads(model_suggestion.value)
 
         validation_errors = []
         if parse_error is not None:
             validation_errors.append(
-                f"{EVENT_DETAILS_JSON_QUESTION_NAME} is invalid JSON: {parse_error}"
+                f"{EVENT_DETAILS_JSON_QUESTION_NAME} is invalid: {parse_error}"
             )
-        validation_errors.extend(table_errors)
-        validation_errors.extend(detail_errors)
-        validation_errors.extend(merge_warnings)
         validation_errors.extend(
-            validate_events_annotation(
-                relevance_value, events, text, allowed_event_types
-            )
+            validate_events_annotation(events, text, allowed_event_types)
         )
         if validation_errors:
             validation_error_count += 1
@@ -755,13 +529,9 @@ def export(args: argparse.Namespace) -> None:
             "title": record.fields.get("title"),
             "text": text,
             "annotation": {
-                "document_relevance": relevance_value,
                 "events": events,
             },
             "events_parse_error": parse_error,
-            "events_table_errors": table_errors or None,
-            "events_detail_errors": detail_errors or None,
-            "events_merge_warnings": merge_warnings or None,
             "events_validation_errors": validation_errors or None,
             "model_annotation": {
                 "events": model_events,
@@ -771,8 +541,7 @@ def export(args: argparse.Namespace) -> None:
             invalid_rows.append(
                 {
                     **row,
-                    EVENT_DETAILS_TABLE_QUESTION_NAME: table_value,
-                    EVENT_DETAILS_JSON_QUESTION_NAME: legacy_json_value,
+                    EVENT_DETAILS_JSON_QUESTION_NAME: json_value,
                 }
             )
         if not args.valid_only or not validation_errors:
@@ -798,11 +567,6 @@ def export(args: argparse.Namespace) -> None:
         print(
             f"Warning: {parse_errors} record(s) had invalid JSON in "
             f"{EVENT_DETAILS_JSON_QUESTION_NAME!r}; see events_parse_error in the output."
-        )
-    if merge_warning_count:
-        print(
-            f"Warning: {merge_warning_count} record(s) had span/detail count mismatches; "
-            "see events_merge_warnings in the output."
         )
     if validation_error_count:
         print(
@@ -835,15 +599,13 @@ def main() -> None:
     push_parser.add_argument(
         "--update-settings",
         action="store_true",
-        help="For an existing dataset, update its schema/guidelines to the current event table UI.",
+        help="For an existing dataset, update its schema/guidelines to the current JSON events UI.",
     )
     push_parser.add_argument(
         "--max-chars",
         type=int,
         default=0,
-        help="Truncate article text to this many characters (0 = no truncation, the default — "
-        "span offsets are computed against the text actually shown, so truncating can push "
-        "later events' grounding_quote out of reach).",
+        help="Truncate article text to this many characters (0 = no truncation, the default).",
     )
     push_parser.set_defaults(func=push)
 
