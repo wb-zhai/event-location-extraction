@@ -10,12 +10,11 @@ from typing import Any
 from google.genai import types as genai_types
 from pydantic import BaseModel, Field
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.llms.llm_client import GeminiLLMClient
+from src.llms.llm_client import GeminiLLMClient, LLMClient
 
 DEFAULT_RELEVANCE_SYSTEM_PROMPT = """<role>
 You are a high-recall relevance gate for food-security risk-event extraction.
@@ -69,6 +68,65 @@ Return whether this article should proceed to the full food-security risk/event 
 - A passing mention, historical anecdote, or rhetorical comparison that uses category-related language does not count as evidence.
 - If uncertain whether the article's actual reported content falls in-scope, return is_relevant=true.
 - is_relevant=false when the article is clearly unrelated to all of the above categories, or when category-related terms appear only incidentally rather than as the article's actual subject.
+</decision_rule>
+"""
+
+DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL = """<role>
+You are a high-recall relevance gate for food-security risk-event extraction.
+</role>
+
+<goal>
+Decide, using a 3-way label, whether the article is likely to contain explicit food-insecurity events or risk-factor evidence worth sending to the full extraction pipeline.
+</goal>
+
+<event_categories>
+The pipeline extracts events in these categories:
+- agricultural production issues
+- conflicts and violence
+- economic issues
+- environmental issues
+- food crisis
+- forced displacement
+- humanitarian aid
+- land-related issues
+- pests and diseases
+- political instability
+- weather shocks
+</event_categories>
+
+<labels>
+- relevant: the article substantively reports on a current, concrete instance of at least one event category above.
+- partially_relevant: the article touches on an event category, but only partially, ambiguously, or as secondary context to a different main subject (e.g. a brief mention within a broader story, an early/developing situation with limited detail, or content that mixes in-scope and out-of-scope material).
+- not_relevant: the article is not about any event category, or category-related terms appear only in a quote, anecdote, historical aside, or rhetorical comparison rather than in reporting on a real, current event.
+</labels>
+
+<policy>
+- Favor recall over precision, but base the decision on what the article substantively reports, not on incidental mentions.
+- Opinion/analysis pieces are relevant or partially_relevant only if they are substantively about a concrete event or situation in one of the categories, not general commentary (e.g. domestic politics, culture, sports, entertainment, personal profiles) that merely touches a related theme in passing.
+- If the article is borderline, ambiguous, or only partially visible in the preview, prefer partially_relevant over not_relevant, and prefer relevant over partially_relevant when the in-scope content is substantial.
+- Use only the provided title and article preview.
+</policy>
+"""
+
+DEFAULT_RELEVANCE_USER_PROMPT_3LABEL = """<context>
+<title>
+{title}
+</title>
+
+<article_preview>
+{text}
+</article_preview>
+</context>
+
+<task>
+Return a 3-way relevance label for whether this article should proceed to the full food-security risk/event extraction pipeline.
+</task>
+
+<decision_rule>
+- relevance_label="relevant" if the article substantively reports on at least one of the following event categories: agricultural production issues, conflicts and violence, economic issues, environmental issues, food crisis, forced displacement, humanitarian aid, land-related issues, pests and diseases, political instability, or weather shocks.
+- relevance_label="partially_relevant" if the article touches on one of these categories only partially, ambiguously, or as secondary context to a different main subject.
+- relevance_label="not_relevant" if the article is clearly unrelated to all of the above categories, or category-related terms appear only incidentally (quote, anecdote, historical aside, rhetorical comparison) rather than as the article's actual subject.
+- If uncertain between two labels, prefer the more inclusive one (not_relevant < partially_relevant < relevant).
 </decision_rule>
 """
 
@@ -128,6 +186,19 @@ class RelevanceDecision(BaseModel):
     )
 
 
+RELEVANCE_LABELS_3 = ("relevant", "partially_relevant", "not_relevant")
+
+
+class RelevanceDecision3Label(BaseModel):
+    reason: str = Field(default="")
+    confidence: float = Field(
+        default=0.0, description="Confidence from 0.0 to 1.0 in the relevance decision."
+    )
+    relevance_label: str = Field(
+        ..., description="One of: relevant, partially_relevant, not_relevant."
+    )
+
+
 def clean_relevance_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     if hasattr(parsed, "model_dump"):
         parsed = parsed.model_dump()
@@ -148,6 +219,30 @@ def clean_relevance_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def clean_relevance_decision_3label(parsed: dict[str, Any]) -> dict[str, Any]:
+    if hasattr(parsed, "model_dump"):
+        parsed = parsed.model_dump()
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    label = str(parsed.get("relevance_label", "relevant")).strip().lower()
+    label = label.replace(" ", "_").replace("-", "_")
+    if label not in RELEVANCE_LABELS_3:
+        label = "relevant"
+    try:
+        confidence = float(parsed.get("confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    confidence = max(0.0, min(confidence, 1.0))
+    reason = str(parsed.get("reason", "")).strip()
+    return {
+        "relevance_label": label,
+        "is_relevant": label != "not_relevant",
+        "confidence": confidence,
+        "reason": reason,
+    }
+
+
 def should_filter_by_relevance(
     decision: dict[str, Any], confidence_threshold: float
 ) -> bool:
@@ -158,21 +253,36 @@ def should_filter_by_relevance(
 
 
 async def classify_article_relevance(
-    client: GeminiLLMClient,
+    client: LLMClient,
     title: str,
     text: str,
     record_id: str,
     max_chars: int,
     confidence_threshold: float,
-    system_prompt: str = DEFAULT_RELEVANCE_SYSTEM_PROMPT,
-    user_prompt_template: str = DEFAULT_RELEVANCE_USER_PROMPT,
+    system_prompt: str | None = None,
+    user_prompt_template: str | None = None,
+    use_3label_prompt: bool = False,
     verbose: bool = False,
+    override_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from scripts.data.generation.gemini_event_gen import (
         log_llm_call,
         response_to_dict,
         truncate_text,
     )
+
+    if system_prompt is None:
+        system_prompt = (
+            DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL
+            if use_3label_prompt
+            else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+        )
+    if user_prompt_template is None:
+        user_prompt_template = (
+            DEFAULT_RELEVANCE_USER_PROMPT_3LABEL
+            if use_3label_prompt
+            else DEFAULT_RELEVANCE_USER_PROMPT
+        )
 
     preview_text = truncate_text(text, max_chars)
     prompt = user_prompt_template.format(title=title, text=preview_text)
@@ -185,17 +295,19 @@ async def classify_article_relevance(
         prompt=prompt,
     )
     response = None
+    reasoning_effort = "low" if "pro" in client.model_name else "minimal" if "3" in client.model_name else None
+    response_format = (
+        {"reason": str, "relevance_label": str, "confidence": float}
+        if use_3label_prompt
+        else {"reason": str, "is_relevant": bool, "confidence": float}
+    )
     async for candidate in client.generate(
         prompt=prompt,
         system_prompt=system_prompt,
-        override_settings={"temperature": 0.0},
-        response_format={
-            "reason": str,
-            "is_relevant": bool,
-            "confidence": float,
-        },
+        override_settings=override_settings if override_settings is not None else {"temperature": 0.0},
+        response_format=response_format,
         add_cot_field=False,
-        reasoning_effort="minimal" if "3" in client.model_name else None,
+        reasoning_effort=reasoning_effort,
     ):
         response = candidate
         break
@@ -213,9 +325,14 @@ async def classify_article_relevance(
         answer=raw_answer,
     )
     parsed = raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
-    decision = clean_relevance_decision(parsed)
+    if use_3label_prompt:
+        decision = clean_relevance_decision_3label(parsed)
+        decision_label = decision["relevance_label"]
+    else:
+        decision = clean_relevance_decision(parsed)
+        decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
     return {
-        "decision": "relevant" if decision["is_relevant"] else "irrelevant",
+        "decision": decision_label,
         "is_relevant": decision["is_relevant"],
         "confidence": decision["confidence"],
         "reason": decision["reason"],
@@ -294,12 +411,21 @@ async def process_record(client, record, args):
                 record_id=record_id,
                 max_chars=args.max_chars,
                 confidence_threshold=args.confidence_threshold,
+                use_3label_prompt=getattr(args, "use_3label_prompt", False),
                 verbose=args.verbose,
+                override_settings=getattr(args, "override_settings", None),
             )
 
         record["relevance"] = relevance_info
-        if "metadata" in relevance_info and relevance_info.get("model") not in (None, "regex", "keyword"):
-            record["llm"] = {"model": relevance_info["model"], "metadata": relevance_info["metadata"]}
+        if "metadata" in relevance_info and relevance_info.get("model") not in (
+            None,
+            "regex",
+            "keyword",
+        ):
+            record["llm"] = {
+                "model": relevance_info["model"],
+                "metadata": relevance_info["metadata"],
+            }
     except Exception as e:
         record["relevance"] = {"error": str(e), "filtered": False}
         print(f"Error processing record {record_id}: {e}")
@@ -325,6 +451,20 @@ _RELEVANCE_RESPONSE_SCHEMA = {
     "required": ["reason", "confidence", "is_relevant"],
 }
 
+_RELEVANCE_RESPONSE_SCHEMA_3LABEL = {
+    "type": "OBJECT",
+    "properties": {
+        "reason": {"type": "STRING"},
+        "confidence": {"type": "NUMBER"},
+        "relevance_label": {
+            "type": "STRING",
+            "enum": list(RELEVANCE_LABELS_3),
+        },
+    },
+    "required": ["reason", "confidence", "relevance_label"],
+}
+
+
 @dataclass
 class _BatchTask:
     key: str
@@ -332,7 +472,9 @@ class _BatchTask:
     prompt: str
 
 
-def _build_batch_request(task: "_BatchTask", system_prompt: str) -> dict[str, Any]:
+def _build_batch_request(
+    task: "_BatchTask", system_prompt: str, response_schema: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "key": task.key,
         "request": {
@@ -342,14 +484,19 @@ def _build_batch_request(task: "_BatchTask", system_prompt: str) -> dict[str, An
                 "responseMimeType": "application/json",
                 "maxOutputTokens": 256,
                 "temperature": 0.0,
-                "responseSchema": _RELEVANCE_RESPONSE_SCHEMA,
+                "responseSchema": response_schema,
             },
         },
     }
 
 
 async def _poll_batch_job(client: GeminiLLMClient, name: str, interval: int) -> Any:
-    done = {"JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED", "JOB_STATE_EXPIRED"}
+    done = {
+        "JOB_STATE_SUCCEEDED",
+        "JOB_STATE_FAILED",
+        "JOB_STATE_CANCELLED",
+        "JOB_STATE_EXPIRED",
+    }
     job = await asyncio.to_thread(client.client.batches.get, name=name)
     while job.state.name not in done:
         print(f"  batch={name} state={job.state.name}")
@@ -374,10 +521,22 @@ def _batch_response_metadata(response: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(usage, dict):
         return {}
     return {
-        "prompt_tokens": int(usage.get("prompt_token_count") or usage.get("promptTokenCount") or 0),
-        "completion_tokens": int(usage.get("candidates_token_count") or usage.get("candidatesTokenCount") or 0),
-        "cached_tokens": int(usage.get("cached_content_token_count") or usage.get("cachedContentTokenCount") or 0),
-        "thoughts_token_count": int(usage.get("thoughts_token_count") or usage.get("thoughtsTokenCount") or 0),
+        "prompt_tokens": int(
+            usage.get("prompt_token_count") or usage.get("promptTokenCount") or 0
+        ),
+        "completion_tokens": int(
+            usage.get("candidates_token_count")
+            or usage.get("candidatesTokenCount")
+            or 0
+        ),
+        "cached_tokens": int(
+            usage.get("cached_content_token_count")
+            or usage.get("cachedContentTokenCount")
+            or 0
+        ),
+        "thoughts_token_count": int(
+            usage.get("thoughts_token_count") or usage.get("thoughtsTokenCount") or 0
+        ),
     }
 
 
@@ -400,13 +559,27 @@ async def _execute_batch_chunk(
     chunk_index: int,
     poll_interval: int,
     confidence_threshold: float,
+    use_3label_prompt: bool = False,
 ) -> list[dict[str, Any]]:
-    request_path = output_path.with_suffix(f".batch.part-{chunk_index:04d}.requests.jsonl")
-    result_path = output_path.with_suffix(f".batch.part-{chunk_index:04d}.results.jsonl")
+    response_schema = (
+        _RELEVANCE_RESPONSE_SCHEMA_3LABEL
+        if use_3label_prompt
+        else _RELEVANCE_RESPONSE_SCHEMA
+    )
+    request_path = output_path.with_suffix(
+        f".batch.part-{chunk_index:04d}.requests.jsonl"
+    )
+    result_path = output_path.with_suffix(
+        f".batch.part-{chunk_index:04d}.results.jsonl"
+    )
 
     request_path.write_text(
         "".join(
-            json.dumps(_build_batch_request(t, system_prompt), ensure_ascii=False) + "\n"
+            json.dumps(
+                _build_batch_request(t, system_prompt, response_schema),
+                ensure_ascii=False,
+            )
+            + "\n"
             for t in tasks
         ),
         encoding="utf-8",
@@ -426,17 +599,31 @@ async def _execute_batch_chunk(
         src=uploaded.name,
         config={"display_name": f"{output_path.stem}-part-{chunk_index:04d}"},
     )
-    print(f"Chunk {chunk_index}: batch job {job.name} submitted ({len(tasks)} records).")
+    print(
+        f"Chunk {chunk_index}: batch job {job.name} submitted ({len(tasks)} records)."
+    )
     job = await _poll_batch_job(client, job.name, poll_interval)
 
     if job.state.name != "JOB_STATE_SUCCEEDED":
         print(f"Chunk {chunk_index}: batch job {job.name} ended with {job.state.name}.")
-        return [_error_batch_record(t.record, f"Batch job ended with {job.state.name}", model) for t in tasks]
+        return [
+            _error_batch_record(
+                t.record, f"Batch job ended with {job.state.name}", model
+            )
+            for t in tasks
+        ]
 
     if not job.dest or not job.dest.file_name:
-        return [_error_batch_record(t.record, "Batch job succeeded without a result file.", model) for t in tasks]
+        return [
+            _error_batch_record(
+                t.record, "Batch job succeeded without a result file.", model
+            )
+            for t in tasks
+        ]
 
-    data = await asyncio.to_thread(client.client.files.download, file=job.dest.file_name)
+    data = await asyncio.to_thread(
+        client.client.files.download, file=job.dest.file_name
+    )
     result_path.write_bytes(data)
 
     task_by_key = {t.key: t for t in tasks}
@@ -456,16 +643,25 @@ async def _execute_batch_chunk(
             try:
                 response = line.get("response")
                 if not isinstance(response, dict):
-                    raise ValueError(str(line.get("error") or "Missing batch response."))
+                    raise ValueError(
+                        str(line.get("error") or "Missing batch response.")
+                    )
                 parsed = json.loads(_batch_response_text(response))
-                decision = clean_relevance_decision(parsed)
+                if use_3label_prompt:
+                    decision = clean_relevance_decision_3label(parsed)
+                    decision_label = decision["relevance_label"]
+                else:
+                    decision = clean_relevance_decision(parsed)
+                    decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
                 metadata = _batch_response_metadata(response)
                 relevance_info = {
-                    "decision": "relevant" if decision["is_relevant"] else "irrelevant",
+                    "decision": decision_label,
                     "is_relevant": decision["is_relevant"],
                     "confidence": decision["confidence"],
                     "reason": decision["reason"],
-                    "filtered": should_filter_by_relevance(decision, confidence_threshold),
+                    "filtered": should_filter_by_relevance(
+                        decision, confidence_threshold
+                    ),
                     "threshold": confidence_threshold,
                     "model": model,
                     "metadata": metadata,
@@ -481,14 +677,18 @@ async def _execute_batch_chunk(
 
     for task in tasks:
         if task.key not in seen:
-            results.append(_error_batch_record(task.record, "Batch result missing.", model))
+            results.append(
+                _error_batch_record(task.record, "Batch result missing.", model)
+            )
 
     request_path.unlink(missing_ok=True)
     result_path.unlink(missing_ok=True)
     return results
 
 
-def _error_batch_record(record: dict[str, Any], error: str, model: str) -> dict[str, Any]:
+def _error_batch_record(
+    record: dict[str, Any], error: str, model: str
+) -> dict[str, Any]:
     rec = dict(record)
     rec["relevance"] = {"error": error, "filtered": False, "model": model}
     return rec
@@ -498,13 +698,27 @@ async def run_batch_relevance(
     args: argparse.Namespace,
     records: list[dict[str, Any]],
     output_path: Path,
-    done_keys: set[str],
+    append: bool,
 ) -> list[dict[str, Any]]:
     from scripts.data.generation_v3.costs import aggregate, report
 
+    use_3label_prompt = getattr(args, "use_3label_prompt", False)
     client = GeminiLLMClient(model_name=args.model, system_prompt=None)
-    system_prompt = args.system_prompt if hasattr(args, "system_prompt") and args.system_prompt else DEFAULT_RELEVANCE_SYSTEM_PROMPT
-    user_prompt_template = DEFAULT_RELEVANCE_USER_PROMPT
+    default_system_prompt = (
+        DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL
+        if use_3label_prompt
+        else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+    )
+    system_prompt = (
+        args.system_prompt
+        if hasattr(args, "system_prompt") and args.system_prompt
+        else default_system_prompt
+    )
+    user_prompt_template = (
+        DEFAULT_RELEVANCE_USER_PROMPT_3LABEL
+        if use_3label_prompt
+        else DEFAULT_RELEVANCE_USER_PROMPT
+    )
 
     tasks = [
         _BatchTask(
@@ -512,7 +726,9 @@ async def run_batch_relevance(
             record=r,
             prompt=user_prompt_template.format(
                 title=str(r.get("title") or (r.get("source") or {}).get("title", "")),
-                text=(str(r.get("text") or (r.get("source") or {}).get("text", "")))[:args.max_chars],
+                text=(str(r.get("text") or (r.get("source") or {}).get("text", "")))[
+                    : args.max_chars
+                ],
             ),
         )
         for i, r in enumerate(records)
@@ -532,10 +748,11 @@ async def run_batch_relevance(
             chunk_index=chunk_index,
             poll_interval=args.batch_poll_interval_seconds,
             confidence_threshold=args.confidence_threshold,
+            use_3label_prompt=use_3label_prompt,
         )
         all_results.extend(chunk_results)
 
-        write_mode = "a" if (args.resume and done_keys) or chunk_index > 1 else "w"
+        write_mode = "a" if append or chunk_index > 1 else "w"
         with output_path.open(write_mode, encoding="utf-8") as fh:
             for r in chunk_results:
                 if args.filter_only and r.get("relevance", {}).get("filtered", False):
@@ -551,6 +768,7 @@ async def run_batch_relevance(
 # Main processing
 # ---------------------------------------------------------------------------
 
+
 async def process_file(args):
     input_path = Path(args.input)
     output_path = Path(args.output)
@@ -561,14 +779,30 @@ async def process_file(args):
             "or --overwrite to replace it."
         )
 
-    # Load already-done keys when resuming
+    # Load already-done keys when resuming. Records that previously errored are
+    # dropped from the output so they get retried rather than skipped.
     done_keys: set[str] = set()
     if args.resume and output_path.exists():
+        kept_lines = []
+        error_count = 0
         with output_path.open(encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line:
-                    done_keys.add(_record_key(json.loads(line)))
+                if not line:
+                    continue
+                rec = json.loads(line)
+                if rec.get("relevance", {}).get("error"):
+                    error_count += 1
+                    continue
+                done_keys.add(_record_key(rec))
+                kept_lines.append(line)
+
+        if error_count:
+            with output_path.open("w", encoding="utf-8") as f:
+                for line in kept_lines:
+                    f.write(line + "\n")
+            print(f"Resuming: dropping {error_count} previously errored records to retry.")
+
         print(f"Resuming: {len(done_keys)} records already done, skipping.")
 
     records = []
@@ -582,8 +816,10 @@ async def process_file(args):
             if args.limit and len(records) >= args.limit:
                 break
 
+    append = args.resume and output_path.exists()
+
     if args.batch_api:
-        results = await run_batch_relevance(args, records, output_path, done_keys)
+        results = await run_batch_relevance(args, records, output_path, append)
     else:
         client = None
         if args.use_llm:
@@ -601,13 +837,15 @@ async def process_file(args):
 
             tasks = [bounded_process(r) for r in records]
             results = []
-            for f in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Filtering"):
+            for f in tqdm(
+                asyncio.as_completed(tasks), total=len(tasks), desc="Filtering"
+            ):
                 results.append(await f)
         except ImportError:
             results = await asyncio.gather(*(bounded_process(r) for r in records))
 
         # Append when resuming, overwrite otherwise
-        write_mode = "a" if args.resume and done_keys else "w"
+        write_mode = "a" if append else "w"
         with open(output_path, write_mode, encoding="utf-8") as f:
             for r in results:
                 if args.filter_only and r.get("relevance", {}).get("filtered", False):
@@ -616,6 +854,7 @@ async def process_file(args):
 
         if args.use_llm:
             from scripts.data.generation_v3.costs import aggregate, report
+
             totals = aggregate(results)
             report(output_path.name, totals, batch=False)
 
@@ -702,6 +941,13 @@ def main():
         help="Use LLM for relevance classification.",
     )
     parser.add_argument(
+        "--use-3label-prompt",
+        action="store_true",
+        help="Use the 3-label (relevant / partially_relevant / not_relevant) relevance "
+        "prompt instead of the default 2-label (is_relevant true/false) prompt. Only "
+        "applies when --use-llm is set.",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -735,6 +981,12 @@ def main():
         default=30,
         help="Seconds between batch job status polls (default: 30).",
     )
+    # parser.add_argument(
+    #     "--thinking-level",
+    #     type=str,
+    #     default="default",
+    #     help="Level of thinking to use for relevance classification.",
+    # )
     args = parser.parse_args()
 
     # Import log_llm_call if needed globally, but it's handled inside classify_article_relevance

@@ -62,7 +62,10 @@ PRICING: dict[str, dict[str, dict[str, dict[str, float]]]] = {
 
 
 def _extract_tokens(record: dict[str, Any]) -> tuple[str, int, int, int, int] | None:
-    llm = record.get("llm")
+    # generate.py/fix_events.py write "generation_llm" now (to avoid clobbering an
+    # upstream pipeline's own "llm" field on preserved rows); fall back to "llm"
+    # for older output files.
+    llm = record.get("generation_llm", record.get("llm"))
     if not isinstance(llm, dict):
         return None
     model = str(llm.get("model") or "")

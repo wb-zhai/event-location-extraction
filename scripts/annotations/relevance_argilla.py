@@ -20,12 +20,60 @@ if str(REPO_ROOT) not in sys.path:
 from dotenv import load_dotenv
 
 from scripts.data.relevance.relevance_filter import (
-    DEFAULT_RELEVANCE_SYSTEM_PROMPT,
+    DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL,
     _record_key,
 )
 
 RELEVANCE_QUESTION_NAME = "relevance"
 DEFAULT_WORKSPACE = "default"
+
+# Human-facing label set. Runs using the legacy 2-label prompt only ever
+# produce "relevant"/"irrelevant" in relevance.decision; "irrelevant" is
+# normalized to "not_relevant" so both prompt versions map onto one question.
+LABEL_DISPLAY = {
+    "relevant": "Relevant",
+    "partially_relevant": "Partially relevant",
+    "not_relevant": "Not relevant",
+}
+
+# Definitions lifted from DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL's <labels> block,
+# shown to annotators so they apply the same criteria as the Gemini gate.
+LABEL_DESCRIPTIONS = {
+    "relevant": (
+        "The article substantively reports on a current, concrete instance of "
+        "at least one event category (agricultural production issues, conflicts "
+        "and violence, economic issues, environmental issues, food crisis, "
+        "forced displacement, humanitarian aid, land-related issues, pests and "
+        "diseases, political instability, or weather shocks)."
+    ),
+    "partially_relevant": (
+        "The article touches on an event category, but only partially, "
+        "ambiguously, or as secondary context to a different main subject "
+        "(e.g. a brief mention within a broader story, an early/developing "
+        "situation with limited detail, or content mixing in-scope and "
+        "out-of-scope material)."
+    ),
+    "not_relevant": (
+        "The article is not about any event category, or category-related "
+        "terms appear only in a quote, anecdote, historical aside, or "
+        "rhetorical comparison rather than in reporting on a real, current "
+        "event."
+    ),
+}
+
+RELEVANCE_QUESTION_DESCRIPTION = "\n".join(
+    f"- {LABEL_DISPLAY[label]}: {LABEL_DESCRIPTIONS[label]}" for label in LABEL_DISPLAY
+)
+
+
+def normalize_decision(decision: Any) -> str | None:
+    """Map a raw relevance.decision value onto the 3-way label set."""
+    if not decision:
+        return None
+    value = str(decision).strip().lower()
+    if value == "irrelevant":
+        value = "not_relevant"
+    return value if value in LABEL_DISPLAY else None
 
 
 def iter_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -58,7 +106,7 @@ def get_client():
 def build_settings():
 
     return rg.Settings(
-        guidelines=DEFAULT_RELEVANCE_SYSTEM_PROMPT,
+        guidelines=DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL,
         fields=[
             rg.TextField(name="title"),
             rg.TextField(name="text"),
@@ -67,8 +115,9 @@ def build_settings():
         questions=[
             rg.LabelQuestion(
                 name=RELEVANCE_QUESTION_NAME,
-                labels=["relevant", "irrelevant"],
+                labels=LABEL_DISPLAY,
                 title="Is this article relevant to food-security risk-event extraction?",
+                description=RELEVANCE_QUESTION_DESCRIPTION,
             ),
         ],
         metadata=[
@@ -111,12 +160,12 @@ def extract_title_text(record: dict[str, Any]) -> tuple[str, str]:
 
 
 def gemini_assessment_str(relevance: dict[str, Any]) -> str:
-    if "is_relevant" not in relevance:
+    label = normalize_decision(relevance.get("decision"))
+    if label is None:
         return ""
-    decision = "relevant" if relevance["is_relevant"] else "irrelevant"
     confidence = float(relevance.get("confidence", 0.0) or 0.0)
     reason = relevance.get("reason", "")
-    return f"gemini: {decision} ({confidence:.2f}) — {reason}"
+    return f"gemini: {LABEL_DISPLAY[label]} ({confidence:.2f}) — {reason}"
 
 
 def build_record(rec: dict[str, Any], max_chars: int):
@@ -126,6 +175,8 @@ def build_record(rec: dict[str, Any], max_chars: int):
     if not isinstance(relevance, dict):
         relevance = {}
 
+    label = normalize_decision(relevance.get("decision"))
+
     metadata: dict[str, Any] = {}
     adm0_code = rec.get("adm0_code")
     if adm0_code:
@@ -133,18 +184,16 @@ def build_record(rec: dict[str, Any], max_chars: int):
     risk_factors = rec.get("risk_factors")
     if risk_factors:
         metadata["risk_factors"] = [str(r) for r in risk_factors]
-    if "is_relevant" in relevance:
-        metadata["gemini_decision"] = (
-            "relevant" if relevance["is_relevant"] else "irrelevant"
-        )
+    if label is not None:
+        metadata["gemini_decision"] = label
         metadata["gemini_confidence"] = float(relevance.get("confidence", 0.0) or 0.0)
 
     suggestions = []
-    if "is_relevant" in relevance:
+    if label is not None:
         suggestions.append(
             rg.Suggestion(
                 RELEVANCE_QUESTION_NAME,
-                value="relevant" if relevance["is_relevant"] else "irrelevant",
+                value=label,
                 agent=str(relevance.get("model") or "gemini"),
                 score=float(relevance.get("confidence", 0.0) or 0.0),
             )
@@ -213,11 +262,11 @@ def export(args: argparse.Namespace) -> None:
                 "title": record.fields.get("title"),
                 "human_relevance": human_value,
                 "human_is_relevant": (
-                    (human_value == "relevant") if human_value else None
+                    (human_value != "not_relevant") if human_value else None
                 ),
                 "gemini_relevance": gemini_value,
                 "gemini_is_relevant": (
-                    (gemini_value == "relevant") if gemini_value else None
+                    (gemini_value != "not_relevant") if gemini_value else None
                 ),
                 "agreement": (
                     (human_value == gemini_value)

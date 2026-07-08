@@ -111,23 +111,35 @@ def record_id(record: dict[str, Any], index: int) -> str:
     return str(record.get("id") or index)
 
 
+def _source_dict(record: dict[str, Any]) -> dict[str, Any]:
+    # Records may carry article fields nested under "source" (e.g. relevance-filter
+    # pipeline output) or flat at the top level (e.g. raw scrape dumps).
+    source = record.get("source")
+    return source if isinstance(source, dict) else record
+
+
 def source_title(record: dict[str, Any]) -> str:
-    return str(record.get("title") or "")
+    return str(_source_dict(record).get("title") or "")
 
 
 def source_text(record: dict[str, Any]) -> str:
-    return str(record.get("text") or "")
+    return str(_source_dict(record).get("text") or "")
 
 
 def source_publish_date(record: dict[str, Any]) -> str:
-    return str(record.get("publish_date") or "")
+    source = _source_dict(record)
+    return str(source.get("publish_date") or source.get("published_at") or "")
 
 
-def source_record(record: dict[str, Any]) -> dict[str, str]:
+def source_url(record: dict[str, Any]) -> str:
+    return str(_source_dict(record).get("source_url") or "")
+
+
+def normalized_source(record: dict[str, Any]) -> dict[str, str]:
     return {
         "title": source_title(record),
         "text": source_text(record),
-        "source_url": str(record.get("source_url") or ""),
+        "source_url": source_url(record),
         "publish_date": source_publish_date(record),
     }
 
@@ -253,6 +265,18 @@ def apply_grounding_verification(
         annotation["unverified_events"] = unverified
 
 
+def _with_normalized_source(record: dict[str, Any]) -> dict[str, Any]:
+    # Preserve the entire original row (all input fields, including any richer
+    # nested "source" dict) and layer the title/text/source_url/publish_date
+    # keys downstream steps (validate.py) expect on top of it.
+    existing_source = record.get("source")
+    merged_source = {
+        **(existing_source if isinstance(existing_source, dict) else {}),
+        **normalized_source(record),
+    }
+    return {**record, "source": merged_source}
+
+
 def output_record(
     record: dict[str, Any],
     annotation: dict[str, Any],
@@ -260,25 +284,22 @@ def output_record(
     model: str,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    out: dict[str, Any] = {
-        "id": record.get("id"),
+    # "generation_llm" (not "llm") avoids clobbering an upstream pipeline's own
+    # "llm" field (e.g. relevance-filter metadata already present on the row).
+    return {
+        **_with_normalized_source(record),
         "status": "ok",
-        "source": source_record(record),
         "annotation": annotation,
-        "llm": {"model": model, "metadata": metadata or {}},
+        "generation_llm": {"model": model, "metadata": metadata or {}},
     }
-    if "candidates" in record:
-        out["candidates"] = record["candidates"]
-    return out
 
 
 def error_record(record: dict[str, Any], error: str, *, model: str) -> dict[str, Any]:
     return {
-        "id": record.get("id"),
+        **_with_normalized_source(record),
         "status": "error",
-        "source": source_record(record),
         "error": error,
-        "llm": {"model": model},
+        "generation_llm": {"model": model},
     }
 
 
@@ -287,7 +308,7 @@ def completed_output_ids(path: Path) -> set[str]:
         return set()
     completed: set[str] = set()
     for result in iter_jsonl(path):
-        if result.get("status") != "ok" or "llm" not in result:
+        if result.get("status") != "ok" or "generation_llm" not in result:
             continue
         result_id = result.get("id")
         if result_id is not None:
@@ -324,6 +345,22 @@ def _stratified_sample(
         sampled.extend(random.sample(pool, min(limit - len(sampled), len(pool))))
 
     return sampled
+
+
+def filter_relevant_records(
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    filtered = []
+    n_skipped = 0
+    for record in records:
+        relevance = record.get("relevance")
+        if isinstance(relevance, dict) and relevance.get("is_relevant") is False:
+            n_skipped += 1
+            continue
+        filtered.append(record)
+    if n_skipped:
+        LOGGER.info("Skipping %s records with relevance.is_relevant=False", n_skipped)
+    return filtered
 
 
 def sample_records(
@@ -890,6 +927,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-poll-interval-seconds", type=int, default=30)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--top-k-candidates", type=int, default=None)
+    parser.add_argument(
+        "--skip-not-relevant",
+        action="store_true",
+        help="Skip records whose relevance.is_relevant is False (if present).",
+    )
 
     args = parser.parse_args()
     if not args.interactive:
@@ -922,6 +964,8 @@ async def main() -> None:
         return
 
     records = load_input_records(args.input)
+    if args.skip_not_relevant:
+        records = filter_relevant_records(records)
     records = sample_records(
         records,
         args.limit,

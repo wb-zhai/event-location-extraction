@@ -34,6 +34,29 @@ def get_decision(r: dict) -> str:
     return rel.get("decision") or ("error" if "error" in rel else "")
 
 
+def format_annotation(r: dict) -> str:
+    ann = r.get("annotation")
+    if not ann:
+        return ""
+    parts = [f"\n\n---\n\n### Annotation\n\n**Document relevance:** {ann.get('document_relevance', 'n/a')}"]
+    events = ann.get("events") or []
+    if events:
+        parts.append(f"\n\n**Events ({len(events)}):**")
+        for j, ev in enumerate(events, 1):
+            parts.append(
+                f"\n{j}. **{ev.get('event_type', 'n/a')}** — _{ev.get('grounding_quote', '')}_\n"
+                f"   - Location: {ev.get('event_location', 'n/a')} ({ev.get('event_location_text', 'n/a')})\n"
+                f"   - Time: {ev.get('event_time', 'n/a')} ({ev.get('event_time_text', 'n/a')}), status: {ev.get('time_status', 'n/a')}\n"
+                f"   - Affected: {ev.get('affected_entity', 'n/a')} / {ev.get('affected_group', 'n/a')}\n"
+                f"   - Severity: {ev.get('severity', 'n/a')}, Modality: {ev.get('modality', 'n/a')}"
+            )
+    return "\n".join(parts)
+
+
+def get_decision_labels(records: list[dict]) -> list[str]:
+    return sorted({get_decision(r) for r in records if get_decision(r)})
+
+
 def get_model_name(records: list[dict]) -> str | None:
     for r in records:
         model = (r.get("relevance") or {}).get("model") or (r.get("llm") or {}).get("model")
@@ -95,14 +118,17 @@ def build_app(records: list[dict]):
             f"**Filtered:** {rel.get('filtered', False)}  \n"
             f"**Model:** {rel.get('model', 'n/a')}  \n"
             f"**Reason:** {rel.get('reason') or rel.get('error') or ''}"
+            f"{format_annotation(r)}"
         )
         return meta, record_text(r)
+
+    decision_choices = ["All"] + [label.capitalize() for label in get_decision_labels(records)]
 
     with gr.Blocks(title="Relevance filter viewer") as demo:
         gr.Markdown("## Relevance filter output viewer")
         with gr.Row():
             decision_filter = gr.Radio(
-                ["All", "Relevant", "Irrelevant", "Error"], value="All", label="Decision"
+                decision_choices, value="All", label="Decision"
             )
             filtered_filter = gr.Radio(
                 ["All", "Filtered only", "Kept only"], value="All", label="Filtered"
@@ -235,12 +261,14 @@ def build_compare_app(
             f"**Decision:** {dec_a}  \n"
             f"**Confidence:** {rel_a.get('confidence', 'n/a')}  \n"
             f"**Reason:** {rel_a.get('reason') or rel_a.get('error') or ''}"
+            f"{format_annotation(ra)}"
         )
         meta_b = (
             f"#### B: {b_name}\n\n"
             f"**Decision:** {dec_b}  \n"
             f"**Confidence:** {rel_b.get('confidence', 'n/a')}  \n"
             f"**Reason:** {rel_b.get('reason') or rel_b.get('error') or ''}"
+            f"{format_annotation(rb)}"
         )
         title_md = f"### {record_title(ra)}"
         text = record_text(ra) or record_text(rb)
@@ -383,15 +411,16 @@ def main():
     parser.add_argument("--share", action="store_true")
     args = parser.parse_args()
 
-    if args.a or args.b:
-        if not (args.a and args.b and args.output):
-            parser.error("Compare mode requires --a, --b, and --output.")
+    if args.a and args.b:
+        if not args.output:
+            parser.error("Compare mode requires --output.")
         demo = build_compare_app(Path(args.a), Path(args.b), Path(args.output), args.a_name, args.b_name)
-    else:
-        if not args.input:
-            parser.error("Provide --input for view mode, or --a/--b/--output for compare mode.")
-        records = load_records(Path(args.input))
+    elif args.a or args.b or args.input:
+        path = args.input or args.a or args.b
+        records = load_records(Path(path))
         demo = build_app(records)
+    else:
+        parser.error("Provide --input for view mode, or --a/--b/--output for compare mode.")
 
     demo.launch(server_port=args.port, share=args.share)
 

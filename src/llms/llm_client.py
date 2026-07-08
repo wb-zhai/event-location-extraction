@@ -17,7 +17,7 @@ from google.genai import types
 from openai import AsyncOpenAI, OpenAI
 from openai._types import NOT_GIVEN
 from openai.lib._parsing import parse_chat_completion
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, create_model
 
 from src.llms.settings import LLMSettings
 
@@ -924,21 +924,29 @@ class AnthropicVertexLLMClient(LLMClient):
 #         return cls(**settings.to_dict())
 
 
-class Citation(BaseModel):
-    title: str = Field(..., description="The title of the cited work.")
-    url: str = Field(..., description="The URL of the cited work.")
-    text: str = Field(..., description="Text excerpt used from the cited work.")
-
-
-class OpenAIModel(BaseModel):
-    text: str = Field(..., description="The generated text from the model.")
-    citations: List[Citation] = Field(
-        ..., description="List of citations used in the generated text."
-    )
-
-
 class OpenAILLMClient(LLMClient):
-    """LLM client class for handling prompts and generating responses using OpenAI API."""
+    """LLM client for any OpenAI-compatible chat-completions API — OpenAI itself, or a
+    local/self-hosted server (llama.cpp `llama-server`, vLLM, etc.) via `base_url`."""
+
+    # Sampling kwargs forwarded as direct OpenAI SDK kwargs to chat.completions.{create,parse}.
+    _STANDARD_SAMPLING_KEYS = (
+        "top_p",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "stop",
+    )
+    # Server-specific sampling kwargs (llama.cpp / vLLM) forwarded flat via `extra_body`, since
+    # the OpenAI SDK rejects unknown top-level kwargs.
+    _EXTRA_SAMPLING_KEYS = (
+        "top_k",
+        "min_p",
+        "repeat_penalty",
+        "n_predict",
+    )
+    # `enable_thinking` (Qwen3) isn't a flat extra_body key — vLLM/llama.cpp expect it nested
+    # under `extra_body["chat_template_kwargs"]`.
+    _CHAT_TEMPLATE_KWARGS_KEYS = ("enable_thinking",)
 
     def __init__(
         self,
@@ -950,6 +958,8 @@ class OpenAILLMClient(LLMClient):
         reasoning_effort: str | int | None = None,
         use_content_cache: bool = False,
         verbose: bool = False,
+        base_url: str | None = None,
+        api_key: str | None = None,
         **kwargs: Any,
     ):
         """
@@ -961,9 +971,15 @@ class OpenAILLMClient(LLMClient):
             prompts_dir: Directory containing prompt templates
             temperature: Sampling temperature for generation
             max_tokens: Maximum number of tokens to generate
-            reasoning_effort: Level of reasoning effort (e.g., "low", "medium", "high")
+            reasoning_effort: Level of reasoning effort (e.g., "low", "medium", "high").
+                Accepted for interface parity with `GeminiLLMClient` but not forwarded to the
+                server — local OpenAI-compatible servers (llama.cpp, vLLM) don't support it.
             use_content_cache: Whether to use content caching for responses
             verbose: Whether to enable verbose logging
+            base_url: Optional OpenAI-compatible endpoint (e.g. a local llama-server instance).
+                Defaults to OpenAI's API when not set.
+            api_key: API key for the endpoint. Defaults to `OPENAI_API_KEY`, falling back to a
+                placeholder for local servers that don't check it.
         """
         super().__init__(
             model_name,
@@ -983,7 +999,10 @@ class OpenAILLMClient(LLMClient):
                 "Content cache integration for Gemini models is currently unstable and may lead to unexpected behavior."
             )
 
-        self.client = AsyncOpenAI()
+        self.client = AsyncOpenAI(
+            base_url=base_url,
+            api_key=api_key or os.getenv("OPENAI_API_KEY") or "not-needed",
+        )
 
     async def generate(
         self,
@@ -997,7 +1016,7 @@ class OpenAILLMClient(LLMClient):
         num_retries: int = 10,
         retry_strategy: str = "exponential_backoff_retry",
         **kwargs,
-    ) -> LLMResponse:
+    ):
         """
         Generate a response using the configured LLM.
 
@@ -1085,63 +1104,69 @@ class OpenAILLMClient(LLMClient):
         logger.info("Messages:")
         logger.info(messages)
 
-        reasoning_kwargs = {}
         if reasoning_effort is not None:
-            logger.info("Reasoning effort: %s", reasoning_effort)
-            reasoning_kwargs["reasoning_effort"] = reasoning_effort
-            reasoning_kwargs["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": reasoning_effort,
-            }
-
-        try:
-            # Use acompletion with full message history
-            response = await self.client.responses.parse(
-                model=self.model_name,
-                tools=[{"type": "web_search", "search_context_size": "low"}],
-                input=messages,
-                reasoning={"effort": "low"},
-                text_format=OpenAIModel,
-                # **{
-                #     k: v
-                #     for k, v in override_settings.items()
-                #     # this is weird. drop_params=True doesn't seem to always work
-                #     if k not in {"model_name", "prompt_name"}
-                # },
-                # drop_params=True,
-                # response_format=response_format_model,
-                # num_retries=num_retries,
-                # retry_strategy=retry_strategy,
-                # **reasoning_kwargs,
+            logger.info(
+                "Reasoning effort '%s' requested but ignored — not supported by "
+                "OpenAI-compatible chat-completions servers.",
+                reasoning_effort,
             )
 
-            parsed_response = None
-            # if response_format_model is not None:
-            #     # spoofing to avoid parse_chat_completion error
-            #     response.choices[0].message.refusal = None
-            #     # use OpenAI's parse_chat_completion to parse the response
-            #     parsed_response = parse_chat_completion(
-            #         response_format=response_format_model,
-            #         input_tools=NOT_GIVEN,
-            #         chat_completion=response,
-            #     )
+        override_settings = override_settings or {}
+        sampling_kwargs: Dict[str, Any] = {
+            "temperature": override_settings.get("temperature", self.temperature),
+            "max_tokens": override_settings.get("max_tokens", self.max_tokens),
+        }
+        for key in self._STANDARD_SAMPLING_KEYS:
+            if key in override_settings:
+                sampling_kwargs[key] = override_settings[key]
 
-            parsed = response.output_parsed.model_dump(mode="json")
+        extra_body = {
+            key: override_settings[key]
+            for key in self._EXTRA_SAMPLING_KEYS
+            if key in override_settings
+        }
+        chat_template_kwargs = {
+            key: override_settings[key]
+            for key in self._CHAT_TEMPLATE_KWARGS_KEYS
+            if key in override_settings
+        }
+        if chat_template_kwargs:
+            extra_body["chat_template_kwargs"] = chat_template_kwargs
+
+        try:
+            if response_format_model is not None:
+                response = await self.client.chat.completions.parse(
+                    model=self.model_name,
+                    messages=messages,
+                    response_format=response_format_model,
+                    extra_body=extra_body or None,
+                    **sampling_kwargs,
+                )
+                message = response.choices[0].message
+                parsed = message.parsed
+            else:
+                response = await self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    extra_body=extra_body or None,
+                    **sampling_kwargs,
+                )
+                message = response.choices[0].message
+                parsed = None
+
+            usage = response.usage
+            cached_tokens = 0
+            if usage is not None and usage.prompt_tokens_details is not None:
+                cached_tokens = usage.prompt_tokens_details.cached_tokens or 0
+
             yield LLMResponse(
-                # text=response.output_text,
-                text=response.output_parsed.text,
+                text=message.content or "",
                 metadata={
-                    "sources": parsed["citations"],
-                    # "prompt_tokens": response.usage.prompt_tokens,
-                    # "completion_tokens": response.usage.completion_tokens,
-                    # "cached_tokens": response.usage.prompt_tokens_details.cached_tokens
-                    # or 0,
+                    "prompt_tokens": usage.prompt_tokens if usage else 0,
+                    "completion_tokens": usage.completion_tokens if usage else 0,
+                    "cached_tokens": cached_tokens,
                 },
-                # parsed=(
-                #     parsed_response.choices[0].message.parsed
-                #     if parsed_response
-                #     else None
-                # ),
+                parsed=parsed,
             )
 
         except Exception as e:

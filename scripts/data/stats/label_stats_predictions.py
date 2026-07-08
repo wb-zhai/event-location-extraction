@@ -4,13 +4,19 @@ from collections import Counter
 from pathlib import Path
 
 
+def normalize_record(r: dict) -> dict:
+    if "predictions" not in r and isinstance(r.get("annotation"), dict):
+        r["predictions"] = r["annotation"].get("events") or []
+    return r
+
+
 def load_jsonl(path: Path):
     records = []
     with open(path) as f:
         for line in f:
             line = line.strip()
             if line:
-                records.append(json.loads(line))
+                records.append(normalize_record(json.loads(line)))
     return records
 
 

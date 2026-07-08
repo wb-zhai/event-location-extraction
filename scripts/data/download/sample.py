@@ -3,9 +3,13 @@
 Streams dataset/db/matrix_5M.jsonl (multi-GB, ~5M records) in two passes so
 the full file never has to fit in memory:
 
-  Pass 1 - count records per (adm0_code, label) stratum to compute
-  per-stratum sample quotas proportional to each stratum's share of the
-  corpus (largest-remainder allocation, sums to exactly --sample-size).
+  Pass 1 - count records per stratum to compute per-stratum sample quotas
+  proportional to each stratum's share of the corpus (largest-remainder
+  allocation, sums to exactly --sample-size). The stratum key is always
+  (adm0_code, label), optionally extended with a risk-factor cluster
+  (--stratify-by-cluster, mapping risk_factors -> cluster via
+  ontologies/zhai/science_clusters.json) and/or a publication decade
+  (--stratify-by-decade).
 
   Pass 2 - stream again (in parallel across --workers processes); for each
   record that clears the text-quality heuristic and isn't a near-duplicate
@@ -16,6 +20,10 @@ the full file never has to fit in memory:
   lives in the main process; workers only do the parallelizable per-record
   scoring (quality heuristic, shingles, identity keys).
 
+--stratify-by-decade forces an equal sample share per decade present in the
+corpus (rather than proportional to how decade-skewed the corpus is), so
+older, sparser decades aren't crowded out by recent years.
+
 Output preserves the original record schema (id, label, adm0_code,
 risk_factors, source{...}) with a "quality_score" field added.
 
@@ -23,6 +31,10 @@ Usage:
     python scripts/data/download/sample.py \
         dataset/db/matrix_5M.jsonl dataset/db/matrix_5M.sample_20k.jsonl \
         --sample-size 20000
+
+    python scripts/data/download/sample.py \
+        dataset/db/matrix_5M.jsonl dataset/db/matrix_5M.sample_20k.jsonl \
+        --sample-size 20000 --stratify-by-cluster --stratify-by-decade
 """
 
 from __future__ import annotations
@@ -53,7 +65,10 @@ from scripts.data.generation_v3.sample_articles import (
 )
 from scripts.data.generation_v3.io_utils import resolve_path
 
-StratumKey = tuple[str, str]
+StratumKey = tuple[str, str, str, str]  # (adm0_code, label, cluster, decade)
+DECADE_AXIS = 3
+
+DEFAULT_SCIENCE_CLUSTERS_PATH = Path("ontologies/zhai/science_clusters.json")
 
 # Quality/dedup heuristics only look at the first ANALYSIS_CHARS characters of
 # each article. Scanning full article bodies (avg ~18KB in this corpus) makes
@@ -111,8 +126,48 @@ def fast_shingles(text: str) -> frozenset[str]:
     return frozenset(" ".join(tokens[i : i + SHINGLE_SIZE]) for i in range(0, total, stride))
 
 
-def stratum_key(record: dict) -> StratumKey:
-    return (str(record.get("adm0_code") or ""), str(record.get("label") or ""))
+def load_cluster_map(path: Path) -> dict[str, str]:
+    """Map risk_factor name -> cluster name, from a science_clusters.json export."""
+    entries = orjson.loads(path.read_bytes())
+    return {entry["name"]: entry["cluster"] for entry in entries}
+
+
+def record_cluster(record: dict, cluster_map: dict[str, str]) -> str:
+    """Plurality-vote cluster among a record's risk_factors, ties broken by first occurrence.
+
+    Records can carry several risk_factors spanning different clusters; a single
+    scalar is needed for the stratum key, so we pick the cluster that covers the
+    most of the record's tags rather than e.g. always taking the first tag.
+    """
+    clusters = [cluster_map[rf] for rf in record.get("risk_factors") or [] if rf in cluster_map]
+    if not clusters:
+        return ""
+    counts = Counter(clusters)
+    best = max(counts.values())
+    return next(c for c in clusters if counts[c] == best)
+
+
+def record_decade(record: dict) -> str:
+    source = record.get("source")
+    source = source if isinstance(source, dict) else {}
+    published_at = str(source.get("published_at") or "")
+    if len(published_at) < 4 or not published_at[:4].isdigit():
+        return "unknown"
+    return str((int(published_at[:4]) // 10) * 10)
+
+
+def stratum_key(record: dict, cluster_map: dict[str, str] | None, use_decade: bool) -> StratumKey:
+    cluster = record_cluster(record, cluster_map) if cluster_map is not None else ""
+    decade = record_decade(record) if use_decade else ""
+    return (str(record.get("adm0_code") or ""), str(record.get("label") or ""), cluster, decade)
+
+
+_cwstate: dict = {}
+
+
+def _count_worker_init(cluster_map: dict[str, str] | None, use_decade: bool) -> None:
+    _cwstate["cluster_map"] = cluster_map
+    _cwstate["use_decade"] = use_decade
 
 
 def _count_line(raw: bytes) -> tuple[StratumKey | None, int]:
@@ -121,16 +176,24 @@ def _count_line(raw: bytes) -> tuple[StratumKey | None, int]:
     if not line:
         return None, n
     record = orjson.loads(line)
-    return stratum_key(record), n
+    return stratum_key(record, _cwstate["cluster_map"], _cwstate["use_decade"]), n
 
 
-def count_strata(input_path: Path, workers: int) -> Counter[StratumKey]:
+def count_strata(
+    input_path: Path,
+    workers: int,
+    *,
+    cluster_map: dict[str, str] | None,
+    use_decade: bool,
+) -> Counter[StratumKey]:
     counts: Counter[StratumKey] = Counter()
     file_size = input_path.stat().st_size
     # Parallelized like pass 2: fully JSON-parsing every record (including its large
     # text body) just to read adm0_code/label is CPU-bound, and single-threaded this
     # pass over a multi-GB, 5M-record corpus dominated runtime.
-    with input_path.open("rb") as fh, multiprocessing.Pool(workers) as pool, tqdm(
+    with input_path.open("rb") as fh, multiprocessing.Pool(
+        workers, initializer=_count_worker_init, initargs=(cluster_map, use_decade)
+    ) as pool, tqdm(
         total=file_size, unit="B", unit_scale=True, desc="Pass 1/2: counting strata"
     ) as bar:
         for key, n in pool.imap(_count_line, fh, chunksize=CHUNK_RECORD_CAP):
@@ -155,13 +218,35 @@ def _allocate_proportional(counts: Counter[StratumKey], n: int) -> dict[StratumK
     return quotas
 
 
+def _allocate_balanced_by_axis(counts: Counter[StratumKey], n: int, axis: int) -> dict[StratumKey, int]:
+    """Split `n` equally across distinct values of key[axis] seen in `counts`, then
+    allocate each share proportionally across the strata within that value.
+
+    Used for --stratify-by-decade: an equal quota per decade (rather than
+    proportional to how decade-skewed the corpus is) keeps sparse older
+    decades from being crowded out by recent years.
+    """
+    values = sorted({key[axis] for key in counts})
+    if not values or n <= 0:
+        return {key: 0 for key in counts}
+    base, extra = divmod(n, len(values))
+    quotas: dict[StratumKey, int] = {}
+    for i, value in enumerate(values):
+        group_counts = Counter({key: c for key, c in counts.items() if key[axis] == value})
+        group_n = base + (1 if i < extra else 0)
+        quotas.update(_allocate_proportional(group_counts, group_n))
+    return quotas
+
+
 def allocate_quotas(
     counts: Counter[StratumKey],
     sample_size: int,
     *,
     pos_ratio: float | None = None,
+    balance_decades: bool = False,
 ) -> dict[StratumKey, int]:
-    """Allocate `sample_size` across (adm0_code, label) strata.
+    """Allocate `sample_size` across strata: (adm0_code, label), optionally
+    extended with a risk-factor cluster and/or a publication decade.
 
     Without --pos-ratio, positive/negative mix follows whatever ratio already
     exists in the corpus (country proportions preserved within each label).
@@ -169,16 +254,27 @@ def allocate_quotas(
     first, then country quotas are allocated proportionally within each half
     independently -- so a country's positive and negative shares no longer
     have to match the label's corpus-wide country distribution.
+
+    Without --stratify-by-decade, decade mix (if the key carries one) follows
+    the corpus's natural distribution, same as country/cluster. With it, each
+    decade present gets an equal share of its group's quota before country/
+    cluster proportions are applied within that decade.
     """
+
+    def _allocate(group_counts: Counter[StratumKey], n: int) -> dict[StratumKey, int]:
+        if balance_decades:
+            return _allocate_balanced_by_axis(group_counts, n, axis=DECADE_AXIS)
+        return _allocate_proportional(group_counts, n)
+
     if pos_ratio is None:
-        return _allocate_proportional(counts, sample_size)
+        return _allocate(counts, sample_size)
 
     pos_counts = Counter({key: n for key, n in counts.items() if key[1] == "positive"})
     neg_counts = Counter({key: n for key, n in counts.items() if key[1] != "positive"})
     n_pos = round(sample_size * pos_ratio)
     n_neg = sample_size - n_pos
-    quotas = _allocate_proportional(pos_counts, n_pos)
-    quotas.update(_allocate_proportional(neg_counts, n_neg))
+    quotas = _allocate(pos_counts, n_pos)
+    quotas.update(_allocate(neg_counts, n_neg))
     return quotas
 
 
@@ -189,9 +285,16 @@ def allocate_quotas(
 _wstate: dict = {}
 
 
-def _worker_init(min_quality_score: float, quotas: dict[StratumKey, int]) -> None:
+def _worker_init(
+    min_quality_score: float,
+    quotas: dict[StratumKey, int],
+    cluster_map: dict[str, str] | None,
+    use_decade: bool,
+) -> None:
     _wstate["min_quality_score"] = min_quality_score
     _wstate["quotas"] = quotas
+    _wstate["cluster_map"] = cluster_map
+    _wstate["use_decade"] = use_decade
 
 
 def _score_line(raw: bytes) -> dict | None:
@@ -199,7 +302,7 @@ def _score_line(raw: bytes) -> dict | None:
     if not line:
         return None
     record = orjson.loads(line)
-    key = stratum_key(record)
+    key = stratum_key(record, _wstate["cluster_map"], _wstate["use_decade"])
     if _wstate["quotas"].get(key, 0) <= 0:
         return {"status": "no_quota"}
 
@@ -223,6 +326,7 @@ def _score_line(raw: bytes) -> dict | None:
     return {
         "record": record,
         "status": "ok",
+        "key": key,
         "qs": qs,
         "identity_keys": identity_keys,
         "shingles": shingles,
@@ -260,6 +364,8 @@ def sample_reservoirs(
     min_quality_score: float,
     workers: int,
     expected_total: int,
+    cluster_map: dict[str, str] | None = None,
+    use_decade: bool = False,
     risk_factor_diversity_weight: float = 0.0,
 ) -> tuple[dict[StratumKey, list], Counter[str]]:
     rng = random.Random(seed)
@@ -277,7 +383,9 @@ def sample_reservoirs(
 
     chunksize = max(1, min(CHUNK_RECORD_CAP, expected_total // (workers * 8))) if expected_total else 1
     with input_path.open("rb") as fh, multiprocessing.Pool(
-        workers, initializer=_worker_init, initargs=(min_quality_score, quotas)
+        workers,
+        initializer=_worker_init,
+        initargs=(min_quality_score, quotas, cluster_map, use_decade),
     ) as pool:
         results = pool.imap(_score_line, fh, chunksize=chunksize)
         for result in tqdm(
@@ -294,7 +402,7 @@ def sample_reservoirs(
                 continue
 
             record = result["record"]
-            key = stratum_key(record)
+            key = result["key"]
             identity_keys = result["identity_keys"]
             shingles = result["shingles"]
             if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
@@ -367,6 +475,8 @@ def print_summary(
 ) -> None:
     filled = sum(len(heap) for heap in reservoirs.values())
     distinct_risk_factors = {rf for row in output_rows for rf in row.get("risk_factors") or []}
+    distinct_clusters = {key[2] for key in quotas if quotas[key] > 0 and key[2]}
+    distinct_decades = {key[3] for key in quotas if quotas[key] > 0 and key[3]}
     print("Sampling summary:")
     print(f"  input_records: {stats['input']:,}")
     print(f"  quality_filtered: {stats['quality_filtered']:,}")
@@ -375,6 +485,10 @@ def print_summary(
     print(f"  requested_sample_size: {sample_size:,}")
     print(f"  output_records: {filled:,}")
     print(f"  distinct_risk_factors_covered: {len(distinct_risk_factors):,}")
+    if distinct_clusters:
+        print(f"  distinct_clusters_covered: {len(distinct_clusters):,}")
+    if distinct_decades:
+        print(f"  distinct_decades_covered: {sorted(distinct_decades)}")
     underfilled = [
         (key, quotas[key], len(reservoirs.get(key, [])))
         for key in quotas
@@ -383,8 +497,9 @@ def print_summary(
     if underfilled:
         underfilled.sort(key=lambda item: item[1] - item[2], reverse=True)
         print(f"  strata_below_quota: {len(underfilled)} (showing up to 10)")
-        for (adm0_code, label), quota, actual in underfilled[:10]:
-            print(f"    {adm0_code}/{label}: quota={quota} actual={actual}")
+        for (adm0_code, label, cluster, decade), quota, actual in underfilled[:10]:
+            stratum_desc = "/".join(part for part in (adm0_code, label, cluster, decade) if part)
+            print(f"    {stratum_desc}: quota={quota} actual={actual}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -427,6 +542,31 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Worker processes for parallel scoring in pass 2 (default: all CPU cores).",
     )
+    parser.add_argument(
+        "--stratify-by-cluster",
+        action="store_true",
+        help=(
+            "Add a risk-factor cluster dimension to the stratum key (via --science-clusters), "
+            "on top of (adm0_code, label). Records are assigned the cluster that covers the "
+            "plurality of their risk_factors; records with no mapped risk_factors (e.g. all "
+            "negatives) fall into a single unclustered stratum."
+        ),
+    )
+    parser.add_argument(
+        "--science-clusters",
+        type=Path,
+        default=DEFAULT_SCIENCE_CLUSTERS_PATH,
+        help="Path to the science_clusters.json risk_factor->cluster mapping (used with --stratify-by-cluster).",
+    )
+    parser.add_argument(
+        "--stratify-by-decade",
+        action="store_true",
+        help=(
+            "Add a publication-decade dimension to the stratum key, and give each decade "
+            "present in the corpus an equal share of the sample (rather than proportional to "
+            "how decade-skewed the corpus is), so sparse older decades aren't crowded out."
+        ),
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 
@@ -442,9 +582,15 @@ def main() -> int:
         print(f"Output already exists, use --overwrite to replace: {output_path}")
         return 1
 
+    cluster_map = None
+    if args.stratify_by_cluster:
+        cluster_map = load_cluster_map(resolve_path(args.science_clusters))
+
     workers = args.workers or os.cpu_count() or 1
-    counts = count_strata(input_path, workers)
-    quotas = allocate_quotas(counts, args.sample_size, pos_ratio=args.pos_ratio)
+    counts = count_strata(input_path, workers, cluster_map=cluster_map, use_decade=args.stratify_by_decade)
+    quotas = allocate_quotas(
+        counts, args.sample_size, pos_ratio=args.pos_ratio, balance_decades=args.stratify_by_decade
+    )
     reservoirs, stats = sample_reservoirs(
         input_path,
         quotas,
@@ -452,6 +598,8 @@ def main() -> int:
         min_quality_score=args.min_quality_score,
         workers=workers,
         expected_total=sum(counts.values()),
+        cluster_map=cluster_map,
+        use_decade=args.stratify_by_decade,
         risk_factor_diversity_weight=args.risk_factor_diversity_weight,
     )
     output_rows = flatten_output(reservoirs)
