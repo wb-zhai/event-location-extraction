@@ -1,0 +1,13 @@
+<context>
+<publish_date>{{PUBLISH_DATE}}</publish_date>
+<article_text>
+{{ARTICLE_TEXT}}
+</article_text>
+</context>
+
+<invalid_events>
+{{INVALID_EVENTS}}
+</invalid_events>
+
+Pour chaque événement de invalid_events (dans l'ordre), décidez s'il peut être corrigé ou doit être abandonné.
+Retournez un objet JSON avec un tableau "decisions" aligné un à un avec les événements en entrée.

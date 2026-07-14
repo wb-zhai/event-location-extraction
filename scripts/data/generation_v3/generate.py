@@ -30,6 +30,8 @@ DEFAULT_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "system_prompt.txt"
 USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "user_prompt.txt"
+SYSTEM_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "teacher" / "system_prompt.fr.txt"
+USER_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "teacher" / "user_prompt.fr.txt"
 ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 
 
@@ -955,7 +957,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument("--prompt", type=Path, default=USER_PROMPT_PATH)
+    parser.add_argument("--prompt", type=Path, default=None)
+    parser.add_argument(
+        "--french",
+        action="store_true",
+        help="Use the French translation of the teacher system/user prompts "
+        "(event categories and output format stay in English).",
+    )
     parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--temperature", type=float, default=0.0)
@@ -985,6 +993,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ontology-path", type=Path, default=ONTOLOGY_PATH)
 
     args = parser.parse_args()
+    if args.prompt is None:
+        args.prompt = USER_PROMPT_PATH_FR if args.french else USER_PROMPT_PATH
     args.definitions = (
         load_ontology_definitions(args.ontology_path) if args.use_definitions else None
     )
@@ -1009,7 +1019,8 @@ async def main() -> None:
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
     load_env_file(args.env_file)
-    system_prompt = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    system_prompt_path = SYSTEM_PROMPT_PATH_FR if args.french else SYSTEM_PROMPT_PATH
+    system_prompt = system_prompt_path.read_text(encoding="utf-8").strip()
     print("System prompt:")
     print(system_prompt)
     template = args.prompt.read_text(encoding="utf-8")

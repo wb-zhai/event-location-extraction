@@ -25,6 +25,8 @@ DEFAULT_MODEL = "gemini-3.1-pro-preview"
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "fixer" / "system_prompt.txt"
 USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "fixer" / "user_prompt.txt"
+SYSTEM_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "fixer" / "system_prompt.fr.txt"
+USER_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "fixer" / "user_prompt.fr.txt"
 ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 
 
@@ -687,7 +689,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mode", choices=["per-article", "per-event"], default="per-article")
-    parser.add_argument("--prompt", type=Path, default=USER_PROMPT_PATH)
+    parser.add_argument("--prompt", type=Path, default=None)
+    parser.add_argument(
+        "--french",
+        action="store_true",
+        help="Use the French translation of the fixer system/user prompts "
+        "(event categories and output format stay in English).",
+    )
     parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--temperature", type=float, default=0.0)
@@ -700,6 +708,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=4)
 
     args = parser.parse_args()
+    if args.prompt is None:
+        args.prompt = USER_PROMPT_PATH_FR if args.french else USER_PROMPT_PATH
     if args.input.resolve() == args.output.resolve():
         raise ValueError("--output must differ from --input.")
     if args.workers < 1:
@@ -715,7 +725,8 @@ async def main() -> None:
     load_env_file(args.env_file)
 
     ontology = load_ontology_labels()
-    system_prompt = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    system_prompt_path = SYSTEM_PROMPT_PATH_FR if args.french else SYSTEM_PROMPT_PATH
+    system_prompt = system_prompt_path.read_text(encoding="utf-8").strip()
     template = args.prompt.read_text(encoding="utf-8")
 
     raw_rows = iter_jsonl(args.input)

@@ -73,16 +73,16 @@ Return whether this article should proceed to the full food-security risk/event 
 </decision_rule>
 """
 
-DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL = """<role>
-You are a high-recall relevance gate for the extraction of risk events contributing to food crises.
+DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR = """<role>
+Vous êtes un filtre de pertinence à haut rappel pour l'extraction d'événements à risque contribuant aux crises alimentaires.
 </role>
 
 <goal>
-Decide, using a 3-way label, whether the article is likely to discuss an explicit risk event or food crisis itself, thus worth sending to the full extraction pipeline.
+Déterminez si l'article est susceptible de traiter d'un événement à risque explicite ou d'une crise alimentaire elle-même, et mérite donc d'être transmis au pipeline d'extraction complet.
 </goal>
 
 <event_categories>
-The pipeline extracts events in these categories:
+Le pipeline extrait des événements dans les catégories suivantes :
 - agricultural issues
 - conflict and security
 - displacement and migration
@@ -95,21 +95,17 @@ The pipeline extracts events in these categories:
 - weather and natural hazards
 </event_categories>
 
-<labels>
-- relevant: the article reports a real, current, concrete instance of at least one event category above -- whether that is the article's main subject or a clearly factual side mention within a story about something else (e.g. a football report noting "amid extreme rainfall affecting the region").
-- partially_relevant: the article's connection to an event category is genuinely ambiguous or underspecified -- e.g. a very early/developing situation with too little detail to confirm, or content that mixes clearly in-scope and out-of-scope material such that scope is unclear.
-- not_relevant: the article is not about any event category, or category-related terms appear only in a quote, anecdote, historical aside, hypothetical, or rhetorical comparison rather than in reporting on a real, current occurrence.
-</labels>
-
 <policy>
-- Favor recall over precision: what matters is whether a real, current occurrence of a category is reported at all, not how prominent it is in the article. A brief, factual side mention of a real event should be relevant, not merely partially_relevant -- reserve partially_relevant for genuine ambiguity or lack of detail, not for prominence.
-- Opinion/analysis pieces are relevant if they factually reference a concrete, current event or situation in one of the categories, even briefly, and not_relevant if they only use category language rhetorically (e.g. domestic politics, culture, sports, entertainment, personal profiles that merely borrow a related term or metaphor).
-- If the article is borderline, ambiguous, or only partially visible in the preview, prefer partially_relevant over not_relevant, and prefer relevant over partially_relevant when a real, current in-scope occurrence is clearly described, however briefly.
-- Use only the provided title and article preview.
+- Privilégiez le rappel plutôt que la précision. La pertinence dépend du fait qu'une instance réelle, actuelle et concrète d'une catégorie soit rapportée dans l'article -- PAS du fait qu'il s'agisse du sujet principal de l'article. Une brève mention incidente d'un événement réel (par exemple, un article sportif notant « en pleines pluies extrêmes touchant la région ») rend l'article pertinent.
+- Ce qui disqualifie une mention n'est pas sa proéminence mais sa nature : un langage de catégorie utilisé seulement comme citation, anecdote historique, hypothèse ou comparaison rhétorique (par exemple « les prix ont grimpé comme lors de la famine des années 1980 ») ne décrit PAS une occurrence réelle et actuelle, et ne rend pas l'article pertinent à lui seul.
+- Les articles d'opinion/analyse sont pertinents s'ils font référence factuellement à un événement ou une situation concrète et actuelle relevant d'une des catégories, même brièvement, et non pertinents s'ils n'utilisent le langage de catégorie que de manière rhétorique (par exemple politique intérieure, culture, sport, divertissement, profils personnels qui empruntent seulement un terme ou une métaphore connexe).
+- Si l'article est limite, ambigu, ou seulement partiellement visible dans l'aperçu, marquez-le comme pertinent.
+- Ne marquez l'article comme non pertinent que lorsque le titre et l'aperçu ne donnent aucune indication d'une instance réelle, actuelle et concrète d'une catégorie d'événement -- c'est-à-dire que tout le langage lié à une catégorie est rhétorique, historique, hypothétique, ou cité sans décrire une occurrence réelle actuelle.
+- Utilisez uniquement le titre et l'aperçu de l'article fournis.
 </policy>
 """
 
-DEFAULT_RELEVANCE_USER_PROMPT_3LABEL = """<context>
+DEFAULT_RELEVANCE_USER_PROMPT_FR = """<context>
 <title>
 {title}
 </title>
@@ -120,14 +116,14 @@ DEFAULT_RELEVANCE_USER_PROMPT_3LABEL = """<context>
 </context>
 
 <task>
-Return a 3-way relevance label for whether this article should proceed to the full food-security risk/event extraction pipeline.
+Indiquez si cet article doit être transmis au pipeline complet d'extraction des risques/événements de sécurité alimentaire.
 </task>
 
 <decision_rule>
-- relevance_label="relevant" if the article reports a real, current, concrete instance of at least one of the following event categories, even as a brief or secondary detail within a story mainly about something else: agricultural production issues, conflicts and violence, economic issues, environmental issues, food crisis, forced displacement, humanitarian aid, land-related issues, pests and diseases, political instability, or weather shocks.
-- relevance_label="partially_relevant" if the article's connection to one of these categories is genuinely ambiguous or underspecified (too little detail, or unclear mix of in-scope/out-of-scope content) -- not merely because the mention is brief or secondary.
-- relevance_label="not_relevant" if the article is clearly unrelated to all of the above categories, or category-related terms appear only as a quote, anecdote, historical aside, hypothetical, or rhetorical comparison rather than describing a genuine current occurrence.
-- If uncertain between two labels, prefer the more inclusive one (not_relevant < partially_relevant < relevant).
+- is_relevant=true si l'article rapporte une instance réelle, actuelle et concrète d'au moins une des catégories d'événements suivantes, même comme détail bref ou secondaire dans un article traitant principalement d'autre chose : agricultural issues, conflict and security, displacement and migration, economic stress, environmental issues, food insecurity, humanitarian disruption, political instability, public health, or weather and natural hazards.
+- Une anecdote historique, une hypothèse, ou une comparaison rhétorique qui utilise un langage lié à une catégorie sans décrire une occurrence réelle actuelle ne compte pas comme preuve (la proéminence dans l'article n'a pas d'importance ; ce qui compte est de savoir si cela décrit quelque chose de réel et actuel).
+- En cas d'incertitude quant à savoir si le contenu de l'article décrit une occurrence réelle, actuelle et dans le périmètre, retournez is_relevant=true.
+- is_relevant=false uniquement lorsque l'article est clairement sans rapport avec toutes les catégories ci-dessus, ou lorsque tout le langage lié à une catégorie est rhétorique, historique, hypothétique, ou cité plutôt que de décrire une occurrence réelle actuelle.
 </decision_rule>
 """
 
@@ -187,19 +183,6 @@ class RelevanceDecision(BaseModel):
     )
 
 
-RELEVANCE_LABELS_3 = ("relevant", "partially_relevant", "not_relevant")
-
-
-class RelevanceDecision3Label(BaseModel):
-    reason: str = Field(default="")
-    confidence: float = Field(
-        default=0.0, description="Confidence from 0.0 to 1.0 in the relevance decision."
-    )
-    relevance_label: str = Field(
-        ..., description="One of: relevant, partially_relevant, not_relevant."
-    )
-
-
 def clean_relevance_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     if hasattr(parsed, "model_dump"):
         parsed = parsed.model_dump()
@@ -215,30 +198,6 @@ def clean_relevance_decision(parsed: dict[str, Any]) -> dict[str, Any]:
     reason = str(parsed.get("reason", "")).strip()
     return {
         "is_relevant": is_relevant,
-        "confidence": confidence,
-        "reason": reason,
-    }
-
-
-def clean_relevance_decision_3label(parsed: dict[str, Any]) -> dict[str, Any]:
-    if hasattr(parsed, "model_dump"):
-        parsed = parsed.model_dump()
-    if not isinstance(parsed, dict):
-        parsed = {}
-
-    label = str(parsed.get("relevance_label", "relevant")).strip().lower()
-    label = label.replace(" ", "_").replace("-", "_")
-    if label not in RELEVANCE_LABELS_3:
-        label = "relevant"
-    try:
-        confidence = float(parsed.get("confidence", 0.0) or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-    confidence = max(0.0, min(confidence, 1.0))
-    reason = str(parsed.get("reason", "")).strip()
-    return {
-        "relevance_label": label,
-        "is_relevant": label != "not_relevant",
         "confidence": confidence,
         "reason": reason,
     }
@@ -262,7 +221,6 @@ async def classify_article_relevance(
     confidence_threshold: float,
     system_prompt: str | None = None,
     user_prompt_template: str | None = None,
-    use_3label_prompt: bool = False,
     verbose: bool = False,
     override_settings: dict[str, Any] | None = None,
     max_attempts: int = 3,
@@ -275,17 +233,9 @@ async def classify_article_relevance(
     )
 
     if system_prompt is None:
-        system_prompt = (
-            DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL
-            if use_3label_prompt
-            else DEFAULT_RELEVANCE_SYSTEM_PROMPT
-        )
+        system_prompt = DEFAULT_RELEVANCE_SYSTEM_PROMPT
     if user_prompt_template is None:
-        user_prompt_template = (
-            DEFAULT_RELEVANCE_USER_PROMPT_3LABEL
-            if use_3label_prompt
-            else DEFAULT_RELEVANCE_USER_PROMPT
-        )
+        user_prompt_template = DEFAULT_RELEVANCE_USER_PROMPT
 
     preview_text = truncate_text(text, max_chars)
     prompt = user_prompt_template.format(title=title, text=preview_text)
@@ -302,11 +252,7 @@ async def classify_article_relevance(
         if "pro" in client.model_name
         else "minimal" if "3" in client.model_name else None
     )
-    response_format = (
-        {"reason": str, "relevance_label": str, "confidence": float}
-        if use_3label_prompt
-        else {"reason": str, "is_relevant": bool, "confidence": float}
-    )
+    response_format = {"reason": str, "is_relevant": bool, "confidence": float}
 
     last_error: Exception | None = None
     for attempt in range(1, max_attempts + 1):
@@ -341,13 +287,11 @@ async def classify_article_relevance(
                 prompt=prompt,
                 answer=raw_answer,
             )
-            parsed = raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
-            if use_3label_prompt:
-                decision = clean_relevance_decision_3label(parsed)
-                decision_label = decision["relevance_label"]
-            else:
-                decision = clean_relevance_decision(parsed)
-                decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
+            parsed = (
+                raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
+            )
+            decision = clean_relevance_decision(parsed)
+            decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
             return {
                 "decision": decision_label,
                 "is_relevant": decision["is_relevant"],
@@ -461,7 +405,12 @@ async def process_record(client, record, args):
                 record_id=record_id,
                 max_chars=args.max_chars,
                 confidence_threshold=args.confidence_threshold,
-                use_3label_prompt=getattr(args, "use_3label_prompt", False),
+                system_prompt=(
+                    DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else None
+                ),
+                user_prompt_template=(
+                    DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else None
+                ),
                 verbose=args.verbose,
                 override_settings=getattr(args, "override_settings", None),
                 max_attempts=args.max_attempts,
@@ -501,19 +450,6 @@ _RELEVANCE_RESPONSE_SCHEMA = {
         "is_relevant": {"type": "BOOLEAN"},
     },
     "required": ["reason", "confidence", "is_relevant"],
-}
-
-_RELEVANCE_RESPONSE_SCHEMA_3LABEL = {
-    "type": "OBJECT",
-    "properties": {
-        "reason": {"type": "STRING"},
-        "confidence": {"type": "NUMBER"},
-        "relevance_label": {
-            "type": "STRING",
-            "enum": list(RELEVANCE_LABELS_3),
-        },
-    },
-    "required": ["reason", "confidence", "relevance_label"],
 }
 
 
@@ -611,13 +547,8 @@ async def _execute_batch_chunk(
     chunk_index: int,
     poll_interval: int,
     confidence_threshold: float,
-    use_3label_prompt: bool = False,
 ) -> list[dict[str, Any]]:
-    response_schema = (
-        _RELEVANCE_RESPONSE_SCHEMA_3LABEL
-        if use_3label_prompt
-        else _RELEVANCE_RESPONSE_SCHEMA
-    )
+    response_schema = _RELEVANCE_RESPONSE_SCHEMA
     request_path = output_path.with_suffix(
         f".batch.part-{chunk_index:04d}.requests.jsonl"
     )
@@ -699,14 +630,8 @@ async def _execute_batch_chunk(
                         str(line.get("error") or "Missing batch response.")
                     )
                 parsed = json.loads(_batch_response_text(response))
-                if use_3label_prompt:
-                    decision = clean_relevance_decision_3label(parsed)
-                    decision_label = decision["relevance_label"]
-                else:
-                    decision = clean_relevance_decision(parsed)
-                    decision_label = (
-                        "relevant" if decision["is_relevant"] else "irrelevant"
-                    )
+                decision = clean_relevance_decision(parsed)
+                decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
                 metadata = _batch_response_metadata(response)
                 relevance_info = {
                     "decision": decision_label,
@@ -756,12 +681,9 @@ async def run_batch_relevance(
 ) -> list[dict[str, Any]]:
     from scripts.data.generation_v3.costs import aggregate, report
 
-    use_3label_prompt = getattr(args, "use_3label_prompt", False)
     client = GeminiLLMClient(model_name=args.model, system_prompt=None)
     default_system_prompt = (
-        DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL
-        if use_3label_prompt
-        else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else DEFAULT_RELEVANCE_SYSTEM_PROMPT
     )
     system_prompt = (
         args.system_prompt
@@ -769,9 +691,7 @@ async def run_batch_relevance(
         else default_system_prompt
     )
     user_prompt_template = (
-        DEFAULT_RELEVANCE_USER_PROMPT_3LABEL
-        if use_3label_prompt
-        else DEFAULT_RELEVANCE_USER_PROMPT
+        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else DEFAULT_RELEVANCE_USER_PROMPT
     )
 
     tasks = [
@@ -802,7 +722,6 @@ async def run_batch_relevance(
             chunk_index=chunk_index,
             poll_interval=args.batch_poll_interval_seconds,
             confidence_threshold=args.confidence_threshold,
-            use_3label_prompt=use_3label_prompt,
         )
         all_results.extend(chunk_results)
 
@@ -928,7 +847,11 @@ async def process_file(args):
         for r in errors:
             msg = str(r["relevance"]["error"])
             error_counts[msg] = error_counts.get(msg, 0) + 1
-        print(f"Errors: {len(errors)} ({len(errors)/total:.2%})" if total else f"Errors: {len(errors)}")
+        print(
+            f"Errors: {len(errors)} ({len(errors)/total:.2%})"
+            if total
+            else f"Errors: {len(errors)}"
+        )
         for msg, count in sorted(error_counts.items(), key=lambda kv: -kv[1]):
             print(f"  [{count}x] {msg}")
 
@@ -1022,11 +945,10 @@ def main():
         help="Use LLM for relevance classification.",
     )
     parser.add_argument(
-        "--use-3label-prompt",
+        "--french",
         action="store_true",
-        help="Use the 3-label (relevant / partially_relevant / not_relevant) relevance "
-        "prompt instead of the default 2-label (is_relevant true/false) prompt. Only "
-        "applies when --use-llm is set.",
+        help="Use the French translation of the relevance system/user prompts "
+        "(event categories and output format stay in English).",
     )
     parser.add_argument(
         "--limit",
