@@ -11,171 +11,60 @@ Return only valid JSON.
 Do not return markdown, comments, explanations, or code fences.
 Use only article_text and publish_date as evidence.
 Do not use world knowledge, geography knowledge, or metadata outside the provided fields.
-Never invent locations, dates, affected groups, severity, or event types.
+Never invent locations, dates, severity, or event types.
 Every string field marked as a verbatim quote must be an exact substring of article_text.
-event_type MUST be copied character-for-character from the allowed list below. Never normalize, pluralize, singularize, capitalize, snake_case, hyphenate, or invent a variant. For example: "flood" is INVALID (use "floods"); "armed_conflict" and "Conflict" are INVALID (use "conflict"); "civil unrest" is INVALID (use "civil strife"); "air_strike" is INVALID (use "air attack"); "food_shortage" and "food shortage" are INVALID (use "food crisis" or "food insecurity"); "disease outbreak" is INVALID (use "cholera outbreak" or "epidemics affecting agriculture"); "malnutrition" is INVALID (use "malnourished").
+event_type MUST be copied character-for-character from the allowed list below, exactly as written (lowercase, natural word order, space-separated). Never normalize, pluralize, singularize, capitalize, snake_case, hyphenate, or invent a variant not present in the list.
 </critical_rules>
 
 <allowed_event_types_with_descriptions>
-cyclone: Mentions cyclones, hurricanes, typhoons, or tropical storms causing damaging wind, rain, storm surge, or destruction.
-harvest devastation: Mentions harvests, yields, or crop output being severely damaged, lost, or destroyed.
-rising inflation: Mentions inflation, rapidly rising prices, or declining purchasing power affecting households or food access.
-prolonged fighting: Mentions sustained or long-running fighting, conflict, or violence over an extended period.
-air attack: Mentions attacks carried out from the air, including airstrikes, aerial bombardment, or drone strikes.
-locusts: Mentions locust infestations or swarms damaging crops, pasture, or agricultural production.
-rival warlords: Mentions competing warlords or faction leaders fighting for territory, authority, or resources.
-water distribution shortages: Mentions shortages or failures in water delivery, irrigation supply, or distribution systems affecting people, farming, or livestock.
-militia groups: Mentions militias, paramilitary groups, or irregular armed groups involved in violence or insecurity.
-reduced imports: Mentions a reduction in imports or imported goods that constrains supply, markets, or food availability.
-prolonged dry spell: Mentions an extended period of unusually dry weather with little rain, especially when it harms crops, pasture, or water access.
-population crisis: Mentions large-scale population distress or demographic strain not better captured by a more specific label.
-floods: Mentions flooding, inundation, overflowing rivers, flash floods, or submerged land causing damage or displacement.
-migration: Mentions crisis-driven migration or movement of people away from affected areas.
-environmental degradation: Mentions deterioration of the natural environment, such as degraded ecosystems, damaged soils, depleted water sources, or declining ecological conditions.
-pests: Mentions agricultural pests or infestations harming crops, seeds, stored food, or pasture, excluding labels that name a specific pest.
-farmland loss or access: Mentions loss of farmland, restricted access to farmland, or disputes specifically centered on cultivated agricultural land.
-siege: Mentions siege conditions, encirclement, or the blocking of movement, supplies, or access to pressure a town, city, or population.
-gastrointestinal distress: Mentions severe gastrointestinal suffering linked to hunger, starvation, or inability to retain food, rather than general disease discussion.
-drought: Mentions drought or severe seasonal rainfall deficit causing water stress, crop failure, or livelihood damage.
-humanitarian disaster: Mentions a major humanitarian emergency marked by large-scale suffering and unmet survival needs.
-civil strife: Mentions internal unrest, violent disorder, or instability within a society or state.
-economic collapse: Mentions severe economic breakdown, collapse of markets, collapse of national income, or systemic financial failure.
-cholera outbreak: Mentions an outbreak or epidemic of cholera.
-land invasions: Mentions forcible occupation or takeover of land by groups, settlers, armed actors, or political supporters.
-withheld relief: Mentions aid or relief being delayed, blocked, denied, diverted, or intentionally not delivered.
-economic crisis: Mentions broad economic crisis, instability, recession, currency stress, or widespread financial hardship.
-cattle death: Mentions cattle dying in significant numbers due to drought, disease, starvation, lack of water, or related shocks.
-terrorism: Mentions terrorist actors, terrorist attacks, or violence explicitly described as terrorism.
-bombing campaign: Mentions repeated or organized bombing over time, including strategic bombardment or a sustained explosives campaign.
-flee: Mentions people fleeing, escaping, or running from violence, disaster, persecution, or hunger.
-police torture: Mentions torture or severe mistreatment carried out by police or security forces.
-natural disaster: Mentions a destructive natural hazard in general terms when no more specific hazard label is clearly stated.
-increased external debt: Mentions rising foreign debt, external borrowing burdens, or debt obligations to international creditors.
-aid worker deaths: Mentions aid workers being killed or dying while engaged in humanitarian work.
-lack of roads: Mentions inadequate roads, impassable routes, or road scarcity limiting transport, farming, or market access.
-severe rains: Mentions unusually heavy or intense rainfall causing damage, disruption, erosion, flooding, or crop loss.
-failed crops: Mentions crops failing, not maturing, producing poorly, or being lost before harvest.
-insufficient rainfall: Mentions rainfall being absent, below normal, late, scanty, or insufficient for seasonal or agricultural needs.
-epidemics affecting agriculture: Mentions widespread outbreaks or epidemics affecting crops or livestock, excluding labels that name a specific disease.
-land grab: Mentions land grabbing or acquisition of land through coercive, elite-driven, or unjust means.
-international embargo: Mentions externally imposed embargoes or trade restrictions limiting access to goods, markets, or supplies.
-blockade: Mentions blockades preventing movement of goods, aid, people, or commercial traffic.
-international terrorists: Mentions transnational terrorist groups, foreign terrorist networks, or cross-border extremist actors.
-internal strife: Mentions domestic conflict or internal instability within a country.
-makeshift camps: Mentions temporary camps, improvised shelters, or informal settlements housing displaced people.
-land reform: Mentions land reform policies, redistribution, or restructuring of land ownership or access.
-forests destroyed: Mentions forests being destroyed, cleared, burned, or heavily degraded.
-economic impoverishment: Mentions deepening poverty, impoverishment, or chronic decline in economic well-being.
-malnourished: Mentions people being malnourished, undernourished, wasted, or clinically affected by poor nutrition.
-restricted relief flights: Mentions relief flights being blocked, limited, suspended, or unable to reach affected areas.
-restricted humanitarian access: Mentions denial or obstruction of humanitarian access, including blocked corridors or bureaucratic restrictions.
-carbon emissions: Mentions carbon emissions, carbon release, or carbon-related environmental harm.
-call for donations: Mentions public appeals for donations, fundraising, or support for relief efforts.
-land seizures: Mentions land being confiscated, expropriated, or forcibly taken from owners or users.
-food insecurity: Mentions inadequate access to sufficient, safe, or stable food, including acute or chronic food insecurity.
-pirates: Mentions piracy, pirate attacks, or armed robbery at sea affecting trade, aid, or livelihoods.
-foreign troops: Mentions troops from another country deployed in conflict, occupation, intervention, or security operations.
-continued deterioration: Mentions worsening conditions over time without a single dominant cause.
-totalitarian rule: Mentions totalitarian rule or near-total political domination by a repressive state.
-conflict: Mentions armed conflict, violent clashes, or warfare in general when no more specific violence label applies.
-acute hunger: Mentions severe and immediate hunger at emergency levels requiring urgent assistance.
-human rights abuses: Mentions killings, torture, disappearances, arbitrary detention, or other serious rights violations.
-military junta: Mentions rule by a governing military council or military leaders after seizure of power.
-lack of agricultural infrastructure: Mentions missing or inadequate agricultural infrastructure such as storage, irrigation, machinery, or farm support systems.
-toll on livestock: Mentions severe negative effects on livestock, including weakness, losses, reduced productivity, or mortality.
-dependence on international aid: Mentions survival, recovery, or basic needs being impossible without external aid.
-mismanagement: Mentions poor governance, bad administration, or policy failure contributing to crisis outcomes.
-displacement: Mentions people being displaced from their homes, including internal displacement and forced relocation.
-the offensive: Mentions a military offensive, assault, or major push by armed forces to seize territory or defeat opponents.
-tragedy: Mentions a grave human disaster in broad terms when no clearer label applies.
-gangs of bandits: Mentions organized bandit groups carrying out raids, theft, or violent predation.
-continued strife: Mentions ongoing unrest, violence, or instability persisting over time.
-rinderpest: Mentions rinderpest specifically, including outbreaks or effects on cattle and pastoral livelihoods.
-reduced national output: Mentions decline in a country's total production, output, or economic activity.
-clans: Mentions clans as organized social or armed groups involved in rivalry, control, or conflict dynamics.
-aid appeal: Mentions formal humanitarian appeals for emergency assistance or funding.
-convoys: Mentions aid or supply convoys, especially when they are blocked, attacked, or required for access.
-food crisis: Mentions a serious food crisis marked by widespread shortages, hunger, or inability to meet food needs.
-overthrow: Mentions the removal or toppling of a government, ruler, or regime by force or political action.
-cattle plague: Mentions cattle plague, especially disease-related references affecting herds and livestock survival.
-catastrophe: Mentions catastrophe or disaster in severe but nonspecific terms when no more precise label fits.
-foreign aid: Mentions external assistance provided by foreign governments, international organizations, or donors.
-international alarm: Mentions strong international concern, warning, or alarm over a worsening situation.
-collapse of government: Mentions state collapse or breakdown of governing institutions.
-dehydrated: Mentions dehydration or severe bodily water loss associated with hunger or survival crisis.
-repression: Mentions systematic repression by authorities, including crackdowns, intimidation, arrests, or coercion.
-cycle of poverty: Mentions persistent or self-reinforcing poverty trapping households or communities over time.
-rebel insurgency: Mentions sustained armed insurgency by rebel groups against the state or other authorities.
-weather extremes: Mentions unusually severe or extreme weather conditions in broad terms without naming a specific hazard.
-slashed export: Mentions sharp reductions in exports or export earnings affecting the economy.
-potato blight: Mentions potato blight specifically, including disease damaging potato crops.
-corrupt government: Mentions a government characterized as corrupt, predatory, or abusing public office.
-clan battle: Mentions fighting or violent clashes between clans.
-oppressive regimes: Mentions oppressive governments marked by coercion, repression, denial of rights, or authoritarian control.
-unable to sow: Mentions farmers being unable to plant or sow due to insecurity, drought, lack of inputs, or displacement.
-price of food: Mentions food prices, especially when unusually high cost or affordability is highlighted.
-authoritarian rule: Mentions authoritarian governance, concentrated political control, or restricted political freedoms.
-bad harvests: Mentions poor harvest outcomes or below-normal seasonal agricultural production.
-violent suppression: Mentions authorities or armed actors suppressing dissent, protest, or communities through force.
-brain drain: Mentions loss of skilled workers or educated people leaving a country, harming institutions or the economy.
-price rise: Mentions rising prices in general, especially when linked to essential goods or household stress.
-refugees: Mentions refugees who crossed borders or are explicitly described as refugees.
-years of warfare: Mentions warfare continuing over many years, emphasizing long duration and cumulative damage.
-destructive pattern: Mentions a recurring harmful pattern of shocks, violence, or disruption.
-transport bottleneck: Mentions logistical choke points or transport constraints affecting movement of goods or agricultural supply.
-harvest decline: Mentions harvest quantity declining compared with normal levels or previous periods.
-rising food prices: Mentions food prices increasing over time and worsening affordability or access.
-humanitarian situation: Mentions the overall humanitarian condition, especially severity of needs and suffering.
-self reliance: Mentions efforts or expectations for affected populations to become self-reliant rather than dependent on aid.
-land degradation: Mentions deterioration of land quality, such as erosion, salinization, nutrient loss, or declining productivity.
-hunger crises: Mentions repeated or multiple hunger emergencies affecting populations or regions.
-secession: Mentions secessionist efforts, breakaway movements, or attempts to separate from an existing state.
-mass hunger: Mentions hunger affecting very large populations at scale.
-looting: Mentions looting, pillaging, or theft of homes, goods, warehouses, or aid supplies during unrest or conflict.
-forced eviction from land: Mentions peasants or rural communities being forced off land by elites, violence, or policy.
-apathy from starvation: Mentions severe weakness, lethargy, or loss of responsiveness associated with starvation or extreme deprivation.
-wreaked havoc: Mentions a destructive event causing widespread damage or disruption without enough detail for a narrower label.
-regimes toppled: Mentions regimes being overthrown, brought down, or removed from power.
-massive starvation: Mentions starvation on a very large scale, including widespread deaths or extreme deprivation.
-military dictatorship: Mentions dictatorship under military rule with civilian political authority suppressed.
-infrastructure damage: Mentions damage to roads, bridges, irrigation, markets, storage, or other infrastructure affecting livelihoods or food systems.
-water availability: Mentions reduced, limited, or stressed water availability for people, livestock, or agriculture.
-lack of alternatives: Mentions absence of viable coping options, livelihood substitutes, or escape routes.
-economic rise: Mentions an increase in an adverse economic variable when context indicates prices, costs, or market stress.
-anti-western policies: Mentions state policies framed as anti-Western, especially when tied to isolation, sanctions, or political rupture.
-ecological crisis: Mentions broad ecological crisis involving ecosystem collapse, biodiversity loss, or resource depletion.
-alarming level: Mentions a problem reaching an alarming or critical threshold without enough specificity for a narrower label.
-mayhem: Mentions chaotic violence, lawlessness, or disorder causing insecurity and disruption.
-life-threatening hunger: Mentions hunger severe enough to endanger life or immediate physical survival.
-man-made disaster: Mentions disaster caused primarily by human action, policy, conflict, or negligence.
-slave trade: Mentions enslavement, slave trading, or trafficking in persons.
-climatic hazards: Mentions climate-related hazards broadly, including droughts, floods, storms, and temperature extremes.
-devastated the economy: Mentions a shock severely damaging the economy, markets, employment, or national income.
-corruption: Mentions bribery, embezzlement, patronage, theft of public resources, or corrupt practices.
-clan warfare: Mentions organized warfare or sustained violent conflict between clans.
-brutal government: Mentions a government using extreme violence, cruelty, or abusive force against populations.
-coup: Mentions a coup or sudden unconstitutional seizure of power, including coup d'etat.
-international intervention: Mentions military, diplomatic, peacekeeping, or humanitarian intervention by external states or international bodies.
-lack of authority: Mentions absence of effective governing authority, weak state control, or administrative vacuum.
-lack of cultivation: Mentions farmland not being cultivated, left unplanted, or underused during crisis conditions.
-poor soil quality: Mentions infertile, degraded, eroded, or low-quality soil limiting agricultural production.
-disrupted trade: Mentions trade flows being interrupted, reduced, blocked, or made unreliable.
-food assistance: Mentions food aid, ration distribution, feeding programs, or direct food support.
-greenhouse gases: Mentions greenhouse gas emissions or atmospheric pollutants driving climate or environmental harm.
-disruption to farming: Mentions farming activities being interrupted by insecurity, weather, displacement, labor shortages, or lack of inputs.
-dysfunction: Mentions severe breakdown or dysfunction in systems supporting survival, services, or food access.
-power struggle: Mentions political or military competition for state control, leadership, or authority.
-livestock deaths: Mentions livestock dying, having died, or suffering mass mortality due to drought, disease, starvation, or neglect.
-asylum seekers: Mentions people seeking asylum or applying for protection in another country.
-climate change: Mentions long-term climate change, global warming, or climate-driven shifts affecting risk or livelihoods.
-politically engineered: Mentions a crisis or harmful condition described as intentionally created, manipulated, or worsened by political actors.
-warlord: Mentions a warlord as an armed local power holder controlling territory, fighters, or resources outside normal state authority.
-dictators: Mentions dictators or personalist rulers exercising unchecked political control.
-jihadist groups: Mentions jihadist or Islamist militant groups involved in insurgency, attacks, or territorial control.
-infant mortality: Mentions deaths of infants, especially when elevated mortality is linked to hunger, deprivation, or crisis.
-burning houses: Mentions homes or settlements being burned, often during raids, forced displacement, or land-related violence.
-major offensive: Mentions a large-scale military offensive involving major troop movement, territorial aims, or intensified combat.
-stolen food aid: Mentions food aid being looted, diverted, stolen, or seized before reaching intended recipients.
+crop failure: Reduced or failed crop yields and declining farm output, e.g. failed harvests or shrinking production. Use only for the crop outcome itself; tag the cause separately (drought, pest infestation, flooding). Distinct from agricultural input shortage (missing fertilizer/seed/fuel) and livestock loss (animals, not crops).
+agricultural infrastructure damage: Damage or degradation of physical infrastructure supporting agriculture and rural livelihoods, such as irrigation systems, grain storage, mills, or rural roads. Distinct from crop failure (the yield outcome) and from land degradation (the land resource itself).
+land degradation: Loss or destruction of productive land: deforestation, soil erosion, desertification, land loss. Distinct from environmental degradation (general environment, not farmland) and crop failure (yield outcome).
+livestock loss: Death, disease, or distress sale of livestock, including animal epidemics, herd losses, and fodder or pasture shortage. Distinct from pest infestation (crop pests) and disease spread (human disease).
+agricultural input shortage: Shortage or unaffordability of farming inputs: fertilizer, seeds, fuel, pesticides, animal feed. Distinct from crop failure (the resulting yield loss) and food price inflation (consumer food prices).
+pest infestation: Invasion or spread of crop pests such as locusts, armyworm, or other insects damaging agriculture. Distinct from disease spread (human disease) and livestock loss (animal disease).
+armed violence: Armed hostilities between military forces or armed groups: warfare, armed clashes, conflict outbreak or escalation, attacks by military forces. The default label for active conflict. Distinct from militant activity (insurgent/terrorist group presence or operations), aerial bombardment (shelling/airstrikes specifically), and protests (civil unrest without armed combat).
+aerial bombardment: Bombing or shelling: airstrikes, artillery fire, explosive munitions. A specific mode of attack; if the article describes general fighting without bombardment, use armed violence.
+supply route blockade: Physical blockade of roads, corridors, or transportation routes preventing movement of goods or people. Distinct from aid obstruction (specifically blocking humanitarian aid) and trade disruption (policy-level restrictions like sanctions).
+militant activity: Presence, operations, or attacks of insurgent, militant, or terrorist groups, and related security concerns. If two organized forces fight, prefer armed violence; use this label when the salient fact is the militant group itself.
+looting: Robbery, banditry, plundering, and organized criminal theft of property. Distinct from aid diversion (theft of humanitarian aid specifically).
+human rights violation: Abuse or violation of human or civil rights: repression, persecution, rights abuses against individuals or groups. Distinct from civilian casualties (deaths/injuries) — an article can carry both labels.
+civilian casualties: Deaths or injuries of civilians, including mass casualty incidents. Use for the human toll; tag the causing event separately (armed violence, aerial bombardment, flooding, etc.).
+protests: Public demonstrations, riots, strikes, and civil unrest, including food riots and anti-government protests. Distinct from armed violence (organized armed combat) and governance breakdown (state dysfunction).
+infrastructure destruction: Destruction or severe damage of critical infrastructure: roads, bridges, power plants, water systems, hospitals, and buildings, whether from conflict or natural hazards. Distinct from agricultural infrastructure damage (farm-specific facilities) and power outage (supply failure without physical destruction). Tag the causing event separately (aerial bombardment, flooding, earthquake).
+internal displacement: People forced to flee or leave their homes within their own country: displaced populations, evacuations, people fleeing villages or towns. Distinct from refugee movement (crossing international borders) and migrant influx (arrivals into an area).
+refugee movement: Refugees crossing international borders or refugee arrivals and situations in host countries. If people flee within their own country, use internal displacement.
+migrant influx: Arrival or inflow of migrants into an area, framed from the receiving side. Distinct from refugee movement (protection-driven flight) — use migrant influx when the article frames arrivals as migration rather than refuge.
+shelter loss: Lack or loss of adequate shelter or housing, including displaced people without shelter and destroyed housing. Tag the cause separately (fire, flooding, armed violence).
+economic decline: Macro-level economic downturn: recession, sector strain, economic crisis, currency depreciation. Economy-wide framing. Distinct from poverty (household-level hardship) and food price inflation (food prices specifically).
+poverty: Rising poverty rates or worsening household economic vulnerability and hardship. People-level framing. Distinct from economic decline (macro framing).
+food price inflation: Rising food prices or food becoming unaffordable, including staple price spikes. Distinct from food scarcity (physical lack of food) and economic decline (general economy).
+trade disruption: Disruption of trade flows: embargoes, sanctions, import/export bans or restrictions, border closures for goods. Policy/economic mechanism. Distinct from supply route blockade (physical barriers on the ground).
+environmental degradation: General degradation of the natural environment not captured by a more specific label. Prefer the specific label when applicable: pollution, ecosystem collapse, land degradation, resource depletion.
+resource depletion: Depletion or exhaustion of natural resources (minerals, groundwater, forests as resource stock). Distinct from water shortage (acute water availability) and ecosystem collapse (biological systems).
+pollution: Air, soil, or environmental pollution and its impacts. Water-specific contamination goes to water contamination.
+ecosystem collapse: Destruction or collapse of terrestrial or marine ecosystems, including depleted fish stocks and biodiversity loss.
+power outage: Electricity supply failures and power outages.
+fire: Destructive fires: house and building fires, urban fires, and wildfires. Tag consequences separately (shelter loss, civilian casualties).
+food scarcity: Physical shortage or lack of food in markets or households: food shortages, empty markets, insufficient food supply. Distinct from food price inflation (food exists but unaffordable) and famine (declared extreme deprivation).
+famine: Declared or reported famine conditions: extreme, widespread food deprivation and starvation. The most severe food label; if the article reports shortage without famine framing, use food scarcity.
+aid reduction: Cuts or reductions in humanitarian aid programs or delivery volumes. Distinct from funding shortfall (donor financing) and aid obstruction (access blocked).
+aid obstruction: Obstruction, restriction, or impediment of humanitarian aid access and delivery. Distinct from supply route blockade (general transport blockade) — use aid obstruction when humanitarian access is the target.
+aid diversion: Theft or diversion of humanitarian aid, including stolen food rations and misappropriated relief supplies.
+funding shortfall: Decline or shortfall in donor funding and financial contributions for humanitarian programs. The financing side; if programs are cut on the ground, also tag aid reduction.
+governance breakdown: Political instability, misgovernance, government dysfunction, or breakdown of state functions within a country. Distinct from geopolitical tension (between countries) and protests (public unrest).
+geopolitical tension: Tensions, disputes, or instability between countries or in international relations. Within-country political turmoil is governance breakdown.
+disease spread: Spread of human disease: epidemics, outbreaks, virus transmission, elevated disease risk in a population. Distinct from pest infestation (crops), livestock loss (animals), and water contamination (the contamination event itself).
+health service disruption: Threats to population health conditions and disruption of health services or care access. If the article is about a spreading disease, use disease spread.
+water contamination: Contamination of water sources: polluted drinking water, sewage overflow into water systems. Distinct from water shortage (quantity) and disease spread (resulting human illness).
+flooding: Flood events: river floods, flash floods, and coastal or seawater inundation. Distinct from abnormal rainfall (the precipitation itself) — an article can carry both.
+drought: Drought conditions and prolonged precipitation deficits. Distinct from water shortage (reduced water availability from any cause) and extreme heat (temperature).
+water shortage: Reduced water availability: declining river flows, drained or depleted water sources, water supply scarcity. Broader than drought; use drought when the article frames it as a precipitation deficit.
+abnormal rainfall: Abnormally heavy or increased rainfall, including monsoon rains. If flooding results, also tag flooding.
+extreme heat: Heat waves and abnormal temperature increases.
+cyclone: Tropical cyclones, hurricanes, major storms, and destructive high winds.
+earthquake: Earthquakes and seismic events.
+landslide: Landslides and mass ground movement, often following heavy rain or earthquakes.
 </allowed_event_types_with_descriptions>
 
 <output_schema>
@@ -190,10 +79,7 @@ stolen food aid: Mentions food aid being looted, diverted, stolen, or seized bef
         "event_time_text": "verbatim quote from article_text (or resolved relative expression), or not_stated",
         "event_time": "ISO-8601 date derived from event_time_text, or not_stated",
         "time_status": "past | ongoing | forecast | not_stated",
-        "affected_entity": "string | not_stated | not_applicable",
-        "affected_group": "string | not_stated | not_applicable",
         "severity": "low | medium | high | extreme | not_stated",
-        "modality": "asserted | projected",
         "grounding_quote": "exact verbatim quote from article_text that justifies the event"
       },
       "reason": "brief explanation of which label was chosen and why, or why the event cannot be mapped"
@@ -216,30 +102,62 @@ For each event in the input:
    - event_location_text must be an exact substring of article_text, or "not_stated".
    - event_time_text must be an exact substring of article_text (or a resolved relative expression), or "not_stated".
 5. Only drop if you have worked through step 3 AND step 4 AND the article text provides no evidence for any allowed label:
-   - Before dropping, consider broad catch-all labels: "humanitarian disaster", "humanitarian situation", "catastrophe", "wreaked havoc", "tragedy", "population crisis", "continued deterioration".
-   - Only set decision to "dropped" when the grounding_quote cannot justify any allowed label, even broadly.
    - Set fixed_event to null.
    - Set reason to a concise explanation of why no allowed label fits, naming the labels you considered and rejected.
-   - NEVER drop food-deficit events. "famine", "starvation", "acute food insecurity", "food shortage", "risk of famine", and any phrasing of insufficient food ALWAYS map to "food crisis", "food insecurity", "acute hunger", or "massive starvation". The allowed list is the one given above in this prompt; do not claim it is unavailable.
+   - Do not drop an event solely because the original event_type string looks unfamiliar — first check whether it describes a concept covered by a broader allowed label (e.g. a specific disease outbreak still maps to "disease spread"; a specific storm still maps to "cyclone" or "abnormal rainfall").
 
-Common mappings to apply:
-- drought, dry conditions -> drought or prolonged dry spell (only if article explicitly characterizes it as drought); insufficient rainfall (if lack of rain stated directly)
-- flood, floods -> floods
-- cyclone, typhoon, hurricane, storm -> cyclone (if damage/impact described); climatic hazards (if weather event only)
-- famine, hunger, food crisis, food insecurity, food shortage -> food insecurity or food crisis (if food deficit stated); food assistance (if external food assistance needed); acute hunger (if acute need stated)
-- malnutrition, acute malnutrition, stunting, wasting -> malnourished; food insecurity or acute hunger (never cholera outbreak)
-- displacement, displaced people -> displacement; flee (if they have already left); refugees (if they crossed a border)
-- conflict, armed conflict, civil war, war -> conflict (state/armed forces); civil strife (physical force without clear military framing)
-- protest, civil unrest -> power struggle or collapse of government; civil strife (if physical)
-- earthquake, landslide, volcano -> natural disaster (if described as a serious disruptive event with widespread harm)
-- disease, cholera, ebola, epidemic, measles, typhoid, tuberculosis, outbreak -> cholera outbreak (only if cholera is named); epidemics affecting agriculture (only if crops or livestock affected); malnourished (if disease is linked to malnutrition or wasting); infant mortality (if children or infants are dying); humanitarian disaster (if large-scale human suffering described); population crisis (if broad demographic strain without a better fit)
-- starvation, severe acute malnutrition -> acute hunger or life-threatening hunger or massive starvation
-- bombing, shelling, airstrike, missile strike, drone strike -> bombing campaign (if sustained campaign); air attack (if aerial); the offensive (if broader military push)
-- movement restriction, curfew, lockdown, road closure -> blockade or restricted humanitarian access (if aid/people movement blocked); siege (if encirclement)
-- murder, killing, death -> humanitarian disaster; infant mortality (if children); human rights abuses (if by authorities)
-- livestock deaths -> livestock deaths; toll on livestock; cattle death
-- crop failure -> failed crops; harvest devastation; harvest decline
-- humanitarian crisis -> humanitarian disaster or humanitarian situation
+Common mappings to apply (original concept -> allowed label):
+- failed harvest, bad harvest, harvest decline, low crop yield -> crop failure
+- damaged irrigation, damaged grain storage, damaged mills, rural road damage -> agricultural infrastructure damage
+- deforestation, soil erosion, desertification, farmland loss -> land degradation
+- livestock deaths, cattle death, cattle plague, rinderpest, fodder/pasture shortage -> livestock loss
+- fertilizer shortage, seed shortage, fuel shortage for farming, farm input cost -> agricultural input shortage
+- locusts, armyworm, crop pest invasion -> pest infestation
+- war, armed conflict, civil war, clan warfare, warfare, fighting, clashes -> armed violence
+- airstrike, air attack, bombing campaign, artillery, shelling, drone strike -> aerial bombardment
+- blockade of roads/corridors/transport (not aid-specific) -> supply route blockade
+- militia, warlord, jihadist group, rebel insurgency, terrorism, terrorist attack -> militant activity
+- looting, pillaging, banditry, gangs of bandits -> looting
+- human rights abuses, repression, torture, persecution -> human rights violation
+- civilian deaths, mass casualties, fatalities -> civilian casualties
+- protest, riot, strike, civil unrest, civil strife -> protests
+- destroyed roads/bridges/power plants/hospitals/buildings (general infrastructure, not farm-specific) -> infrastructure destruction
+- displacement, displaced people, fled within country, evacuations -> internal displacement
+- refugees crossing a border, refugee crisis -> refugee movement
+- migrant influx, migration into an area -> migrant influx
+- lack of shelter, destroyed housing, makeshift camps -> shelter loss
+- economic collapse, recession, economic crisis, currency depreciation -> economic decline
+- rising poverty, economic impoverishment, cycle of poverty -> poverty
+- rising food prices, price of food, food price spikes -> food price inflation
+- international embargo, trade restriction, disrupted trade, sanctions -> trade disruption
+- general environmental harm not covered by a more specific label -> environmental degradation
+- resource depletion (minerals, groundwater, forests as stock) -> resource depletion
+- pollution, carbon emissions, greenhouse gases (non-water) -> pollution
+- ecosystem collapse, biodiversity loss, marine ecosystem damage -> ecosystem collapse
+- power outage, electricity failure -> power outage
+- fire, wildfire, burning houses -> fire
+- food shortage, food crisis, food insecurity, insufficient food supply -> food scarcity
+- famine, mass hunger, massive starvation, acute hunger at emergency scale -> famine
+- reduced aid delivery, aid cuts -> aid reduction
+- withheld relief, restricted humanitarian access, blocked aid convoys -> aid obstruction
+- stolen food aid, diverted relief supplies -> aid diversion
+- reduced humanitarian funding, donor funding shortfall -> funding shortfall
+- coup, military junta, collapse of government, government dysfunction, corruption -> governance breakdown
+- tension or dispute between countries -> geopolitical tension
+- cholera outbreak, epidemic, disease outbreak in a human population -> disease spread
+- health service disruption, disrupted care access (not itself a spreading disease) -> health service disruption
+- water contamination, sewage overflow, polluted drinking water -> water contamination
+- floods, flash floods, coastal flooding -> flooding
+- drought, prolonged dry spell, insufficient rainfall framed as a precipitation deficit -> drought
+- reduced water availability not framed as drought -> water shortage
+- heavy rainfall, severe rains, monsoon rain -> abnormal rainfall
+- heat wave, extreme temperature -> extreme heat
+- cyclone, hurricane, typhoon, tropical storm -> cyclone
+- earthquake, seismic event -> earthquake
+- landslide, mudslide, mass ground movement -> landslide
+- malnutrition, malnourished, wasting, dehydration from hunger -> food scarcity (or famine if extreme/widespread deprivation is stated)
+
+NEVER drop food-deficit events. Any phrasing of insufficient food, hunger, starvation, or malnutrition ALWAYS maps to "food scarcity" or "famine" (use famine only if the article frames it as extreme, widespread deprivation).
 </decision_rules>
 
 <grounding_rules>
@@ -253,10 +171,7 @@ All verbatim fields must be exact substrings of article_text. Never paraphrase o
 
 <field_rules>
 time_status: past (completed/historical) | ongoing (current/continuing) | forecast (expected/projected) | not_stated.
-affected_entity: thing, system, asset, crop, infrastructure, or resource affected. "not_stated" if absent.
-affected_group: people or population group affected. Never put countries or organizations here. "not_stated" if absent.
 severity: low | medium | high | extreme | not_stated. Use severity language from article_text. Do not infer from numbers alone.
-modality: asserted (stated as fact, or attributed to a source) | projected (expected, predicted, possible, or uncertain).
 </field_rules>
 
 <alignment_rule>

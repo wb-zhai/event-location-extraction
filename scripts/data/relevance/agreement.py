@@ -142,6 +142,23 @@ def main() -> None:
             pct = count / n * 100 if n else 0.0
             print(f"  {a_name} said '{a_label}', {b_name} said '{b_label}': {count} ({pct:.1f}%)")
 
+    print()
+    print(f"Label transitions ({a_name} -> {b_name}, within-row %):")
+    a_totals = Counter(a for a, _ in pairs)
+    for a_label in labels:
+        total = a_totals[a_label]
+        if total == 0:
+            continue
+        print(f"  {a_name} '{a_label}' ({total}, {total / n * 100:.1f}% of comparable):")
+        row = sorted(
+            ((confusion[(a_label, b_label)], b_label) for b_label in labels if confusion[(a_label, b_label)] > 0),
+            reverse=True,
+        )
+        for count, b_label in row:
+            pct = count / total * 100
+            marker = "  <- agree" if b_label == a_label else ""
+            print(f"    -> {b_name} '{b_label}': {count} ({pct:.1f}%){marker}")
+
     if args.disagreements:
         with args.disagreements.open("w", encoding="utf-8") as f:
             for row in disagreements:

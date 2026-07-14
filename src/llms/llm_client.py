@@ -212,6 +212,53 @@ class LLMClient:
         return env
 
 
+class GeminiContentBlockedError(Exception):
+    """Raised when Gemini refuses to generate content (e.g. safety/prohibited-content block).
+
+    Unlike transient API errors, retrying the exact same prompt will almost always hit
+    the same block again, so callers should treat this differently from a generic retry.
+    """
+
+    def __init__(self, block_reason: Any, diagnostic: str):
+        super().__init__(f"Gemini blocked the response (block_reason={block_reason})")
+        self.block_reason = block_reason
+        self.diagnostic = diagnostic
+
+
+def _describe_gemini_response(response: Any) -> str:
+    """Best-effort dump of a raw Gemini response's diagnostic fields for error logs."""
+    if response is None:
+        return "<no response object captured>"
+    try:
+        block_reason = getattr(
+            getattr(response, "prompt_feedback", None), "block_reason", None
+        )
+        candidate_info = []
+        for cand in getattr(response, "candidates", None) or []:
+            parts = []
+            for part in getattr(getattr(cand, "content", None), "parts", None) or []:
+                parts.append(
+                    {
+                        "text": getattr(part, "text", None),
+                        "thought": getattr(part, "thought", None),
+                    }
+                )
+            candidate_info.append(
+                {
+                    "finish_reason": getattr(cand, "finish_reason", None),
+                    "finish_message": getattr(cand, "finish_message", None),
+                    "safety_ratings": getattr(cand, "safety_ratings", None),
+                    "parts": parts,
+                }
+            )
+        return (
+            f"prompt_feedback.block_reason={block_reason} "
+            f"candidates={candidate_info}"
+        )
+    except Exception as exc:  # pragma: no cover - diagnostics must never mask the real error
+        return f"<failed to introspect response: {exc}; repr={response!r}>"
+
+
 class GeminiLLMClient(LLMClient):
     """Client for interacting with Gemini APIs."""
 
@@ -499,6 +546,13 @@ class GeminiLLMClient(LLMClient):
                     if isinstance(item, Exception):
                         raise item
                     chunk = item
+                    block_reason = getattr(
+                        getattr(chunk, "prompt_feedback", None), "block_reason", None
+                    )
+                    if block_reason is not None:
+                        raise GeminiContentBlockedError(
+                            block_reason, _describe_gemini_response(chunk)
+                        )
                     logger.info(f"Received chunk: {chunk.text}")
                     # logger.info(f"Received chunk: {chunk}")
                     yield LLMResponse(
@@ -527,6 +581,14 @@ class GeminiLLMClient(LLMClient):
                     contents=contents,
                 )
 
+                block_reason = getattr(
+                    getattr(response, "prompt_feedback", None), "block_reason", None
+                )
+                if block_reason is not None:
+                    raise GeminiContentBlockedError(
+                        block_reason, _describe_gemini_response(response)
+                    )
+
                 yield LLMResponse(
                     text=response.text,
                     metadata={
@@ -545,9 +607,17 @@ class GeminiLLMClient(LLMClient):
                     parsed=response.parsed if response_format_model else None,
                 )
 
+        except GeminiContentBlockedError as e:
+            logger.error(f"Gemini blocked content: {e.diagnostic}")
+            raise
         except Exception as e:
             logger.error(traceback.format_exc())
-            raise Exception(f"Error generating structured response: {str(e)}")
+            raw_response = locals().get("response") or locals().get("chunk")
+            diagnostic = _describe_gemini_response(raw_response)
+            logger.error(f"Raw Gemini response at failure: {diagnostic}")
+            raise Exception(
+                f"Error generating structured response: {str(e)} | raw_response: {diagnostic}"
+            )
 
 
 class AnthropicVertexLLMClient(LLMClient):

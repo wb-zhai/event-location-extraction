@@ -25,7 +25,7 @@ DEFAULT_MODEL = "gemini-3.1-pro-preview"
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "fixer" / "system_prompt.txt"
 USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "fixer" / "user_prompt.txt"
-ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "risk.label.description.training.json"
+ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 
 
 # ---------------------------------------------------------------------------
@@ -40,10 +40,7 @@ class FixedEvent(BaseModel):
     event_time_text: str
     event_time: str
     time_status: Literal["past", "ongoing", "forecast", "not_stated"]
-    affected_entity: str
-    affected_group: str
     severity: Literal["low", "medium", "high", "extreme", "not_stated"]
-    modality: Literal["asserted", "projected"]
     grounding_quote: str
 
 
@@ -185,13 +182,10 @@ def check_event(
 
     valid_time_status = {"past", "ongoing", "forecast", "not_stated"}
     valid_severity = {"low", "medium", "high", "extreme", "not_stated"}
-    valid_modality = {"asserted", "projected"}
     if event.get("time_status") not in valid_time_status:
         errors.append(f"invalid time_status: {event.get('time_status')!r}")
     if event.get("severity") not in valid_severity:
         errors.append(f"invalid severity: {event.get('severity')!r}")
-    if event.get("modality") not in valid_modality:
-        errors.append(f"invalid modality: {event.get('modality')!r}")
 
     key = (event_type, gq)
     if key in seen_keys:

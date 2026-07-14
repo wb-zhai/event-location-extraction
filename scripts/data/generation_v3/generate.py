@@ -30,6 +30,7 @@ DEFAULT_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "system_prompt.txt"
 USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "user_prompt.txt"
+ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 
 
 class AnnotationEvent(BaseModel):
@@ -40,14 +41,10 @@ class AnnotationEvent(BaseModel):
     event_time_text: str
     event_time: str
     time_status: Literal["past", "ongoing", "forecast", "not_stated"]
-    affected_entity: str
-    affected_group: str
     severity: Literal["low", "medium", "high", "extreme", "not_stated"]
-    modality: Literal["asserted", "projected"]
 
 
 class Annotation(BaseModel):
-    document_relevance: Literal["relevant", "not_relevant"]
     events: list[AnnotationEvent] = Field(default_factory=list)
 
 
@@ -181,6 +178,11 @@ def candidate_labels(
     return labels
 
 
+def load_ontology_definitions(path: Path) -> dict[str, str]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return dict(payload["events"])
+
+
 def annotation_schema(labels: list[str] | None = None) -> dict[str, Any]:
     if labels is None:
         return _ANNOTATION_SCHEMA_DICT
@@ -202,9 +204,30 @@ def strip_output_schema_block(system_prompt: str) -> str:
     ).strip()
 
 
-def replace_allowed_event_types(system_prompt: str, labels: list[str]) -> str:
+def strip_event_type_rules_block(system_prompt: str) -> str:
+    return re.sub(
+        r"\n?<event_type_rules>.*?</event_type_rules>\n?",
+        "\n",
+        system_prompt,
+        flags=re.DOTALL,
+    ).strip()
+
+
+def replace_allowed_event_types(
+    system_prompt: str,
+    labels: list[str],
+    definitions: dict[str, str] | None = None,
+) -> str:
+    lines = (
+        labels
+        if not definitions
+        else [
+            f"{label}: {definitions[label]}" if label in definitions else label
+            for label in labels
+        ]
+    )
     replacement = (
-        "<allowed_event_types>\n" + "\n".join(labels) + "\n</allowed_event_types>"
+        "<allowed_event_types>\n" + "\n".join(lines) + "\n</allowed_event_types>"
     )
     updated, count = re.subn(
         r"<allowed_event_types>.*?</allowed_event_types>",
@@ -219,12 +242,21 @@ def replace_allowed_event_types(system_prompt: str, labels: list[str]) -> str:
 
 
 def render_system_prompt(
-    system_prompt: str, record: dict[str, Any], top_k: int | None = None
+    system_prompt: str,
+    record: dict[str, Any],
+    top_k: int | None = None,
+    definitions: dict[str, str] | None = None,
 ) -> tuple[str, list[str] | None]:
     labels = candidate_labels(record, top_k=top_k)
     rendered = strip_output_schema_block(system_prompt)
     if labels is not None:
-        rendered = replace_allowed_event_types(rendered, labels)
+        rendered = replace_allowed_event_types(rendered, labels, definitions)
+    elif definitions is not None:
+        rendered = replace_allowed_event_types(
+            rendered, list(definitions.keys()), definitions
+        )
+    if definitions is not None:
+        rendered = strip_event_type_rules_block(rendered)
     return rendered, labels
 
 
@@ -469,7 +501,10 @@ async def run_sync(
         async with semaphore:
             try:
                 record_system_prompt, labels = render_system_prompt(
-                    system_prompt, record, top_k=args.top_k_candidates
+                    system_prompt,
+                    record,
+                    top_k=args.top_k_candidates,
+                    definitions=args.definitions,
                 )
                 annotation, metadata = await generate_one(
                     client,
@@ -525,7 +560,9 @@ async def run_interactive(
         reasoning_effort=args.reasoning_effort,
     )
     record = {"id": "interactive", "source": {"title": args.title, "text": text}}
-    record_system_prompt, labels = render_system_prompt(system_prompt, record)
+    record_system_prompt, labels = render_system_prompt(
+        system_prompt, record, definitions=args.definitions
+    )
     annotation, metadata = await generate_one(
         client,
         record,
@@ -599,6 +636,7 @@ def build_batch_tasks(
     template: str,
     system_prompt: str,
     top_k_candidates: int | None = None,
+    definitions: dict[str, str] | None = None,
 ) -> list[BatchTask]:
     tasks: list[BatchTask] = []
     for index, record in enumerate(records):
@@ -606,7 +644,10 @@ def build_batch_tasks(
         prompt = render_prompt(template, record)
         try:
             record_system_prompt, labels = render_system_prompt(
-                system_prompt, record, top_k=top_k_candidates
+                system_prompt,
+                record,
+                top_k=top_k_candidates,
+                definitions=definitions,
             )
             response_schema = annotation_schema(labels)
             error = None
@@ -846,7 +887,11 @@ async def run_batch(
     tasks = [
         task
         for task in build_batch_tasks(
-            records, template, system_prompt, args.top_k_candidates
+            records,
+            template,
+            system_prompt,
+            args.top_k_candidates,
+            args.definitions,
         )
         if task.key not in completed
     ]
@@ -932,8 +977,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip records whose relevance.is_relevant is False (if present).",
     )
+    parser.add_argument(
+        "--use-definitions",
+        action="store_true",
+        help="Append the ontology's event_type definitions inline in <allowed_event_types>.",
+    )
+    parser.add_argument("--ontology-path", type=Path, default=ONTOLOGY_PATH)
 
     args = parser.parse_args()
+    args.definitions = (
+        load_ontology_definitions(args.ontology_path) if args.use_definitions else None
+    )
     if not args.interactive:
         if args.input is None:
             raise ValueError("Input path is required when not in interactive mode.")

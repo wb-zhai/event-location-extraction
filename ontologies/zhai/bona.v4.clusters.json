@@ -1,0 +1,338 @@
+[
+  {
+    "id": "1",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "crop failure",
+    "cluster": "agricultural issues"
+  },
+  {
+    "id": "2",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "agricultural infrastructure damage",
+    "cluster": "agricultural issues"
+  },
+  {
+    "id": "3",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "land degradation",
+    "cluster": "agricultural issues"
+  },
+  {
+    "id": "4",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "livestock loss",
+    "cluster": "agricultural issues"
+  },
+  {
+    "id": "5",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "agricultural input shortage",
+    "cluster": "agricultural issues"
+  },
+  {
+    "id": "6",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "pest infestation",
+    "cluster": "agricultural issues"
+  },
+  {
+    "id": "7",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "armed violence",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "8",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "aerial bombardment",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "9",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "supply route blockade",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "10",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "militant activity",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "11",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "looting",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "12",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "human rights violation",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "13",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "civilian casualties",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "14",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "protests",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "15",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "infrastructure destruction",
+    "cluster": "conflict and security"
+  },
+  {
+    "id": "16",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "internal displacement",
+    "cluster": "displacement and migration"
+  },
+  {
+    "id": "17",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "refugee movement",
+    "cluster": "displacement and migration"
+  },
+  {
+    "id": "18",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "migrant influx",
+    "cluster": "displacement and migration"
+  },
+  {
+    "id": "19",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "shelter loss",
+    "cluster": "displacement and migration"
+  },
+  {
+    "id": "20",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "economic decline",
+    "cluster": "economic stress"
+  },
+  {
+    "id": "21",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "poverty",
+    "cluster": "economic stress"
+  },
+  {
+    "id": "22",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "food price inflation",
+    "cluster": "economic stress"
+  },
+  {
+    "id": "23",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "trade disruption",
+    "cluster": "economic stress"
+  },
+  {
+    "id": "24",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "environmental degradation",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "25",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "resource depletion",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "26",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "pollution",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "27",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "ecosystem collapse",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "28",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "power outage",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "29",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "fire",
+    "cluster": "environmental issues"
+  },
+  {
+    "id": "30",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "food scarcity",
+    "cluster": "food insecurity"
+  },
+  {
+    "id": "31",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "famine",
+    "cluster": "food insecurity"
+  },
+  {
+    "id": "32",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "aid reduction",
+    "cluster": "humanitarian disruption"
+  },
+  {
+    "id": "33",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "aid obstruction",
+    "cluster": "humanitarian disruption"
+  },
+  {
+    "id": "34",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "aid diversion",
+    "cluster": "humanitarian disruption"
+  },
+  {
+    "id": "35",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "funding shortfall",
+    "cluster": "humanitarian disruption"
+  },
+  {
+    "id": "36",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "governance breakdown",
+    "cluster": "political instability"
+  },
+  {
+    "id": "37",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "geopolitical tension",
+    "cluster": "political instability"
+  },
+  {
+    "id": "38",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "disease spread",
+    "cluster": "public health"
+  },
+  {
+    "id": "39",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "health service disruption",
+    "cluster": "public health"
+  },
+  {
+    "id": "40",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "water contamination",
+    "cluster": "public health"
+  },
+  {
+    "id": "41",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "flooding",
+    "cluster": "weather and natural hazards"
+  },
+  {
+    "id": "42",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "drought",
+    "cluster": "weather and natural hazards"
+  },
+  {
+    "id": "43",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "water shortage",
+    "cluster": "weather and natural hazards"
+  },
+  {
+    "id": "44",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "abnormal rainfall",
+    "cluster": "weather and natural hazards"
+  },
+  {
+    "id": "45",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "extreme heat",
+    "cluster": "weather and natural hazards"
+  },
+  {
+    "id": "46",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "cyclone",
+    "cluster": "weather and natural hazards"
+  },
+  {
+    "id": "47",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "earthquake",
+    "cluster": "weather and natural hazards"
+  },
+  {
+    "id": "48",
+    "created_at": "2026-07-09T00:00:00.00000Z",
+    "updated_at": "2026-07-09T00:00:00.00000Z",
+    "name": "landslide",
+    "cluster": "weather and natural hazards"
+  }
+]

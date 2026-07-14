@@ -39,34 +39,98 @@ DETAIL_FIELDS = [
     "event_time_text",
     "event_time",
     "time_status",
-    "affected_entity",
-    "affected_group",
     "severity",
-    "modality",
 ]
 EVENT_FIELDS = ["event_type", "grounding_quote", *DETAIL_FIELDS]
 CHOICE_DETAIL_FIELDS = {
     "time_status": ["past", "ongoing", "forecast", "not_stated"],
     "severity": ["low", "medium", "high", "extreme", "not_stated"],
-    "modality": ["asserted", "projected"],
 }
 VERBATIM_FIELDS = ["event_location_text", "event_time_text"]
 MISSING_TEXT_VALUES = {"", "not_stated"}
 
+EVENT_TYPE_REFERENCE_FIELD = "event_type_reference"
+
+# One-line, human-readable description per allowed event_type, condensed from the
+# teacher prompt's <event_type_rules>. Shown to annotators as a reference field
+# under the article so they can pick the single most specific type. Keyed by the
+# exact ontology label; any allowed type missing here falls back to just its name.
+EVENT_TYPE_DESCRIPTIONS = {
+    "crop failure": "Reduced or failed crop yields, declining farm output (tag the cause — drought, pest, flooding — separately).",
+    "agricultural infrastructure damage": "Damage to irrigation systems, grain storage, mills, or rural roads.",
+    "land degradation": "Deforestation, soil erosion, desertification, farmland loss.",
+    "livestock loss": "Animal disease, herd losses, distress sale of livestock, fodder or pasture shortage.",
+    "agricultural input shortage": "Shortage or unaffordability of fertilizer, seeds, fuel, pesticides, or animal feed.",
+    "pest infestation": "Locusts, armyworm, or other crop-damaging pest invasions.",
+    "armed violence": "Warfare, armed clashes, conflict outbreak or escalation, attacks by military forces (default active-conflict label).",
+    "aerial bombardment": "Bombing, shelling, airstrikes, artillery fire.",
+    "supply route blockade": "Physical blockade of roads, corridors, or transport routes.",
+    "militant activity": "Presence, operations, or attacks of insurgent, militant, or terrorist groups (prefer armed violence if two organized forces fight).",
+    "looting": "Robbery, banditry, plundering, organized theft of property.",
+    "human rights violation": "Repression, persecution, abuse of human or civil rights.",
+    "civilian casualties": "Civilian deaths or injuries, including mass-casualty incidents (tag the causing event separately).",
+    "protests": "Demonstrations, riots, strikes, food riots, civil unrest.",
+    "infrastructure destruction": "Destruction or severe damage of critical infrastructure — roads, bridges, power plants, water systems, hospitals, buildings.",
+    "internal displacement": "People forced to flee or leave their homes within their own country.",
+    "refugee movement": "Refugees crossing international borders, or refugee arrivals and situations in host countries.",
+    "migrant influx": "Arrival or inflow of migrants into an area, framed from the receiving side.",
+    "shelter loss": "Lack or loss of adequate shelter or housing (tag the cause — fire, flooding, armed violence — separately).",
+    "economic decline": "Macro-level economic downturn: recession, sector strain, economic crisis, currency depreciation.",
+    "poverty": "Rising poverty rates, worsening household economic hardship.",
+    "food price inflation": "Rising food prices, food becoming unaffordable, staple price spikes.",
+    "trade disruption": "Embargoes, sanctions, import/export bans, trade or border restrictions with a stated trade mechanism.",
+    "environmental degradation": "General degradation of the natural environment not captured by a more specific label.",
+    "resource depletion": "Depletion or exhaustion of natural resources — minerals, groundwater, forests as a resource stock.",
+    "pollution": "Air, soil, or general environmental pollution (water-specific contamination -> water contamination).",
+    "ecosystem collapse": "Destruction or collapse of terrestrial or marine ecosystems, depleted fish stocks, biodiversity loss.",
+    "power outage": "Electricity supply failures without physical destruction.",
+    "fire": "House or building fires, urban fires, wildfires (tag consequences separately).",
+    "food scarcity": "Physical shortage or lack of food in markets or households, food deficit, hunger increase.",
+    "famine": "Declared or reported famine conditions, extreme and widespread food deprivation.",
+    "aid reduction": "Cuts or reductions in humanitarian aid programs or delivery volumes.",
+    "aid obstruction": "Obstruction, restriction, or impediment of humanitarian aid access and delivery.",
+    "aid diversion": "Theft or diversion of humanitarian aid, stolen food rations, misappropriated relief supplies.",
+    "funding shortfall": "Decline or shortfall in donor funding for humanitarian programs.",
+    "governance breakdown": "Political instability, misgovernance, breakdown of state functions within a country.",
+    "geopolitical tension": "Tensions, disputes, or instability between countries or in international relations.",
+    "disease spread": "Epidemics, outbreaks, virus transmission, elevated disease risk (only when a human disease is explicitly named).",
+    "health service disruption": "Disruption of health services or care access.",
+    "water contamination": "Contamination of water sources: polluted drinking water, sewage overflow into water systems.",
+    "flooding": "River floods, flash floods, coastal or seawater inundation.",
+    "drought": "Drought conditions, prolonged precipitation deficits.",
+    "water shortage": "Reduced water availability: declining river flows, drained or depleted sources, water supply scarcity.",
+    "abnormal rainfall": "Abnormally heavy or increased rainfall, including monsoon rains (also tag flooding if it floods).",
+    "extreme heat": "Heat waves, abnormal temperature increases.",
+    "cyclone": "Tropical cyclones, hurricanes, major storms, destructive high winds.",
+    "earthquake": "Earthquakes and seismic events.",
+    "landslide": "Landslides and mass ground movement, often following heavy rain or earthquakes.",
+}
+
+
+def render_event_type_reference(allowed_event_types: list[str]) -> str:
+    lines = [
+        "Pick the single **most specific** type each event supports. If nothing here fits, the event is out of scope.",
+        "",
+    ]
+    for event_type in allowed_event_types:
+        description = EVENT_TYPE_DESCRIPTIONS.get(event_type)
+        if description:
+            lines.append(f"- **{event_type}** — {description}")
+        else:
+            lines.append(f"- **{event_type}**")
+    return "\n".join(lines)
+
 EVENT_JSON_TEMPLATE = """```json
 [
   {
-    "event_type": "drought",
-    "grounding_quote": "Hammered by four droughts in a row",
-    "event_location_text": "in the Horn of Africa",
-    "event_location": "not_stated",
-    "event_time_text": "not_stated",
-    "event_time": "not_stated",
+    "event_type": "crop failure",
+    "grounding_quote": "The 1995 grain harvest in Shandong province suffered a significant decline, falling by 2.7 million tons",
+    "event_location_text": "in Shandong province",
+    "event_location": "Shandong province",
+    "event_time_text": "The 1995 grain harvest",
+    "event_time": "1995",
     "time_status": "past",
-    "affected_entity": "not_stated",
-    "affected_group": "not_stated",
-    "severity": "not_stated",
-    "modality": "asserted"
+    "severity": "medium"
   }
 ]
 ```"""
@@ -92,64 +156,94 @@ def load_allowed_event_types() -> list[str]:
     return [line.strip() for line in match.group(1).splitlines() if line.strip()]
 
 
-# Argilla caps dataset guidelines at 10,000 characters; the full teacher system
-# prompt (with few-shot examples etc.) runs ~22,000. This condensed version
-# keeps the schema/field rules and explains the JSON-edit workflow, and points
-# annotators at the full file for edge cases.
-GUIDELINES_TEMPLATE = """Validate, correct, and add to the extracted events for this article.
-See {prompt_path} for the full extraction spec (few-shot examples, edge-case rules)
-this condensed version is drawn from.
+# Human-readable rewrite of the teacher system prompt (which is written as an
+# LLM system prompt) so annotators apply the same criteria as the extraction
+# model. Formatted as markdown since Argilla renders the guidelines field as
+# markdown. Argilla caps guidelines at 10,000 characters; the full teacher
+# prompt (with few-shot examples etc.) runs ~22,000, so this condensed version
+# keeps the schema/field rules. The full allowed-type list with descriptions is
+# shown as a reference field under each article, not repeated here.
+GUIDELINES_TEMPLATE = """Review and correct the risk events extracted from this article.
 
-<workflow>
-1. Read the article text.
-2. Edit the {event_details_question!r} JSON field: a JSON list of event objects, one per
-   event in the article. Fix values on existing entries, delete entries that aren't valid
-   events, or add new entries for events the model missed.
-3. Submit `[]` if the document has no valid events.
-</workflow>
+Each article arrives **pre-filled with the model's extraction** as a suggestion in the
+**Events** field. Your job is to validate and fix that extraction, not to label from
+scratch: confirm the events the model got right, correct the ones it got wrong, delete
+anything that isn't a valid event, and add any events it missed.
 
-<output_schema (per event)>
-{{
-  "event_type": "string (must exactly match one of allowed_event_types below)",
-  "grounding_quote": "exact contiguous quote from the article that justifies event_type",
-  "event_location_text": "shortest verbatim quote with location evidence, or not_stated",
-  "event_location": "geocodable place name(s) derived from event_location_text, ';'-separated, or not_stated",
-  "event_time_text": "shortest verbatim quote with time evidence, or not_stated",
-  "event_time": "ISO 8601 (YYYY / YYYY-MM / YYYY-MM-DD), range as X/Y, open-ended as X/ or /Y, or not_stated",
-  "time_status": "past | ongoing | forecast | not_stated",
-  "affected_entity": "thing/system/asset/economy/resource affected, or not_stated",
-  "affected_group": "people/population group affected (never a country or org), or not_stated",
-  "severity": "low | medium | high | extreme | not_stated",
-  "modality": "asserted | projected"
-}}
-</output_schema>
+## Workflow
 
-<critical_rules>
-Use only the article text (and publish date) as evidence — never world knowledge, geography knowledge, or outside metadata.
-Never invent locations, dates, affected groups, severity, or event types not supported by the text.
-Extract one event per distinct, explicitly stated event; do not merge distinct events or duplicate repeated mentions without new information.
-</critical_rules>
+1. Read the article (title and text).
+2. Open the **Events** field — it holds a JSON list of event objects, one per event, seeded
+   from the model's prediction.
+3. Go through it: fix wrong field values, delete entries that aren't valid events, and add
+   new entries for events the model missed. Keep every object to exactly the eight keys below.
+4. Submit `[]` if the article contains no valid events.
 
-<field_notes>
-time_status: past = completed/historical; ongoing = current/continuing/worsening; forecast = expected/projected/predicted/planned/warned about.
-severity: infer only from explicit severity language (severe, major, catastrophic, etc.) — worsening/trajectory language alone (intensifies, escalates) does not imply "high". Never infer severity from a number alone.
-modality: asserted = stated as fact (including attributed claims); projected = expected/predicted/forecast/possible/rumored/unconfirmed.
-event_location: strip vague directional prefixes ("southwestern Bangladesh" -> "Bangladesh") but keep proper administrative names ("North Darfur state" -> "North Darfur"). Broad scopes ("world", "many countries") are not_stated. Do not put countries/places in affected_group.
-event_time: resolve relative expressions (e.g. "last month") using the article's publish date; drop vague qualifiers (early/mid/late/season) to just the year.
-</field_notes>
+## What counts as an event
 
-<allowed_event_types>
-{allowed_event_types}
-</allowed_event_types>
+- Extract **one event per distinct, explicitly stated** risk event that matches an allowed
+  type below. Don't merge distinct events, and don't duplicate repeated mentions of the same
+  event unless a later mention adds new information.
+- Use **only the article text and its publish date** as evidence — never world knowledge,
+  geography knowledge, source names, URLs, or outside metadata.
+- **Never invent** locations, dates, severity, or event types the text doesn't support. When
+  something isn't stated, use `not_stated`.
+- Historical or background events still count if they are concrete and explicitly stated.
+- Skip vague implications, and skip anything whose most specific fitting type isn't in the
+  **Allowed event types** reference shown under the article.
+
+## The eight fields (per event)
+
+- **event_type** — must exactly match one of the allowed types below. Use the most specific
+  one the text directly supports.
+- **grounding_quote** — the shortest exact, contiguous quote from the article that justifies
+  the event_type. Must appear verbatim in the text.
+- **event_location_text** — the shortest verbatim quote carrying the location evidence, or
+  `not_stated`. It can come from a nearby sentence, not just the grounding quote — scan the
+  whole paragraph before deciding a location is absent.
+- **event_location** — a geocodable place name derived from event_location_text; multiple
+  places are `;`-separated in article order, or `not_stated`. Strip vague directional/zonal
+  prefixes ("southwestern Bangladesh" -> "Bangladesh") but keep proper administrative names
+  ("North Darfur state" -> "North Darfur"). Broad scopes ("world", "many countries", "globally")
+  are `not_stated`. Livelihood/pastoral zones aren't geocodable — use the named region/country
+  containing them, or `not_stated`.
+- **event_time_text** — the shortest verbatim quote carrying the time evidence, copied in the
+  article's own words (e.g. "last month", not the resolved date), or `not_stated`.
+- **event_time** — ISO 8601 derived from event_time_text: `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`;
+  a range as `X/Y`; open-ended as `X/` or `/Y`; else `not_stated`. Resolve relative expressions
+  ("last month", "today", "currently") against the publish date; drop vague qualifiers
+  (early/mid/late/season) to just the year.
+- **time_status** — `past` (completed/historical) · `ongoing` (current/continuing/worsening) ·
+  `forecast` (expected/projected/predicted/planned/warned about) · `not_stated`.
+- **severity** — `low` · `medium` · `high` · `extreme` · `not_stated`. Assign a level **only**
+  from explicit severity language in the text (severe, major, catastrophic, etc.). Worsening
+  or trajectory language alone (intensifies, escalates, deteriorates) does **not** imply high,
+  and never infer severity from a number alone.
+
+## Picking event_type — common distinctions
+
+- Two organized forces fighting -> `armed violence`; insurgent/terrorist group presence or
+  attacks -> `militant activity`; bombing/shelling/airstrikes -> `aerial bombardment`.
+- Tag consequences as **separate** events: civilian deaths/injuries -> `civilian casualties`;
+  destroyed bridges/hospitals/power plants -> `infrastructure destruction` (farm-specific
+  facilities -> `agricultural infrastructure damage`; electricity supply failure without
+  physical destruction -> `power outage`).
+- Reported shortage/deficit of food -> `food scarcity`; declared/extreme famine conditions ->
+  `famine`.
+- Precipitation deficit -> `drought`; reduced water availability/supply -> `water shortage`;
+  heavy/increased rainfall -> `abnormal rainfall` (also tag `flooding` if it floods).
+- A spreading human disease itself -> `disease spread`; disruption of care/health services ->
+  `health service disruption`.
+- Macro downturn/recession/currency depreciation -> `economic decline`; embargoes/sanctions/
+  import-export bans with a stated trade mechanism -> `trade disruption`.
+
+See the **Allowed event types** reference under the article for the full list of types and
+what each one covers.
 """
 
 
-def load_guidelines(allowed_event_types: list[str]) -> str:
-    return GUIDELINES_TEMPLATE.format(
-        prompt_path=SYSTEM_PROMPT_PATH.relative_to(REPO_ROOT),
-        event_details_question=EVENT_DETAILS_JSON_QUESTION_NAME,
-        allowed_event_types="\n".join(allowed_event_types),
-    )
+def load_guidelines() -> str:
+    return GUIDELINES_TEMPLATE
 
 
 def iter_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -176,17 +270,22 @@ def get_client():
             "ARGILLA_API_URL and ARGILLA_API_KEY must be set (see .env or "
             "scripts/annotations/README.md)."
         )
+    print(f"[connect] using Argilla server {api_url!r}...", flush=True)
     return rg.Argilla(api_url=api_url, api_key=api_key)
 
 
 def build_settings():
 
-    allowed_event_types = load_allowed_event_types()
     return rg.Settings(
-        guidelines=load_guidelines(allowed_event_types),
+        guidelines=load_guidelines(),
         fields=[
             rg.TextField(name="title"),
             rg.TextField(name="text"),
+            rg.TextField(
+                name=EVENT_TYPE_REFERENCE_FIELD,
+                title="Allowed event types",
+                use_markdown=True,
+            ),
         ],
         questions=[
             rg.TextQuestion(
@@ -200,7 +299,7 @@ def build_settings():
                     "invalid choices, off-ontology event_type values, and non-verbatim quote "
                     "fields."
                 ),
-                use_markdown=True,
+                use_markdown=False,
             ),
         ],
         metadata=[
@@ -278,36 +377,11 @@ def model_name(rec: dict[str, Any]) -> str:
     return str(generation_llm or "model")
 
 
-def split_matched_unmatched(
-    events: list[Any], text: str
-) -> tuple[list[tuple[int, int, str, dict[str, Any]]], list[dict[str, Any]]]:
-    """Split model events into (matched, unmatched) by whether grounding_quote is
-    found verbatim in text. matched entries are (start, end, event_type, detail_dict).
-
-    Used by events_label_studio.py's span-based UI; events_argilla.py itself no
-    longer needs the split since its JSON field doesn't use spans."""
-    matched = []
-    unmatched = []
-    for ev in events:
-        if not isinstance(ev, dict):
-            continue
-        quote = str(ev.get("grounding_quote") or "")
-        event_type = str(ev.get("event_type") or "")
-        detail = {field: ev.get(field, "not_stated") for field in DETAIL_FIELDS}
-        idx = text.find(quote) if quote and event_type else -1
-        if idx >= 0:
-            matched.append((idx, idx + len(quote), event_type, detail))
-        else:
-            unmatched.append({"event_type": event_type, "grounding_quote": quote, **detail})
-    matched.sort(key=lambda m: m[0])
-    return matched, unmatched
-
-
 def normalize_event(ev: dict[str, Any]) -> dict[str, str]:
     return {field: str(ev.get(field) or "not_stated") for field in EVENT_FIELDS}
 
 
-def build_record(rec: dict[str, Any], max_chars: int):
+def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str):
 
     title, text = extract_title_text(rec)
     if max_chars:
@@ -343,6 +417,7 @@ def build_record(rec: dict[str, Any], max_chars: int):
         fields={
             "title": title,
             "text": text,
+            EVENT_TYPE_REFERENCE_FIELD: event_type_reference,
         },
         metadata=metadata,
         suggestions=suggestions,
@@ -351,7 +426,12 @@ def build_record(rec: dict[str, Any], max_chars: int):
 
 
 def push(args: argparse.Namespace) -> None:
-    print("[connect] authenticating to Argilla...", flush=True)
+    if args.replace and args.limit:
+        raise SystemExit(
+            "--replace and --limit cannot be combined: --replace would then delete "
+            "the records that --limit excluded from this push."
+        )
+
     client = get_client()
     print("[connect] connected.", flush=True)
 
@@ -371,13 +451,28 @@ def push(args: argparse.Namespace) -> None:
         records = records[: args.limit]
     print(f"[load] {len(records)} record(s) to push ({skipped} skipped as not_relevant).", flush=True)
 
-    rg_records = [build_record(rec, args.max_chars) for rec in records]
+    event_type_reference = render_event_type_reference(load_allowed_event_types())
+    rg_records = [
+        build_record(rec, args.max_chars, event_type_reference) for rec in records
+    ]
     print(f"[upload] sending {len(rg_records)} record(s)...", flush=True)
     dataset.records.log(rg_records)
     print(
         f"[done] pushed {len(rg_records)} records to dataset {args.dataset_name!r}.",
         flush=True,
     )
+
+    if args.replace:
+        new_ids = {r.id for r in rg_records if r.id is not None}
+        existing_ids = {r.id for r in dataset.records()}
+        stale_ids = existing_ids - new_ids
+        if stale_ids:
+            print(f"[replace] deleting {len(stale_ids)} stale record(s)...", flush=True)
+            dataset.records.delete([rg.Record(id=i) for i in stale_ids])
+            print(
+                f"[replace] deleted {len(stale_ids)} record(s) not present in {args.input!r}.",
+                flush=True,
+            )
 
 
 def validate_events_annotation(
@@ -443,7 +538,6 @@ def default_invalid_output_path(output_path: Path) -> Path:
 
 
 def export(args: argparse.Namespace) -> None:
-    print("[connect] authenticating to Argilla...", flush=True)
     client = get_client()
     print("[connect] connected.", flush=True)
     allowed_event_types = set(load_allowed_event_types())
@@ -606,6 +700,15 @@ def main() -> None:
         type=int,
         default=0,
         help="Truncate article text to this many characters (0 = no truncation, the default).",
+    )
+    push_parser.add_argument(
+        "--replace",
+        action="store_true",
+        help=(
+            "After pushing, delete any existing records not present in --input, "
+            "making the dataset an exact mirror of the file (same dataset/URL, "
+            "content fully replaced). Not compatible with --limit."
+        ),
     )
     push_parser.set_defaults(func=push)
 

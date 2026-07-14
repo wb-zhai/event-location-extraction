@@ -21,11 +21,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 DEFAULT_IGNORE = {
-    "document_relevance",
     "event_location_text",
     "event_time_text",
-    "affected_group",
-    "affected_entity",
     "severity",
 }
 

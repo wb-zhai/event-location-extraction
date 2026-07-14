@@ -1,20 +1,23 @@
 # Annotation
 
-Two annotation workflows, on two different tools, sharing a similar `push`/`export`
+Three annotation workflows, all on **Argilla**, sharing a similar `push`/`export`
 CLI shape:
 
-- **Relevance** ([`relevance_argilla.py`](relevance_argilla.py), on **Argilla**) —
-  is an article relevant / irrelevant to food-security risk-event extraction, to
+- **Relevance** ([`relevance_argilla.py`](relevance_argilla.py)) — is an
+  article relevant / irrelevant to food-security risk-event extraction, to
   build a gold set for scoring the Gemini relevance gate in
   [`relevance_filter.py`](../data/relevance/relevance_filter.py). A single
   label per document, which Argilla's `LabelQuestion` handles well.
-- **Events** ([`events_label_studio.py`](events_label_studio.py), on **Label
-  Studio**) — validate/correct/add to the structured `annotation.events` list
-  extracted for each article. Each event is a text span (`grounding_quote`)
-  plus 9 structured fields, which needs a per-span structured-detail UI —
-  see [below](#why-label-studio-for-events) for why this moved off Argilla.
-  The older Argilla-based version, [`events_argilla.py`](events_argilla.py),
-  still works but is superseded by the Label Studio one.
+- **Events** ([`events_argilla.py`](events_argilla.py)) — validate/correct/add
+  to the structured `annotation.events` list extracted for each article. Each
+  event's 8 fields are edited as a single hand-edited JSON blob
+  (`event_details_json`) rather than per-span highlighting — the simplest UI
+  for annotators: one field to read, one field to edit.
+- **Relevance comparison** ([`relevance_comparison_argilla.py`](relevance_comparison_argilla.py))
+  — given two relevance-labeled JSONL files covering the same articles (e.g.
+  two prompt versions), show both predictions side by side and record which
+  one a human prefers. Defaults to only pushing articles where the two
+  predictions disagree.
 
 ## 1. Run a local Argilla server (Docker)
 
@@ -72,6 +75,12 @@ python scripts/annotations/relevance_argilla.py push \
   --limit 50
 ```
 
+The first `push` to a given `--dataset-name` creates the Argilla dataset, with
+a single `relevance` label question (see `build_settings`) and human-readable
+guidelines rewritten from `DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL` (see
+`load_guidelines` in `relevance_argilla.py`) so annotators apply the same
+criteria as the Gemini gate.
+
 Annotate in the browser at http://localhost:6900. Re-running `push` on the
 same `--dataset-name` upserts records (keyed by article id/url), so it's safe
 to run repeatedly as new data arrives.
@@ -89,56 +98,7 @@ Each output row has `human_relevance`, `gemini_relevance`, and an `agreement`
 flag, ready for scoring the Gemini gate's precision/recall against human
 judgment.
 
-## Why Label Studio for events
-
-Argilla has no question type for "one span, with N structured fields attached
-to it" — so `events_argilla.py` has to split an event's `event_type` +
-`grounding_quote` into a `SpanQuestion`, and its other 9 fields into a
-hand-edited JSON blob (`event_details_json`) matched back to the span
-*positionally* (by article order). That's fragile: annotators can misalign
-entries, and the export step has to detect and flag span/detail count
-mismatches (`events_merge_warnings`).
-
-Label Studio's `Labels` control tag supports `perRegion` sibling controls
-(`TextArea`, `Choices`) that only apply to whichever span is currently
-selected, and are stored keyed to that span's own id — no JSON typing, no
-positional matching, and add/remove-event follows directly from
-highlight/delete-span. `events_label_studio.py` uses this instead.
-
-## 4. Set up Label Studio
-
-**Run the server (Docker):**
-
-```bash
-docker run -d --name label-studio -p 8080:8080 \
-  --restart unless-stopped \
-  -v label-studio-data:/label-studio/data \
-  heartexlabs/label-studio:latest
-```
-
-The `-v` flag persists projects/tasks/annotations in the `label-studio-data`
-volume, so (as with the Argilla container above) you can `docker rm` and
-recreate the container without losing data; `--restart unless-stopped` brings
-it back up after a Docker/host restart.
-
-Open http://localhost:8080 and create an account (this just creates a local
-user in your own container — nothing external). Then:
-
-1. Click your user icon (top right) → **Account & Settings**.
-2. Open **API Tokens Settings**. If neither token type is listed yet, enable
-   **Legacy Tokens** for your organization here first.
-3. Under **Legacy Token**, copy the token. (Legacy tokens are static and don't
-   expire, unlike Personal Access Tokens which need a refresh step — simpler
-   for scripted use here.)
-
-Add to `.env`:
-
-```
-LABEL_STUDIO_URL=http://localhost:8080
-LABEL_STUDIO_API_KEY=<your legacy token>
-```
-
-## 5. Events: push articles for annotation
+## 4. Events: push articles for annotation
 
 Input is JSONL with records shaped like
 `dataset/db/relevance/matrix_5M.sample_1000.3.1pro.extracted.jsonl`: each
@@ -149,57 +109,93 @@ see `keep_by_relevance`), and an `annotation` block
 [`generate.py`](../data/generation_v3/generate.py).
 
 ```bash
-python scripts/annotations/events_label_studio.py push \
+python scripts/annotations/events_argilla.py push \
   --input dataset/db/relevance/matrix_5M.sample_1000.3.1pro.extracted.jsonl \
-  --project-name events-review \
+  --dataset-name events-review \
   --limit 50
 ```
 
-The first `push` to a given `--project-name` creates the Label Studio project,
-with a labeling config generated from `ontologies/zhai/science.json` by default
-(`--ontology` can point to another ontology shaped as `{"events": {...}}`).
-The event types are searchable via a filter box — see `build_label_config` —
-and a condensed version of the teacher system prompt is used as the project's
-instructions (the "?" help icon in the labeling UI — see `load_guidelines`).
+The first `push` to a given `--dataset-name` creates the Argilla dataset, with
+a single `event_details_json` text question (see `build_settings`) and
+condensed guidelines drawn from the teacher system prompt (see
+`load_guidelines`). Pass `--update-settings` to push a schema/guidelines
+update to an existing dataset.
 
-Each article's model-extracted events are pushed as **predictions**: wherever
-an event's `grounding_quote` is found verbatim in the article text and its
-`event_type` is present in the ontology, it's pre-filled as a highlighted span
-plus its 9 detail fields, ready to review/correct rather than label from
-scratch. Events whose quote isn't found verbatim, or whose model label is not
-in the ontology, are listed in a small note above the article text so the
-annotator can add them manually if still valid.
+Each article's model-extracted events are pre-filled as a JSON **suggestion**
+in `event_details_json` (see `build_record`), ready to review/correct rather
+than annotate from scratch.
 
-Re-running `push` on the same `--project-name` skips records already present
-in the project (matched by id — see `_record_key`); pass `--force` to push
-them again anyway (Label Studio has no upsert, so this adds duplicate tasks).
+Re-running `push` on the same `--dataset-name` upserts records (keyed by id —
+see `_record_key`), so it's safe to run repeatedly as new data arrives.
 
-Text is **not truncated by default** (`--max-chars 0`) — span offsets are
-computed against whatever text is actually shown, so truncating can push
-later events' quotes out of reach (about half the articles in the sample
-dataset exceed the old 4000-char default).
+Text is **not truncated by default** (`--max-chars 0`).
 
-In the browser at http://localhost:8080: open the project, click a task,
-highlight each event mention in the text and tag it with `event_type` from the
-list on the left (type to filter), then click the highlighted span to open its
-detail panel below the text and fill in the 9 remaining fields. Delete a span
-to remove that event. Set `document_relevance` at the bottom and submit.
+In the browser at http://localhost:6900: open the dataset, read the article,
+and edit the `event_details_json` field directly — fix values on existing
+entries, delete entries that aren't valid events, or add new entries for
+events the model missed. Submit `[]` if the article has no valid events.
 
-## 6. Events: export human-corrected events
+## 5. Events: export human-corrected events
 
 ```bash
-python scripts/annotations/events_label_studio.py export \
-  --project-name events-review \
+python scripts/annotations/events_argilla.py export \
+  --dataset-name events-review \
   --output events_annotations.jsonl \
   --only-submitted
 ```
 
-Each output row has a human-corrected `annotation.events` list (reconstructed
-by grouping each span's result with its per-region detail fields by their
-shared Label Studio region id — see `parse_annotation_result`) and the
-original `model_annotation` for diffing. Export is strict: only rows whose
-events match the schema, use ontology event types, have valid enum values, and
-keep `grounding_quote`/`event_location_text`/`event_time_text` verbatim in the
+Each output row has the human-corrected `annotation.events` list (parsed from
+the submitted `event_details_json`) and the original `model_annotation` for
+diffing. Export is strict: only rows whose events match the schema, use
+ontology event types, have valid enum values, and keep
+`grounding_quote`/`event_location_text`/`event_time_text` verbatim in the
 article are written to `--output`. Invalid rows are written to
 `<output stem>.invalid<suffix>` by default, or to `--invalid-output`, with
 `events_validation_errors` explaining what needs review.
+
+## 6. Relevance comparison: push two predictions for the same articles
+
+Input is two JSONL files in the same format as `relevance_argilla.py push`
+(records keyed by `id`, with a `relevance.decision` block), covering the same
+set of articles — e.g. the same sample scored under two different prompt
+versions. Only articles present in both files are considered, and by default
+only the ones where the two `relevance.decision` values **disagree** are
+pushed (pass `--include-agreements` to push everything).
+
+```bash
+python scripts/annotations/relevance_comparison_argilla.py push \
+  --input-a dataset/db/relevance/matrix_5M.sample_1000.3.1pro.v3.jsonl \
+  --input-b dataset/db/relevance/matrix_5M.sample_1000.3.1pro.old_prompt.jsonl \
+  --name-a v3 \
+  --name-b old_prompt \
+  --dataset-name relevance-v3-vs-old-prompt
+```
+
+`--name-a`/`--name-b` (defaulting to each file's stem) are shown as field
+titles (`Prediction A: v3`, `Prediction B: old_prompt`) and in the
+`preference` question's label text, so annotators know which article
+preview/prediction came from which source. The first `push` to a given
+`--dataset-name` creates the dataset with a `title`/`text`/`prediction_a`/
+`prediction_b` field layout and a single `preference` label question
+(`prefer_a` / `prefer_b` / `tie` / `neither`). Pass `--update-settings` to
+push a schema/guidelines update (e.g. after changing `--name-a`/`--name-b`)
+to an existing dataset.
+
+Annotate in the browser at http://localhost:6900. To filter to only the
+disagreement cases already pushed, use Argilla's metadata filter on
+`agreement` (`disagree`); if you pushed with `--include-agreements`, that
+filter also lets you drill into agreement cases.
+
+## 7. Relevance comparison: export preferences
+
+```bash
+python scripts/annotations/relevance_comparison_argilla.py export \
+  --dataset-name relevance-v3-vs-old-prompt \
+  --output relevance_preferences.jsonl \
+  --only-submitted
+```
+
+Each output row has the submitted `preference` (`prefer_a`/`prefer_b`/`tie`/
+`neither`) plus `decision_a`/`confidence_a`/`decision_b`/`confidence_b` from
+each input file's prediction, for tallying which prompt version humans
+preferred.

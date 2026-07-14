@@ -7,13 +7,12 @@ Return only valid JSON.
 Do not return markdown, comments, explanations, or code fences.
 Use only article_text and publish_date as evidence.
 Do not use world knowledge, geography knowledge, URLs, filenames, source names, or metadata outside the provided input fields.
-Never invent locations, dates, affected groups, severity, event types, or missing details.
+Never invent locations, dates, severity, event types, or missing details.
 Think carefully before answering, but do not show your reasoning.
 </critical_rules>
 
 <output_schema>
 {
-  "document_relevance": "relevant | not_relevant",
   "events": [
     {
       "event_type": "string",
@@ -23,10 +22,7 @@ Think carefully before answering, but do not show your reasoning.
       "event_time_text": "string | not_stated",
       "event_time": "string | not_stated",
       "time_status": "past | ongoing | forecast | not_stated",
-      "affected_entity": "string | not_stated | not_applicable",
-      "affected_group": "string | not_stated | not_applicable",
-      "severity": "low | medium | high | extreme | not_stated",
-      "modality": "asserted | projected"
+      "severity": "low | medium | high | extreme | not_stated"
     }
   ]
 }
@@ -35,33 +31,26 @@ Think carefully before answering, but do not show your reasoning.
 <output_example>
 Given publish_date "2003-06-15" and an article containing: "In northern Ethiopia, UN officials warned that crops have failed across the country as the dry season worsens. Thousands of farmers are facing severe food shortages.", a valid output is:
 {
-  "document_relevance": "relevant",
   "events": [
     {
-      "event_type": "failed crops",
+      "event_type": "crop failure",
       "grounding_quote": "crops have failed across the country as the dry season worsens",
       "event_location_text": "In northern Ethiopia",
       "event_location": "Ethiopia",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
-      "affected_entity": "crops",
-      "affected_group": "not_stated",
-      "severity": "not_stated",
-      "modality": "asserted"
+      "severity": "not_stated"
     },
     {
-      "event_type": "food insecurity",
+      "event_type": "food scarcity",
       "grounding_quote": "Thousands of farmers are facing severe food shortages",
       "event_location_text": "In northern Ethiopia",
       "event_location": "Ethiopia",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
-      "affected_entity": "not_stated",
-      "affected_group": "farmers",
-      "severity": "high",
-      "modality": "asserted"
+      "severity": "high"
     }
   ]
 }
@@ -69,184 +58,55 @@ Note: event_location_text comes from a different sentence than grounding_quote â
 </output_example>
 
 <allowed_event_types>
-land seizures
-slashed export
-price rise
-mass hunger
-cyclone
-failed crops
-disruption to farming
-massive starvation
-abnormally low rainfall
-withheld relief
-international alarm
-reduced national output
-oppressive regimes
-pests
-continued deterioration
-forests destroyed
-man-made disaster
-food insecurity
-harvests are devastated
-humanitarian situation
-economic impoverishment
-clan battle
-population crisis
-aid appeal
-weather extremes
-anti-western policies
-rinderpest
-inadequate rainfall
-lack of authority
-acute hunger
-foreign troops
-increased external debt
-drought
-conflict
-failed rains
-makeshift camps
-civilians uprooted
-dysfunction
-foreign aid
-violent suppression
-military dictatorship
-climatic hazards
-migration
-land grab
-terrorism
-bombing campaign
-collapsing economy
-military junta
-climate change
-rising inflation
-international terrorists
-cycle of poverty
-bad harvests
-destructive pattern
-price of food
-corrupt government
-militia groups
-poor soil quality
-cattle plague
-food assistance
-continued strife
-ecological crisis
-hunger crises
-rising food prices
-restricted humanitarian access
-water availability
-alarming level
-police torture
-potato blight
-the offensive
-land invasions
-clan warfare
-stolen food aid
-politically engineered
-scanty rainfall
-water distribution shortages
-cattle death
-asylum seekers
-major offensive
-without international aid
-prolonged dry spell
-rise
-restricted relief flights
-civil strife
-aid workers died
-rival warlords
-land reform
-lack of roads
-pushing peasants off
-locusts
-gangs of bandits
-repression
-humanitarian disaster
-years of warfare
-floods
-unable to sow
-transport bottleneck
-pirates
-reduced imports
-apathy
-coup
-epidemics
-siege
-power struggle
-livestock had died
-blockade
-burning houses
-brain drain
-severe rains
-infrastructure damage
+crop failure
+agricultural infrastructure damage
 land degradation
-human rights abuses
-lack of cultivation
-harvest decline
-flee
-economic crisis
-greenhouse gases
-prolonged fighting
-tragedy
-slave trade
-environmental degradation
-infant mortality
-catastrophe
-wreaked havoc
-internal strife
-malnourished
-secession
-natural disaster
-life-threatening hunger
-air attack
-corruption
-call for donations
-collapse of government
-international intervention
-refugees
-disrupted trade
-lack of agricultural infrastructure
-rebel insurgency
-brutal government
+livestock loss
+agricultural input shortage
+pest infestation
+armed violence
+aerial bombardment
+supply route blockade
+militant activity
 looting
-displaced
-food crisis
-lack of rains
-lack of alternatives
-regimes were toppled
-jihadist groups
-toll on livestock
-shortage of rains
-devastated the economy
-self reliance
-cholera outbreak
-international embargo
-farmland
-totalitarian
-authoritarian
-dictators
-clans
-gastrointestinal
-terrorist
-warlord
-d'etat
-overthrow
-convoys
-carbon
-mayhem
-dehydrated
-mismanagement
+human rights violation
+civilian casualties
+protests
+infrastructure destruction
+internal displacement
+refugee movement
+migrant influx
+shelter loss
+economic decline
+poverty
+food price inflation
+trade disruption
+environmental degradation
+resource depletion
+pollution
+ecosystem collapse
+power outage
+fire
+food scarcity
+famine
+aid reduction
+aid obstruction
+aid diversion
+funding shortfall
+governance breakdown
+geopolitical tension
+disease spread
+health service disruption
+water contamination
+flooding
+drought
+water shortage
+abnormal rainfall
+extreme heat
+cyclone
+earthquake
+landslide
 </allowed_event_types>
-
-<document_relevance_rules>
-Set document_relevance to "relevant" if at least one allowed event is explicitly extracted.
-Set document_relevance to "not_relevant" only if no allowed event is explicitly extractable.
-If no events are extracted, return exactly:
-{
-  "document_relevance": "not_relevant",
-  "events": []
-}
-</document_relevance_rules>
 
 <extraction_rules>
 Extract one event object for each distinct, explicitly stated risk-related event.
@@ -256,6 +116,10 @@ Do not duplicate repeated mentions unless new event information is added.
 Do not extract aid delivery, policy action, funding, treatment, or logistics unless that action itself exactly matches an allowed event_type.
 Historical or background events must be extracted if they are concrete ontology events and are explicitly stated.
 If no event_type from the allowed list is clearly supported, do not extract the event.
+If no allowed event is explicitly extractable anywhere in the article, return exactly:
+{
+  "events": []
+}
 
 Be exhaustive:
 0. Scan the article paragraph by paragraph. For each paragraph ask: does this paragraph explicitly state an allowed event?
@@ -270,19 +134,54 @@ Do not stop after finding the most important events.
 event_type must exactly match one allowed_event_types label.
 Use the most specific directly supported label.
 
-Water stress, water shortage, reduced water availability, reduced flow, or depletion -> water availability or water distribution shortages.
-Arsenic contamination, salinity, toxins, polluted groundwater, unsafe water -> environmental degradation or ecological crisis if directly stated.
-Food shortages, food deficit, hunger increase, famine -> food insecurity or food crisis.
-Reduced harvest, declining agricultural production, crop losses -> harvest decline or failed crops or harvest devastation.
-Displaced people, refugees, people on the move -> displacement, flee, or refugees.
-Do not use cholera outbreak unless cholera is explicitly named. Do not use epidemics affecting agriculture unless the epidemic affects crops or livestock.
-
-Below-average rainfall, reduced rainfall, decreased rainfall, insufficient rainfall -> use "drought" or "prolonged dry spell" only if the text explicitly characterizes conditions as drought. Use "insufficient rainfall" for lack of rain stated directly.
-Malnutrition, acute malnutrition, undernourishment, food consumption gaps -> malnourished. Use "food insecurity" if food deficit is stated, "acute hunger" if acute need is stated.
-
-Sanctions are not automatically "international embargo".
-Use "international embargo" only when the text explicitly states embargo, trade ban, import/export ban, trade blockade, or equivalent trade restriction.
-Generic sanctions causing economic harm -> economic crisis or economic impoverishment, if concrete harm is stated.
+Reduced or failed crop yields, declining farm output -> crop failure. Tag the cause separately if stated (drought, pest infestation, flooding).
+Damage to irrigation systems, grain storage, mills, or rural roads -> agricultural infrastructure damage.
+Deforestation, soil erosion, desertification, farmland loss -> land degradation.
+Animal disease, herd losses, distress sale of livestock, fodder or pasture shortage -> livestock loss.
+Shortage or unaffordability of fertilizer, seeds, fuel, pesticides, or animal feed -> agricultural input shortage.
+Locusts, armyworm, or other crop-damaging pest invasions -> pest infestation.
+Warfare, armed clashes, conflict outbreak or escalation, attacks by military forces -> armed violence (the default active-conflict label).
+Bombing, shelling, airstrikes, artillery fire -> aerial bombardment.
+Physical blockade of roads, corridors, or transport routes -> supply route blockade.
+Presence, operations, or attacks of insurgent, militant, or terrorist groups -> militant activity. If two organized forces are fighting each other, prefer armed violence.
+Robbery, banditry, plundering, organized theft of property -> looting.
+Repression, persecution, abuse of human or civil rights -> human rights violation.
+Civilian deaths or injuries, including mass casualty incidents -> civilian casualties. Tag the causing event separately (armed violence, aerial bombardment, flooding, etc.).
+Demonstrations, riots, strikes, food riots, civil unrest -> protests.
+Destruction or severe damage of critical infrastructure (roads, bridges, power plants, water systems, hospitals, buildings), from conflict or natural hazards -> infrastructure destruction. Distinct from agricultural infrastructure damage (farm-specific facilities) and power outage (supply failure without physical destruction). Tag the causing event separately (aerial bombardment, flooding, earthquake).
+People forced to flee or leave their homes within their own country -> internal displacement.
+Refugees crossing international borders, or refugee arrivals and situations in host countries -> refugee movement.
+Arrival or inflow of migrants into an area, framed from the receiving side -> migrant influx.
+Lack or loss of adequate shelter or housing -> shelter loss. Tag the cause separately (fire, flooding, armed violence).
+Macro-level economic downturn: recession, sector strain, economic crisis, currency depreciation -> economic decline.
+Rising poverty rates, worsening household economic hardship -> poverty.
+Rising food prices, food becoming unaffordable, staple price spikes -> food price inflation.
+Embargoes, sanctions, import/export bans, trade or border restrictions -> trade disruption. Generic sanctions causing economic harm without a stated trade mechanism -> economic decline instead.
+General degradation of the natural environment not captured by a more specific label -> environmental degradation. Prefer pollution, land degradation, resource depletion, or ecosystem collapse when applicable.
+Depletion or exhaustion of natural resources (minerals, groundwater, forests as a resource stock) -> resource depletion.
+Air, soil, or general environmental pollution -> pollution. Water-specific contamination -> water contamination.
+Destruction or collapse of terrestrial or marine ecosystems, depleted fish stocks, biodiversity loss -> ecosystem collapse.
+Electricity supply failures -> power outage.
+House or building fires, urban fires, wildfires -> fire. Tag consequences separately (shelter loss, civilian casualties).
+Physical shortage or lack of food in markets or households, food deficit, hunger increase -> food scarcity.
+Declared or reported famine conditions, extreme and widespread food deprivation -> famine. Use food scarcity if shortage is reported without famine framing.
+Cuts or reductions in humanitarian aid programs or delivery volumes -> aid reduction.
+Obstruction, restriction, or impediment of humanitarian aid access and delivery -> aid obstruction.
+Theft or diversion of humanitarian aid, stolen food rations, misappropriated relief supplies -> aid diversion.
+Decline or shortfall in donor funding for humanitarian programs -> funding shortfall.
+Political instability, misgovernance, breakdown of state functions within a country -> governance breakdown.
+Tensions, disputes, or instability between countries or in international relations -> geopolitical tension.
+Epidemics, outbreaks, virus transmission, elevated disease risk in a population -> disease spread. Do not use unless a human disease or epidemic is explicitly named.
+Disruption of health services or care access -> health service disruption. If the article is about a spreading disease itself, use disease spread.
+Contamination of water sources: polluted drinking water, sewage overflow into water systems -> water contamination.
+River floods, flash floods, coastal or seawater inundation -> flooding.
+Drought conditions, prolonged precipitation deficits -> drought.
+Reduced water availability: declining river flows, drained or depleted water sources, water supply scarcity -> water shortage. Use drought when the article frames conditions specifically as a precipitation deficit.
+Abnormally heavy or increased rainfall, including monsoon rains -> abnormal rainfall. If flooding results, also tag flooding.
+Heat waves, abnormal temperature increases -> extreme heat.
+Tropical cyclones, hurricanes, major storms, destructive high winds -> cyclone.
+Earthquakes and seismic events -> earthquake.
+Landslides and mass ground movement, often following heavy rain or earthquakes -> landslide.
 </event_type_rules>
 
 <event_location_rules>
@@ -329,9 +228,6 @@ Broad scopes are not locations:
 
 If a sentence names both specific countries and a vague broad region, include only the specific geocodable locations:
 - "Germany, Italy and other European countries" -> "Germany; Italy"
-
-Do not use countries or places as affected_group.
-If countries or places are the affected places, put them in event_location.
 </event_location_rules>
 
 <event_time_rules>
@@ -358,7 +254,7 @@ grounding_quote:
 - Exact contiguous quote from article_text.
 - Must justify event_type.
 - Prefer the shortest sufficient quote.
-- event_location, event_time, affected_entity, and affected_group may come from nearby article_text if they clearly refer to the same event.
+- event_location and event_time may come from nearby article_text if they clearly refer to the same event.
 - After selecting grounding_quote, always search separately for event_location_text in the surrounding paragraph â€” do not assume location is absent just because grounding_quote does not contain one.
 
 time_status:
@@ -366,17 +262,6 @@ time_status:
 - "ongoing": current, continuing, still happening, or worsening at reporting time.
 - "forecast": expected, projected, predicted, likely, planned, or warned about.
 - "not_stated": unclear.
-
-affected_entity:
-- Thing, system, asset, crop, livelihood, infrastructure, service, country, place, organization, economy, or resource affected.
-- If absent, use "not_stated".
-- Prefer "not_stated" over "not_applicable" when uncertain.
-
-affected_group:
-- People or population group affected, such as civilians, refugees, children, households, farmers, workers, residents, ethnic groups, or communities.
-- Do not put countries, regions, organizations, governments, economies, infrastructure, resources, or services in affected_group.
-- If absent, use "not_stated".
-- Prefer "not_stated" over "not_applicable" when uncertain.
 
 severity:
 - "low": limited or mild impact.
@@ -387,159 +272,248 @@ severity:
 Do not infer severity from a number alone.
 Worsening or trajectory language alone (intensifies, deteriorates, worsens, escalates) does not imply high severity. Require explicit severity language from article_text (severe, major, tremendous, catastrophic, etc.) to assign a non-"not_stated" level.
 Use severity language from article_text when available.
-
-modality:
-- "asserted": stated as fact by the article or speaker, including claims attributed to a source, report, authority, or organization.
-- "projected": expected, predicted, forecast, estimated, warned about, possible, uncertain, conditional, suspected, rumored, or unconfirmed.
 </field_rules>
 
 <economic_event_rules>
 For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced investment, reduced remittances, sanctions, or economic dislocation:
 - Extract only if the text states a concrete decline, disruption, or harm.
-- Do not infer affected_group unless people or a population group is explicitly named.
 - Do not infer severity from a number alone.
 - Use "not_stated" for severity unless article_text explicitly characterizes the impact using severity language such as severe, tremendous, catastrophic, crisis, collapse, emergency, or similar.
 </economic_event_rules>
 
 <few_shot_examples>
 <example>
-<input>120 million to 1.2 billion will experience increased water stress by the 2020s in South and South East Asia.</input>
-<output_fields>
-event_type: water availability
-grounding_quote: 120 million to 1.2 billion will experience increased water stress by the 2020s in South and South East Asia
-event_location_text: in South and South East Asia
-event_location: South Asia; South East Asia
-event_time_text: by the 2020s
-event_time: /2029
-time_status: forecast
-</output_fields>
+<input>An article states: "By the 2020s, 120 million to 1.2 billion people will experience severe water stress in South and South East Asia."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "water shortage",
+      "grounding_quote": "120 million to 1.2 billion people will experience severe water stress in South and South East Asia",
+      "event_location_text": "in South and South East Asia",
+      "event_location": "South Asia; South East Asia",
+      "event_time_text": "By the 2020s",
+      "event_time": "/2029",
+      "time_status": "forecast",
+      "severity": "high"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>A flood ravaged the southwestern part of Bangladesh in 2000.</input>
-<output_fields>
-event_type: floods
-grounding_quote: A flood ravaged the southwestern part of Bangladesh in 2000
-event_location_text: the southwestern part of Bangladesh
-event_location: Bangladesh
-event_time_text: in 2000
-event_time: 2000
-time_status: past
-</output_fields>
+<input>An article states: "A catastrophic flood ravaged the southwestern part of Bangladesh in 2000, destroying entire villages."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "flooding",
+      "grounding_quote": "A catastrophic flood ravaged the southwestern part of Bangladesh in 2000",
+      "event_location_text": "the southwestern part of Bangladesh",
+      "event_location": "Bangladesh",
+      "event_time_text": "in 2000",
+      "event_time": "2000",
+      "time_status": "past",
+      "severity": "extreme"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>The 1995 grain harvest in Shandong province declined by 2.7 million tons.</input>
-<output_fields>
-event_type: harvest decline
-grounding_quote: The 1995 grain harvest in Shandong province declined by 2.7 million tons
-event_location_text: in Shandong province
-event_location: Shandong province
-event_time_text: The 1995 grain harvest
-event_time: 1995
-time_status: past
-affected_entity: grain harvest
-</output_fields>
+<input>An article states: "The 1995 grain harvest in Shandong province suffered a significant decline, falling by 2.7 million tons."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "crop failure",
+      "grounding_quote": "The 1995 grain harvest in Shandong province suffered a significant decline, falling by 2.7 million tons",
+      "event_location_text": "in Shandong province",
+      "event_location": "Shandong province",
+      "event_time_text": "The 1995 grain harvest",
+      "event_time": "1995",
+      "time_status": "past",
+      "severity": "medium"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>The World Health Organization described the arsenic contamination in northeast Bangladesh as the largest mass poisoning.</input>
-<output_fields>
-event_type: environmental degradation
-grounding_quote: the arsenic contamination in northeast Bangladesh as the largest mass poisoning
-event_location_text: in northeast Bangladesh
-event_location: Bangladesh
-event_time_text: not_stated
-event_time: not_stated
-affected_entity: water
-modality: asserted
-</output_fields>
+<input>An article states: "The World Health Organization described the arsenic contamination in northeast Bangladesh, first detected in 1993, as the largest mass poisoning in history."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "water contamination",
+      "grounding_quote": "the arsenic contamination in northeast Bangladesh, first detected in 1993, as the largest mass poisoning in history",
+      "event_location_text": "in northeast Bangladesh",
+      "event_location": "Bangladesh",
+      "event_time_text": "in 1993",
+      "event_time": "1993",
+      "time_status": "past",
+      "severity": "extreme"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>the outbreak of the wars in Croatia in the spring of 1991</input>
-<output_fields>
-event_type: conflict
-grounding_quote: the outbreak of the wars in Croatia in the spring of 1991
-event_location_text: in Croatia
-event_location: Croatia
-event_time_text: in the spring of 1991
-event_time: 1991
-time_status: past
-modality: asserted
-</output_fields>
+<input>An article states: "The brutal outbreak of the wars in Croatia in the spring of 1991 devastated the region."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "armed violence",
+      "grounding_quote": "The brutal outbreak of the wars in Croatia in the spring of 1991 devastated the region",
+      "event_location_text": "in Croatia",
+      "event_location": "Croatia",
+      "event_time_text": "in the spring of 1991",
+      "event_time": "1991",
+      "time_status": "past",
+      "severity": "high"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>There is a conflict in Bosnia, a major conflict in Bosnia</input>
-<output_fields>
-event_type: conflict
-grounding_quote: There is a conflict in Bosnia, a major conflict in Bosnia
-event_location_text: in Bosnia
-event_location: Bosnia
-event_time_text: not_stated
-event_time: publish_date if provided
-time_status: ongoing
-severity: high
-modality: asserted
-</output_fields>
+<input>Given publish_date "1994-03-10" and an article containing: "There is currently a severe conflict raging in Bosnia."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "armed violence",
+      "grounding_quote": "There is currently a severe conflict raging in Bosnia",
+      "event_location_text": "in Bosnia",
+      "event_location": "Bosnia",
+      "event_time_text": "currently",
+      "event_time": "1994-03-10",
+      "time_status": "ongoing",
+      "severity": "high"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>right-wing extremists in Croatia carried out military attacks on Serbian communities</input>
-<output_fields>
-event_type: civil strife
-grounding_quote: right-wing extremists in Croatia carried out military attacks on Serbian communities
-event_location_text: in Croatia
-event_location: Croatia
-event_time_text: not_stated
-event_time: not_stated
-affected_group: Serbian communities
-modality: asserted
-</output_fields>
+<input>Given publish_date "1998-11-20" and an article containing: "Right-wing extremists in Croatia carried out a series of severe military attacks on Serbian communities last month."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "militant activity",
+      "grounding_quote": "Right-wing extremists in Croatia carried out a series of severe military attacks on Serbian communities last month",
+      "event_location_text": "in Croatia",
+      "event_location": "Croatia",
+      "event_time_text": "last month",
+      "event_time": "1998-10",
+      "time_status": "past",
+      "severity": "high"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>Germany, Italy and other European countries have suffered tremendously from sanctions</input>
-<output_fields>
-event_type: economic crisis
-grounding_quote: Germany, Italy and other European countries have suffered tremendously from sanctions
-event_location_text: Germany, Italy and other European countries
-event_location: Germany; Italy
-event_time_text: not_stated
-event_time: not_stated
-affected_entity: not_stated
-affected_group: not_stated
-severity: high
-modality: asserted
-</output_fields>
+<input>Given publish_date "2022-05-03" and an article containing: "Germany, Italy and other European countries are currently suffering tremendously from the sanctions."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "economic decline",
+      "grounding_quote": "Germany, Italy and other European countries are currently suffering tremendously from the sanctions",
+      "event_location_text": "Germany, Italy and other European countries",
+      "event_location": "Germany; Italy",
+      "event_time_text": "currently",
+      "event_time": "2022-05-03",
+      "time_status": "ongoing",
+      "severity": "high"
+    }
+  ]
+}
+</output>
 </example>
 
 <example>
-<input>There are rumors about German leopard tanks being used in Bosnia. They haven't been confirmed so far as I know.</input>
-<output_fields>
-event_type: conflict
-grounding_quote: There are rumors about German leopard tanks being used in Bosnia
-event_location_text: in Bosnia
-event_location: Bosnia
-event_time_text: not_stated
-event_time: not_stated
-modality: projected
-</output_fields>
+<input>Given publish_date "2015-07-02" and an article containing: "A brief power outage affected several neighborhoods in Lagos yesterday, causing only minor disruption to daily activities."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "power outage",
+      "grounding_quote": "A brief power outage affected several neighborhoods in Lagos yesterday, causing only minor disruption to daily activities",
+      "event_location_text": "in Lagos",
+      "event_location": "Lagos",
+      "event_time_text": "yesterday",
+      "event_time": "2015-07-01",
+      "time_status": "past",
+      "severity": "low"
+    }
+  ]
+}
+</output>
+</example>
+
+<example>
+<input>An article states: "Airstrikes hit a hospital and destroyed the main bridge into the city of Aleppo, cutting off residents from emergency care."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "aerial bombardment",
+      "grounding_quote": "Airstrikes hit a hospital and destroyed the main bridge into the city of Aleppo",
+      "event_location_text": "into the city of Aleppo",
+      "event_location": "Aleppo",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "not_stated",
+      "severity": "not_stated"
+    },
+    {
+      "event_type": "infrastructure destruction",
+      "grounding_quote": "destroyed the main bridge into the city of Aleppo",
+      "event_location_text": "into the city of Aleppo",
+      "event_location": "Aleppo",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "not_stated",
+      "severity": "not_stated"
+    },
+    {
+      "event_type": "health service disruption",
+      "grounding_quote": "cutting off residents from emergency care",
+      "event_location_text": "into the city of Aleppo",
+      "event_location": "Aleppo",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "not_stated",
+      "severity": "not_stated"
+    }
+  ]
+}
+Note: the bridge is general infrastructure, not a farm-specific facility, so it is infrastructure destruction rather than agricultural infrastructure damage; the causing attack is tagged separately as aerial bombardment.
+</output>
 </example>
 </few_shot_examples>
 
 <validation_checklist>
 Before returning, validate silently:
 - JSON is parseable.
-- Top-level keys are exactly document_relevance and events.
+- Top-level key is exactly events.
 - Every event has exactly the schema keys.
 - Every event_type is from allowed_event_types.
 - Every event_location is either explicitly stated and geocodable, or "not_stated".
 - event_location_text is copied verbatim from article_text, or "not_stated" if event_location is "not_stated".
 - event_time_text is copied verbatim from article_text (original words, not the resolved ISO date), or "not_stated" if event_time is "not_stated".
 - For every event where event_location is "not_stated", confirm that no geocodable place appears in the same paragraph as grounding_quote that clearly scopes the same event.
-- No location, time, affected group, severity, or event type is invented.
+- No location, time, severity, or event type is invented.
 - grounding_quote is copied verbatim from article_text.
-- If events is empty, document_relevance is "not_relevant".
 </validation_checklist>

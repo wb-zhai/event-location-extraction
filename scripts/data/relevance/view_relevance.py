@@ -38,7 +38,7 @@ def format_annotation(r: dict) -> str:
     ann = r.get("annotation")
     if not ann:
         return ""
-    parts = [f"\n\n---\n\n### Annotation\n\n**Document relevance:** {ann.get('document_relevance', 'n/a')}"]
+    parts = ["\n\n---\n\n### Annotation"]
     events = ann.get("events") or []
     if events:
         parts.append(f"\n\n**Events ({len(events)}):**")
@@ -47,8 +47,7 @@ def format_annotation(r: dict) -> str:
                 f"\n{j}. **{ev.get('event_type', 'n/a')}** — _{ev.get('grounding_quote', '')}_\n"
                 f"   - Location: {ev.get('event_location', 'n/a')} ({ev.get('event_location_text', 'n/a')})\n"
                 f"   - Time: {ev.get('event_time', 'n/a')} ({ev.get('event_time_text', 'n/a')}), status: {ev.get('time_status', 'n/a')}\n"
-                f"   - Affected: {ev.get('affected_entity', 'n/a')} / {ev.get('affected_group', 'n/a')}\n"
-                f"   - Severity: {ev.get('severity', 'n/a')}, Modality: {ev.get('modality', 'n/a')}"
+                f"   - Severity: {ev.get('severity', 'n/a')}"
             )
     return "\n".join(parts)
 

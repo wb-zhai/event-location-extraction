@@ -2,11 +2,12 @@ import argparse
 import asyncio
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 from typing import Any
 
+from dotenv import load_dotenv
 from google.genai import types as genai_types
 from pydantic import BaseModel, Field
 
@@ -14,37 +15,38 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.llms.llm_client import GeminiLLMClient, LLMClient
+from src.llms.llm_client import GeminiContentBlockedError, GeminiLLMClient, LLMClient
+
+load_dotenv(dotenv_path=REPO_ROOT / ".env")
 
 DEFAULT_RELEVANCE_SYSTEM_PROMPT = """<role>
-You are a high-recall relevance gate for food-security risk-event extraction.
+You are a high-recall relevance gate for the extraction of risk events contributing to food crises.
 </role>
 
 <goal>
-Decide whether the article is likely to contain explicit food-insecurity events or risk-factor evidence worth sending to the full extraction pipeline.
+Decide whether the article is likely to discuss an explicit risk event or food crisis itself, thus worth sending to the full extraction pipeline.
 </goal>
 
 <event_categories>
 The pipeline extracts events in these categories:
-- agricultural production issues
-- conflicts and violence
-- economic issues
+- agricultural issues
+- conflict and security
+- displacement and migration
+- economic stress
 - environmental issues
-- food crisis
-- forced displacement
-- humanitarian aid
-- land-related issues
-- pests and diseases
+- food insecurity
+- humanitarian disruption
 - political instability
-- weather shocks
+- public health
+- weather and natural hazards
 </event_categories>
 
 <policy>
-- Favor recall over precision, but base the decision on what the article substantively reports, not on incidental mentions.
-- A category term appearing in a quote, anecdote, historical aside, or rhetorical comparison does NOT make an article relevant unless the article itself is reporting on a current, concrete instance of that category.
-- Opinion/analysis pieces are relevant only if they are substantively about a concrete event or situation in one of the categories, not general commentary (e.g. domestic politics, culture, sports, entertainment, personal profiles) that merely touches a related theme in passing.
+- Favor recall over precision. Relevance depends on whether a real, current, concrete instance of a category is reported at all in the article -- NOT on whether it is the article's main subject. A brief side mention of an actual event (e.g. a football report noting "amid extreme rainfall affecting the region") makes the article relevant.
+- What disqualifies a mention is not its prominence but its nature: category language used only as a quote, historical anecdote, hypothetical, or rhetorical comparison (e.g. "prices rose like the famine of the 1980s") does NOT describe a real, current occurrence, and does not make the article relevant on its own.
+- Opinion/analysis pieces are relevant if they factually reference a concrete, current event or situation in one of the categories, even briefly, and not relevant if they only use category language rhetorically (e.g. domestic politics, culture, sports, entertainment, personal profiles that merely borrow a related term or metaphor).
 - If the article is borderline, ambiguous, or only partially visible in the preview, mark it relevant.
-- Mark it irrelevant when the title and preview strongly indicate the article is outside all of the event categories above, or when the only category-related content is a passing mention rather than the article's actual subject.
+- Mark it irrelevant only when the title and preview give no indication of any real, current, concrete instance of any event category -- i.e. all category-related language is rhetorical, historical, hypothetical, or quoted without describing a genuine current occurrence.
 - Use only the provided title and article preview.
 </policy>
 """
@@ -64,46 +66,45 @@ Return whether this article should proceed to the full food-security risk/event 
 </task>
 
 <decision_rule>
-- is_relevant=true if the article substantively reports on at least one of the following event categories: agricultural production issues, conflicts and violence, economic issues, environmental issues, food crisis, forced displacement, humanitarian aid, land-related issues, pests and diseases, political instability, or weather shocks.
-- A passing mention, historical anecdote, or rhetorical comparison that uses category-related language does not count as evidence.
-- If uncertain whether the article's actual reported content falls in-scope, return is_relevant=true.
-- is_relevant=false when the article is clearly unrelated to all of the above categories, or when category-related terms appear only incidentally rather than as the article's actual subject.
+- is_relevant=true if the article reports a real, current, concrete instance of at least one of the following event categories, even as a brief or secondary detail within an article mainly about something else: agricultural issues, conflict and security, displacement and migration, economic stress, environmental issues, food insecurity, humanitarian disruption, political instability, public health, or weather and natural hazards.
+- A historical anecdote, hypothetical, or rhetorical comparison that uses category-related language without describing a real current occurrence does not count as evidence (prominence in the article does not matter; whether it describes something real and current does).
+- If uncertain whether the article's content describes a real, current in-scope occurrence, return is_relevant=true.
+- is_relevant=false only when the article is clearly unrelated to all of the above categories, or when all category-related language is rhetorical, historical, hypothetical, or quoted rather than describing a genuine current occurrence.
 </decision_rule>
 """
 
 DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL = """<role>
-You are a high-recall relevance gate for food-security risk-event extraction.
+You are a high-recall relevance gate for the extraction of risk events contributing to food crises.
 </role>
 
 <goal>
-Decide, using a 3-way label, whether the article is likely to contain explicit food-insecurity events or risk-factor evidence worth sending to the full extraction pipeline.
+Decide, using a 3-way label, whether the article is likely to discuss an explicit risk event or food crisis itself, thus worth sending to the full extraction pipeline.
 </goal>
 
 <event_categories>
 The pipeline extracts events in these categories:
-- agricultural production issues
-- conflicts and violence
-- economic issues
+- agricultural issues
+- conflict and security
+- displacement and migration
+- economic stress
 - environmental issues
-- food crisis
-- forced displacement
-- humanitarian aid
-- land-related issues
-- pests and diseases
+- food insecurity
+- humanitarian disruption
 - political instability
-- weather shocks
+- public health
+- weather and natural hazards
 </event_categories>
 
 <labels>
-- relevant: the article substantively reports on a current, concrete instance of at least one event category above.
-- partially_relevant: the article touches on an event category, but only partially, ambiguously, or as secondary context to a different main subject (e.g. a brief mention within a broader story, an early/developing situation with limited detail, or content that mixes in-scope and out-of-scope material).
-- not_relevant: the article is not about any event category, or category-related terms appear only in a quote, anecdote, historical aside, or rhetorical comparison rather than in reporting on a real, current event.
+- relevant: the article reports a real, current, concrete instance of at least one event category above -- whether that is the article's main subject or a clearly factual side mention within a story about something else (e.g. a football report noting "amid extreme rainfall affecting the region").
+- partially_relevant: the article's connection to an event category is genuinely ambiguous or underspecified -- e.g. a very early/developing situation with too little detail to confirm, or content that mixes clearly in-scope and out-of-scope material such that scope is unclear.
+- not_relevant: the article is not about any event category, or category-related terms appear only in a quote, anecdote, historical aside, hypothetical, or rhetorical comparison rather than in reporting on a real, current occurrence.
 </labels>
 
 <policy>
-- Favor recall over precision, but base the decision on what the article substantively reports, not on incidental mentions.
-- Opinion/analysis pieces are relevant or partially_relevant only if they are substantively about a concrete event or situation in one of the categories, not general commentary (e.g. domestic politics, culture, sports, entertainment, personal profiles) that merely touches a related theme in passing.
-- If the article is borderline, ambiguous, or only partially visible in the preview, prefer partially_relevant over not_relevant, and prefer relevant over partially_relevant when the in-scope content is substantial.
+- Favor recall over precision: what matters is whether a real, current occurrence of a category is reported at all, not how prominent it is in the article. A brief, factual side mention of a real event should be relevant, not merely partially_relevant -- reserve partially_relevant for genuine ambiguity or lack of detail, not for prominence.
+- Opinion/analysis pieces are relevant if they factually reference a concrete, current event or situation in one of the categories, even briefly, and not_relevant if they only use category language rhetorically (e.g. domestic politics, culture, sports, entertainment, personal profiles that merely borrow a related term or metaphor).
+- If the article is borderline, ambiguous, or only partially visible in the preview, prefer partially_relevant over not_relevant, and prefer relevant over partially_relevant when a real, current in-scope occurrence is clearly described, however briefly.
 - Use only the provided title and article preview.
 </policy>
 """
@@ -123,9 +124,9 @@ Return a 3-way relevance label for whether this article should proceed to the fu
 </task>
 
 <decision_rule>
-- relevance_label="relevant" if the article substantively reports on at least one of the following event categories: agricultural production issues, conflicts and violence, economic issues, environmental issues, food crisis, forced displacement, humanitarian aid, land-related issues, pests and diseases, political instability, or weather shocks.
-- relevance_label="partially_relevant" if the article touches on one of these categories only partially, ambiguously, or as secondary context to a different main subject.
-- relevance_label="not_relevant" if the article is clearly unrelated to all of the above categories, or category-related terms appear only incidentally (quote, anecdote, historical aside, rhetorical comparison) rather than as the article's actual subject.
+- relevance_label="relevant" if the article reports a real, current, concrete instance of at least one of the following event categories, even as a brief or secondary detail within a story mainly about something else: agricultural production issues, conflicts and violence, economic issues, environmental issues, food crisis, forced displacement, humanitarian aid, land-related issues, pests and diseases, political instability, or weather shocks.
+- relevance_label="partially_relevant" if the article's connection to one of these categories is genuinely ambiguous or underspecified (too little detail, or unclear mix of in-scope/out-of-scope content) -- not merely because the mention is brief or secondary.
+- relevance_label="not_relevant" if the article is clearly unrelated to all of the above categories, or category-related terms appear only as a quote, anecdote, historical aside, hypothetical, or rhetorical comparison rather than describing a genuine current occurrence.
 - If uncertain between two labels, prefer the more inclusive one (not_relevant < partially_relevant < relevant).
 </decision_rule>
 """
@@ -264,6 +265,8 @@ async def classify_article_relevance(
     use_3label_prompt: bool = False,
     verbose: bool = False,
     override_settings: dict[str, Any] | None = None,
+    max_attempts: int = 3,
+    retry_backoff_seconds: float = 2.0,
 ) -> dict[str, Any]:
     from scripts.data.generation.gemini_event_gen import (
         log_llm_call,
@@ -294,55 +297,102 @@ async def classify_article_relevance(
         system_prompt=system_prompt,
         prompt=prompt,
     )
-    response = None
-    reasoning_effort = "low" if "pro" in client.model_name else "minimal" if "3" in client.model_name else None
+    reasoning_effort = (
+        "low"
+        if "pro" in client.model_name
+        else "minimal" if "3" in client.model_name else None
+    )
     response_format = (
         {"reason": str, "relevance_label": str, "confidence": float}
         if use_3label_prompt
         else {"reason": str, "is_relevant": bool, "confidence": float}
     )
-    async for candidate in client.generate(
-        prompt=prompt,
-        system_prompt=system_prompt,
-        override_settings=override_settings if override_settings is not None else {"temperature": 0.0},
-        response_format=response_format,
-        add_cot_field=False,
-        reasoning_effort=reasoning_effort,
-    ):
-        response = candidate
-        break
-    if response is None:
-        raise RuntimeError("Gemini returned no relevance response.")
 
-    raw_answer = response_to_dict(response.parsed) if response.parsed else response.text
-    log_llm_call(
-        enabled=verbose,
-        record_id=record_id,
-        step="relevance_filter",
-        call_type="relevance",
-        system_prompt=system_prompt,
-        prompt=prompt,
-        answer=raw_answer,
-    )
-    parsed = raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
-    if use_3label_prompt:
-        decision = clean_relevance_decision_3label(parsed)
-        decision_label = decision["relevance_label"]
-    else:
-        decision = clean_relevance_decision(parsed)
-        decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
-    return {
-        "decision": decision_label,
-        "is_relevant": decision["is_relevant"],
-        "confidence": decision["confidence"],
-        "reason": decision["reason"],
-        "filtered": should_filter_by_relevance(decision, confidence_threshold),
-        "threshold": confidence_threshold,
-        "model": client.model_name,
-        "max_chars": max_chars,
-        "text_chars_used": len(preview_text),
-        "metadata": response.metadata,
-    }
+    last_error: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = None
+            async for candidate in client.generate(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                override_settings=(
+                    override_settings
+                    if override_settings is not None
+                    else {"temperature": 0.0, "max_output_tokens": 8192}
+                ),
+                response_format=response_format,
+                add_cot_field=False,
+                reasoning_effort=reasoning_effort,
+            ):
+                response = candidate
+                break
+            if response is None:
+                raise RuntimeError("Gemini returned no relevance response.")
+
+            raw_answer = (
+                response_to_dict(response.parsed) if response.parsed else response.text
+            )
+            log_llm_call(
+                enabled=verbose,
+                record_id=record_id,
+                step="relevance_filter",
+                call_type="relevance",
+                system_prompt=system_prompt,
+                prompt=prompt,
+                answer=raw_answer,
+            )
+            parsed = raw_answer if isinstance(raw_answer, dict) else json.loads(raw_answer)
+            if use_3label_prompt:
+                decision = clean_relevance_decision_3label(parsed)
+                decision_label = decision["relevance_label"]
+            else:
+                decision = clean_relevance_decision(parsed)
+                decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
+            return {
+                "decision": decision_label,
+                "is_relevant": decision["is_relevant"],
+                "confidence": decision["confidence"],
+                "reason": decision["reason"],
+                "filtered": should_filter_by_relevance(decision, confidence_threshold),
+                "threshold": confidence_threshold,
+                "model": client.model_name,
+                "max_chars": max_chars,
+                "text_chars_used": len(preview_text),
+                "metadata": response.metadata,
+            }
+        except GeminiContentBlockedError as exc:
+            # Retrying the same content will hit the same block again, so fail fast
+            # instead of burning attempts. Default to relevant (favor recall, per the
+            # gate's own policy) rather than silently dropping a blocked article.
+            print(
+                f"[relevance_filter] record={record_id} blocked by Gemini "
+                f"(block_reason={exc.block_reason}); defaulting to relevant."
+            )
+            return {
+                "decision": "relevant",
+                "is_relevant": True,
+                "confidence": 0.0,
+                "reason": f"Gemini blocked the response (block_reason={exc.block_reason}); "
+                "defaulted to relevant to favor recall.",
+                "filtered": False,
+                "threshold": confidence_threshold,
+                "model": client.model_name,
+                "max_chars": max_chars,
+                "text_chars_used": len(preview_text),
+                "blocked": True,
+                "block_reason": str(exc.block_reason),
+            }
+        except Exception as exc:
+            last_error = exc
+            if attempt < max_attempts:
+                print(
+                    f"[relevance_filter] record={record_id} attempt={attempt}/"
+                    f"{max_attempts} failed ({exc}); retrying..."
+                )
+                await asyncio.sleep(retry_backoff_seconds * attempt)
+
+    assert last_error is not None
+    raise last_error
 
 
 async def process_record(client, record, args):
@@ -414,6 +464,8 @@ async def process_record(client, record, args):
                 use_3label_prompt=getattr(args, "use_3label_prompt", False),
                 verbose=args.verbose,
                 override_settings=getattr(args, "override_settings", None),
+                max_attempts=args.max_attempts,
+                retry_backoff_seconds=args.retry_backoff_seconds,
             )
 
         record["relevance"] = relevance_info
@@ -482,7 +534,7 @@ def _build_batch_request(
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "maxOutputTokens": 256,
+                "maxOutputTokens": 8192,
                 "temperature": 0.0,
                 "responseSchema": response_schema,
             },
@@ -652,7 +704,9 @@ async def _execute_batch_chunk(
                     decision_label = decision["relevance_label"]
                 else:
                     decision = clean_relevance_decision(parsed)
-                    decision_label = "relevant" if decision["is_relevant"] else "irrelevant"
+                    decision_label = (
+                        "relevant" if decision["is_relevant"] else "irrelevant"
+                    )
                 metadata = _batch_response_metadata(response)
                 relevance_info = {
                     "decision": decision_label,
@@ -801,7 +855,10 @@ async def process_file(args):
             with output_path.open("w", encoding="utf-8") as f:
                 for line in kept_lines:
                     f.write(line + "\n")
-            print(f"Resuming: dropping {error_count} previously errored records to retry.")
+            print(
+                f"Resuming: {error_count} previously errored records removed from "
+                "output and will be retried in this run."
+            )
 
         print(f"Resuming: {len(done_keys)} records already done, skipping.")
 
@@ -861,9 +918,19 @@ async def process_file(args):
     # print some summary stats
     total = len(results)
     filtered = sum(1 for r in results if r.get("relevance", {}).get("filtered", False))
+    errors = [r for r in results if r.get("relevance", {}).get("error")]
     print(f"Total records: {total}")
     if total:
         print(f"Filtered out: {filtered} ({filtered/total:.2%})")
+
+    if errors:
+        error_counts: dict[str, int] = {}
+        for r in errors:
+            msg = str(r["relevance"]["error"])
+            error_counts[msg] = error_counts.get(msg, 0) + 1
+        print(f"Errors: {len(errors)} ({len(errors)/total:.2%})" if total else f"Errors: {len(errors)}")
+        for msg, count in sorted(error_counts.items(), key=lambda kv: -kv[1]):
+            print(f"  [{count}x] {msg}")
 
 
 DEFAULT_KEYWORDS = [
@@ -911,6 +978,20 @@ def main():
     )
     parser.add_argument(
         "--concurrency", type=int, default=10, help="Concurrent requests"
+    )
+    parser.add_argument(
+        "--max-attempts",
+        type=int,
+        default=3,
+        help="Max attempts per record for LLM relevance calls before giving up "
+        "(only applies with --use-llm, non-batch mode).",
+    )
+    parser.add_argument(
+        "--retry-backoff-seconds",
+        type=float,
+        default=2.0,
+        help="Base backoff in seconds between retry attempts (multiplied by attempt "
+        "number).",
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument(

@@ -6,7 +6,7 @@ Checks per event:
   - grounding_quote is a non-empty exact substring of source.text
   - event_location_text (when not "not_stated") is an exact substring of source.text
   - event_time_text (when not "not_stated") is an exact substring of source.text
-  - time_status / severity / modality are valid enum values
+  - time_status / severity are valid enum values
   - no duplicate events per document (same event_type + grounding_quote)
 
 Emits:
@@ -24,13 +24,11 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "risk.label.description.training.json"
+ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 SYSTEM_PROMPT_PATH = REPO_ROOT / "scripts" / "data" / "generation_v3" / "prompts" / "teacher" / "system_prompt.txt"
 
 VALID_TIME_STATUS = {"past", "ongoing", "forecast", "not_stated"}
 VALID_SEVERITY = {"low", "medium", "high", "extreme", "not_stated"}
-VALID_MODALITY = {"asserted", "projected"}
-VALID_DOC_RELEVANCE = {"relevant", "not_relevant"}
 
 
 def load_ontology_labels(path: Path) -> set[str]:
@@ -84,9 +82,6 @@ def check_event(
         categories.add("enum")
     if event.get("severity") not in VALID_SEVERITY:
         errors.append(f"invalid severity: {event.get('severity')!r}")
-        categories.add("enum")
-    if event.get("modality") not in VALID_MODALITY:
-        errors.append(f"invalid modality: {event.get('modality')!r}")
         categories.add("enum")
 
     key = (event_type, gq)
