@@ -173,6 +173,27 @@ exhaustive_food_insecurity_regex = re.compile(
 )
 
 
+def _relevance_reasoning_effort(model_name: str) -> str | None:
+    return "low" if "pro" in model_name else "minimal" if "3" in model_name else None
+
+
+def _relevance_thinking_config(model_name: str) -> dict[str, Any] | None:
+    """REST-format thinkingConfig for the Gemini Batch API, mirroring the
+    reasoning_effort used by the streaming path (classify_article_relevance)
+    so batch jobs don't silently default to the API's own thinking budget."""
+    reasoning_effort = _relevance_reasoning_effort(model_name)
+    if "gemini" not in model_name:
+        return None
+    if "2.5" in model_name:
+        budget = {"low": 1024, "minimal": 0}.get(reasoning_effort or "", 0)
+        return {"thinkingBudget": budget}
+    if "3" in model_name:
+        if reasoning_effort is None:
+            return None
+        return {"thinkingLevel": reasoning_effort}
+    return None
+
+
 class RelevanceDecision(BaseModel):
     reason: str = Field(default="")
     confidence: float = Field(
@@ -247,11 +268,7 @@ async def classify_article_relevance(
         system_prompt=system_prompt,
         prompt=prompt,
     )
-    reasoning_effort = (
-        "low"
-        if "pro" in client.model_name
-        else "minimal" if "3" in client.model_name else None
-    )
+    reasoning_effort = _relevance_reasoning_effort(client.model_name)
     response_format = {"reason": str, "is_relevant": bool, "confidence": float}
 
     last_error: Exception | None = None
@@ -461,19 +478,25 @@ class _BatchTask:
 
 
 def _build_batch_request(
-    task: "_BatchTask", system_prompt: str, response_schema: dict[str, Any]
+    task: "_BatchTask",
+    system_prompt: str,
+    response_schema: dict[str, Any],
+    thinking_config: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    generation_config: dict[str, Any] = {
+        "responseMimeType": "application/json",
+        "maxOutputTokens": 8192,
+        "temperature": 0.0,
+        "responseSchema": response_schema,
+    }
+    if thinking_config is not None:
+        generation_config["thinkingConfig"] = thinking_config
     return {
         "key": task.key,
         "request": {
             "contents": [{"role": "user", "parts": [{"text": task.prompt}]}],
             "systemInstruction": {"parts": [{"text": system_prompt}]},
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "maxOutputTokens": 8192,
-                "temperature": 0.0,
-                "responseSchema": response_schema,
-            },
+            "generationConfig": generation_config,
         },
     }
 
@@ -549,6 +572,7 @@ async def _execute_batch_chunk(
     confidence_threshold: float,
 ) -> list[dict[str, Any]]:
     response_schema = _RELEVANCE_RESPONSE_SCHEMA
+    thinking_config = _relevance_thinking_config(model)
     request_path = output_path.with_suffix(
         f".batch.part-{chunk_index:04d}.requests.jsonl"
     )
@@ -559,7 +583,7 @@ async def _execute_batch_chunk(
     request_path.write_text(
         "".join(
             json.dumps(
-                _build_batch_request(t, system_prompt, response_schema),
+                _build_batch_request(t, system_prompt, response_schema, thinking_config),
                 ensure_ascii=False,
             )
             + "\n"
