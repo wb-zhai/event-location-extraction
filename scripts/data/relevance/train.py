@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,14 +38,14 @@ from transformers import (
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_MODEL_NAME = "answerdotai/ModernBERT-base"
-DEFAULT_MAX_LENGTH = 512
-DEFAULT_MAX_CHARS = 2000
-DEFAULT_BATCH_SIZE = 16
+DEFAULT_MAX_LENGTH = 2048
+DEFAULT_MAX_CHARS = 4000
+DEFAULT_BATCH_SIZE = 8
 DEFAULT_LEARNING_RATE = 2e-5
-DEFAULT_NUM_EPOCHS = 3.0
+DEFAULT_NUM_EPOCHS = 5.0
 DEFAULT_WEIGHT_DECAY = 0.01
 DEFAULT_WARMUP_RATIO = 0.1
-DEFAULT_EVAL_FRAC = 0.15
+DEFAULT_EVAL_FRAC = 0.10
 DEFAULT_SEED = 42
 
 ID2LABEL = {0: "irrelevant", 1: "relevant"}
@@ -185,6 +186,23 @@ class WeightedLossTrainer(Trainer):
 # ---------------------------------------------------------------------------
 
 
+def log_split_stats(name: str, examples: list[dict[str, Any]]) -> None:
+    n = len(examples)
+    if not n:
+        LOGGER.warning("%s split is empty!", name)
+        return
+    n_relevant = sum(e["label"] for e in examples)
+    LOGGER.info(
+        "%s split: %d examples | relevant=%d (%.1f%%) irrelevant=%d (%.1f%%)",
+        name,
+        n,
+        n_relevant,
+        n_relevant / n * 100,
+        n - n_relevant,
+        (n - n_relevant) / n * 100,
+    )
+
+
 def build_dataset(
     examples: list[dict[str, Any]],
     tokenizer: PreTrainedTokenizerBase,
@@ -279,7 +297,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Use inverse-frequency class weights in the loss.",
     )
     parser.add_argument("--wandb-project", type=str, default=None)
-    parser.add_argument("--dataloader-num-workers", type=int, default=0)
+    parser.add_argument("--wandb-run-name", type=str, default=None)
+    parser.add_argument("--dataloader-num-workers", type=int, default=4)
     parser.add_argument("--resume-from-checkpoint", type=str, default=None)
     return parser.parse_args(argv)
 
@@ -305,9 +324,26 @@ def main(argv: list[str] | None = None) -> None:
     tokenizer_name = args.tokenizer_name or args.model_name
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
+    model_max = tokenizer.model_max_length
+    if model_max < 1_000_000:
+        LOGGER.info(
+            "Tokenizer model_max_length=%d; requested --max-length=%d", model_max, args.max_length
+        )
+        if args.max_length > model_max:
+            raise ValueError(
+                f"--max-length {args.max_length} exceeds the model's maximum supported length "
+                f"({model_max}). Lower --max-length or choose a model with a larger context window."
+            )
+    else:
+        LOGGER.info(
+            "Tokenizer does not declare a max length; using --max-length=%d", args.max_length
+        )
+
     if args.eval_file is not None:
         train_examples = load_examples(args.input, args.max_chars)
         eval_examples = load_examples(args.eval_file, args.max_chars)
+        log_split_stats("train", train_examples)
+        log_split_stats("eval", eval_examples)
     else:
         all_examples = load_examples(args.input, args.max_chars)
         labels = [e["label"] for e in all_examples]
@@ -324,6 +360,26 @@ def main(argv: list[str] | None = None) -> None:
             len(eval_examples),
             args.eval_frac,
         )
+        log_split_stats("train", train_examples)
+        log_split_stats("eval", eval_examples)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = args.wandb_run_name or f"{args.output_dir.name}_{timestamp}"
+
+    if args.resume_from_checkpoint:
+        run_dir = args.output_dir
+    else:
+        run_dir = args.output_dir / timestamp
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    LOGGER.info("Run directory: %s", run_dir)
+
+    for split_name, split_examples in (("train", train_examples), ("dev", eval_examples)):
+        split_path = run_dir / f"{split_name}.jsonl"
+        with split_path.open("w", encoding="utf-8") as f:
+            for ex in split_examples:
+                f.write(json.dumps(ex, ensure_ascii=False) + "\n")
+        LOGGER.info("Saved %s split (%d examples) to %s", split_name, len(split_examples), split_path)
 
     train_dataset = build_dataset(train_examples, tokenizer, args.max_length)
     eval_dataset = build_dataset(eval_examples, tokenizer, args.max_length)
@@ -346,7 +402,7 @@ def main(argv: list[str] | None = None) -> None:
 
     report_to = ["wandb"] if args.wandb_project else "none"
     training_args_kwargs: dict[str, Any] = dict(
-        output_dir=str(args.output_dir),
+        output_dir=str(run_dir),
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         learning_rate=args.learning_rate,
@@ -370,6 +426,7 @@ def main(argv: list[str] | None = None) -> None:
         import os
 
         os.environ["WANDB_PROJECT"] = args.wandb_project
+        os.environ["WANDB_RUN_NAME"] = run_name
 
     training_args = TrainingArguments(**training_args_kwargs)
 
