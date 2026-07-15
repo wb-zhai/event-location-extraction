@@ -42,6 +42,14 @@ python scripts/data/relevance/relevance_filter.py \
   --input  dataset/zhai/v3/articles.jsonl \
   --output dataset/zhai/v3/articles.filtered.jsonl \
   --use-regex --use-llm --filter-only
+
+# Cascade: classify with --model first, escalate only its "relevant" calls to
+# --cascade-model and use that as the final decision (batch API supported too, add --batch-api)
+python scripts/data/relevance/relevance_filter.py \
+  --input  dataset/zhai/v3/articles.jsonl \
+  --output dataset/zhai/v3/articles.filtered.jsonl \
+  --use-llm --cascade --model gemini-2.5-flash --cascade-model gemini-3.1-pro-preview \
+  --filter-only
 ```
 
 **How the modes compose:**
@@ -49,8 +57,9 @@ python scripts/data/relevance/relevance_filter.py \
 1. If `--use-regex` is set, the compiled `food_insecurity_regex` is checked first. Articles that don't match are marked filtered immediately (no LLM call).
 2. Otherwise, if `--keywords` is set (or the default keyword list is used), a case-insensitive substring check is run. Non-matching articles are marked filtered.
 3. If `--use-llm` is set and the article was not already filtered by step 1/2, Gemini classifies the article with a structured `{is_relevant, confidence, reason}` response. An article is filtered only when `is_relevant=false` and `confidence ≥ --confidence-threshold`. With `--use-3label-prompt`, Gemini instead returns `{relevance_label, confidence, reason}` where `relevance_label` is one of `relevant` / `partially_relevant` / `not_relevant`; only `not_relevant` maps to `is_relevant=false` (and is thus filterable), while `partially_relevant` is treated as relevant but recorded in `relevance.decision` for downstream distinction.
+4. If `--cascade` is also set, any record `--use-llm` marked `is_relevant=true` gets a *second* LLM call with `--cascade-model`, and that second decision replaces the first as `relevance.*`. Records already marked irrelevant by `--model` are kept as-is and never reach the cascade model. This is meant to close the gap between a cheap/fast model (e.g. `gemini-2.5-flash`) and a stronger one (e.g. `gemini-3.1-pro-preview`, the default `--cascade-model`) for a fraction of the cost of running the stronger model on every record — see `agreement.py` below to measure how much gap actually exists between two models before turning this on. Works with both the streaming and `--batch-api` code paths.
 
-Every output record gets a `relevance` field. With `--filter-only`, records marked filtered are omitted from the output entirely.
+Every output record gets a `relevance` field. With `--filter-only`, records marked filtered are omitted from the output entirely. With `--cascade`, escalated records additionally get `relevance.cascade_escalated=true` and `relevance.cascade_first_pass` (the pre-escalation model/decision/confidence/token-usage, for auditing and cost accounting), while non-escalated records get `relevance.cascade_escalated=false`.
 
 Key flags:
 
@@ -60,7 +69,9 @@ Key flags:
 | `--keywords` | built-in list | Space-separated keywords for substring matching; ignored when `--use-regex` is set |
 | `--use-llm` | off | Run Gemini relevance classification on articles that survive the pre-pass |
 | `--use-3label-prompt` | off | Use the 3-label (`relevant` / `partially_relevant` / `not_relevant`) prompt instead of the default 2-label (`is_relevant`) prompt. Only applies with `--use-llm` |
-| `--model` | `gemini-2.5-flash` | Gemini model for LLM mode |
+| `--model` | `gemini-2.5-flash` | Gemini model for LLM mode (first-pass model when `--cascade` is set) |
+| `--cascade` | off | Two-stage cascade: escalate `--model`'s `relevant` calls to `--cascade-model` for a second, final decision. Requires `--use-llm` |
+| `--cascade-model` | `gemini-3.1-pro-preview` | Model used for the second cascade pass. Only used with `--cascade` |
 | `--max-chars` | `1000` | Article preview length sent to the LLM (title + first N chars) |
 | `--confidence-threshold` | `0.0` | Minimum LLM confidence to act on an `is_relevant=false` decision |
 | `--filter-only` | off | Omit filtered records from output (default: write all records with metadata) |
@@ -68,6 +79,8 @@ Key flags:
 | `--verbose` | off | Log each LLM prompt and response |
 
 The LLM filter favors recall: the system prompt instructs the model to mark borderline articles relevant. The `--confidence-threshold` flag lets you tighten this — at `0.8` the LLM must be quite confident before dropping an article.
+
+**Cascade cost accounting**: the end-of-run token report (from `scripts/data/generation_v3/costs.py`) prints a second table for cascade first-pass calls on escalated records, so total spend is `final decisions` + `cascade first-pass calls on escalated records` (non-escalated records only make one call, already counted in `final decisions`). Cascade cost roughly tracks the escalation rate: if `--model` marks `X%` of records relevant, expect cascade to cost about `--model`'s full-corpus cost plus `--cascade-model`'s cost on `X%` of the corpus — cheaper than running `--cascade-model` on everything, but the savings shrink for models where per-call cost is dominated by fixed overhead (e.g. thinking tokens) rather than input size.
 
 ---
 

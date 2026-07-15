@@ -3,6 +3,7 @@ import asyncio
 import json
 import re
 import sys
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -356,7 +357,7 @@ async def classify_article_relevance(
     raise last_error
 
 
-async def process_record(client, record, args):
+async def process_record(client, record, args, cascade_client=None):
     source = record.get("source") or {}
     if not isinstance(source, dict):
         source = {}
@@ -415,24 +416,49 @@ async def process_record(client, record, args):
                 }
 
         if args.use_llm and (not relevance_info.get("filtered", False)):
-            relevance_info = await classify_article_relevance(
-                client=client,
-                title=title,
-                text=text,
-                record_id=record_id,
-                max_chars=args.max_chars,
-                confidence_threshold=args.confidence_threshold,
-                system_prompt=(
-                    DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else None
-                ),
-                user_prompt_template=(
-                    DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else None
-                ),
-                verbose=args.verbose,
-                override_settings=getattr(args, "override_settings", None),
-                max_attempts=args.max_attempts,
-                retry_backoff_seconds=args.retry_backoff_seconds,
-            )
+
+            async def _classify(llm_client):
+                return await classify_article_relevance(
+                    client=llm_client,
+                    title=title,
+                    text=text,
+                    record_id=record_id,
+                    max_chars=args.max_chars,
+                    confidence_threshold=args.confidence_threshold,
+                    system_prompt=(
+                        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else None
+                    ),
+                    user_prompt_template=(
+                        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else None
+                    ),
+                    verbose=args.verbose,
+                    override_settings=getattr(args, "override_settings", None),
+                    max_attempts=args.max_attempts,
+                    retry_backoff_seconds=args.retry_backoff_seconds,
+                )
+
+            relevance_info = await _classify(client)
+
+            if args.cascade and cascade_client is not None and relevance_info.get(
+                "is_relevant"
+            ):
+                # First pass said relevant: escalate to the (usually pricier/more
+                # accurate) cascade model and let its decision win. Records the
+                # first pass already called irrelevant are trusted as-is and never
+                # reach the cascade model, since disagreement analysis showed the
+                # cheap model's "irrelevant" calls already agree with the cascade
+                # model ~96% of the time.
+                first_pass = relevance_info
+                relevance_info = await _classify(cascade_client)
+                relevance_info["cascade_escalated"] = True
+                relevance_info["cascade_first_pass"] = {
+                    "model": first_pass.get("model"),
+                    "decision": first_pass.get("decision"),
+                    "confidence": first_pass.get("confidence"),
+                    "metadata": first_pass.get("metadata"),
+                }
+            elif args.cascade:
+                relevance_info["cascade_escalated"] = False
 
         record["relevance"] = relevance_info
         if "metadata" in relevance_info and relevance_info.get("model") not in (
@@ -453,6 +479,45 @@ async def process_record(client, record, args):
 
 def _record_key(record: dict[str, Any]) -> str:
     return str(record.get("id") or record.get("url") or "")
+
+
+def _cascade_token_ledger(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten every LLM call made during a --cascade run (the first pass on
+    every record, plus the escalation call on records the first pass marked
+    relevant) into one list of pseudo-records, so costs.aggregate() can report
+    true total tokens/cost per model in a single table instead of undercounting
+    the first-pass call that gets overwritten on escalated records."""
+    ledger: list[dict[str, Any]] = []
+    for r in records:
+        relevance = r.get("relevance") or {}
+        first_pass = relevance.get("cascade_first_pass")
+        if first_pass:
+            ledger.append(
+                {
+                    "llm": {
+                        "model": first_pass.get("model"),
+                        "metadata": first_pass.get("metadata") or {},
+                    }
+                }
+            )
+            ledger.append(
+                {
+                    "llm": {
+                        "model": relevance.get("model"),
+                        "metadata": relevance.get("metadata") or {},
+                    }
+                }
+            )
+        elif "metadata" in relevance:
+            ledger.append(
+                {
+                    "llm": {
+                        "model": relevance.get("model"),
+                        "metadata": relevance.get("metadata") or {},
+                    }
+                }
+            )
+    return ledger
 
 
 # ---------------------------------------------------------------------------
@@ -761,6 +826,152 @@ async def run_batch_relevance(
     return all_results
 
 
+async def run_batch_relevance_cascade(
+    args: argparse.Namespace,
+    records: list[dict[str, Any]],
+    output_path: Path,
+    append: bool,
+) -> list[dict[str, Any]]:
+    """Two-stage batch cascade: classify every record with args.model, then
+    re-classify only the records it marked relevant with args.cascade_model and
+    let that second decision win. Records the first pass already called
+    irrelevant are kept as-is and never sent to the cascade model, since its
+    "irrelevant" calls tend to already agree with a stronger model most of the
+    time -- this trades a small amount of recall for a large cut in the volume
+    of (usually pricier) cascade-model calls.
+
+    Each chunk's *final* decisions are appended to output_path as soon as
+    they're known (non-escalated records right after their first-pass chunk,
+    escalated records right after their cascade chunk) instead of buffering
+    the whole run in memory, so a crash partway through doesn't lose every
+    already-completed chunk.
+    """
+    from scripts.data.generation_v3.costs import aggregate, report
+
+    client = GeminiLLMClient(model_name=args.model, system_prompt=None)
+    default_system_prompt = (
+        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+    )
+    system_prompt = (
+        args.system_prompt
+        if hasattr(args, "system_prompt") and args.system_prompt
+        else default_system_prompt
+    )
+    user_prompt_template = (
+        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else DEFAULT_RELEVANCE_USER_PROMPT
+    )
+
+    def build_tasks(recs: list[dict[str, Any]]) -> list[_BatchTask]:
+        return [
+            _BatchTask(
+                key=_record_key(r) or str(i),
+                record=r,
+                prompt=user_prompt_template.format(
+                    title=str(r.get("title") or (r.get("source") or {}).get("title", "")),
+                    text=(str(r.get("text") or (r.get("source") or {}).get("text", "")))[
+                        : args.max_chars
+                    ],
+                ),
+            )
+            for i, r in enumerate(recs)
+        ]
+
+    all_results: list[dict[str, Any]] = []
+    written_keys: set[str] = set()
+    write_mode = "a" if append else "w"
+
+    with output_path.open(write_mode, encoding="utf-8") as fh:
+
+        def flush(recs: list[dict[str, Any]]) -> None:
+            for r in recs:
+                written_keys.add(_record_key(r))
+                if args.filter_only and r.get("relevance", {}).get("filtered", False):
+                    continue
+                fh.write(json.dumps(r) + "\n")
+            fh.flush()
+            all_results.extend(recs)
+
+        async def run_stage(
+            recs: list[dict[str, Any]], model: str, label: str
+        ) -> AsyncIterator[list[dict[str, Any]]]:
+            tasks = build_tasks(recs)
+            chunks = list(enumerate(_chunked(tasks, args.batch_size), start=1))
+            for chunk_index, chunk in chunks:
+                print(
+                    f"[cascade:{label}] chunk {chunk_index}/{len(chunks)} "
+                    f"({len(chunk)} records)..."
+                )
+                chunk_results = await _execute_batch_chunk(
+                    client=client,
+                    tasks=chunk,
+                    system_prompt=system_prompt,
+                    model=model,
+                    output_path=output_path,
+                    chunk_index=chunk_index,
+                    poll_interval=args.batch_poll_interval_seconds,
+                    confidence_threshold=args.confidence_threshold,
+                )
+                # _execute_batch_chunk's order follows the batch API's response
+                # order, not the input order -- restore input order per chunk so
+                # incremental writes stay ordered the same way a full-buffer
+                # write would have been.
+                by_key = {_record_key(r): r for r in chunk_results}
+                chunk_results = [by_key[t.key] for t in chunk]
+                yield chunk_results
+
+        first_pass: list[dict[str, Any]] = []
+        escalate: list[dict[str, Any]] = []
+        async for chunk_results in run_stage(records, args.model, "first-pass"):
+            first_pass.extend(chunk_results)
+            done_now = []
+            for rec in chunk_results:
+                relevance = rec.get("relevance") or {}
+                if relevance.get("is_relevant") and not relevance.get("error"):
+                    escalate.append(rec)
+                else:
+                    rec = dict(rec)
+                    rec["relevance"] = {**relevance, "cascade_escalated": False}
+                    done_now.append(rec)
+            flush(done_now)
+
+        print(
+            f"[cascade] escalating {len(escalate)}/{len(first_pass)} records "
+            f"to {args.cascade_model}."
+        )
+
+        if escalate:
+            first_pass_by_key = {_record_key(r): (r.get("relevance") or {}) for r in escalate}
+            async for chunk_results in run_stage(escalate, args.cascade_model, "cascade"):
+                annotated = []
+                for rec in chunk_results:
+                    key = _record_key(rec)
+                    first_relevance = first_pass_by_key.get(key, {})
+                    rec = dict(rec)
+                    rec["relevance"] = {
+                        **rec["relevance"],
+                        "cascade_escalated": True,
+                        "cascade_first_pass": {
+                            "model": first_relevance.get("model"),
+                            "decision": first_relevance.get("decision"),
+                            "confidence": first_relevance.get("confidence"),
+                            "metadata": first_relevance.get("metadata"),
+                        },
+                    }
+                    annotated.append(rec)
+                flush(annotated)
+
+        missing = [r for r in records if _record_key(r) not in written_keys]
+        if missing:
+            flush(
+                [_error_batch_record(r, "Cascade result missing.", args.model) for r in missing]
+            )
+
+    totals = aggregate(_cascade_token_ledger(all_results))
+    report(output_path.name, totals, batch=True)
+
+    return all_results
+
+
 # ---------------------------------------------------------------------------
 # Main processing
 # ---------------------------------------------------------------------------
@@ -819,17 +1030,27 @@ async def process_file(args):
     append = args.resume and output_path.exists()
 
     if args.batch_api:
-        results = await run_batch_relevance(args, records, output_path, append)
+        if args.cascade:
+            results = await run_batch_relevance_cascade(args, records, output_path, append)
+        else:
+            results = await run_batch_relevance(args, records, output_path, append)
     else:
         client = None
+        cascade_client = None
         if args.use_llm:
             client = GeminiLLMClient(model_name=args.model, system_prompt=None)
+            if args.cascade:
+                cascade_client = GeminiLLMClient(
+                    model_name=args.cascade_model, system_prompt=None
+                )
 
         sem = asyncio.Semaphore(args.concurrency)
 
         async def bounded_process(record):
             async with sem:
-                return await process_record(client, record, args)
+                return await process_record(
+                    client, record, args, cascade_client=cascade_client
+                )
 
         # Optional progress bar if tqdm is available
         try:
@@ -855,7 +1076,7 @@ async def process_file(args):
         if args.use_llm:
             from scripts.data.generation_v3.costs import aggregate, report
 
-            totals = aggregate(results)
+            totals = aggregate(_cascade_token_ledger(results) if args.cascade else results)
             report(output_path.name, totals, batch=False)
 
     # print some summary stats
@@ -910,6 +1131,21 @@ def main():
     parser.add_argument("--output", required=True, type=str, help="Output JSONL file")
     parser.add_argument(
         "--model", type=str, default="gemini-2.5-flash", help="Model name"
+    )
+    parser.add_argument(
+        "--cascade",
+        action="store_true",
+        help="Two-stage cascade: classify with --model first, then re-classify only "
+        "the records it marked relevant with --cascade-model and use that as the "
+        "final decision. Records --model already called irrelevant are kept as-is "
+        "and never sent to the cascade model. Cuts cost vs running the (usually "
+        "pricier) cascade model on every record. Requires --use-llm.",
+    )
+    parser.add_argument(
+        "--cascade-model",
+        type=str,
+        default="gemini-3.1-pro-preview",
+        help="Model used for the second cascade pass. Only used with --cascade.",
     )
     parser.add_argument(
         "--max-chars",
@@ -1015,6 +1251,9 @@ def main():
     #     help="Level of thinking to use for relevance classification.",
     # )
     args = parser.parse_args()
+
+    if args.cascade and not args.use_llm:
+        raise SystemExit("--cascade requires --use-llm.")
 
     # Import log_llm_call if needed globally, but it's handled inside classify_article_relevance
     asyncio.run(process_file(args))
