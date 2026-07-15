@@ -91,6 +91,8 @@ def parse_args() -> argparse.Namespace:
         help="tag_method_id filter (default 1).")
     parser.add_argument("--chunk-size", type=int, default=5_000,
         help="Max URIs per article_downloads batch fetch (default 5000).")
+    parser.add_argument("--language", type=str, default="eng",
+        help="Language filter for article_downloads (default eng).")
     parser.add_argument(
         "--oversample", type=int, default=3,
         help=(
@@ -261,6 +263,7 @@ _CONTENT_SQL = """
 SELECT uri, cloud_uri, title, body, published_at, article_type, source_uri
 FROM article_downloads
 WHERE uri = ANY(%(uris)s)
+  AND language = %(language)s
 """
 
 
@@ -332,12 +335,13 @@ def fetch_content(
     cur: psycopg2.extras.RealDictCursor,
     uris: list[str],
     chunk_size: int,
+    language: str,
 ) -> dict[str, dict]:
     content_map: dict[str, dict] = {}
     total = len(uris)
     for i in range(0, total, chunk_size):
         chunk = uris[i : i + chunk_size]
-        cur.execute(_CONTENT_SQL, {"uris": chunk})
+        cur.execute(_CONTENT_SQL, {"uris": chunk, "language": language})
         for row in cur.fetchall():
             content_map[str(row["uri"])] = dict(row)
         done = min(i + chunk_size, total)
@@ -514,7 +518,7 @@ def main() -> None:
             all_selected = selected_pos + selected_neg
             all_uris = [r["article_uri"] for r in all_selected]
             print(f"\nPhase 5: fetching content for {len(all_uris):,} articles...")
-            content_map = fetch_content(cur, all_uris, args.chunk_size)
+            content_map = fetch_content(cur, all_uris, args.chunk_size, args.language)
             print(f"  resolved {len(content_map):,} articles")
 
         # ── Phase 6: Write JSONL ───────────────────────────────────────────

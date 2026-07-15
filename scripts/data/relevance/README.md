@@ -10,6 +10,7 @@ pass on the survivors.
 | File | Purpose |
 | --- | --- |
 | `relevance_filter.py` | Step 0 — pre-filter articles before sending to the teacher |
+| `train.py` | Fine-tune an encoder classifier on `relevance_filter.py` output |
 | `local.py` | Test the relevance gate against a local OpenAI-compatible LLM server |
 | `encoder.py` | Test the relevance gate against a local encoder text classifier (no LLM) |
 | `view_relevance.py` | Gradio UI to browse a `relevance_filter.py` output JSONL |
@@ -187,6 +188,63 @@ Key flags (in addition to the ones shared with the other scripts — `--max-char
 | `--max-length` | `512` | Tokenizer max sequence length (the model's native limit) |
 | `--batch-size` | `32` | Pipeline's internal inference batch size |
 | `--chunk-size` | `500` | Records per progress/flush chunk |
+
+---
+
+## `train.py`
+
+Fine-tunes a binary (`relevant` / `irrelevant`) sequence classifier on the labeled JSONL produced
+by `relevance_filter.py`. Default backbone is `answerdotai/ModernBERT-base`. Self-contained — no
+imports from other repo scripts.
+
+**Input format** — each JSONL record must have:
+- `relevance.is_relevant` — `true` / `false` label (records missing this field are skipped)
+- `title` or `source.title` and `text` or `source.text` — concatenated to form the input text
+- `id` or `url` — used for deduplication (optional but recommended)
+
+**Outputs** saved to `--output-dir`:
+- `final/` — best checkpoint (model + tokenizer), loadable with `AutoModelForSequenceClassification.from_pretrained`
+- `eval_metrics.json` — final evaluation metrics (accuracy, precision, recall, F1, confusion matrix counts)
+
+```bash
+# Auto train/eval split (85/15 stratified)
+python scripts/data/relevance/train.py \
+  --input  dataset/db/relevance/matrix_5M.sample_1000.3.1pro.2label_prompt.jsonl \
+  --output-dir /tmp/relevance-modernbert
+
+# Separate eval file + class balancing (useful for skewed datasets)
+python scripts/data/relevance/train.py \
+  --input     data/train.jsonl \
+  --eval-file data/eval.jsonl \
+  --output-dir /tmp/relevance-modernbert \
+  --balance-classes
+
+# Smoke test — 1 epoch, small batch, CPU-safe fp32
+python scripts/data/relevance/train.py \
+  --input dataset/db/relevance/matrix_5M.sample_1000.3.1pro.2label_prompt.jsonl \
+  --output-dir /tmp/relevance-modernbert-smoke \
+  --num-epochs 1 --batch-size 8 --precision fp32
+```
+
+Key flags:
+
+| Flag | Default | Notes |
+| --- | --- | --- |
+| `--input` | required | Training JSONL file |
+| `--output-dir` | required | Directory for checkpoints and final model |
+| `--eval-file` | none | Separate eval JSONL; if omitted, a stratified split of `--input` is used |
+| `--model-name` | `answerdotai/ModernBERT-base` | Any HF sequence-classification model |
+| `--max-length` | `512` | Max token length; longer inputs are truncated |
+| `--max-chars` | `2000` | Max characters taken from raw text before tokenization |
+| `--batch-size` | `16` | Per-device train and eval batch size |
+| `--learning-rate` | `2e-5` | AdamW learning rate |
+| `--num-epochs` | `3` | Number of training epochs |
+| `--eval-frac` | `0.15` | Fraction of `--input` held out for eval when no `--eval-file` is given |
+| `--precision` | `auto` | `auto` picks bf16 > fp16 > fp32 based on hardware; `fp32` is safe on CPU/MPS |
+| `--balance-classes` | off | Applies inverse-frequency class weights to the loss (helps with skewed label distributions) |
+| `--metric-for-best` | `f1` | Metric used to select the best checkpoint (`accuracy` / `precision` / `recall` / `f1`) |
+| `--wandb-project` | none | WandB project name; omit to disable WandB logging |
+| `--resume-from-checkpoint` | none | Path to a checkpoint directory to resume training from |
 
 ---
 
