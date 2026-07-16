@@ -11,6 +11,8 @@ pass on the survivors.
 | --- | --- |
 | `relevance_filter.py` | Step 0 — pre-filter articles before sending to the teacher |
 | `train.py` | Fine-tune an encoder classifier on `relevance_filter.py` output |
+| `inference.py` | Run a `train.py` checkpoint over text/JSONL (HF or vLLM backend) |
+| `eval.py` | Score a `train.py` checkpoint against labeled JSONL (accuracy/precision/recall/F1) |
 | `local.py` | Test the relevance gate against a local OpenAI-compatible LLM server |
 | `encoder.py` | Test the relevance gate against a local encoder text classifier (no LLM) |
 | `view_relevance.py` | Gradio UI to browse a `relevance_filter.py` output JSONL |
@@ -245,6 +247,99 @@ Key flags:
 | `--metric-for-best` | `f1` | Metric used to select the best checkpoint (`accuracy` / `precision` / `recall` / `f1`) |
 | `--wandb-project` | none | WandB project name; omit to disable WandB logging |
 | `--resume-from-checkpoint` | none | Path to a checkpoint directory to resume training from |
+
+---
+
+## `inference.py`
+
+Runs a `train.py` checkpoint (e.g. `outputs/relevance/relevance-modernbert/<run>/checkpoint-XXXX`
+or `.../final`) over new data. Two interchangeable backends, selected with `--backend`:
+
+- `hf` (default) — `AutoModelForSequenceClassification`, runs on `cuda` / `mps` / `cpu`
+- `vllm` — `vllm.LLM(runner="pooling").classify()`, cuda only, higher throughput for large batches
+
+Input is either raw text on the command line, or a path: a single JSONL file, or a folder of
+JSONL files (every `*.jsonl` sibling is processed, one output file per input file). Records may
+be raw articles (`title`/`text` or `source.title`/`source.text`, as written by
+`relevance_filter.py`) or pre-built train/dev splits (`id`/`text`/`label`, as saved by
+`train.py`) — the same text-building logic as `train.py` is used, so tokenized input matches
+what the model was trained on. Each record is enriched with a `relevance` field
+(`decision`, `is_relevant`, `confidence`, `probs`, `model`, `backend`) — the same shape as
+`relevance_filter.py`/`encoder.py`, so it's diffable against a Gemini-labeled file with
+`agreement.py`.
+
+```bash
+# Raw text from the terminal
+python scripts/data/relevance/inference.py \
+  --checkpoint outputs/relevance/relevance-modernbert/20260715_123657/checkpoint-4618 \
+  --text "Flooding displaces thousands in southern province"
+
+# A single JSONL file, HF backend
+python scripts/data/relevance/inference.py \
+  --checkpoint outputs/relevance/relevance-modernbert/20260715_123657/checkpoint-4618 \
+  --input  dataset/db/training_exp/matrix_5M.sample_20000.relevance.cascade.jsonl \
+  --output /tmp/matrix.relevance.jsonl --batch-size 64
+
+# A folder of JSONL files, vLLM backend
+python scripts/data/relevance/inference.py \
+  --checkpoint outputs/relevance/relevance-modernbert/20260715_123657/checkpoint-4618 \
+  --input dataset/db/training_exp --output /tmp/training_exp.relevance --backend vllm
+```
+
+Key flags:
+
+| Flag | Default | Notes |
+| --- | --- | --- |
+| `--checkpoint` | required | Path to a trained checkpoint dir from `train.py` |
+| `--backend` | `hf` | `hf` (transformers) or `vllm` (`vllm.LLM.classify`, cuda only) |
+| `--text` | — | One or more raw strings to classify; mutually exclusive with `--input`. Written to `--output` if given, else printed to stdout |
+| `--input` | — | A JSONL file or a folder of JSONL files; mutually exclusive with `--text` |
+| `--output` | — | Required with `--input` (a file, or a folder if `--input` is a folder); optional with `--text` |
+| `--max-chars` | `4000` | Max characters taken from raw text before tokenization (mirrors `train.py`) |
+| `--max-length` | `2048` | Tokenizer max sequence length (mirrors `train.py`) |
+| `--batch-size` | `32` | Inference batch size |
+| `--precision` | `auto` | `auto` picks bf16 > fp16 > fp32 based on hardware; `fp32` is safe on CPU/MPS |
+| `--device` | auto-detect | `cuda` / `mps` / `cpu` for `--backend hf`; a device string for `--backend vllm` |
+| `--tensor-parallel-size` | `1` | vLLM only: number of GPUs |
+| `--gpu-memory-utilization` | `0.9` | vLLM only: fraction of GPU memory vLLM is allowed to use |
+| `--limit` | none | Max records to process per input file |
+| `--overwrite` | off | Allow overwriting an existing output file |
+
+---
+
+## `eval.py`
+
+Scores a predictions JSONL file against a labeled JSONL file, matched by `id` — no model
+loading, no inference, just the two files (run `inference.py` first to produce the predictions
+file). Reports accuracy/precision/recall/F1/confusion matrix (the same metrics `train.py` logs at
+the end of training). Both `--predictions` and `--labels` accept anything with a
+`relevance.is_relevant` field (`inference.py`/`relevance_filter.py`/`encoder.py`/`local.py`
+output) — `--labels` additionally accepts a `train.py` train/dev split (top-level `label`), e.g.:
+
+- `--labels outputs/relevance/relevance-modernbert/20260715_123657/dev.jsonl` (train.py split)
+- `--labels dataset/db/training_exp/matrix_5M.sample_20000.relevance.cascade.jsonl` (cascade-labeled gold)
+
+```bash
+# Score inference.py's predictions against the dev split it was held out from
+python scripts/data/relevance/eval.py \
+  --predictions /tmp/dev.predictions.jsonl \
+  --labels outputs/relevance/relevance-modernbert/20260715_123657/dev.jsonl
+
+# Score against a cascade-labeled file used as gold, save misclassified records
+python scripts/data/relevance/eval.py \
+  --predictions /tmp/matrix.relevance.jsonl \
+  --labels dataset/db/training_exp/matrix_5M.sample_20000.relevance.cascade.jsonl \
+  --errors /tmp/eval_errors.jsonl
+```
+
+Key flags:
+
+| Flag | Default | Notes |
+| --- | --- | --- |
+| `--predictions` | required | JSONL file with predicted relevance (e.g. `inference.py` output) |
+| `--labels` | required | JSONL file with ground-truth relevance/label |
+| `--errors` | none | Optional path to write only misclassified records |
+| `--metrics-output` | none | Optional path to write the metrics JSON |
 
 ---
 
