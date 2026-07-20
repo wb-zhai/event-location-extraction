@@ -281,7 +281,7 @@ def sparse_text_shingles(text: str) -> frozenset[str]:
 
 def is_near_duplicate_text(
     shingles: frozenset[str],
-    seen_shingles: list[frozenset[str]],
+    seen_shingles: "list[frozenset[str]] | dict[int, frozenset[str]]",
     threshold: float = TEXT_NEAR_DUPLICATE_THRESHOLD,
     shingle_index: dict[str, list[int]] | None = None,
 ) -> bool:
@@ -312,7 +312,7 @@ def article_identity_seen(
     keys: dict[str, str | None],
     shingles: frozenset[str],
     seen: dict[str, set[str]],
-    seen_shingles: list[frozenset[str]],
+    seen_shingles: "list[frozenset[str]] | dict[int, frozenset[str]]",
     shingle_index: dict[str, list[int]] | None = None,
 ) -> bool:
     return any(value is not None and value in seen[key] for key, value in keys.items()) or is_near_duplicate_text(

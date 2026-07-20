@@ -48,6 +48,7 @@ import random
 import re
 import sys
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 
 import orjson
@@ -297,7 +298,18 @@ def _worker_init(
     _wstate["use_decade"] = use_decade
 
 
-def _score_line(raw: bytes) -> dict | None:
+def _iter_offset_lines(fh) -> "Iterator[tuple[int, bytes]]":
+    """Yield (byte_offset, raw_line) pairs, tracking position ourselves so
+    workers can report back a seek point instead of the full parsed record.
+    """
+    offset = 0
+    for raw in fh:
+        yield offset, raw
+        offset += len(raw)
+
+
+def _score_line(item: "tuple[int, bytes]") -> dict | None:
+    offset, raw = item
     line = raw.strip()
     if not line:
         return None
@@ -323,30 +335,71 @@ def _score_line(raw: bytes) -> dict | None:
         }
     )
     shingles = fast_shingles(text)
+    # Deliberately excludes the parsed `record` (its "text" field averages
+    # several KB): pickling that back to the main process for every candidate
+    # that clears quota+quality -- most of which never end up in the output
+    # sample -- was the dominant cost in the main process's single-threaded
+    # loop. `offset`/`length` let the tiny final set of actually-selected
+    # records be re-read directly from disk in flatten_output instead.
     return {
-        "record": record,
         "status": "ok",
         "key": key,
         "qs": qs,
         "identity_keys": identity_keys,
         "shingles": shingles,
+        "risk_factors": record.get("risk_factors") or [],
+        "offset": offset,
+        "length": len(raw),
     }
 
 
 def _remember_identity(
+    seq_id: int,
     identity_keys: dict[str, str | None],
     shingles: frozenset[str],
     seen: dict[str, set[str]],
-    seen_shingles: list[frozenset[str]],
+    seen_shingles: dict[int, frozenset[str]],
     shingle_index: dict[str, list[int]],
 ) -> None:
     remember_article_identity(identity_keys, seen)
-    idx = len(seen_shingles)
-    seen_shingles.append(shingles)
+    seen_shingles[seq_id] = shingles
     for s in shingles:
         posting = shingle_index.setdefault(s, [])
         if len(posting) < SHINGLE_POSTING_CAP:
-            posting.append(idx)
+            posting.append(seq_id)
+
+
+def _forget_identity(
+    seq_id: int,
+    identity_keys: dict[str, str | None],
+    shingles: frozenset[str],
+    seen: dict[str, set[str]],
+    seen_shingles: dict[int, frozenset[str]],
+    shingle_index: dict[str, list[int]],
+) -> None:
+    """Undo _remember_identity for a reservoir entry that just got evicted.
+
+    Without this, `seen`/`seen_shingles`/`shingle_index` would grow for every
+    record ever pushed into a reservoir across the whole corpus pass instead
+    of staying bounded by what's currently held (matching the module
+    docstring's "already-selected article" semantics) -- on a multi-GB, 5M
+    record corpus that unbounded growth is what drove RAM past 17GB and
+    slowed the sequential main-process loop to a crawl.
+    """
+    for key, value in identity_keys.items():
+        if value is not None:
+            seen[key].discard(value)
+    seen_shingles.pop(seq_id, None)
+    for s in shingles:
+        posting = shingle_index.get(s)
+        if posting is None:
+            continue
+        try:
+            posting.remove(seq_id)
+        except ValueError:
+            pass
+        if not posting:
+            del shingle_index[s]
 
 
 def _update_risk_factor_coverage(covered: Counter[str], risk_factors: list, delta: int) -> None:
@@ -376,7 +429,7 @@ def sample_reservoirs(
     # the positive quota doesn't just fill up with the most common tags.
     risk_factor_coverage: dict[StratumKey, Counter[str]] = {key: Counter() for key in reservoirs}
     seen = empty_article_identity_seen()
-    seen_shingles: list[frozenset[str]] = []
+    seen_shingles: dict[int, frozenset[str]] = {}
     shingle_index: dict[str, list[int]] = {}
     seq = itertools.count()
     stats: Counter[str] = Counter()
@@ -387,7 +440,7 @@ def sample_reservoirs(
         initializer=_worker_init,
         initargs=(min_quality_score, quotas, cluster_map, use_decade),
     ) as pool:
-        results = pool.imap(_score_line, fh, chunksize=chunksize)
+        results = pool.imap(_score_line, _iter_offset_lines(fh), chunksize=chunksize)
         for result in tqdm(
             results, total=expected_total or None, desc="Pass 2/2: sampling", unit="rec"
         ):
@@ -401,18 +454,13 @@ def sample_reservoirs(
                 stats["quality_filtered"] += 1
                 continue
 
-            record = result["record"]
             key = result["key"]
             identity_keys = result["identity_keys"]
             shingles = result["shingles"]
-            if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
-                stats["duplicate"] += 1
-                continue
-
             heap = reservoirs[key]
             quota = quotas[key]
             qs = result["qs"]
-            risk_factors = record.get("risk_factors") or []
+            risk_factors = result["risk_factors"]
 
             weight = max(qs, 1e-6)
             if risk_factor_diversity_weight and risk_factors:
@@ -428,29 +476,58 @@ def sample_reservoirs(
             # state, so this is a greedy coverage heuristic, not exact
             # weighted-without-replacement sampling.)
             es_key = rng.random() ** (1.0 / weight)
-            entry = (es_key, next(seq), qs, record)
+
+            # is_near_duplicate_text is the most expensive step per candidate
+            # (profiling on the real 5M-record corpus showed the main process
+            # pinned inside it): it scores shingle overlap against every
+            # currently-live reservoir entry sharing one of ~200 shingles. A
+            # record that can't beat the reservoir's current worst member is
+            # getting discarded regardless of whether it's a duplicate, so
+            # skip the check for it -- doesn't change which records end up
+            # selected, only how many candidates pay for the duplicate check
+            # (in practice most of the corpus, once reservoirs fill up).
+            if len(heap) >= quota and es_key <= heap[0][0]:
+                continue
+
+            if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
+                stats["duplicate"] += 1
+                continue
+
+            seq_id = next(seq)
+            entry = (es_key, seq_id, qs, result["offset"], result["length"], identity_keys, shingles, risk_factors)
 
             if len(heap) < quota:
                 heapq.heappush(heap, entry)
-                _remember_identity(identity_keys, shingles, seen, seen_shingles, shingle_index)
+                _remember_identity(seq_id, identity_keys, shingles, seen, seen_shingles, shingle_index)
                 _update_risk_factor_coverage(risk_factor_coverage[key], risk_factors, +1)
                 stats["selected"] += 1
-            elif es_key > heap[0][0]:
+            else:
                 evicted = heapq.heapreplace(heap, entry)
-                _remember_identity(identity_keys, shingles, seen, seen_shingles, shingle_index)
-                evicted_record = evicted[3]
-                _update_risk_factor_coverage(
-                    risk_factor_coverage[key], evicted_record.get("risk_factors") or [], -1
-                )
+                _remember_identity(seq_id, identity_keys, shingles, seen, seen_shingles, shingle_index)
+                _forget_identity(evicted[1], evicted[5], evicted[6], seen, seen_shingles, shingle_index)
+                _update_risk_factor_coverage(risk_factor_coverage[key], evicted[7], -1)
                 _update_risk_factor_coverage(risk_factor_coverage[key], risk_factors, +1)
 
     return reservoirs, stats
 
 
-def flatten_output(reservoirs: dict[StratumKey, list]) -> list[dict]:
+def flatten_output(input_path: Path, reservoirs: dict[StratumKey, list]) -> list[dict]:
+    # Only the tiny final set of selected records (bounded by --sample-size)
+    # gets fully re-parsed here, by seeking back into the source file -- see
+    # the comment in _score_line for why full records aren't carried through
+    # pass 2 itself.
+    entries = [
+        (offset, length, qs)
+        for heap in reservoirs.values()
+        for _es_key, _seq, qs, offset, length, _identity_keys, _shingles, _risk_factors in heap
+    ]
+    entries.sort(key=lambda entry: entry[0])  # ascending offset for sequential disk access
+
     output: list[dict] = []
-    for heap in reservoirs.values():
-        for _es_key, _seq, qs, record in heap:
+    with input_path.open("rb") as fh:
+        for offset, length, qs in entries:
+            fh.seek(offset)
+            record = orjson.loads(fh.read(length).strip())
             row = dict(record)
             row["quality_score"] = qs
             output.append(row)
@@ -602,7 +679,7 @@ def main() -> int:
         use_decade=args.stratify_by_decade,
         risk_factor_diversity_weight=args.risk_factor_diversity_weight,
     )
-    output_rows = flatten_output(reservoirs)
+    output_rows = flatten_output(input_path, reservoirs)
     print_summary(counts, quotas, reservoirs, stats, args.sample_size, output_rows)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

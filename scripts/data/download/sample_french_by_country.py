@@ -1,55 +1,60 @@
-"""Download a country-stratified sample of English articles, split into positives
-(risk-factor-tagged) and negatives (geo-tagged, no risk-factor tags).
+"""Sample N articles in a given language (default French), stratified by country.
 
-This is a merge of two approaches developed in this repo:
-  - from_db_matrix.py's positive/negative split by risk factor tags
-    (article_risk_factor_tags, tag_method_id).
-  - sample_french_by_country.py's fast candidate discovery: Event Registry's own
-    concept tagging (article_concept_association -> geo_taxonomy_concept_uris_direct_match
-    -> geo_taxonomy) probed in chunks against indexed primary keys, instead of joining
-    month/country windows directly against the 2.3B-row / 470 GB association table
-    (which forces a seq scan — measured >10 min per month before this rework).
+Geo source is Event Registry's own concept tagging
+(article_concept_association -> geo_taxonomy_concept_uris_direct_match -> geo_taxonomy),
+not the custom string-matching pipeline — so this covers articles the string-matcher
+never ran on or missed.
 
-Discovery is three stages, all chunked, indexed lookups — no table is ever scanned
-in full:
-  1a. Fetch the URIs of every article in --language, one cheap query per month from
-      --start-month (default: earliest article, i.e. full history) to --end-month —
-      each hits a single article_downloads partition via its language index.
-  1b. Geo-tag those URIs in chunks of --probe-chunk-size, probed against
-      article_concept_association's (article_uri, concept_uri) primary key.
-      Measured ~1.25 ms/article.
-  2.  Risk-factor-tag the same URIs in chunks, probed against
-      article_risk_factor_tags' article_uri index. Measured ~0.8 ms/article.
-      Present in the result = positive candidate (with its risk factor ids);
-      absent = negative candidate. This replaces from_db_matrix.py's per-risk-factor
-      LATERAL oversampling — with real per-article RF data in hand there's no need
-      to guess a sample-pool size, so --oversample is gone.
-All three stages run in parallel across --workers connections. Ctrl+C cancels
-queued work and in-flight queries server-side, then exits.
+Candidate discovery is two-stage (a profiled rework of jerome's Slack recipe):
+  1a. Fetch the URIs of every article in the language, one cheap query per month
+      from --start-month (default: earliest article, i.e. full history) to
+      --end-month — each hits a single article_downloads partition via its
+      language index.
+  1b. Geo-tag those URIs in chunks of --probe-chunk-size probed against
+      article_concept_association's (article_uri, concept_uri) primary key,
+      in parallel on --workers connections, collecting per-country pools.
+Joining month windows directly against the concept table (the naive approach)
+makes Postgres seq-scan the 2.3B-row / 470 GB table once per month; the chunked
+PK probes measured ~1.25 ms per article instead (~25 min for the full French
+history on 12 workers).
 
-Stratification (phase 3) is round-robin per label: positive and negative candidates
-are each grouped by country and drawn rarest-country-first, one article per country
-per round, until the pos/neg quota is hit or the pool is exhausted — so rare
-countries contribute everything they have and surplus countries absorb the rest.
-Within a country, positives are ordered by risk-factor-count descending (most
-diverse first, as in from_db_matrix.py's balance_positives) then by
-md5(uri + seed) for determinism; negatives are ordered by md5(uri + seed) alone.
-An article geo-tagged to several countries is claimed by whichever country's round
-reaches it first; all of its tagged countries are still recorded in the output.
+Ctrl+C cancels queued work and the in-flight queries server-side, then exits.
+
+Stratification is round-robin: countries are visited in ascending candidate-count
+order, one article per country per round, until N articles are selected or all pools
+are exhausted. This keeps the per-country distribution as flat as the data allows —
+rare countries contribute everything they have, surplus countries absorb the rest.
+Articles tagged with several countries are assigned to the first country that picks
+them; all their tagged countries are still recorded in the output record.
+
+Selection is deterministic for a given --seed: each country's pool is ordered by
+md5(uri + seed), independent of query arrival order.
+
+Phase 3 (content fetch) writes each chunk to --output as soon as it's fetched,
+retrying a failed chunk on a fresh connection a few times before giving up
+(article_downloads content queries occasionally get canceled server-side).
+If a run still dies partway through, rerun with --resume: it re-derives the same
+candidates/selection (deterministic for a given --seed), skips articles already
+in --output, and appends the rest.
 
 Usage:
-    # 50k English articles, 70% positive, full history -> today
-    python scripts/data/download/from_db_matrix_v2.py \
-        --n 50000 --output dataset/matrix_sample.jsonl
+    # 500 French articles, stratified by country, full history -> today
+    python scripts/data/download/sample_french_by_country.py \
+        --n 500 --output dataset/french_sample.jsonl
 
-    # Custom split, bounded window, more workers, GCS output
-    python scripts/data/download/from_db_matrix_v2.py \
-        --n 100000 --pos-ratio 0.6 --start-month 2020-01 --end-month 2025-06 \
-        --workers 16 --output gs://my-bucket/data/matrix_sample.jsonl
+    # Custom window, more parallel monthly queries, GCS output
+    python scripts/data/download/sample_french_by_country.py \
+        --n 2000 --start-month 2020-01 --end-month 2025-06 --workers 16 \
+        --output gs://my-bucket/data/french_sample.jsonl
 
-    # Small test run to inspect output format before a large download
-    python scripts/data/download/from_db_matrix_v2.py \
-        --n 200 --start-month 2025-05 --output /tmp/test_sample.jsonl
+    # Small test run to inspect output format
+    python scripts/data/download/sample_french_by_country.py \
+        --n 20 --start-month 2025-05 --output /tmp/test_french.jsonl
+
+    # Resume a Phase 3 run that died partway through
+    python scripts/data/download/sample_french_by_country.py \
+        --n 5000000 --output dataset/french_sample_5M.jsonl --start-month 2000-01 \
+        --resume
 
 Requires psycopg2:
     pip install psycopg2-binary
@@ -69,7 +74,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Generator, TextIO
+from typing import Generator, TextIO
 from urllib.parse import urlparse
 
 try:
@@ -114,33 +119,32 @@ def parse_month(value: str) -> date:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Download a country-stratified positive/negative sample from the DB.",
+        description="Sample N articles in one language, stratified by country.",
     )
     parser.add_argument("--n", type=int, required=True,
-        help="Total number of articles to download.")
+        help="Total number of articles to sample.")
     parser.add_argument("--output", "-o", required=True,
         help="Output JSONL path (local or gs://bucket/path).")
-    parser.add_argument("--language", type=str, default="eng",
-        help="article_downloads language filter (default eng).")
-    parser.add_argument("--pos-ratio", type=float, default=0.7,
-        help="Fraction of articles with risk factor tags (default 0.7).")
-    parser.add_argument("--tag-method-id", type=int, default=1,
-        help="tag_method_id filter for the risk-factor tagger (default 1).")
-    parser.add_argument("--seed", type=int, default=42,
-        help="Seed for deterministic sampling (default 42).")
+    parser.add_argument("--language", type=str, default="fra",
+        help="article_downloads language filter (default fra).")
     parser.add_argument("--start-month", type=parse_month, default=None,
         help="First month to scan, YYYY-MM (default: earliest article for the language).")
     parser.add_argument("--end-month", type=parse_month, default=None,
         help="Last month to scan inclusive, YYYY-MM (default: current month).")
     parser.add_argument("--workers", type=int, default=12,
         help="Parallel DB connections for discovery queries (default 12).")
+    parser.add_argument("--seed", type=int, default=42,
+        help="Seed for deterministic sampling (default 42).")
     parser.add_argument("--probe-chunk-size", type=int, default=2_000,
-        help="URIs per geo/risk-factor probe query (default 2000).")
+        help="URIs per geo-probe query in phase 1b (default 2000; "
+             "measured ~1.25 ms/article at 1200).")
     parser.add_argument("--chunk-size", type=int, default=5_000,
         help="Max URIs per article_downloads content fetch (default 5000).")
+    parser.add_argument("--resume", action="store_true",
+        help="Skip articles already present in --output (matched by 'id') and "
+             "append the rest. Use after Phase 3 was interrupted or a chunk "
+             "failed all its retries.")
     args = parser.parse_args()
-    if not 0.0 < args.pos_ratio < 1.0:
-        parser.error("--pos-ratio must be strictly between 0 and 1")
     if args.n < 1:
         parser.error("--n must be at least 1")
     if args.workers < 1:
@@ -163,7 +167,11 @@ def parse_gcs_uri(uri: str) -> tuple[str, str]:
 
 
 @contextmanager
-def open_output(path_or_uri: str) -> Generator[TextIO, None, None]:
+def open_output(path_or_uri: str, initial_text: str = "") -> Generator[TextIO, None, None]:
+    """Open for writing. initial_text (the cleaned contents of a prior run,
+    from load_resume_state) is written back first so --resume effectively
+    appends without relying on true append-mode support (GCS blobs don't have
+    one; a local 'a' open wouldn't let us drop a truncated trailing line)."""
     if path_or_uri.startswith("gs://"):
         try:
             from google.cloud import storage
@@ -174,12 +182,45 @@ def open_output(path_or_uri: str) -> Generator[TextIO, None, None]:
         client = storage.Client()
         blob = client.bucket(bucket_name).blob(blob_name)
         with blob.open("w", encoding="utf-8") as f:
+            if initial_text:
+                f.write(initial_text)
             yield f
         return
     output_path = Path(path_or_uri)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as f:
+        if initial_text:
+            f.write(initial_text)
         yield f
+
+
+def load_resume_state(path_or_uri: str) -> tuple[set[str], str]:
+    """Article URIs already written by a prior run, and the cleaned raw text
+    to preserve. A trailing line that fails to parse (a partial write from a
+    process that died mid-record) is dropped along with anything after it —
+    given writes are append-only and flushed per chunk, corruption can only
+    ever be at the tail."""
+    if path_or_uri.startswith("gs://"):
+        from google.cloud import storage
+        bucket_name, blob_name = parse_gcs_uri(path_or_uri)
+        blob = storage.Client().bucket(bucket_name).blob(blob_name)
+        text = blob.download_as_text() if blob.exists() else ""
+    else:
+        p = Path(path_or_uri)
+        text = p.read_text(encoding="utf-8") if p.exists() else ""
+    uris: set[str] = set()
+    clean_lines: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            uris.add(json.loads(line)["id"])
+        except (json.JSONDecodeError, KeyError):
+            break
+        clean_lines.append(line)
+    cleaned = "".join(line + "\n" for line in clean_lines)
+    return uris, cleaned
 
 
 # ── SQL ───────────────────────────────────────────────────────────────────────
@@ -201,7 +242,8 @@ WHERE language = %(language)s
 # / 470 GB and its only index is the (article_uri, concept_uri) PK; the fence
 # forces one index-only probe of that PK per chunk, then a hash join against the
 # small geo mapping. Without it the planner flattens the join and either
-# seq-scans the whole table or re-scans the index once per geo concept
+# seq-scans the whole table (the original month-window join: >10 min per month,
+# ×12 in parallel = I/O thrash) or re-scans the index once per geo concept
 # (measured 68 s per 1200-URI chunk vs 1.5 s with the fence).
 _GEO_PROBE_SQL = """
 WITH assoc_rows AS MATERIALIZED (
@@ -220,32 +262,12 @@ JOIN geo_taxonomy geo
     ON geo.adm_code = geo_concepts.code
 """
 
-# Phase 2: risk factor tags for a chunk of article URIs.
-#
-# article_risk_factor_tags is 103M rows / 17 GB, indexed on article_uri. A single
-# query filtering the whole table by tag_method_id (as from_db_matrix.py's original
-# per-risk-factor sampling effectively required) costs 10M+ and scans ~85M rows —
-# almost the whole table matches tag_method_id=1. Chunking by article_uri instead
-# turns it into an indexed ANY(...) lookup per chunk (measured ~0.8 ms/article),
-# using the article_uri index directly rather than a full filtered scan.
-_RF_PROBE_SQL = """
-WITH rf_rows AS MATERIALIZED (
-    SELECT article_uri, risk_factor
-    FROM article_risk_factor_tags
-    WHERE tag_method_id = %(tag_method_id)s
-      AND article_uri = ANY(%(uris)s)
-)
-SELECT article_uri, array_agg(DISTINCT risk_factor ORDER BY risk_factor) AS risk_factor_ids
-FROM rf_rows
-GROUP BY article_uri
-"""
-
 # Used by resolve_start_month's binary search instead of MIN(published_at).
 # article_downloads has ~300 monthly partitions but no index on (language,
-# published_at) together, only per-partition indexes on language and on
-# published_at separately — so a plain MIN() aggregate can't stop at the first
-# match and instead scans every matching row in every partition (measured: cost
-# 16M+, tens of millions of rows for 'fra'). EXISTS+LIMIT 1 lets each pruned
+# published_at), only per-partition indexes on language and on published_at
+# separately — so a plain MIN() aggregate can't stop at the first match and
+# instead scans every matching row in every partition (measured: cost 16M+,
+# tens of millions of rows for 'fra'). EXISTS+LIMIT 1 lets each pruned
 # partition answer with a single index probe (measured ~30-50ms per call
 # regardless of range size), so binary-searching the boundary is ~10 fast
 # queries instead of one query that touches the whole table.
@@ -263,14 +285,6 @@ FROM geo_taxonomy
 WHERE adm_level = 0
 """
 
-# risk_factors is a small (167-row) catalog table — its count stands in for
-# "total possible risk factors" without touching article_risk_factor_tags.
-# COUNT(DISTINCT risk_factor) FROM article_risk_factor_tags WHERE tag_method_id=X
-# has the same problem as the old MIN(published_at) query: no index on
-# (tag_method_id, risk_factor) together, so it scans ~85M matching rows
-# (measured: still running after 2 minutes) instead of answering from an index.
-_RF_NAMES_SQL = "SELECT id, name FROM risk_factors"
-
 _CONTENT_SQL = """
 SELECT uri, cloud_uri, title, body, published_at, article_type, source_uri
 FROM article_downloads
@@ -279,7 +293,7 @@ WHERE uri = ANY(%(uris)s)
 """
 
 
-# ── Threaded, cancellable discovery ────────────────────────────────────────────
+# ── Phase 1: candidate discovery ──────────────────────────────────────────────
 
 class Cancelled(Exception):
     """Worker aborted because the run is being cancelled."""
@@ -377,36 +391,22 @@ def fetch_month_uris(params: dict, language: str, start: date, end: date) -> lis
     return [str(r[0]) for r in rows]
 
 
-def probe_geo_chunk(params: dict, uris: list[str]) -> list[tuple[str, str]]:
+def probe_uri_chunk(params: dict, uris: list[str]) -> list[tuple[str, str]]:
     rows = _run_query(params, _GEO_PROBE_SQL, {"uris": uris},
                       f"geo probe of {len(uris)} uris")
     return [(str(uri), str(adm0)) for uri, adm0 in rows]
 
 
-def probe_rf_chunk(params: dict, uris: list[str], tag_method_id: int) -> list[tuple[str, list[int]]]:
-    rows = _run_query(params, _RF_PROBE_SQL, {"uris": uris, "tag_method_id": tag_method_id},
-                      f"rf probe of {len(uris)} uris")
-    return [(str(uri), [int(x) for x in rf_ids]) for uri, rf_ids in rows]
-
-
-def discover(
+def collect_candidates(
     params: dict,
     language: str,
     months: list[tuple[date, date]],
     workers: int,
     probe_chunk_size: int,
-    tag_method_id: int,
-) -> tuple[dict[str, set[str]], dict[str, list[int]]]:
-    """Three-stage discovery: month URIs -> geo probe -> risk-factor probe.
-
-    Returns (candidates, rf_map):
-      candidates: adm0_code -> set of geo-tagged article URIs in `language`.
-      rf_map: article_uri -> risk_factor_ids, present only for RF-tagged articles
-              (i.e. positives). Absence from rf_map means negative candidate.
-    """
+) -> dict[str, set[str]]:
+    """Two-stage discovery; returns adm0_code -> set of article URIs."""
     pool = ThreadPoolExecutor(max_workers=workers)
     candidates: dict[str, set[str]] = {}
-    rf_map: dict[str, list[int]] = {}
     try:
         # 1a: article URIs, one cheap partition-pruned query per month
         uris: list[str] = []
@@ -421,43 +421,24 @@ def discover(
         print(file=sys.stderr)
 
         # 1b: geo-tag the URIs in chunked PK probes
-        geo_futures = {
-            pool.submit(probe_geo_chunk, params, uris[i:i + probe_chunk_size]):
+        chunk_futures = {
+            pool.submit(probe_uri_chunk, params, uris[i:i + probe_chunk_size]):
                 len(uris[i:i + probe_chunk_size])
             for i in range(0, len(uris), probe_chunk_size)
         }
-        t0, processed = time.time(), 0
-        for future in as_completed(geo_futures):
+        t0 = time.time()
+        processed = 0
+        for future in as_completed(chunk_futures):
             for uri, adm0 in future.result():
                 # intern: the same URI lands in several country sets
                 candidates.setdefault(adm0, set()).add(sys.intern(uri))
-            processed += geo_futures[future]
+            processed += chunk_futures[future]
             rate = processed / max(time.time() - t0, 1e-9)
             eta_min = (len(uris) - processed) / max(rate, 1e-9) / 60
             print(f"  1b: {processed:,}/{len(uris):,} articles geo-probed "
                   f"({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
                   end="\r", file=sys.stderr, flush=True)
         print(file=sys.stderr)
-
-        # 2: risk-factor-tag the distinct geo-tagged URIs
-        rf_uris = list({u for uris_ in candidates.values() for u in uris_})
-        rf_futures = {
-            pool.submit(probe_rf_chunk, params, rf_uris[i:i + probe_chunk_size], tag_method_id):
-                len(rf_uris[i:i + probe_chunk_size])
-            for i in range(0, len(rf_uris), probe_chunk_size)
-        }
-        t0, processed = time.time(), 0
-        for future in as_completed(rf_futures):
-            for uri, rf_ids in future.result():
-                rf_map[uri] = rf_ids
-            processed += rf_futures[future]
-            rate = processed / max(time.time() - t0, 1e-9)
-            eta_min = (len(rf_uris) - processed) / max(rate, 1e-9) / 60
-            print(f"  2: {processed:,}/{len(rf_uris):,} articles risk-factor-probed "
-                  f"({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
-                  end="\r", file=sys.stderr, flush=True)
-        print(file=sys.stderr)
-
         pool.shutdown(wait=True)
     except BaseException:
         # Ctrl+C or a worker failure: drop queued chunks AND cancel the queries
@@ -468,27 +449,23 @@ def discover(
         raise
     finally:
         close_all_conns()
-    return candidates, rf_map
+    return candidates
 
 
-# ── Phase 3: stratified selection ─────────────────────────────────────────────
+# ── Phase 2: stratified selection ─────────────────────────────────────────────
 
 def stratified_sample(
     candidates: dict[str, set[str]],
     n: int,
     seed: int,
-    priority: Callable[[str], object] | None = None,
 ) -> list[dict]:
     """Round-robin over countries, rarest first, until n articles or exhaustion.
 
-    Each country's pool is ordered by (priority(uri), md5(uri + seed)) — priority
-    lets callers favour e.g. risk-factor-diverse articles; ties (or no priority)
-    fall back to a deterministic, query-order-independent hash.
+    Each country's pool is ordered by md5(uri + seed) so selection is deterministic
+    and independent of the order monthly queries completed in.
     """
-    priority_fn = priority or (lambda uri: 0)
-
-    def sort_key(uri: str):
-        return (priority_fn(uri), hashlib.md5(f"{uri}:{seed}".encode()).hexdigest())
+    def sort_key(uri: str) -> str:
+        return hashlib.md5(f"{uri}:{seed}".encode()).hexdigest()
 
     order = sorted(candidates, key=lambda c: (len(candidates[c]), c))
     pools = {c: iter(sorted(candidates[c], key=sort_key)) for c in order}
@@ -509,63 +486,111 @@ def stratified_sample(
     return selected
 
 
-def split_and_sample(
+# ── Phase 3: content fetch ────────────────────────────────────────────────────
+
+def fetch_country_names(params: dict) -> dict[str, str]:
+    conn = psycopg2.connect(**params)
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(_COUNTRY_NAMES_SQL)
+            return {str(r["adm0_code"]): str(r["country_name"]) for r in cur.fetchall()}
+    finally:
+        conn.close()
+
+
+def _fetch_content_chunk(conn, uris: list[str], language: str) -> list[dict]:
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(_CONTENT_SQL, {"uris": uris, "language": language})
+        return [dict(r) for r in cur.fetchall()]
+
+
+def fetch_and_write_content(
+    params: dict,
+    output: str,
+    selected: list[dict],
     candidates: dict[str, set[str]],
-    rf_map: dict[str, list[int]],
-    n: int,
-    pos_ratio: float,
-    seed: int,
-) -> list[dict]:
-    """Split candidates into positive/negative pools by rf_map membership, then
-    stratify each independently. Positives favour risk-factor diversity."""
-    positive_candidates: dict[str, set[str]] = {}
-    negative_candidates: dict[str, set[str]] = {}
-    for adm0, uris in candidates.items():
-        pos = {u for u in uris if u in rf_map}
-        neg = uris - pos
-        if pos:
-            positive_candidates[adm0] = pos
-        if neg:
-            negative_candidates[adm0] = neg
-
-    n_pos = round(n * pos_ratio)
-    n_neg = n - n_pos
-
-    selected_pos = stratified_sample(
-        positive_candidates, n_pos, seed,
-        priority=lambda uri: -len(rf_map[uri]),
-    )
-    for meta in selected_pos:
-        meta["label"] = "positive"
-        meta["risk_factor_ids"] = rf_map[meta["article_uri"]]
-
-    selected_neg = stratified_sample(negative_candidates, n_neg, seed)
-    for meta in selected_neg:
-        meta["label"] = "negative"
-        meta["risk_factor_ids"] = []
-
-    return selected_pos + selected_neg
-
-
-# ── Phase 4: content fetch ─────────────────────────────────────────────────────
-
-def fetch_content(
-    cur: psycopg2.extras.RealDictCursor,
-    uris: list[str],
-    chunk_size: int,
+    country_names: dict[str, str],
     language: str,
-) -> dict[str, dict]:
-    content_map: dict[str, dict] = {}
-    total = len(uris)
-    for i in range(0, total, chunk_size):
-        chunk = uris[i : i + chunk_size]
-        cur.execute(_CONTENT_SQL, {"uris": chunk, "language": language})
-        for row in cur.fetchall():
-            content_map[str(row["uri"])] = dict(row)
-        done = min(i + chunk_size, total)
-        print(f"  fetched {done}/{total} articles\033[K", end="\r", file=sys.stderr, flush=True)
-    print(file=sys.stderr)
-    return content_map
+    chunk_size: int,
+    already_written: set[str],
+    existing_text: str,
+    max_retries: int = 5,
+) -> tuple[int, int, int, set[str]]:
+    """Fetch content chunk by chunk and write matching records as they arrive.
+
+    Content-fetch chunks against article_downloads occasionally get canceled
+    server-side (statement_timeout, or the server killing a slow scan) —
+    that's what stopped the original run at 165k/5M articles. Each chunk now
+    gets its own retry-with-fresh-connection loop, and records are flushed to
+    disk as soon as a chunk succeeds, so a chunk that exhausts its retries only
+    loses that chunk (rerun with --resume) instead of the whole multi-hour run.
+
+    Returns (written_this_run, missing, skipped, all_written_uris).
+    """
+    to_fetch = [m for m in selected if m["article_uri"] not in already_written]
+    skipped = len(selected) - len(to_fetch)
+    written = 0
+    missing = 0
+    total = len(to_fetch)
+    written_uris: set[str] = set(already_written)
+
+    conn = psycopg2.connect(**params)
+    conn.autocommit = True
+    try:
+        with open_output(output, initial_text=existing_text) as f:
+            for i in range(0, total, chunk_size):
+                chunk = to_fetch[i:i + chunk_size]
+                uris = [m["article_uri"] for m in chunk]
+                rows: list[dict] | None = None
+                last_exc: Exception | None = None
+                for attempt in range(max_retries):
+                    try:
+                        rows = _fetch_content_chunk(conn, uris, language)
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+                        wait = min(2 ** attempt, 30)
+                        print(f"\n  chunk fetch failed ({exc}); "
+                              f"reconnecting, retry {attempt + 1}/{max_retries} in {wait}s...",
+                              file=sys.stderr)
+                        time.sleep(wait)
+                        conn = psycopg2.connect(**params)
+                        conn.autocommit = True
+                if rows is None:
+                    raise RuntimeError(
+                        f"content fetch failed after {max_retries} attempts "
+                        f"(rerun with --resume to pick up where this left off): {last_exc}"
+                    ) from last_exc
+
+                content_map = {str(r["uri"]): r for r in rows}
+                for meta in chunk:
+                    content = content_map.get(meta["article_uri"])
+                    if content is None:
+                        missing += 1
+                        continue
+                    all_countries = sorted(
+                        adm0 for adm0, member_uris in candidates.items()
+                        if meta["article_uri"] in member_uris
+                    )
+                    record = build_record(meta, content, language, all_countries, country_names)
+                    f.write(json.dumps(record, ensure_ascii=False, default=str,
+                                        separators=(",", ":")) + "\n")
+                    written += 1
+                    written_uris.add(meta["article_uri"])
+                f.flush()
+
+                done = min(i + chunk_size, total)
+                print(f"  fetched {done:,}/{total:,} articles "
+                      f"({written:,} written, {missing:,} missing)\033[K",
+                      end="\r", file=sys.stderr, flush=True)
+            print(file=sys.stderr)
+    finally:
+        conn.close()
+    return written, missing, skipped, written_uris
 
 
 # ── Output ────────────────────────────────────────────────────────────────────
@@ -576,16 +601,12 @@ def build_record(
     language: str,
     all_countries: list[str],
     country_names: dict[str, str],
-    rf_names: dict[int, str],
 ) -> dict:
-    risk_factors = [rf_names.get(rf_id, str(rf_id)) for rf_id in meta["risk_factor_ids"]]
     return {
         "id": meta["article_uri"],
-        "label": meta["label"],
         "adm0_code": meta["adm0_code"],
         "country_name": country_names.get(meta["adm0_code"], meta["adm0_code"]),
         "adm0_codes_all": all_countries,
-        "risk_factors": risk_factors,
         "language": language,
         "source": {
             "title":        str(content.get("title") or ""),
@@ -598,58 +619,33 @@ def build_record(
     }
 
 
-def write_output(
-    path_or_uri: str,
-    selected: list[dict],
-    candidates: dict[str, set[str]],
-    content_map: dict[str, dict],
-    country_names: dict[str, str],
-    rf_names: dict[int, str],
-    language: str,
-) -> tuple[int, int]:
-    written = missing = 0
-    with open_output(path_or_uri) as f:
-        for meta in selected:
-            content = content_map.get(meta["article_uri"])
-            if content is None:
-                missing += 1
-                continue
-            all_countries = sorted(
-                adm0 for adm0, uris in candidates.items() if meta["article_uri"] in uris
-            )
-            record = build_record(meta, content, language, all_countries, country_names, rf_names)
-            f.write(json.dumps(record, ensure_ascii=False, default=str,
-                               separators=(",", ":")) + "\n")
-            written += 1
-    return written, missing
-
-
 def print_summary(
     selected: list[dict],
     candidates: dict[str, set[str]],
-    content_map: dict[str, dict],
+    written_uris: set[str],
+    country_names: dict[str, str],
     written: int,
     missing: int,
-    n_rf: int,
+    skipped: int,
     output: str,
 ) -> None:
-    present = [m for m in selected if m["article_uri"] in content_map]
-    n_pos = sum(1 for m in present if m["label"] == "positive")
-    n_neg = sum(1 for m in present if m["label"] == "negative")
-    covered_countries = len({m["adm0_code"] for m in present})
-    covered_rf_ids: set[int] = set()
-    for m in present:
-        covered_rf_ids.update(m["risk_factor_ids"])
+    per_country: dict[str, int] = {}
+    for meta in selected:
+        if meta["article_uri"] in written_uris:
+            per_country[meta["adm0_code"]] = per_country.get(meta["adm0_code"], 0) + 1
 
-    print("\n=== Matrix sample complete ===")
-    print(f"Total articles written : {written:,}")
-    print(f"  Positives            : {n_pos:,}")
-    print(f"  Negatives            : {n_neg:,}")
-    print(f"Countries covered      : {covered_countries:,} / {len(candidates):,}")
-    print(f"Risk factors covered   : {len(covered_rf_ids):,} / {n_rf:,}")
+    print("\n=== Stratified language sample complete ===")
+    print(f"Articles in output : {len(written_uris):,}")
+    if skipped:
+        print(f"  ({written:,} written this run, {skipped:,} already present from --resume)")
+    print(f"Countries covered  : {len(per_country):,} / {len(candidates):,} with candidates")
     if missing:
-        print(f"Missing from DB        : {missing:,}")
-    print(f"Output                 : {output}")
+        print(f"Missing from DB    : {missing:,}")
+    print(f"Output             : {output}")
+    print("\nPer-country breakdown (selected / candidates):")
+    for adm0 in sorted(per_country, key=lambda c: (-per_country[c], c)):
+        name = country_names.get(adm0, adm0)
+        print(f"  {name:<40} {per_country[adm0]:>6,} / {len(candidates[adm0]):,}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -710,51 +706,43 @@ def main() -> None:
 
     months = month_ranges(args.start_month, args.end_month)
 
-    print(f"\nPhase 1-2: scanning {len(months)} months "
+    print(f"Phase 1: scanning {len(months)} months "
           f"({args.start_month:%Y-%m} .. {args.end_month:%Y-%m}) "
           f"for language={args.language!r} with {args.workers} workers...")
-    candidates, rf_map = discover(
-        params, args.language, months, args.workers, args.probe_chunk_size, args.tag_method_id,
-    )
+    candidates = collect_candidates(params, args.language, months, args.workers,
+                                    args.probe_chunk_size)
     total_candidates = len(set().union(*candidates.values())) if candidates else 0
-    print(f"  {total_candidates:,} distinct articles across {len(candidates):,} countries, "
-          f"{len(rf_map):,} risk-factor-tagged")
+    print(f"  {total_candidates:,} distinct articles across {len(candidates):,} countries")
     if not candidates:
         print("No geo-tagged articles found for this language/window. Nothing to sample.")
         return
 
-    print(f"\nPhase 3: stratified pos/neg sampling of {args.n:,} articles "
-          f"(pos-ratio={args.pos_ratio})...")
-    selected = split_and_sample(candidates, rf_map, args.n, args.pos_ratio, args.seed)
-    n_pos = sum(1 for m in selected if m["label"] == "positive")
-    n_neg = len(selected) - n_pos
-    print(f"  selected {len(selected):,} articles ({n_pos:,} positive, {n_neg:,} negative) "
-          f"across {len({m['adm0_code'] for m in selected}):,} countries")
+    print(f"\nPhase 2: stratified sampling of {args.n:,} articles...")
+    selected = stratified_sample(candidates, args.n, args.seed)
+    print(f"  selected {len(selected):,} articles across "
+          f"{len({m['adm0_code'] for m in selected}):,} countries")
 
-    print(f"\nPhase 4: fetching content for {len(selected):,} articles...")
     try:
-        conn = psycopg2.connect(**params)
+        country_names = fetch_country_names(params)
     except Exception as exc:
         print(f"Connection failed: {exc}")
         sys.exit(1)
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(_COUNTRY_NAMES_SQL)
-            country_names = {str(r["adm0_code"]): str(r["country_name"]) for r in cur.fetchall()}
-            cur.execute(_RF_NAMES_SQL)
-            rf_names = {int(r["id"]): str(r["name"]) for r in cur.fetchall()}
-            n_rf = len(rf_names)
-            content_map = fetch_content(
-                cur, [m["article_uri"] for m in selected], args.chunk_size, args.language,
-            )
-    finally:
-        conn.close()
 
-    print(f"\nPhase 5: writing JSONL to {args.output} ...")
-    written, missing = write_output(
-        args.output, selected, candidates, content_map, country_names, rf_names, args.language,
+    already_written: set[str] = set()
+    existing_text = ""
+    if args.resume:
+        already_written, existing_text = load_resume_state(args.output)
+        if already_written:
+            print(f"  --resume: {len(already_written):,} articles already in {args.output}")
+
+    print(f"\nPhase 3: fetching content for {len(selected):,} articles "
+          f"(writing to {args.output} as each chunk completes)...")
+    written, missing, skipped, written_uris = fetch_and_write_content(
+        params, args.output, selected, candidates, country_names, args.language,
+        args.chunk_size, already_written, existing_text,
     )
-    print_summary(selected, candidates, content_map, written, missing, n_rf, args.output)
+    print_summary(selected, candidates, written_uris, country_names,
+                  written, missing, skipped, args.output)
 
 
 if __name__ == "__main__":
