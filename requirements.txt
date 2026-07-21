@@ -17,6 +17,8 @@
 # # db
 # sqlalchemy
 
+transformers[torch]
+
 # Inference
 torch>=2.11.0,<2.12.0
 vllm==0.23.0

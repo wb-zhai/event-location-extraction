@@ -3,7 +3,8 @@
 Trains a binary `relevant` / `irrelevant` sequence classifier (default backbone:
 answerdotai/ModernBERT-base) on the `relevance.is_relevant` field written by
 relevance_filter.py (or any file with the same shape). Self-contained: no imports
-from other scripts in this repo.
+from other scripts in this repo. Accepts one or more --input files (concatenated,
+deduped by id/url).
 
     python scripts/data/relevance/train.py \\
         --input dataset/db/relevance/matrix_5M.sample_1000.3.1pro.2label_prompt.jsonl \\
@@ -81,45 +82,50 @@ def build_text(record: dict[str, Any], max_chars: int) -> str:
     return title or text
 
 
-def load_examples(path: Path, max_chars: int) -> list[dict[str, Any]]:
+def load_examples(paths: Path | list[Path], max_chars: int) -> list[dict[str, Any]]:
+    if isinstance(paths, Path):
+        paths = [paths]
+
     examples: list[dict[str, Any]] = []
     seen: set[str] = set()
     skipped_no_label = 0
     skipped_dupe = 0
 
-    with path.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
+    for path in paths:
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                record = json.loads(line)
 
-            key = record_key(record)
-            if key and key in seen:
-                skipped_dupe += 1
-                continue
-            if key:
-                seen.add(key)
+                key = record_key(record)
+                if key and key in seen:
+                    skipped_dupe += 1
+                    continue
+                if key:
+                    seen.add(key)
 
-            label = get_label(record)
-            if label is None:
-                skipped_no_label += 1
-                continue
+                label = get_label(record)
+                if label is None:
+                    skipped_no_label += 1
+                    continue
 
-            examples.append(
-                {
-                    "id": key,
-                    "text": build_text(record, max_chars),
-                    "label": label,
-                }
-            )
+                examples.append(
+                    {
+                        "id": key,
+                        "text": build_text(record, max_chars),
+                        "label": label,
+                        "source": str(path),
+                    }
+                )
 
     n = len(examples)
     n_relevant = sum(e["label"] for e in examples)
     LOGGER.info(
         "Loaded %d examples from %s (skipped %d missing-label, %d duplicate ids)",
         n,
-        path,
+        ", ".join(str(p) for p in paths),
         skipped_no_label,
         skipped_dupe,
     )
@@ -203,6 +209,28 @@ def log_split_stats(name: str, examples: list[dict[str, Any]]) -> None:
     )
 
 
+def save_split_by_source(run_dir: Path, split_name: str, examples: list[dict[str, Any]]) -> None:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for ex in examples:
+        grouped.setdefault(ex["source"], []).append(ex)
+
+    used_names: set[str] = set()
+    for source, group in grouped.items():
+        stem = Path(source).stem
+        name = stem
+        suffix = 2
+        while name in used_names:
+            name = f"{stem}_{suffix}"
+            suffix += 1
+        used_names.add(name)
+
+        split_path = run_dir / f"{split_name}_{name}.jsonl"
+        with split_path.open("w", encoding="utf-8") as f:
+            for ex in group:
+                f.write(json.dumps({k: v for k, v in ex.items() if k != "source"}, ensure_ascii=False) + "\n")
+        LOGGER.info("Saved %s split (%d examples) from %s to %s", split_name, len(group), source, split_path)
+
+
 def build_dataset(
     examples: list[dict[str, Any]],
     tokenizer: PreTrainedTokenizerBase,
@@ -213,7 +241,7 @@ def build_dataset(
     def tokenize(batch: dict[str, list[Any]]) -> dict[str, Any]:
         return tokenizer(batch["text"], truncation=True, max_length=max_length)
 
-    dataset = dataset.map(tokenize, batched=True, remove_columns=["text", "id"])
+    dataset = dataset.map(tokenize, batched=True, remove_columns=["text", "id", "source"])
     return dataset
 
 
@@ -262,13 +290,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fine-tune an encoder classifier on relevance-labeled JSONL data."
     )
-    parser.add_argument("--input", required=True, type=Path, help="Training JSONL file")
+    parser.add_argument(
+        "--input",
+        required=True,
+        type=Path,
+        nargs="+",
+        help="Training JSONL file(s). Multiple files are concatenated (deduped by id/url).",
+    )
     parser.add_argument("--output-dir", required=True, type=Path, help="Output directory")
     parser.add_argument(
         "--eval-file",
         type=Path,
+        nargs="+",
         default=None,
-        help="Optional separate eval JSONL file. If omitted, a stratified split of "
+        help="Optional separate eval JSONL file(s). If omitted, a stratified split of "
         "--input is used (see --eval-frac).",
     )
     parser.add_argument("--model-name", type=str, default=DEFAULT_MODEL_NAME)
@@ -355,7 +390,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         LOGGER.info(
             "Stratified split of %s: train=%d eval=%d (eval_frac=%.2f)",
-            args.input,
+            ", ".join(str(p) for p in args.input),
             len(train_examples),
             len(eval_examples),
             args.eval_frac,
@@ -374,12 +409,8 @@ def main(argv: list[str] | None = None) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     LOGGER.info("Run directory: %s", run_dir)
 
-    for split_name, split_examples in (("train", train_examples), ("dev", eval_examples)):
-        split_path = run_dir / f"{split_name}.jsonl"
-        with split_path.open("w", encoding="utf-8") as f:
-            for ex in split_examples:
-                f.write(json.dumps(ex, ensure_ascii=False) + "\n")
-        LOGGER.info("Saved %s split (%d examples) to %s", split_name, len(split_examples), split_path)
+    save_split_by_source(run_dir, "train", train_examples)
+    save_split_by_source(run_dir, "dev", eval_examples)
 
     train_dataset = build_dataset(train_examples, tokenizer, args.max_length)
     eval_dataset = build_dataset(eval_examples, tokenizer, args.max_length)
@@ -448,11 +479,11 @@ def main(argv: list[str] | None = None) -> None:
     metrics = trainer.evaluate()
     LOGGER.info("Final eval metrics: %s", json.dumps(metrics, indent=2))
 
-    final_output_dir = args.output_dir / "final"
+    final_output_dir = run_dir / "final"
     trainer.save_model(str(final_output_dir))
     tokenizer.save_pretrained(final_output_dir)
 
-    with open(args.output_dir / "eval_metrics.json", "w", encoding="utf-8") as f:
+    with open(run_dir / "eval_metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
 
     LOGGER.info("Saved model to %s", final_output_dir)
