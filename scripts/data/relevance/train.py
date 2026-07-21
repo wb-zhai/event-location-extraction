@@ -4,7 +4,8 @@ Trains a binary `relevant` / `irrelevant` sequence classifier (default backbone:
 answerdotai/ModernBERT-base) on the `relevance.is_relevant` field written by
 relevance_filter.py (or any file with the same shape). Self-contained: no imports
 from other scripts in this repo. Accepts one or more --input files (concatenated,
-deduped by id/url).
+deduped by id/url). The pretrained backbone trains at --backbone-lr (default 2e-4)
+while the classification head trains at --learning-rate.
 
     python scripts/data/relevance/train.py \\
         --input dataset/db/relevance/matrix_5M.sample_1000.3.1pro.2label_prompt.jsonl \\
@@ -43,6 +44,7 @@ DEFAULT_MAX_LENGTH = 2048
 DEFAULT_MAX_CHARS = 4000
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_LEARNING_RATE = 2e-5
+DEFAULT_BACKBONE_LR = 2e-4
 DEFAULT_NUM_EPOCHS = 5.0
 DEFAULT_WEIGHT_DECAY = 0.01
 DEFAULT_WARMUP_RATIO = 0.1
@@ -172,19 +174,64 @@ def compute_metrics(eval_pred) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 
-class WeightedLossTrainer(Trainer):
-    def __init__(self, *args, class_weights: torch.Tensor | None = None, **kwargs):
+class RelevanceTrainer(Trainer):
+    """Trainer with optional class-weighted loss and optional backbone/head learning rates."""
+
+    def __init__(
+        self,
+        *args,
+        class_weights: torch.Tensor | None = None,
+        backbone_lr: float | None = None,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.class_weights = class_weights
+        self.backbone_lr = backbone_lr
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        if self.class_weights is None:
+            return super().compute_loss(model, inputs, return_outputs=return_outputs, **kwargs)
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.logits
-        weight = self.class_weights.to(logits.device) if self.class_weights is not None else None
-        loss_fct = CrossEntropyLoss(weight=weight)
+        loss_fct = CrossEntropyLoss(weight=self.class_weights.to(logits.device))
         loss = loss_fct(logits.view(-1, logits.shape[-1]), labels.view(-1))
         return (loss, outputs) if return_outputs else loss
+
+    def create_optimizer(self):
+        if self.backbone_lr is None or self.optimizer is not None:
+            return super().create_optimizer()
+
+        opt_model = self.model
+        base_prefix = f"{opt_model.base_model_prefix}."
+        decay_parameters = set(self.get_decay_parameter_names(opt_model))
+
+        buckets: dict[tuple[str, bool], list[torch.nn.Parameter]] = {}
+        for name, param in opt_model.named_parameters():
+            if not param.requires_grad:
+                continue
+            part = "backbone" if name.startswith(base_prefix) else "head"
+            buckets.setdefault((part, name in decay_parameters), []).append(param)
+
+        lrs = {"backbone": self.backbone_lr, "head": self.args.learning_rate}
+        LOGGER.info(
+            "Param groups: backbone=%d lr=%s | head=%d lr=%s",
+            sum(len(p) for (part, _), p in buckets.items() if part == "backbone"),
+            self.backbone_lr,
+            sum(len(p) for (part, _), p in buckets.items() if part == "head"),
+            self.args.learning_rate,
+        )
+
+        optimizer_grouped_parameters = [
+            {"params": params, "lr": lrs[part], "weight_decay": self.args.weight_decay if decay else 0.0}
+            for (part, decay), params in buckets.items()
+            if params
+        ]
+
+        optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args, opt_model)
+        optimizer_kwargs.pop("lr", None)
+        self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+        return self.optimizer
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +358,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-length", type=int, default=DEFAULT_MAX_LENGTH)
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
+    parser.add_argument(
+        "--learning-rate", type=float, default=DEFAULT_LEARNING_RATE, help="Learning rate for the classification head (and the whole model, if --backbone-lr is not set)."
+    )
+    parser.add_argument(
+        "--backbone-lr",
+        type=float,
+        default=DEFAULT_BACKBONE_LR,
+        help="Learning rate for the pretrained backbone; the classification head trains at "
+        "--learning-rate. Set --backbone-lr equal to --learning-rate to train the whole "
+        "model at a single rate.",
+    )
     parser.add_argument("--num-epochs", type=float, default=DEFAULT_NUM_EPOCHS)
     parser.add_argument("--weight-decay", type=float, default=DEFAULT_WEIGHT_DECAY)
     parser.add_argument("--warmup-ratio", type=float, default=DEFAULT_WARMUP_RATIO)
@@ -461,18 +518,16 @@ def main(argv: list[str] | None = None) -> None:
 
     training_args = TrainingArguments(**training_args_kwargs)
 
-    trainer_cls = WeightedLossTrainer if args.balance_classes else Trainer
-    trainer_kwargs: dict[str, Any] = dict(
+    trainer = RelevanceTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
+        class_weights=class_weights,
+        backbone_lr=args.backbone_lr,
     )
-    if args.balance_classes:
-        trainer_kwargs["class_weights"] = class_weights
-    trainer = trainer_cls(**trainer_kwargs)
 
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
 

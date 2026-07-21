@@ -220,7 +220,7 @@ def relevance_infer(
     shard_index: int = 0,
     num_shards: int = 1,
     max_chars: int = 4000,
-    max_length: int = 2048,
+    max_length: int = 4096,
     gpu_memory_utilization: float = 0.9,
     tensor_parallel_size: int = 1,
     gcs_read_concurrency: int = 64,
