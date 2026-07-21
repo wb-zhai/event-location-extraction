@@ -21,7 +21,7 @@ transformers[torch]
 
 # Inference
 torch>=2.11.0,<2.12.0
-vllm==0.23.0
+# vllm==0.23.0
 sentence-transformers==5.6.0
 
 # LLMs
@@ -52,6 +52,7 @@ geopandas==1.1.3
 google-cloud-aiplatform==1.158.0
 cloud-sql-python-connector[pymysql]==1.20.3
 sqlalchemy==2.0.49
+psycopg2-binary==2.9.12
 
 # Dev
 black>=26.1.0,<27.0.0

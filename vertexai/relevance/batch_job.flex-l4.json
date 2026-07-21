@@ -1,0 +1,60 @@
+{
+  "taskGroups": [
+    {
+      "taskCount": "TASK_COUNT",
+      "parallelism": "TASK_COUNT",
+      "taskSpec": {
+        "maxRetryCount": 2,
+        "maxRunDuration": "VAL_MAX_RUN_DURATION",
+        "runnables": [
+          {
+            "script": {
+              "text": "#!/bin/bash\nset -euo pipefail\nif ! command -v docker >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq docker.io; command -v nvidia-ctk >/dev/null 2>&1 && nvidia-ctk runtime configure --runtime=docker; systemctl restart docker || service docker restart || true; fi\nTOKEN=$(curl -sf -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | python3 -c 'import sys,json;print(json.load(sys.stdin)[\"access_token\"])')\necho \"$TOKEN\" | docker login -u oauth2accesstoken --password-stdin us-central1-docker.pkg.dev\ndocker pull IMAGE_URI\ndocker run --rm --gpus all --shm-size=4g -e MANIFEST_GCS_PREFIX=\"${MANIFEST_GCS_PREFIX}\" -e OUTPUT_GCS_PREFIX=\"${OUTPUT_GCS_PREFIX}\" -e MODEL_GCS=\"${MODEL_GCS}\" -e MAX_CHARS=\"${MAX_CHARS}\" -e MAX_LENGTH=\"${MAX_LENGTH}\" -e BATCH_SIZE=\"${BATCH_SIZE}\" -e GCS_READ_CONCURRENCY=\"${GCS_READ_CONCURRENCY}\" -e GPU_MEMORY_UTIL=\"${GPU_MEMORY_UTIL}\" -e BATCH_TASK_INDEX=\"${BATCH_TASK_INDEX:-0}\" -e BATCH_TASK_COUNT=\"${BATCH_TASK_COUNT:-1}\" IMAGE_URI"
+            },
+            "environment": {
+              "variables": {
+                "MANIFEST_GCS_PREFIX": "VAL_MANIFEST_GCS_PREFIX",
+                "OUTPUT_GCS_PREFIX": "VAL_OUTPUT_GCS_PREFIX",
+                "MODEL_GCS": "VAL_MODEL_GCS",
+                "MAX_CHARS": "VAL_MAX_CHARS",
+                "MAX_LENGTH": "VAL_MAX_LENGTH",
+                "BATCH_SIZE": "VAL_BATCH_SIZE",
+                "GCS_READ_CONCURRENCY": "VAL_GCS_READ_CONCURRENCY",
+                "GPU_MEMORY_UTIL": "VAL_GPU_MEMORY_UTIL"
+              }
+            }
+          }
+        ],
+        "computeResource": {
+          "cpuMilli": "8000",
+          "memoryMib": "32000"
+        }
+      }
+    }
+  ],
+  "allocationPolicy": {
+    "instances": [
+      {
+        "installGpuDrivers": false,
+        "policy": {
+          "machineType": "g2-standard-8",
+          "accelerators": [
+            {
+              "type": "nvidia-l4",
+              "count": "1"
+            }
+          ],
+          "provisioningModel": "FLEX_START",
+          "bootDisk": {
+            "image": "projects/deeplearning-platform-release/global/images/family/common-cu129-ubuntu-2204-nvidia-580",
+            "sizeGb": "200",
+            "type": "pd-ssd"
+          }
+        }
+      }
+    ]
+  },
+  "logsPolicy": {
+    "destination": "CLOUD_LOGGING"
+  }
+}
