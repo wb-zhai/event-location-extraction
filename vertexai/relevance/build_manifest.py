@@ -25,6 +25,10 @@ Usage:
     python vertexai/relevance/build_manifest.py \
         --output-prefix /tmp/manifests --num-shards 4 --limit 1000
 
+    # restrict to English, French, or both
+    python vertexai/relevance/build_manifest.py \
+        --output-prefix gs://my-bucket/relevance/manifests --num-shards 100 --language both
+
 Requires: psycopg2-binary, google-cloud-storage.
 """
 
@@ -120,13 +124,13 @@ def open_shard_writers(stack: ExitStack, output_prefix: str, num_shards: int):
 # ---------------------------------------------------------------------------
 
 
-def stream_rows(conn, language: str | None, limit: int | None):
+def stream_rows(conn, languages: list[str] | None, limit: int | None):
     """Yield (uri, cloud_uri) via a server-side cursor so nothing is buffered."""
     where = "WHERE cloud_uri IS NOT NULL"
     params: list = []
-    if language:
-        where += " AND language = %s"
-        params.append(language)
+    if languages:
+        where += " AND language = ANY(%s)"
+        params.append(languages)
     sql = f"SELECT uri, cloud_uri FROM article_downloads {where}"
     if limit:
         sql += " LIMIT %s"
@@ -150,7 +154,8 @@ def parse_args() -> argparse.Namespace:
                    help="gs://bucket/path or local dir; writes {prefix}/manifest-NNN.jsonl")
     p.add_argument("--num-shards", type=int, required=True,
                    help="Number of manifest files (must equal the Cloud Batch --shards)")
-    p.add_argument("--language", default=None, help="Optional article language filter (e.g. eng)")
+    p.add_argument("--language", choices=["eng", "fra", "both"], default=None,
+                   help="Optional article language filter: eng, fra, or both (default: no filter, all languages)")
     p.add_argument("--limit", type=int, default=None, help="Max rows (for testing)")
     return p.parse_args()
 
@@ -159,6 +164,8 @@ def main() -> None:
     args = parse_args()
     if args.num_shards < 1:
         raise SystemExit("--num-shards must be >= 1")
+
+    languages = {"eng": ["eng"], "fra": ["fra"], "both": ["eng", "fra"]}.get(args.language)
 
     params = get_connection_params()
     print(f"Connecting to {params['host']}:{params['port']}/{params['dbname']} ...", file=sys.stderr)
@@ -169,7 +176,7 @@ def main() -> None:
     try:
         with conn, ExitStack() as stack:
             writers = open_shard_writers(stack, args.output_prefix, args.num_shards)
-            for i, (uri, cloud_uri) in enumerate(stream_rows(conn, args.language, args.limit)):
+            for i, (uri, cloud_uri) in enumerate(stream_rows(conn, languages, args.limit)):
                 if not uri or not cloud_uri:
                     skipped += 1
                     continue

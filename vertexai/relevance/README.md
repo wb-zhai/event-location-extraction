@@ -65,7 +65,7 @@ in `.env`/Step 4):
 python vertexai/relevance/build_manifest.py \
     --output-prefix "${MANIFEST_GCS_PREFIX}" \
     --num-shards    "${SHARDS}"
-# optional: --language eng   --limit N (testing)
+# optional: --language {eng,fra,both}   --limit N (testing)
 ```
 
 ## Step 2 — Stage the model
