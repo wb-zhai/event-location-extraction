@@ -108,8 +108,16 @@ class ArticleFetcher:
 class RelevanceClassifier:
     def __init__(self, model_name_or_path: str, max_length: int,
                  gpu_memory_utilization: float, tensor_parallel_size: int):
+        from transformers import AutoTokenizer
         from vllm import LLM
 
+        self.max_length = max_length
+        # char-based --max-chars truncation doesn't bound token count (unicode/dense
+        # text can exceed max_length well under --max-chars), so vLLM's classify()
+        # raises VLLMValidationError instead of silently truncating. Tokenize and
+        # truncate ourselves and hand vLLM token ids, guaranteeing no request ever
+        # exceeds max_model_len regardless of input content.
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.llm = LLM(
             model=model_name_or_path,
             runner="pooling",
@@ -130,7 +138,9 @@ class RelevanceClassifier:
         return dict(FALLBACK_ID2LABEL)
 
     def classify(self, texts: list[str]) -> list[str]:
-        outputs = self.llm.classify(texts)
+        token_ids = self.tokenizer(texts, truncation=True, max_length=self.max_length)["input_ids"]
+        prompts = [{"prompt_token_ids": ids} for ids in token_ids]
+        outputs = self.llm.classify(prompts)
         labels = []
         for output in outputs:
             probs = list(output.outputs.probs)
