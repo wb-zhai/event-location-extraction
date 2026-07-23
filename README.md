@@ -8,18 +8,49 @@ for DB ingestion.
 
 ## Pipeline
 
+Event extraction has three distinct, separately-triggered steps that share the same
+ontology/model but run on different inputs — don't conflate them:
+
+- **Data generation** (`scripts/data/generation/`) is a one-time, offline step that
+  *produces the SFT training dataset* by running a Gemini teacher over a small
+  stratified DB sample. That sample is **not relevance-filtered** and deliberately
+  includes negatives (articles with no risk-factor tag) alongside positives, so the
+  teacher (and thus the training set) also covers the *no events* case, not just
+  articles known to contain an event.
+- **Training** (`scripts/train/llamafactory/train.sh`) then fine-tunes the small
+  student model (Qwen3-4B) on that generated dataset — a separate step from data
+  generation itself.
+- **Inference at scale** (`vertexai/inference/`) is the production run of the
+  already-trained model over the **entire** article DB, downstream of the relevance
+  filter (which exists precisely to avoid spending GPU time extracting events from
+  articles the filter has already dropped).
+
 ```text
-Sample from DB  →  Relevance filter  →  Event extraction  →  Geocoding
-(download/)        (relevance/)         (generation/,      (geocoding/)
-                                          vertexai/inference)
+Sample from DB (download/)
+   │
+   ├─→ Data generation (generation/) ──→ SFT dataset ──→ Training (train/llamafactory/)
+   │   [small pos/neg sample, NOT                              │
+   │    relevance-filtered — negatives                         ▼
+   │    teach the model to emit no events]           small model (Qwen3-4B)
+   │                                                               │
+   └─→ Relevance filter (relevance/) ─→ Inference at scale (vertexai/inference/) ─→ Geocoding
+       [gates the full ~130M-article DB]   [runs the trained model on every            (geocoding/)
+                                             article that passes the filter]
 ```
 
-1. **Sample from the DB** — pull a stratified article sample (`scripts/data/download/`).
-2. **Relevance filter** — cheaply drop articles that can't contain a food-insecurity
-   event before spending LLM budget on them (`scripts/data/relevance/`, `vertexai/relevance/`).
-3. **Event extraction** — distill Gemini silver labels into an SFT dataset, then run
-   the fine-tuned model at scale (`scripts/data/generation/`, `vertexai/inference/`).
-4. **Geocoding** — resolve each extracted `event_location` string to coordinates and
+1. **Sample from the DB** — pull a stratified article sample, incl. a positive/negative
+   split for training data (`scripts/data/download/`).
+2. **Data generation** *(offline — produces the training dataset, not the model)* —
+   distill Gemini teacher labels over the sampled positives **and** negatives into an
+   SFT dataset (`scripts/data/generation/`).
+3. **Training** — fine-tune the small extraction model on that SFT dataset
+   (`scripts/train/llamafactory/`).
+4. **Relevance filter** — cheaply drop articles that can't contain a food-insecurity
+   event before spending inference budget on them; gates the production run only, not
+   data generation (`scripts/data/relevance/`, `vertexai/relevance/`).
+5. **Event extraction inference** — run the already-trained model over the entire
+   filtered DB (`vertexai/inference/`).
+6. **Geocoding** — resolve each extracted `event_location` string to coordinates and
    an administrative region, ready for DB ingestion (`scripts/geocoding/`).
 
 ---
@@ -73,6 +104,10 @@ Pre-filters articles before the expensive extraction step. Composes a cheap
 keyword/regex first pass with an optional LLM (Gemini) second pass; the trained
 encoder classifier is the cheap, high-throughput option once labeled data exists.
 See [`scripts/data/relevance/README.md`](scripts/data/relevance/README.md) for full detail.
+
+This filter gates **inference at scale** (§3, the whole-DB production run) only. It is
+not applied ahead of data generation — that training pipeline uses its own DB sample
+and needs both relevant and irrelevant articles (see §3 below).
 
 ### Data generation — `scripts/data/relevance/`
 
@@ -130,16 +165,28 @@ shard-count tuning, spot-preemption recovery) in
 
 ## 3. Event extraction
 
+Two separate pipelines below, sharing the same ontology and model but **not** the
+same data source — see the note at the top of this README's Pipeline section: data
+generation produces the SFT training dataset offline from a pos/neg DB sample (not
+relevance-filtered), which a separate training step then fine-tunes the small model
+on; inference at scale runs that already-trained model on the whole DB downstream of
+the relevance filter.
+
 ### Data generation — `scripts/data/generation/`
 
 Context/prompt-distillation pipeline: a Gemini teacher (elaborate prompt, few-shot)
-labels articles with events, and a small student model (Qwen3-4B) is SFT-trained to
-reproduce those labels from a simpler prompt. Full detail in
+labels articles with events, producing an SFT dataset that a small student model
+(Qwen3-4B) is later trained on to reproduce those labels from a simpler prompt (the
+training step itself lives in `scripts/train/llamafactory/`, not here). Runs on the
+`from_db_matrix_v2.py` positive/negative sample from §1 — **not** on relevance-filtered
+input — so the teacher (and thus the resulting training set) also covers negatives,
+teaching the student to emit no events on them, rather than only ever seeing articles
+known to contain an event. Full detail in
 [`scripts/data/generation/README.md`](scripts/data/generation/README.md).
 
 | Step | Script                    | Purpose                                                                    |
 | ---- | ------------------------- | -------------------------------------------------------------------------- |
-| 0    | (relevance filter, above) | drop irrelevant articles before the teacher call                           |
+| 0    | (DB sample, above)        | pos/neg sample, incl. negatives on purpose — no relevance filtering        |
 | 1    | `generate.py`             | run the Gemini teacher, emit silver JSONL                                  |
 | 2    | `validate.py`             | check ontology/grounding/enums, split clean vs. invalid                    |
 | 2b   | `fix_events.py`           | send invalid events to a stronger model for re-grounding or drop           |
@@ -214,7 +261,10 @@ sets (vLLM pooling-mode encoding instead of in-process Sentence Transformers).
 
 ### Inference at scale — `vertexai/inference/`
 
-Runs the fine-tuned model (`scripts/train/inference/vllm_infer.py`) as an N-shard GCP
+The production run: takes the model already trained on the data-generation dataset
+(above) and runs it over the **whole** article DB, on input that has already been
+through the relevance filter (§2) — the inverse of data generation's unfiltered
+pos/neg sample. Runs the fine-tuned model (`scripts/train/inference/vllm_infer.py`) as an N-shard GCP
 Cloud Batch array job, one GPU VM per shard, merged after completion. Full detail —
 GPU tier costs, shard-count sizing, spot recovery — in
 [`vertexai/inference/README.md`](vertexai/inference/README.md).
