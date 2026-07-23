@@ -1,8 +1,8 @@
 # Relevance filter — GCP Cloud Batch runbook
 
-Classifies **every** article in `article_downloads` (~140M) as `relevant` / `not relevant`
-using the trained relevance encoder (ModernBERT, served via vLLM's pooling `classify`), and
-writes `id,label` CSV shards to GCS.
+Classifies **every** article in `article_downloads` (**130,490,360** — 118,746,759 English +
+11,743,601 French) as `relevant` / `not relevant` using the trained relevance encoder
+(ModernBERT, served via vLLM's pooling `classify`), and writes `id,label` CSV shards to GCS.
 
 This pipeline is **self-contained**: every file lives in `vertexai/relevance/` and imports
 nothing from the rest of the repo.
@@ -21,8 +21,10 @@ nothing from the rest of the repo.
 
 Ingestion is from GCS, not the DB: each article is an individual object
 (`cloud_uri = gs://newsapi-news-data/<uri>.json`), and object storage bulk-read scales
-horizontally with zero load on production cloudSQL. The run is **GPU-bound** at ~120 art/s
-on an L4, so total GPU-time is fixed at ≈ 324 GPU-hours for 140M and wall-clock = 324 / shards.
+horizontally with zero load on production cloudSQL. The run is **GPU-bound** at a **measured**
+~110.5 art/s on an L4 (real end-to-end Cloud Batch run, see "Local timing test" below — GCS
+fetch + tokenize/truncate + vLLM classify + CSV write), so total GPU-time is fixed at
+≈ 328 GPU-hours for 130.49M articles and wall-clock = 328 / shards.
 
 ## Prerequisites
 
@@ -119,18 +121,23 @@ Pass a flag only to **override** a single `.env` value for this run, e.g. a 1-sh
 | `--gpu-memory-util` | `0.9` | Fraction of GPU VRAM for vLLM |
 | `--max-run-duration` | `86400s` | Per-task wall-clock cap (required for flex tiers) |
 
-### Choosing `--shards` (at ~120 art/s on L4, 140M articles)
+### Choosing `--shards` (at measured ~110.5 art/s on L4, 130,490,360 articles)
 
-Total GPU-time is fixed (~324 GPU-h); more shards just finish faster.
+Total GPU-time is fixed (~328 GPU-h); more shards just finish faster.
 
 | shards | articles/worker | wall-clock |
 |-------:|----------------:|-----------:|
-|     20 |            7.0M |     ~16 h  |
-|     50 |            2.8M |    ~6.5 h  |
-|    100 |            1.4M |    ~3.2 h  |
-|    140 |            1.0M |    ~2.3 h  |
+|     20 |            6.5M |    ~16.4 h |
+|     50 |            2.6M |     ~6.6 h |
+|    100 |            1.3M |     ~3.3 h |
+|    140 |            0.9M |     ~2.3 h |
 
-**Verify throughput first** with the timing test below before committing to a shard count.
+**Cost** (spot-l4, ~$0.30/GPU-h): ~328 GPU-h × $0.30 ≈ **$98**, plus ~130.49M GCS reads
+(Class B ops, ~$0.004/10k) ≈ **$52** ≈ **~$150 total**. E.g. 100 shards ≈ ~3.3 h wall-clock.
+
+These numbers come from a real, verified Cloud Batch run (see "Local timing test" below) —
+re-verify throughput if you change `--max-chars`/`--max-length`/the model, since those
+directly affect articles/sec.
 
 ---
 
@@ -158,7 +165,7 @@ gsutil ls "${OUTPUT_GCS_PREFIX}/shard-*.csv"
 
 ## Local timing test (single process, no sharding)
 
-Run 10K articles on one L4, measure throughput, extrapolate:
+Run a batch of articles on one L4, measure throughput, extrapolate:
 
 ```bash
 python vertexai/relevance/relevance_vllm_infer.py \
@@ -167,10 +174,26 @@ python vertexai/relevance/relevance_vllm_infer.py \
     --output  /tmp/relevance.csv \
     --num_shards 1 --shard_index 0 \
     --limit 10000
-# rate = 10000 / elapsed_seconds;  full run ≈ 324 GPU-h / shards
+# rate = 10000 / elapsed_seconds;  full run ≈ 328 GPU-h / shards
 ```
 
 Re-running resumes: already-labeled ids in the output CSV are skipped.
+
+**Verified result** (2026-07-21, real Cloud Batch run on `l4` tier, 1000-article test manifest,
+`relevance-mmbert-small` checkpoint, `MAX_LENGTH=4096`):
+
+- **1000 articles in 9.05s → 110.5 articles/sec** end-to-end (GCS fetch + tokenize/truncate +
+  vLLM classify + CSV write).
+- Output: `shard-0.csv`, 1000 rows, `id,label`, only `relevant`/`not relevant` present
+  (381 relevant / 619 not relevant).
+- One-time overhead per worker, separate from the steady-state rate above: ~73s for vLLM engine
+  init + CUDA graph compile between `[entrypoint] starting inference` and the first classified
+  batch. Negligible on a 1M+-article shard; noticeable on tiny test runs.
+- This run also caught a real bug (now fixed): char-based `--max-chars` truncation doesn't bound
+  token count, so an outlier article could exceed `--max-length` tokens and crash the whole
+  `vLLM.classify()` call with `VLLMValidationError`. `RelevanceClassifier` now tokenizes and
+  truncates to `--max-length` itself before calling `classify()`, so this can't recur regardless
+  of shard content.
 
 ---
 

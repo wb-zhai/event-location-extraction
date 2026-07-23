@@ -439,8 +439,10 @@ async def process_record(client, record, args, cascade_client=None):
 
             relevance_info = await _classify(client)
 
-            if args.cascade and cascade_client is not None and relevance_info.get(
-                "is_relevant"
+            if (
+                args.cascade
+                and cascade_client is not None
+                and relevance_info.get("is_relevant")
             ):
                 # First pass said relevant: escalate to the (usually pricier/more
                 # accurate) cascade model and let its decision win. Records the
@@ -648,7 +650,9 @@ async def _execute_batch_chunk(
     request_path.write_text(
         "".join(
             json.dumps(
-                _build_batch_request(t, system_prompt, response_schema, thinking_config),
+                _build_batch_request(
+                    t, system_prompt, response_schema, thinking_config
+                ),
                 ensure_ascii=False,
             )
             + "\n"
@@ -768,11 +772,13 @@ async def run_batch_relevance(
     output_path: Path,
     append: bool,
 ) -> list[dict[str, Any]]:
-    from scripts.data.generation_v3.costs import aggregate, report
+    from scripts.data.generation.costs import aggregate, report
 
     client = GeminiLLMClient(model_name=args.model, system_prompt=None)
     default_system_prompt = (
-        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR
+        if args.french
+        else DEFAULT_RELEVANCE_SYSTEM_PROMPT
     )
     system_prompt = (
         args.system_prompt
@@ -780,7 +786,9 @@ async def run_batch_relevance(
         else default_system_prompt
     )
     user_prompt_template = (
-        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else DEFAULT_RELEVANCE_USER_PROMPT
+        DEFAULT_RELEVANCE_USER_PROMPT_FR
+        if args.french
+        else DEFAULT_RELEVANCE_USER_PROMPT
     )
 
     tasks = [
@@ -846,11 +854,13 @@ async def run_batch_relevance_cascade(
     the whole run in memory, so a crash partway through doesn't lose every
     already-completed chunk.
     """
-    from scripts.data.generation_v3.costs import aggregate, report
+    from scripts.data.generation.costs import aggregate, report
 
     client = GeminiLLMClient(model_name=args.model, system_prompt=None)
     default_system_prompt = (
-        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR
+        if args.french
+        else DEFAULT_RELEVANCE_SYSTEM_PROMPT
     )
     system_prompt = (
         args.system_prompt
@@ -858,7 +868,9 @@ async def run_batch_relevance_cascade(
         else default_system_prompt
     )
     user_prompt_template = (
-        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else DEFAULT_RELEVANCE_USER_PROMPT
+        DEFAULT_RELEVANCE_USER_PROMPT_FR
+        if args.french
+        else DEFAULT_RELEVANCE_USER_PROMPT
     )
 
     def build_tasks(recs: list[dict[str, Any]]) -> list[_BatchTask]:
@@ -867,10 +879,12 @@ async def run_batch_relevance_cascade(
                 key=_record_key(r) or str(i),
                 record=r,
                 prompt=user_prompt_template.format(
-                    title=str(r.get("title") or (r.get("source") or {}).get("title", "")),
-                    text=(str(r.get("text") or (r.get("source") or {}).get("text", "")))[
-                        : args.max_chars
-                    ],
+                    title=str(
+                        r.get("title") or (r.get("source") or {}).get("title", "")
+                    ),
+                    text=(
+                        str(r.get("text") or (r.get("source") or {}).get("text", ""))
+                    )[: args.max_chars],
                 ),
             )
             for i, r in enumerate(recs)
@@ -940,8 +954,12 @@ async def run_batch_relevance_cascade(
         )
 
         if escalate:
-            first_pass_by_key = {_record_key(r): (r.get("relevance") or {}) for r in escalate}
-            async for chunk_results in run_stage(escalate, args.cascade_model, "cascade"):
+            first_pass_by_key = {
+                _record_key(r): (r.get("relevance") or {}) for r in escalate
+            }
+            async for chunk_results in run_stage(
+                escalate, args.cascade_model, "cascade"
+            ):
                 annotated = []
                 for rec in chunk_results:
                     key = _record_key(rec)
@@ -963,7 +981,10 @@ async def run_batch_relevance_cascade(
         missing = [r for r in records if _record_key(r) not in written_keys]
         if missing:
             flush(
-                [_error_batch_record(r, "Cascade result missing.", args.model) for r in missing]
+                [
+                    _error_batch_record(r, "Cascade result missing.", args.model)
+                    for r in missing
+                ]
             )
 
     totals = aggregate(_cascade_token_ledger(all_results))
@@ -1031,7 +1052,9 @@ async def process_file(args):
 
     if args.batch_api:
         if args.cascade:
-            results = await run_batch_relevance_cascade(args, records, output_path, append)
+            results = await run_batch_relevance_cascade(
+                args, records, output_path, append
+            )
         else:
             results = await run_batch_relevance(args, records, output_path, append)
     else:
@@ -1074,9 +1097,11 @@ async def process_file(args):
                 f.write(json.dumps(r) + "\n")
 
         if args.use_llm:
-            from scripts.data.generation_v3.costs import aggregate, report
+            from scripts.data.generation.costs import aggregate, report
 
-            totals = aggregate(_cascade_token_ledger(results) if args.cascade else results)
+            totals = aggregate(
+                _cascade_token_ledger(results) if args.cascade else results
+            )
             report(output_path.name, totals, batch=False)
 
     # print some summary stats

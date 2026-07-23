@@ -106,7 +106,7 @@ record has `title`/`text` or `source.title`/`source.text`, an existing
 `relevance` block (only `relevant`/`partially_relevant` records are pushed —
 see `keep_by_relevance`), and an `annotation` block
 (`{"document_relevance": ..., "events": [...]}`) produced by
-[`generate.py`](../data/generation_v3/generate.py).
+[`generate.py`](../data/generation/generate.py).
 
 ```bash
 python scripts/annotations/events_argilla.py push \

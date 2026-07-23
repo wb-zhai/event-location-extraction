@@ -139,7 +139,7 @@ SYSTEM_PROMPT_PATH = (
     REPO_ROOT
     / "scripts"
     / "data"
-    / "generation_v3"
+    / "generation"
     / "prompts"
     / "teacher"
     / "system_prompt.txt"

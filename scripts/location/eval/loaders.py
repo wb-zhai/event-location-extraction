@@ -14,6 +14,7 @@ avoid a second network round-trip at eval time:
   https://huggingface.co/datasets/tner/wnut2017/raw/main/dataset/label.json
   https://huggingface.co/datasets/tner/ontonotes5/raw/main/dataset/label.json
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -27,12 +28,14 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v3.io_utils import iter_jsonl, resolve_path  # noqa: E402
+from scripts.data.generation.io_utils import iter_jsonl, resolve_path  # noqa: E402
 
 DEFAULT_ZHAI_PATH = "dataset/zhai/v3/science/train.jsonl"
 
 
-def load_zhai(path: str | None = None, limit: int | None = None, **_: object) -> list[GoldDoc]:
+def load_zhai(
+    path: str | None = None, limit: int | None = None, **_: object
+) -> list[GoldDoc]:
     resolved = resolve_path(path or DEFAULT_ZHAI_PATH)
     docs: list[GoldDoc] = []
     for row in iter_jsonl(resolved):
@@ -45,13 +48,15 @@ def load_zhai(path: str | None = None, limit: int | None = None, **_: object) ->
                 part = part.strip()
                 if part and part != "not_stated":
                     raw_locations.append(part)
-        docs.append(GoldDoc(
-            id=str(row.get("id")),
-            text=text,
-            locations=dedupe_locations(raw_locations),
-            fine=None,
-            fine_schema=None,
-        ))
+        docs.append(
+            GoldDoc(
+                id=str(row.get("id")),
+                text=text,
+                locations=dedupe_locations(raw_locations),
+                fine=None,
+                fine_schema=None,
+            )
+        )
         if limit is not None and len(docs) >= limit:
             break
     return docs
@@ -118,61 +123,128 @@ def _load_tner(
                 fine[ent_type] = type_spans
                 raw_locations.extend(type_spans)
 
-        docs.append(GoldDoc(
-            id=f"{repo_id}:{split}:{i}",
-            text=" ".join(tokens),
-            locations=dedupe_locations(raw_locations),
-            fine=fine if fine_schema else None,
-            fine_schema=fine_schema,
-        ))
+        docs.append(
+            GoldDoc(
+                id=f"{repo_id}:{split}:{i}",
+                text=" ".join(tokens),
+                locations=dedupe_locations(raw_locations),
+                fine=fine if fine_schema else None,
+                fine_schema=fine_schema,
+            )
+        )
         if limit is not None and len(docs) >= limit:
             break
     return docs
 
 
 _CONLL2003_ID2LABEL = {
-    0: "O", 1: "B-ORG", 2: "B-MISC", 3: "B-PER", 4: "I-PER",
-    5: "B-LOC", 6: "I-ORG", 7: "I-MISC", 8: "I-LOC",
+    0: "O",
+    1: "B-ORG",
+    2: "B-MISC",
+    3: "B-PER",
+    4: "I-PER",
+    5: "B-LOC",
+    6: "I-ORG",
+    7: "I-MISC",
+    8: "I-LOC",
 }
 
 _WNUT17_ID2LABEL = {
-    0: "B-corporation", 1: "B-creative-work", 2: "B-group", 3: "B-location",
-    4: "B-person", 5: "B-product", 6: "I-corporation", 7: "I-creative-work",
-    8: "I-group", 9: "I-location", 10: "I-person", 11: "I-product", 12: "O",
+    0: "B-corporation",
+    1: "B-creative-work",
+    2: "B-group",
+    3: "B-location",
+    4: "B-person",
+    5: "B-product",
+    6: "I-corporation",
+    7: "I-creative-work",
+    8: "I-group",
+    9: "I-location",
+    10: "I-person",
+    11: "I-product",
+    12: "O",
 }
 
 _ONTONOTES5_ID2LABEL = {
-    0: "O", 1: "B-CARDINAL", 2: "B-DATE", 3: "I-DATE", 4: "B-PERSON",
-    5: "I-PERSON", 6: "B-NORP", 7: "B-GPE", 8: "I-GPE", 9: "B-LAW",
-    10: "I-LAW", 11: "B-ORG", 12: "I-ORG", 13: "B-PERCENT", 14: "I-PERCENT",
-    15: "B-ORDINAL", 16: "B-MONEY", 17: "I-MONEY", 18: "B-WORK_OF_ART",
-    19: "I-WORK_OF_ART", 20: "B-FAC", 21: "B-TIME", 22: "I-CARDINAL",
-    23: "B-LOC", 24: "B-QUANTITY", 25: "I-QUANTITY", 26: "I-NORP",
-    27: "I-LOC", 28: "B-PRODUCT", 29: "I-TIME", 30: "B-EVENT", 31: "I-EVENT",
-    32: "I-FAC", 33: "B-LANGUAGE", 34: "I-PRODUCT", 35: "I-ORDINAL",
+    0: "O",
+    1: "B-CARDINAL",
+    2: "B-DATE",
+    3: "I-DATE",
+    4: "B-PERSON",
+    5: "I-PERSON",
+    6: "B-NORP",
+    7: "B-GPE",
+    8: "I-GPE",
+    9: "B-LAW",
+    10: "I-LAW",
+    11: "B-ORG",
+    12: "I-ORG",
+    13: "B-PERCENT",
+    14: "I-PERCENT",
+    15: "B-ORDINAL",
+    16: "B-MONEY",
+    17: "I-MONEY",
+    18: "B-WORK_OF_ART",
+    19: "I-WORK_OF_ART",
+    20: "B-FAC",
+    21: "B-TIME",
+    22: "I-CARDINAL",
+    23: "B-LOC",
+    24: "B-QUANTITY",
+    25: "I-QUANTITY",
+    26: "I-NORP",
+    27: "I-LOC",
+    28: "B-PRODUCT",
+    29: "I-TIME",
+    30: "B-EVENT",
+    31: "I-EVENT",
+    32: "I-FAC",
+    33: "B-LANGUAGE",
+    34: "I-PRODUCT",
+    35: "I-ORDINAL",
     36: "I-LANGUAGE",
 }
 
 
-def load_conll2003(split: str = "test", limit: int | None = None, **_: object) -> list[GoldDoc]:
+def load_conll2003(
+    split: str = "test", limit: int | None = None, **_: object
+) -> list[GoldDoc]:
     return _load_tner(
-        "tner/conll2003", "conll2003", _CONLL2003_ID2LABEL,
-        location_types=["LOC"], fine_schema=None, split=split, limit=limit,
+        "tner/conll2003",
+        "conll2003",
+        _CONLL2003_ID2LABEL,
+        location_types=["LOC"],
+        fine_schema=None,
+        split=split,
+        limit=limit,
     )
 
 
-def load_wnut17(split: str = "test", limit: int | None = None, **_: object) -> list[GoldDoc]:
+def load_wnut17(
+    split: str = "test", limit: int | None = None, **_: object
+) -> list[GoldDoc]:
     return _load_tner(
-        "tner/wnut2017", "wnut2017", _WNUT17_ID2LABEL,
-        location_types=["location"], fine_schema=None, split=split, limit=limit,
+        "tner/wnut2017",
+        "wnut2017",
+        _WNUT17_ID2LABEL,
+        location_types=["location"],
+        fine_schema=None,
+        split=split,
+        limit=limit,
     )
 
 
-def load_ontonotes5(split: str = "test", limit: int | None = None, **_: object) -> list[GoldDoc]:
+def load_ontonotes5(
+    split: str = "test", limit: int | None = None, **_: object
+) -> list[GoldDoc]:
     return _load_tner(
-        "tner/ontonotes5", "ontonotes5", _ONTONOTES5_ID2LABEL,
+        "tner/ontonotes5",
+        "ontonotes5",
+        _ONTONOTES5_ID2LABEL,
         location_types=["GPE", "LOC", "FAC"],
-        fine_schema="ontonotes-gpe-loc-fac", split=split, limit=limit,
+        fine_schema="ontonotes-gpe-loc-fac",
+        split=split,
+        limit=limit,
     )
 
 

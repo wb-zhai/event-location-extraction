@@ -6,6 +6,7 @@ Output JSONL: same fields + "predictions" (merged/deduplicated events)
 
 Recovery: re-running on an existing output file skips already-processed articles.
 """
+
 from __future__ import annotations
 
 import copy
@@ -28,12 +29,14 @@ from vllm.sampling_params import GuidedDecodingParams
 HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
-DEFAULT_PROMPT_DIR = REPO_ROOT / "scripts" / "data" / "generation_v3" / "prompts" / "student"
+DEFAULT_PROMPT_DIR = (
+    REPO_ROOT / "scripts" / "data" / "generation" / "prompts" / "student"
+)
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v3.to_sft import (  # noqa: E402
+from scripts.data.generation.to_sft import (  # noqa: E402
     build_paragraph_windows,
     build_user_message,
     coalesce_short_windows,
@@ -43,7 +46,6 @@ from scripts.data.generation_v3.to_sft import (  # noqa: E402
     split_oversized_paragraphs,
     split_paragraphs,
 )
-
 
 # ---------------------------------------------------------------------------
 # Structured-output schema
@@ -77,9 +79,17 @@ _BASE_ANNOTATION_SCHEMA: dict = {
                     "modality": {"type": "string", "enum": ["asserted", "projected"]},
                 },
                 "required": [
-                    "event_type", "grounding_quote", "event_location_text", "event_location",
-                    "event_time_text", "event_time", "time_status", "affected_entity",
-                    "affected_group", "severity", "modality",
+                    "event_type",
+                    "grounding_quote",
+                    "event_location_text",
+                    "event_location",
+                    "event_time_text",
+                    "event_time",
+                    "time_status",
+                    "affected_entity",
+                    "affected_group",
+                    "severity",
+                    "modality",
                 ],
             },
         },
@@ -95,7 +105,9 @@ def _annotation_schema(labels: list[str] | None) -> dict:
     if key not in _schema_cache:
         schema = copy.deepcopy(_BASE_ANNOTATION_SCHEMA)
         if labels:
-            schema["properties"]["events"]["items"]["properties"]["event_type"]["enum"] = list(labels)
+            schema["properties"]["events"]["items"]["properties"]["event_type"][
+                "enum"
+            ] = list(labels)
         _schema_cache[key] = schema
     return _schema_cache[key]
 
@@ -103,6 +115,7 @@ def _annotation_schema(labels: list[str] | None) -> dict:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _article_key(row: dict) -> str:
     text = (row.get("source") or {}).get("text") or json.dumps(row, sort_keys=True)
@@ -155,7 +168,7 @@ def _resolve_events(window_preds: list[dict]) -> list[dict]:
     merged: list[dict] = []
     for wp in window_preds:
         prediction = wp.get("prediction") or {}
-        for event in (prediction.get("events") or []):
+        for event in prediction.get("events") or []:
             gq = (event.get("grounding_quote") or "").strip()
             if gq and gq in seen_quotes:
                 continue
@@ -172,7 +185,10 @@ def _batched(items: list, size: int) -> Iterator[list]:
 
 def _apply_chat_template(tokenizer, messages: list[dict]) -> list[int]:
     token_ids = tokenizer.apply_chat_template(
-        messages, tokenize=True, add_generation_prompt=True, enable_thinking=False,
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        enable_thinking=False,
     )
     if not isinstance(token_ids, (list, tuple)):
         if hasattr(token_ids, "input_ids"):
@@ -217,7 +233,9 @@ def _build_windows(
     if not paras:
         return []
 
-    windows = build_paragraph_windows(paras, max_chars=max_chars, max_paras=max_paras, overlap=overlap)
+    windows = build_paragraph_windows(
+        paras, max_chars=max_chars, max_paras=max_paras, overlap=overlap
+    )
     windows = coalesce_short_windows(
         paras, windows, min_chars=min_chars, max_chars=max_chars, max_paras=max_paras
     )
@@ -239,7 +257,9 @@ def _build_windows(
             ]
             prompt_token_ids = _apply_chat_template(tokenizer, messages)
             win["prompt_token_ids"] = prompt_token_ids
-            win["prompt"] = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
+            win["prompt"] = tokenizer.decode(
+                prompt_token_ids, skip_special_tokens=False
+            )
             win["labels"] = labels
         result.append(win)
 
@@ -249,6 +269,7 @@ def _build_windows(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def vllm_infer(
     model_name_or_path: str,
@@ -296,7 +317,9 @@ def vllm_infer(
     # the (slow) main model load below.
     if retriever_model_name is not None:
         if retriever_index is None:
-            raise ValueError("retriever_index is required when retriever_model_name is set")
+            raise ValueError(
+                "retriever_index is required when retriever_model_name is set"
+            )
         if gpu_memory_utilization + retriever_gpu_memory_utilization > 1.0:
             raise ValueError(
                 f"gpu_memory_utilization ({gpu_memory_utilization}) + "
@@ -307,11 +330,15 @@ def vllm_infer(
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
     prompt_dir_path = pathlib.Path(prompt_dir) if prompt_dir else DEFAULT_PROMPT_DIR
 
-    system_template = (prompt_dir_path / "system_prompt.txt").read_text(encoding="utf-8")
+    system_template = (prompt_dir_path / "system_prompt.txt").read_text(
+        encoding="utf-8"
+    )
     user_template = (prompt_dir_path / "user_prompt.txt").read_text(encoding="utf-8")
     default_labels = load_ontology_labels(ontology_path)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name_or_path, trust_remote_code=True
+    )
 
     engine_kwargs: dict = {
         "model": model_name_or_path,
@@ -337,7 +364,10 @@ def vllm_infer(
     retriever_indexer = None
     if retriever_model_name is not None:
         from src.index.inmemory import InMemoryIndexer
-        retriever_indexer = InMemoryIndexer.from_pretrained(retriever_index, device=index_device)
+
+        retriever_indexer = InMemoryIndexer.from_pretrained(
+            retriever_index, device=index_device
+        )
         _retriever_kwargs: dict = {
             "model": retriever_model_name,
             "runner": "pooling",
@@ -351,6 +381,7 @@ def vllm_infer(
     lora_request = None
     if adapter_name_or_path is not None:
         from vllm.lora.request import LoRARequest
+
         lora_request = LoRARequest("default", 1, adapter_name_or_path)
 
     sampling_params = SamplingParams(
@@ -386,7 +417,9 @@ def vllm_infer(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     processed_keys = _load_processed_keys(output_path)
     if processed_keys:
-        print(f"Skipping {len(processed_keys)} already-processed articles (found in {output_path})")
+        print(
+            f"Skipping {len(processed_keys)} already-processed articles (found in {output_path})"
+        )
 
     pending = [row for row in articles if _article_key(row) not in processed_keys]
     print(f"Processing {len(pending)} / {len(articles)} articles")
@@ -415,9 +448,14 @@ def vllm_infer(
                 texts = [(row.get("source") or {}).get("text") or "" for row in batch]
                 pooling_outputs = retriever_llm.encode(texts, pooling_task="embed")
                 query_embeddings = torch.stack(
-                    [out.outputs.data.to(torch.float32).cpu() for out in pooling_outputs]
+                    [
+                        out.outputs.data.to(torch.float32).cpu()
+                        for out in pooling_outputs
+                    ]
                 )
-                retrieval_results = retriever_indexer.search(query_embeddings, _effective_retriever_k)
+                retrieval_results = retriever_indexer.search(
+                    query_embeddings, _effective_retriever_k
+                )
                 for row, passages in zip(batch, retrieval_results):
                     row["candidates"] = [p["document"]["text"] for p in passages]
 
@@ -433,15 +471,24 @@ def vllm_infer(
             for a_idx, row in enumerate(batch):
                 src = row.get("source") or {}
                 aid = (
-                    row.get("id") or row.get("article_id")
-                    or src.get("url") or src.get("id")
+                    row.get("id")
+                    or row.get("article_id")
+                    or src.get("url")
+                    or src.get("id")
                     or _article_key(row)[:12]
                 )
                 try:
                     windows = _build_windows(
-                        row, system_template, user_template, default_labels, tokenizer,
-                        max_chars=max_chars, max_paras=max_paras, overlap=overlap_paras,
-                        min_chars=min_chars, top_k_candidates=top_k_candidates,
+                        row,
+                        system_template,
+                        user_template,
+                        default_labels,
+                        tokenizer,
+                        max_chars=max_chars,
+                        max_paras=max_paras,
+                        overlap=overlap_paras,
+                        min_chars=min_chars,
+                        top_k_candidates=top_k_candidates,
                         render_prompt=_render_prompt,
                     )
                 except Exception as e:
@@ -452,7 +499,9 @@ def vllm_infer(
 
             # --- Per-window retrieval (after windowing) ---
             if retriever_llm is not None and retriever_query_mode == "per_window":
-                pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Retrieving per window")
+                pbar.set_description(
+                    f"Batch {b_idx + 1}/{n_batches} | Retrieving per window"
+                )
                 _win_texts: list[str] = []
                 _win_index: list[tuple[int, int]] = []
                 for a_idx, windows in enumerate(article_windows):
@@ -460,28 +509,44 @@ def vllm_infer(
                         _win_texts.append(w["window_text"])
                         _win_index.append((a_idx, w_idx))
                 if _win_texts:
-                    pooling_outputs = retriever_llm.encode(_win_texts, pooling_task="embed")
-                    window_embeddings = torch.stack(
-                        [out.outputs.data.to(torch.float32).cpu() for out in pooling_outputs]
+                    pooling_outputs = retriever_llm.encode(
+                        _win_texts, pooling_task="embed"
                     )
-                    window_retrieval = retriever_indexer.search(window_embeddings, _effective_retriever_k)
+                    window_embeddings = torch.stack(
+                        [
+                            out.outputs.data.to(torch.float32).cpu()
+                            for out in pooling_outputs
+                        ]
+                    )
+                    window_retrieval = retriever_indexer.search(
+                        window_embeddings, _effective_retriever_k
+                    )
                     for (a_idx, w_idx), passages in zip(_win_index, window_retrieval):
                         w = article_windows[a_idx][w_idx]
                         row = batch[a_idx]
                         src = row.get("source") or {}
                         publish_date = src.get("publish_date") or ""
-                        row_with_cands = {**row, "candidates": [p["document"]["text"] for p in passages]}
-                        labels = row_labels(row_with_cands, default_labels, top_k_candidates)
+                        row_with_cands = {
+                            **row,
+                            "candidates": [p["document"]["text"] for p in passages],
+                        }
+                        labels = row_labels(
+                            row_with_cands, default_labels, top_k_candidates
+                        )
                         system_prompt = render_system_prompt(system_template, labels)
                         w["labels"] = labels
-                        user_msg = build_user_message(user_template, publish_date, w["window_text"])
+                        user_msg = build_user_message(
+                            user_template, publish_date, w["window_text"]
+                        )
                         messages = [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_msg},
                         ]
                         prompt_token_ids = _apply_chat_template(tokenizer, messages)
                         w["prompt_token_ids"] = prompt_token_ids
-                        w["prompt"] = tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
+                        w["prompt"] = tokenizer.decode(
+                            prompt_token_ids, skip_special_tokens=False
+                        )
 
             # --- Build vLLM inputs ---
             vllm_inputs: list[dict] = []
@@ -496,16 +561,18 @@ def vllm_infer(
                             json=_annotation_schema(w.get("labels")),
                             backend=guided_decoding_backend,
                         )
-                        per_window_params.append(SamplingParams(
-                            temperature=temperature,
-                            max_tokens=max_new_tokens,
-                            top_p=top_p,
-                            top_k=top_k,
-                            repetition_penalty=repetition_penalty,
-                            skip_special_tokens=skip_special_tokens,
-                            seed=seed,
-                            guided_decoding=guided,
-                        ))
+                        per_window_params.append(
+                            SamplingParams(
+                                temperature=temperature,
+                                max_tokens=max_new_tokens,
+                                top_p=top_p,
+                                top_k=top_k,
+                                repetition_penalty=repetition_penalty,
+                                skip_special_tokens=skip_special_tokens,
+                                seed=seed,
+                                guided_decoding=guided,
+                            )
+                        )
 
             pbar.write(
                 f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
@@ -523,11 +590,19 @@ def vllm_infer(
 
             # --- Inference ---
             pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Inference")
-            article_preds: list[list[dict | None]] = [[None] * len(w) for w in article_windows]
+            article_preds: list[list[dict | None]] = [
+                [None] * len(w) for w in article_windows
+            ]
 
             for a_idx, row in enumerate(batch):
                 if not article_windows[a_idx]:
-                    out_f.write(json.dumps({**row, "window_predictions": [], "predictions": []}, ensure_ascii=False) + "\n")
+                    out_f.write(
+                        json.dumps(
+                            {**row, "window_predictions": [], "predictions": []},
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
                     pbar.update(1)
 
             if vllm_inputs:
@@ -537,7 +612,9 @@ def vllm_infer(
                 results = llm.generate(vllm_inputs, _params, lora_request=lora_request)
 
                 if results and not _first_generation_printed:
-                    decoded = tokenizer.decode(results[0].outputs[0].token_ids, skip_special_tokens=False)
+                    decoded = tokenizer.decode(
+                        results[0].outputs[0].token_ids, skip_special_tokens=False
+                    )
                     pbar.write("\n" + "=" * 80)
                     pbar.write("DEBUG — first generation (with special tokens):")
                     pbar.write("=" * 80)
@@ -558,10 +635,17 @@ def vllm_infer(
                 for a_idx, row in enumerate(batch):
                     if article_windows[a_idx]:
                         win_preds = article_preds[a_idx]
-                        out_f.write(json.dumps(
-                            {**row, "window_predictions": win_preds, "predictions": _resolve_events(win_preds)},
-                            ensure_ascii=False,
-                        ) + "\n")
+                        out_f.write(
+                            json.dumps(
+                                {
+                                    **row,
+                                    "window_predictions": win_preds,
+                                    "predictions": _resolve_events(win_preds),
+                                },
+                                ensure_ascii=False,
+                            )
+                            + "\n"
+                        )
                         pbar.update(1)
 
                 out_f.flush()

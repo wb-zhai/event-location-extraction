@@ -1,22 +1,22 @@
 # relevance — article relevance filtering
 
 Pre-filters a raw article corpus before running the expensive teacher generation step
-(see [`generation_v3`](../generation_v3/README.md)). Three filtering modes can be
+(see [`generation`](../generation/README.md)). Three filtering modes can be
 composed: a cheap first pass (keyword or regex) followed by an optional LLM second
 pass on the survivors.
 
 ## Files
 
-| File | Purpose |
-| --- | --- |
-| `relevance_filter.py` | Step 0 — pre-filter articles before sending to the teacher |
-| `train.py` | Fine-tune an encoder classifier on `relevance_filter.py` output |
-| `inference.py` | Run a `train.py` checkpoint over text/JSONL (HF or vLLM backend) |
-| `eval.py` | Score a `train.py` checkpoint against labeled JSONL (accuracy/precision/recall/F1) |
-| `local.py` | Test the relevance gate against a local OpenAI-compatible LLM server |
-| `encoder.py` | Test the relevance gate against a local encoder text classifier (no LLM) |
-| `view_relevance.py` | Gradio UI to browse a `relevance_filter.py` output JSONL |
-| `agreement.py` | Compare relevance decisions between two labeled JSONL files (accuracy, kappa) |
+| File                  | Purpose                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `relevance_filter.py` | Step 0 — pre-filter articles before sending to the teacher                         |
+| `train.py`            | Fine-tune an encoder classifier on `relevance_filter.py` output                    |
+| `inference.py`        | Run a `train.py` checkpoint over text/JSONL (HF or vLLM backend)                   |
+| `eval.py`             | Score a `train.py` checkpoint against labeled JSONL (accuracy/precision/recall/F1) |
+| `local.py`            | Test the relevance gate against a local OpenAI-compatible LLM server               |
+| `encoder.py`          | Test the relevance gate against a local encoder text classifier (no LLM)           |
+| `view_relevance.py`   | Gradio UI to browse a `relevance_filter.py` output JSONL                           |
+| `agreement.py`        | Compare relevance decisions between two labeled JSONL files (accuracy, kappa)      |
 
 ---
 
@@ -66,24 +66,24 @@ Every output record gets a `relevance` field. With `--filter-only`, records mark
 
 Key flags:
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `--use-regex` | off | Use the built-in `food_insecurity_regex` as a fast first-pass filter |
-| `--keywords` | built-in list | Space-separated keywords for substring matching; ignored when `--use-regex` is set |
-| `--use-llm` | off | Run Gemini relevance classification on articles that survive the pre-pass |
-| `--use-3label-prompt` | off | Use the 3-label (`relevant` / `partially_relevant` / `not_relevant`) prompt instead of the default 2-label (`is_relevant`) prompt. Only applies with `--use-llm` |
-| `--model` | `gemini-2.5-flash` | Gemini model for LLM mode (first-pass model when `--cascade` is set) |
-| `--cascade` | off | Two-stage cascade: escalate `--model`'s `relevant` calls to `--cascade-model` for a second, final decision. Requires `--use-llm` |
-| `--cascade-model` | `gemini-3.1-pro-preview` | Model used for the second cascade pass. Only used with `--cascade` |
-| `--max-chars` | `1000` | Article preview length sent to the LLM (title + first N chars) |
-| `--confidence-threshold` | `0.0` | Minimum LLM confidence to act on an `is_relevant=false` decision |
-| `--filter-only` | off | Omit filtered records from output (default: write all records with metadata) |
-| `--concurrency` | `10` | Parallel async workers for LLM mode |
-| `--verbose` | off | Log each LLM prompt and response |
+| Flag                     | Default                  | Notes                                                                                                                                                            |
+| ------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--use-regex`            | off                      | Use the built-in `food_insecurity_regex` as a fast first-pass filter                                                                                             |
+| `--keywords`             | built-in list            | Space-separated keywords for substring matching; ignored when `--use-regex` is set                                                                               |
+| `--use-llm`              | off                      | Run Gemini relevance classification on articles that survive the pre-pass                                                                                        |
+| `--use-3label-prompt`    | off                      | Use the 3-label (`relevant` / `partially_relevant` / `not_relevant`) prompt instead of the default 2-label (`is_relevant`) prompt. Only applies with `--use-llm` |
+| `--model`                | `gemini-2.5-flash`       | Gemini model for LLM mode (first-pass model when `--cascade` is set)                                                                                             |
+| `--cascade`              | off                      | Two-stage cascade: escalate `--model`'s `relevant` calls to `--cascade-model` for a second, final decision. Requires `--use-llm`                                 |
+| `--cascade-model`        | `gemini-3.1-pro-preview` | Model used for the second cascade pass. Only used with `--cascade`                                                                                               |
+| `--max-chars`            | `1000`                   | Article preview length sent to the LLM (title + first N chars)                                                                                                   |
+| `--confidence-threshold` | `0.0`                    | Minimum LLM confidence to act on an `is_relevant=false` decision                                                                                                 |
+| `--filter-only`          | off                      | Omit filtered records from output (default: write all records with metadata)                                                                                     |
+| `--concurrency`          | `10`                     | Parallel async workers for LLM mode                                                                                                                              |
+| `--verbose`              | off                      | Log each LLM prompt and response                                                                                                                                 |
 
 The LLM filter favors recall: the system prompt instructs the model to mark borderline articles relevant. The `--confidence-threshold` flag lets you tighten this — at `0.8` the LLM must be quite confident before dropping an article.
 
-**Cascade cost accounting**: the end-of-run token report (from `scripts/data/generation_v3/costs.py`) prints a second table for cascade first-pass calls on escalated records, so total spend is `final decisions` + `cascade first-pass calls on escalated records` (non-escalated records only make one call, already counted in `final decisions`). Cascade cost roughly tracks the escalation rate: if `--model` marks `X%` of records relevant, expect cascade to cost about `--model`'s full-corpus cost plus `--cascade-model`'s cost on `X%` of the corpus — cheaper than running `--cascade-model` on everything, but the savings shrink for models where per-call cost is dominated by fixed overhead (e.g. thinking tokens) rather than input size.
+**Cascade cost accounting**: the end-of-run token report (from `scripts/data/generation/costs.py`) prints a second table for cascade first-pass calls on escalated records, so total spend is `final decisions` + `cascade first-pass calls on escalated records` (non-escalated records only make one call, already counted in `final decisions`). Cascade cost roughly tracks the escalation rate: if `--model` marks `X%` of records relevant, expect cascade to cost about `--model`'s full-corpus cost plus `--cascade-model`'s cost on `X%` of the corpus — cheaper than running `--cascade-model` on everything, but the savings shrink for models where per-call cost is dominated by fixed overhead (e.g. thinking tokens) rather than input size.
 
 ---
 
@@ -128,13 +128,13 @@ Key flags (in addition to the ones shared with `relevance_filter.py` — `--max-
 `--confidence-threshold`, `--concurrency`, `--verbose`, `--filter-only`, `--use-regex`,
 `--limit`, `--resume`, `--overwrite`):
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `--base-url` | `http://127.0.0.1:8080/v1` | OpenAI-compatible server endpoint |
-| `--api-key` | none | Only needed if the server checks one |
-| `--temperature` | `0.0` | Sampling temperature |
-| `--top-p`, `--top-k`, `--min-p`, `--repeat-penalty`, `--seed` | unset | Extra sampling knobs worth tuning for a small model — `--top-k`/`--min-p`/`--repeat-penalty` are forwarded via `extra_body` since they're llama.cpp/vLLM extensions, not part of the OpenAI API |
-| `--max-tokens` | `256` | Max tokens generated for the `{reason, is_relevant, confidence}` response |
+| Flag                                                          | Default                    | Notes                                                                                                                                                                                           |
+| ------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--base-url`                                                  | `http://127.0.0.1:8080/v1` | OpenAI-compatible server endpoint                                                                                                                                                               |
+| `--api-key`                                                   | none                       | Only needed if the server checks one                                                                                                                                                            |
+| `--temperature`                                               | `0.0`                      | Sampling temperature                                                                                                                                                                            |
+| `--top-p`, `--top-k`, `--min-p`, `--repeat-penalty`, `--seed` | unset                      | Extra sampling knobs worth tuning for a small model — `--top-k`/`--min-p`/`--repeat-penalty` are forwarded via `extra_body` since they're llama.cpp/vLLM extensions, not part of the OpenAI API |
+| `--max-tokens`                                                | `256`                      | Max tokens generated for the `{reason, is_relevant, confidence}` response                                                                                                                       |
 
 ---
 
@@ -147,11 +147,11 @@ with title, decision, confidence, filtered flag, and reason.
 python scripts/data/relevance/view_relevance.py --input dataset/zhai/v3/articles.filtered.jsonl
 ```
 
-| Flag | Default | Notes |
-| --- | --- | --- |
+| Flag      | Default  | Notes                                      |
+| --------- | -------- | ------------------------------------------ |
 | `--input` | required | Path to `relevance_filter.py` output JSONL |
-| `--port` | `7860` | Gradio server port |
-| `--share` | off | Create a public Gradio share link |
+| `--port`  | `7860`   | Gradio server port                         |
+| `--share` | off      | Create a public Gradio share link          |
 
 ---
 
@@ -183,13 +183,13 @@ Key flags (in addition to the ones shared with the other scripts — `--max-char
 `--confidence-threshold`, `--filter-only`, `--use-regex`, `--limit`, `--resume`,
 `--overwrite`):
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `--model` | `classla/multilingual-IPTC-news-topic-classifier` | Any HF `text-classification` model |
-| `--device` | auto-detect | `cuda` / `mps` / `cpu`; auto-picks the best available |
-| `--max-length` | `512` | Tokenizer max sequence length (the model's native limit) |
-| `--batch-size` | `32` | Pipeline's internal inference batch size |
-| `--chunk-size` | `500` | Records per progress/flush chunk |
+| Flag           | Default                                           | Notes                                                    |
+| -------------- | ------------------------------------------------- | -------------------------------------------------------- |
+| `--model`      | `classla/multilingual-IPTC-news-topic-classifier` | Any HF `text-classification` model                       |
+| `--device`     | auto-detect                                       | `cuda` / `mps` / `cpu`; auto-picks the best available    |
+| `--max-length` | `512`                                             | Tokenizer max sequence length (the model's native limit) |
+| `--batch-size` | `32`                                              | Pipeline's internal inference batch size                 |
+| `--chunk-size` | `500`                                             | Records per progress/flush chunk                         |
 
 ---
 
@@ -230,23 +230,23 @@ python scripts/data/relevance/train.py \
 
 Key flags:
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `--input` | required | Training JSONL file |
-| `--output-dir` | required | Directory for checkpoints and final model |
-| `--eval-file` | none | Separate eval JSONL; if omitted, a stratified split of `--input` is used |
-| `--model-name` | `answerdotai/ModernBERT-base` | Any HF sequence-classification model |
-| `--max-length` | `512` | Max token length; longer inputs are truncated |
-| `--max-chars` | `2000` | Max characters taken from raw text before tokenization |
-| `--batch-size` | `16` | Per-device train and eval batch size |
-| `--learning-rate` | `2e-5` | AdamW learning rate |
-| `--num-epochs` | `3` | Number of training epochs |
-| `--eval-frac` | `0.15` | Fraction of `--input` held out for eval when no `--eval-file` is given |
-| `--precision` | `auto` | `auto` picks bf16 > fp16 > fp32 based on hardware; `fp32` is safe on CPU/MPS |
-| `--balance-classes` | off | Applies inverse-frequency class weights to the loss (helps with skewed label distributions) |
-| `--metric-for-best` | `f1` | Metric used to select the best checkpoint (`accuracy` / `precision` / `recall` / `f1`) |
-| `--wandb-project` | none | WandB project name; omit to disable WandB logging |
-| `--resume-from-checkpoint` | none | Path to a checkpoint directory to resume training from |
+| Flag                       | Default                       | Notes                                                                                       |
+| -------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `--input`                  | required                      | Training JSONL file                                                                         |
+| `--output-dir`             | required                      | Directory for checkpoints and final model                                                   |
+| `--eval-file`              | none                          | Separate eval JSONL; if omitted, a stratified split of `--input` is used                    |
+| `--model-name`             | `answerdotai/ModernBERT-base` | Any HF sequence-classification model                                                        |
+| `--max-length`             | `512`                         | Max token length; longer inputs are truncated                                               |
+| `--max-chars`              | `2000`                        | Max characters taken from raw text before tokenization                                      |
+| `--batch-size`             | `16`                          | Per-device train and eval batch size                                                        |
+| `--learning-rate`          | `2e-5`                        | AdamW learning rate                                                                         |
+| `--num-epochs`             | `3`                           | Number of training epochs                                                                   |
+| `--eval-frac`              | `0.15`                        | Fraction of `--input` held out for eval when no `--eval-file` is given                      |
+| `--precision`              | `auto`                        | `auto` picks bf16 > fp16 > fp32 based on hardware; `fp32` is safe on CPU/MPS                |
+| `--balance-classes`        | off                           | Applies inverse-frequency class weights to the loss (helps with skewed label distributions) |
+| `--metric-for-best`        | `f1`                          | Metric used to select the best checkpoint (`accuracy` / `precision` / `recall` / `f1`)      |
+| `--wandb-project`          | none                          | WandB project name; omit to disable WandB logging                                           |
+| `--resume-from-checkpoint` | none                          | Path to a checkpoint directory to resume training from                                      |
 
 ---
 
@@ -288,22 +288,22 @@ python scripts/data/relevance/inference.py \
 
 Key flags:
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `--checkpoint` | required | Path to a trained checkpoint dir from `train.py` |
-| `--backend` | `hf` | `hf` (transformers) or `vllm` (`vllm.LLM.classify`, cuda only) |
-| `--text` | — | One or more raw strings to classify; mutually exclusive with `--input`. Written to `--output` if given, else printed to stdout |
-| `--input` | — | A JSONL file or a folder of JSONL files; mutually exclusive with `--text` |
-| `--output` | — | Required with `--input` (a file, or a folder if `--input` is a folder); optional with `--text` |
-| `--max-chars` | `4000` | Max characters taken from raw text before tokenization (mirrors `train.py`) |
-| `--max-length` | `2048` | Tokenizer max sequence length (mirrors `train.py`) |
-| `--batch-size` | `32` | Inference batch size |
-| `--precision` | `auto` | `auto` picks bf16 > fp16 > fp32 based on hardware; `fp32` is safe on CPU/MPS |
-| `--device` | auto-detect | `cuda` / `mps` / `cpu` for `--backend hf`; a device string for `--backend vllm` |
-| `--tensor-parallel-size` | `1` | vLLM only: number of GPUs |
-| `--gpu-memory-utilization` | `0.9` | vLLM only: fraction of GPU memory vLLM is allowed to use |
-| `--limit` | none | Max records to process per input file |
-| `--overwrite` | off | Allow overwriting an existing output file |
+| Flag                       | Default     | Notes                                                                                                                          |
+| -------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--checkpoint`             | required    | Path to a trained checkpoint dir from `train.py`                                                                               |
+| `--backend`                | `hf`        | `hf` (transformers) or `vllm` (`vllm.LLM.classify`, cuda only)                                                                 |
+| `--text`                   | —           | One or more raw strings to classify; mutually exclusive with `--input`. Written to `--output` if given, else printed to stdout |
+| `--input`                  | —           | A JSONL file or a folder of JSONL files; mutually exclusive with `--text`                                                      |
+| `--output`                 | —           | Required with `--input` (a file, or a folder if `--input` is a folder); optional with `--text`                                 |
+| `--max-chars`              | `4000`      | Max characters taken from raw text before tokenization (mirrors `train.py`)                                                    |
+| `--max-length`             | `2048`      | Tokenizer max sequence length (mirrors `train.py`)                                                                             |
+| `--batch-size`             | `32`        | Inference batch size                                                                                                           |
+| `--precision`              | `auto`      | `auto` picks bf16 > fp16 > fp32 based on hardware; `fp32` is safe on CPU/MPS                                                   |
+| `--device`                 | auto-detect | `cuda` / `mps` / `cpu` for `--backend hf`; a device string for `--backend vllm`                                                |
+| `--tensor-parallel-size`   | `1`         | vLLM only: number of GPUs                                                                                                      |
+| `--gpu-memory-utilization` | `0.9`       | vLLM only: fraction of GPU memory vLLM is allowed to use                                                                       |
+| `--limit`                  | none        | Max records to process per input file                                                                                          |
+| `--overwrite`              | off         | Allow overwriting an existing output file                                                                                      |
 
 ---
 
@@ -334,12 +334,12 @@ python scripts/data/relevance/eval.py \
 
 Key flags:
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `--predictions` | required | JSONL file with predicted relevance (e.g. `inference.py` output) |
-| `--labels` | required | JSONL file with ground-truth relevance/label |
-| `--errors` | none | Optional path to write only misclassified records |
-| `--metrics-output` | none | Optional path to write the metrics JSON |
+| Flag               | Default  | Notes                                                            |
+| ------------------ | -------- | ---------------------------------------------------------------- |
+| `--predictions`    | required | JSONL file with predicted relevance (e.g. `inference.py` output) |
+| `--labels`         | required | JSONL file with ground-truth relevance/label                     |
+| `--errors`         | none     | Optional path to write only misclassified records                |
+| `--metrics-output` | none     | Optional path to write the metrics JSON                          |
 
 ---
 

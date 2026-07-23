@@ -65,35 +65,35 @@ python scripts/train/inference/vllm_infer.py ... --num_shards 4 --shard_index 1
 
 ### Key arguments
 
-| Argument | Default | Description |
-| --- | --- | --- |
-| `model_name_or_path` | required | HuggingFace repo or local path |
-| `input` | required | Input JSONL file |
-| `output` | required | Output JSONL file (appended; processed articles are skipped on re-run) |
-| `adapter_name_or_path` | `None` | Path to a LoRA adapter directory |
-| `ontology` | built-in | Path to ontology JSON for event labels |
-| `prompt_dir` | built-in | Directory containing `system_prompt.txt` and `user_prompt.txt` |
-| `top_k_candidates` | `None` | Limit candidate event labels shown in the prompt |
-| `shard_index` | `0` | Index of this shard (0-based) |
-| `num_shards` | `1` | Total number of shards |
-| **Windowing** | | |
-| `max_chars` | `3000` | Maximum characters per window |
-| `min_chars` | `200` | Minimum characters to keep a window |
-| `max_paras` | `15` | Maximum paragraphs per window |
-| `overlap_paras` | `1` | Overlap paragraphs between adjacent windows |
-| **Sampling** | | |
-| `temperature` | `0.0` | Sampling temperature (0 = greedy) |
-| `max_new_tokens` | `4096` | Maximum tokens to generate |
-| `top_p` | `0.8` | Top-p nucleus sampling |
-| `top_k` | `0` | Top-k sampling |
-| `repetition_penalty` | `1.05` | Repetition penalty |
-| `seed` | `None` | Random seed for reproducibility |
-| **Engine** | | |
-| `max_model_len` | `None` | vLLM max sequence length (input + output tokens) |
-| `gpu_memory_utilization` | `0.95` | Fraction of GPU memory vLLM may use |
-| `tensor_parallel_size` | `1` | Number of GPUs for tensor parallelism |
-| `batch_size` | `1000` | Prompts handed to vLLM per call |
-| `max_num_seqs` | `None` | vLLM max concurrent sequences |
+| Argument                 | Default  | Description                                                            |
+| ------------------------ | -------- | ---------------------------------------------------------------------- |
+| `model_name_or_path`     | required | HuggingFace repo or local path                                         |
+| `input`                  | required | Input JSONL file                                                       |
+| `output`                 | required | Output JSONL file (appended; processed articles are skipped on re-run) |
+| `adapter_name_or_path`   | `None`   | Path to a LoRA adapter directory                                       |
+| `ontology`               | built-in | Path to ontology JSON for event labels                                 |
+| `prompt_dir`             | built-in | Directory containing `system_prompt.txt` and `user_prompt.txt`         |
+| `top_k_candidates`       | `None`   | Limit candidate event labels shown in the prompt                       |
+| `shard_index`            | `0`      | Index of this shard (0-based)                                          |
+| `num_shards`             | `1`      | Total number of shards                                                 |
+| **Windowing**            |          |                                                                        |
+| `max_chars`              | `3000`   | Maximum characters per window                                          |
+| `min_chars`              | `200`    | Minimum characters to keep a window                                    |
+| `max_paras`              | `15`     | Maximum paragraphs per window                                          |
+| `overlap_paras`          | `1`      | Overlap paragraphs between adjacent windows                            |
+| **Sampling**             |          |                                                                        |
+| `temperature`            | `0.0`    | Sampling temperature (0 = greedy)                                      |
+| `max_new_tokens`         | `4096`   | Maximum tokens to generate                                             |
+| `top_p`                  | `0.8`    | Top-p nucleus sampling                                                 |
+| `top_k`                  | `0`      | Top-k sampling                                                         |
+| `repetition_penalty`     | `1.05`   | Repetition penalty                                                     |
+| `seed`                   | `None`   | Random seed for reproducibility                                        |
+| **Engine**               |          |                                                                        |
+| `max_model_len`          | `None`   | vLLM max sequence length (input + output tokens)                       |
+| `gpu_memory_utilization` | `0.95`   | Fraction of GPU memory vLLM may use                                    |
+| `tensor_parallel_size`   | `1`      | Number of GPUs for tensor parallelism                                  |
+| `batch_size`             | `1000`   | Prompts handed to vLLM per call                                        |
+| `max_num_seqs`           | `None`   | vLLM max concurrent sequences                                          |
 
 ### Output format
 
@@ -119,7 +119,7 @@ Each output line is the original input row with two fields added:
 
 ## Windowing strategy
 
-Long articles are split into overlapping paragraph-based windows inside `vllm_infer.py` itself (via helpers in `scripts/data/generation_v3/to_sft.py`). No external windowing script is needed.
+Long articles are split into overlapping paragraph-based windows inside `vllm_infer.py` itself (via helpers in `scripts/data/generation/to_sft.py`). No external windowing script is needed.
 
 ### How it works
 
@@ -151,12 +151,12 @@ python scripts/train/inference/eval_v3_sft.py \
   [--cluster ontologies/risk-factors/clusters.json]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--pred-jsonl` | Predictions JSONL file (required). Each record must contain both `annotation` and `predictions` fields. |
-| `--report-json` | Write the full nested metrics dict as JSON. |
-| `--errors-jsonl` | Write one row per document that had unmatched events; useful for error analysis. |
-| `--cluster` | Studio results JSON mapping event names to cluster labels. When provided, adds four additional cluster-level metric families to the report (see below). |
+| Flag             | Description                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--pred-jsonl`   | Predictions JSONL file (required). Each record must contain both `annotation` and `predictions` fields.                                                 |
+| `--report-json`  | Write the full nested metrics dict as JSON.                                                                                                             |
+| `--errors-jsonl` | Write one row per document that had unmatched events; useful for error analysis.                                                                        |
+| `--cluster`      | Studio results JSON mapping event names to cluster labels. When provided, adds four additional cluster-level metric families to the report (see below). |
 
 ---
 
@@ -176,10 +176,10 @@ errors in addition to linked-field errors.
 
 Each table has two column groups:
 
-| Group | Meaning |
-|-------|---------|
-| **RELAXED** | Lenient matching (headline number) |
-| **EXACT** | Strict matching; shows how much the model deviates from verbatim gold |
+| Group       | Meaning                                                               |
+| ----------- | --------------------------------------------------------------------- |
+| **RELAXED** | Lenient matching (headline number)                                    |
+| **EXACT**   | Strict matching; shows how much the model deviates from verbatim gold |
 
 ---
 
@@ -244,10 +244,10 @@ independent entry in the per-document bag before comparison.
 
 A predicted location matches a gold location if:
 
-| Tier | Matching rule |
-|------|--------------|
+| Tier        | Matching rule                                                                                                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Relaxed** | After lowercasing and stripping directional prefixes (*northern*, *southern*, *eastern*, *western*, *central*): exact equality **or** one is a substring of the other **or** SequenceMatcher ratio ≥ 0.85 |
-| **Exact** | Normalized string equality only |
+| **Exact**   | Normalized string equality only                                                                                                                                                                           |
 
 > **Why strip directional prefixes?** Annotations often normalize *"northern
 > Bangladesh"* to *"Bangladesh"*. The model may or may not strip the prefix; both
@@ -273,9 +273,9 @@ detection, quote grounding, and location linking together.
 
 The conditional accuracy rows isolate location linking:
 
-| Metric | Meaning |
-|--------|---------|
-| **Location on matched events** | Among event pairs already matched by family 1, how often does `event_location` also match? Includes `not_stated` ↔ `not_stated`. |
+| Metric                                       | Meaning                                                                                                                                                        |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Location on matched events**               | Among event pairs already matched by family 1, how often does `event_location` also match? Includes `not_stated` ↔ `not_stated`.                               |
 | **Location on matched events (gold stated)** | Same, but only for matched gold events with an actual stated location. This focuses on geographic extraction/linking and excludes correct absence predictions. |
 
 ---
@@ -289,9 +289,9 @@ quote grounding, and time linking all affect the final number.
 
 `event_time` values are ISO 8601 strings (`"2018-01/2018-10"`, `"2015"`, `"not_stated"`).
 
-| Tier | Match rule |
-|------|-----------|
-| **Exact** | Normalized string equality |
+| Tier        | Match rule                                                                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Exact**   | Normalized string equality                                                                                                              |
 | **Relaxed** | Exact equality **or** the two values share at least one year in common (e.g. `"2018-01"` and `"2018"` both start with `"2018"` → match) |
 
 > The relaxed rule avoids penalizing the model for predicting the correct year but
@@ -299,9 +299,9 @@ quote grounding, and time linking all affect the final number.
 
 The conditional accuracy rows isolate time linking:
 
-| Metric | Meaning |
-|--------|---------|
-| **Time on matched events** | Among event pairs already matched by family 1, how often does `event_time` also match? Includes `not_stated` ↔ `not_stated`. |
+| Metric                                   | Meaning                                                                                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Time on matched events**               | Among event pairs already matched by family 1, how often does `event_time` also match? Includes `not_stated` ↔ `not_stated`.                                                  |
 | **Time on matched events (gold stated)** | Same, but only for matched gold events with an actual stated time. This focuses on extracting/linking concrete temporal expressions and excludes correct absence predictions. |
 
 ---

@@ -1,4 +1,5 @@
 """Gradio UI for single-article event location extraction using vLLM."""
+
 from __future__ import annotations
 
 import gc
@@ -15,7 +16,7 @@ MODELS_ROOT = REPO_ROOT / "models"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v3.to_sft import load_ontology_labels  # noqa: E402
+from scripts.data.generation.to_sft import load_ontology_labels  # noqa: E402
 from scripts.train.inference.vllm_infer import (  # noqa: E402
     _build_windows,
     _parse_json_output,
@@ -23,7 +24,9 @@ from scripts.train.inference.vllm_infer import (  # noqa: E402
 )
 
 DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
-DEFAULT_PROMPT_DIR = REPO_ROOT / "scripts" / "data" / "generation_v3" / "prompts" / "student"
+DEFAULT_PROMPT_DIR = (
+    REPO_ROOT / "scripts" / "data" / "generation" / "prompts" / "student"
+)
 
 _state: dict = {"llm": None, "tokenizer": None, "loaded_model": None}
 
@@ -42,6 +45,7 @@ def load_model(model_path: str, max_model_len_val: int, max_new_tokens: int) -> 
     if _state["llm"] is not None:
         try:
             from vllm.distributed.parallel_state import destroy_model_parallel
+
             destroy_model_parallel()
         except Exception:
             pass
@@ -52,6 +56,7 @@ def load_model(model_path: str, max_model_len_val: int, max_new_tokens: int) -> 
         gc.collect()
         try:
             import torch
+
             torch.cuda.empty_cache()
         except Exception:
             pass
@@ -123,7 +128,9 @@ def run_inference(
     repetition_penalty: float,
 ) -> str:
     if _state["llm"] is None:
-        return json.dumps({"error": "No model loaded — click 'Load Model' first."}, indent=2)
+        return json.dumps(
+            {"error": "No model loaded — click 'Load Model' first."}, indent=2
+        )
     if not article_text.strip():
         return json.dumps({"error": "Article text is empty."}, indent=2)
 
@@ -131,7 +138,9 @@ def run_inference(
 
     top_k_candidates = int(top_k_candidates_raw) if top_k_candidates_raw > 0 else None
 
-    system_template = (DEFAULT_PROMPT_DIR / "system_prompt.txt").read_text(encoding="utf-8")
+    system_template = (DEFAULT_PROMPT_DIR / "system_prompt.txt").read_text(
+        encoding="utf-8"
+    )
     user_template = (DEFAULT_PROMPT_DIR / "user_prompt.txt").read_text(encoding="utf-8")
     default_labels = load_ontology_labels(DEFAULT_ONTOLOGY)
 
@@ -141,7 +150,11 @@ def run_inference(
         row["candidates"] = candidates
 
     windows = _build_windows(
-        row, system_template, user_template, default_labels, _state["tokenizer"],
+        row,
+        system_template,
+        user_template,
+        default_labels,
+        _state["tokenizer"],
         max_chars=int(max_chars),
         max_paras=int(max_paras),
         overlap=int(overlap_paras),
@@ -150,7 +163,11 @@ def run_inference(
     )
 
     if not windows:
-        return json.dumps({"events": [], "note": "No windows built from this article."}, indent=2, ensure_ascii=False)
+        return json.dumps(
+            {"events": [], "note": "No windows built from this article."},
+            indent=2,
+            ensure_ascii=False,
+        )
 
     sampling_params = SamplingParams(
         temperature=float(temperature),
@@ -192,10 +209,19 @@ def build_ui() -> gr.Blocks:
 
         # ── Model loading ────────────────────────────────────────────────────
         with gr.Row():
-            model_dd = gr.Dropdown(choices=models, value=models[0] if models else None, label="Model", scale=5)
-            max_model_len_inp = gr.Number(value=0, label="max_model_len (0 = auto)", precision=0, scale=1)
+            model_dd = gr.Dropdown(
+                choices=models,
+                value=models[0] if models else None,
+                label="Model",
+                scale=5,
+            )
+            max_model_len_inp = gr.Number(
+                value=0, label="max_model_len (0 = auto)", precision=0, scale=1
+            )
             load_btn = gr.Button("Load Model", scale=1)
-            status_txt = gr.Textbox(value="No model loaded.", label="Status", interactive=False, scale=2)
+            status_txt = gr.Textbox(
+                value="No model loaded.", label="Status", interactive=False, scale=2
+            )
 
         # ── JSON row loader ──────────────────────────────────────────────────
         with gr.Accordion("Load from dataset JSON row", open=False):
@@ -208,9 +234,19 @@ def build_ui() -> gr.Blocks:
 
         # ── Article input ────────────────────────────────────────────────────
         with gr.Row():
-            article_box = gr.Textbox(lines=14, label="News Article", placeholder="Paste article text here...", scale=4)
+            article_box = gr.Textbox(
+                lines=14,
+                label="News Article",
+                placeholder="Paste article text here...",
+                scale=4,
+            )
             with gr.Column(scale=1):
-                date_box = gr.Textbox(value="", lines=1, label="Publish Date (optional)", placeholder="2024-01-15")
+                date_box = gr.Textbox(
+                    value="",
+                    lines=1,
+                    label="Publish Date (optional)",
+                    placeholder="2024-01-15",
+                )
                 candidates_box = gr.Textbox(
                     lines=10,
                     label="Candidates (one per line; leave empty to use full ontology)",
@@ -220,20 +256,36 @@ def build_ui() -> gr.Blocks:
         # ── Inference parameters ─────────────────────────────────────────────
         with gr.Accordion("Inference Parameters", open=False):
             with gr.Row():
-                top_k_cand = gr.Slider(0, 100, value=70, step=1, label="top_k_candidates (0 = all)")
-                max_new_tokens_sl = gr.Slider(256, 16384, value=12288, step=256, label="max_new_tokens")
+                top_k_cand = gr.Slider(
+                    0, 100, value=70, step=1, label="top_k_candidates (0 = all)"
+                )
+                max_new_tokens_sl = gr.Slider(
+                    256, 16384, value=12288, step=256, label="max_new_tokens"
+                )
             with gr.Row():
-                max_chars_sl = gr.Slider(500, 10000, value=3000, step=100, label="max_chars")
-                min_chars_sl = gr.Slider(50, 1000, value=200, step=50, label="min_chars")
+                max_chars_sl = gr.Slider(
+                    500, 10000, value=3000, step=100, label="max_chars"
+                )
+                min_chars_sl = gr.Slider(
+                    50, 1000, value=200, step=50, label="min_chars"
+                )
             with gr.Row():
                 max_paras_sl = gr.Slider(1, 50, value=15, step=1, label="max_paras")
-                overlap_paras_sl = gr.Slider(0, 5, value=1, step=1, label="overlap_paras")
+                overlap_paras_sl = gr.Slider(
+                    0, 5, value=1, step=1, label="overlap_paras"
+                )
             with gr.Row():
-                temperature_sl = gr.Slider(0.0, 2.0, value=0.0, step=0.05, label="temperature")
+                temperature_sl = gr.Slider(
+                    0.0, 2.0, value=0.0, step=0.05, label="temperature"
+                )
                 top_p_sl = gr.Slider(0.0, 1.0, value=0.8, step=0.05, label="top_p")
             with gr.Row():
-                top_k_sl = gr.Slider(0, 100, value=0, step=1, label="top_k (0 = disabled)")
-                rep_pen_sl = gr.Slider(1.0, 2.0, value=1.05, step=0.01, label="repetition_penalty")
+                top_k_sl = gr.Slider(
+                    0, 100, value=0, step=1, label="top_k (0 = disabled)"
+                )
+                rep_pen_sl = gr.Slider(
+                    1.0, 2.0, value=1.05, step=0.01, label="repetition_penalty"
+                )
 
         run_btn = gr.Button("Extract Events", variant="primary")
         output_box = gr.Code(language="json", label="Output")
@@ -252,9 +304,19 @@ def build_ui() -> gr.Blocks:
         run_btn.click(
             fn=run_inference,
             inputs=[
-                article_box, date_box, candidates_box,
-                top_k_cand, max_chars_sl, min_chars_sl, max_paras_sl, overlap_paras_sl,
-                temperature_sl, max_new_tokens_sl, top_p_sl, top_k_sl, rep_pen_sl,
+                article_box,
+                date_box,
+                candidates_box,
+                top_k_cand,
+                max_chars_sl,
+                min_chars_sl,
+                max_paras_sl,
+                overlap_paras_sl,
+                temperature_sl,
+                max_new_tokens_sl,
+                top_p_sl,
+                top_k_sl,
+                rep_pen_sl,
             ],
             outputs=[output_box],
         )

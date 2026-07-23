@@ -12,20 +12,24 @@ try:
 
     def loads(line: bytes):
         return json_lib.loads(line)
+
 except ImportError:
     import json as json_lib
 
     def loads(line: bytes):
         return json_lib.loads(line)
 
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v3.io_utils import resolve_path, write_jsonl
+from scripts.data.generation.io_utils import resolve_path, write_jsonl
 
 
-def reservoir_sample(input_path: Path, n_empty: int, n_nonempty: int, seed: int) -> list[dict]:
+def reservoir_sample(
+    input_path: Path, n_empty: int, n_nonempty: int, seed: int
+) -> list[dict]:
     rng = random.Random(seed)
     empty_reservoir: list[dict] = []
     nonempty_reservoir: list[dict] = []
@@ -61,8 +65,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--n-empty", type=int, default=100, help="Rows with empty risk_factors")
-    parser.add_argument("--n-nonempty", type=int, default=100, help="Rows with non-empty risk_factors")
+    parser.add_argument(
+        "--n-empty", type=int, default=100, help="Rows with empty risk_factors"
+    )
+    parser.add_argument(
+        "--n-nonempty", type=int, default=100, help="Rows with non-empty risk_factors"
+    )
     parser.add_argument("--seed", type=int, default=13)
     return parser.parse_args()
 

@@ -3,19 +3,19 @@
 Builds a dense vector index over the event-type ontology (label + description) and
 retrieves the top-K most relevant event types for a query document. Used to shrink a
 large ontology down to a small `candidates` list per document (e.g. for
-`generation_v3`'s `--top-k-candidates` teacher-generation flag), and to evaluate how
+`generation`'s `--top-k-candidates` teacher-generation flag), and to evaluate how
 well a given embedding model ranks the correct event types near the top.
 
 ---
 
 ## Files
 
-| File | Purpose |
-| --- | --- |
-| `generate_index.py` | Step 1 — embed every event type (label + description) from an ontology JSON into a vector index |
-| `retrieve.py` | Step 2 — retrieve top-K candidate event types per query using a Sentence Transformers model (CPU/GPU, in-process) |
-| `retrieve_vllm.py` | Step 2 (alt) — same as above but encodes queries with vLLM in pooling mode (faster on GPU for large query sets) |
-| `eval_recall_at_k.py` | Step 3 — compute Recall@K of the retrieved candidates against gold `event_type` annotations |
+| File                  | Purpose                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `generate_index.py`   | Step 1 — embed every event type (label + description) from an ontology JSON into a vector index                   |
+| `retrieve.py`         | Step 2 — retrieve top-K candidate event types per query using a Sentence Transformers model (CPU/GPU, in-process) |
+| `retrieve_vllm.py`    | Step 2 (alt) — same as above but encodes queries with vLLM in pooling mode (faster on GPU for large query sets)   |
+| `eval_recall_at_k.py` | Step 3 — compute Recall@K of the retrieved candidates against gold `event_type` annotations                       |
 
 ---
 
@@ -91,18 +91,18 @@ stored as `metadata.description` but is not concatenated into the embedded text
 
 Key flags:
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `model_name` | — | HF/Sentence-Transformers repo id, or any name containing `gemini` to route to `GeminiRetriever` |
-| `--sentence-transformers` | off | Use `SentenceTransformersRetriever` instead of the raw `HuggingFaceRetriever` (needed for most modern embedding models) |
-| `--device` | `cpu` | `cuda:0` etc. for GPU encoding |
-| `--precision` | `32` | Model compute precision (HF path only); `16` requires GPU |
-| `--batch_size` | `128` | Passed through but indexing always batches at 100 internally (see `generate_index.py`) |
-| `--num-workers` | `4` | DataLoader / concurrent-encode workers |
-| `--encode-concurrency` | `--num-workers` | Concurrent request count for API-based retrievers (Gemini) |
-| `--normalize-embeddings` | off | L2-normalize passage embeddings (Sentence Transformers path) |
-| `--prompt-name` | None | Sentence-Transformers passage prompt template key (`passage_prompt_name`) |
-| `--output-dimensionality` | `1536` | Gemini embedding output size |
+| Flag                      | Default         | Notes                                                                                                                   |
+| ------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `model_name`              | —               | HF/Sentence-Transformers repo id, or any name containing `gemini` to route to `GeminiRetriever`                         |
+| `--sentence-transformers` | off             | Use `SentenceTransformersRetriever` instead of the raw `HuggingFaceRetriever` (needed for most modern embedding models) |
+| `--device`                | `cpu`           | `cuda:0` etc. for GPU encoding                                                                                          |
+| `--precision`             | `32`            | Model compute precision (HF path only); `16` requires GPU                                                               |
+| `--batch_size`            | `128`           | Passed through but indexing always batches at 100 internally (see `generate_index.py`)                                  |
+| `--num-workers`           | `4`             | DataLoader / concurrent-encode workers                                                                                  |
+| `--encode-concurrency`    | `--num-workers` | Concurrent request count for API-based retrievers (Gemini)                                                              |
+| `--normalize-embeddings`  | off             | L2-normalize passage embeddings (Sentence Transformers path)                                                            |
+| `--prompt-name`           | None            | Sentence-Transformers passage prompt template key (`passage_prompt_name`)                                               |
+| `--output-dimensionality` | `1536`          | Gemini embedding output size                                                                                            |
 
 Output is written to `<output_folder>/` as `documents.jsonl` + a memory-mapped
 `embeddings.mmap` / `embeddings.meta.json` sidecar (`InMemoryIndexer.save_pretrained`,
@@ -163,13 +163,13 @@ exclusive; a `{query}` placeholder is formatted, otherwise treated as a prefix).
 
 Common flags (both scripts):
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `--top-k` | `5` | Number of candidates per query |
-| `--batch-size` | `32` | Queries per batch (vLLM still batches encoding internally) |
-| `--device` | `cpu` | Device for the index/search (`retrieve.py` also uses it for encoding) |
-| `--normalize-embeddings` | off | L2-normalize query embeddings before search |
-| `--save-ids-only` | off | Write `metadata.estimate_id` per candidate instead of the passage text — only use this if your index documents carry that metadata field |
+| Flag                     | Default | Notes                                                                                                                                    |
+| ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `--top-k`                | `5`     | Number of candidates per query                                                                                                           |
+| `--batch-size`           | `32`    | Queries per batch (vLLM still batches encoding internally)                                                                               |
+| `--device`               | `cpu`   | Device for the index/search (`retrieve.py` also uses it for encoding)                                                                    |
+| `--normalize-embeddings` | off     | L2-normalize query embeddings before search                                                                                              |
+| `--save-ids-only`        | off     | Write `metadata.estimate_id` per candidate instead of the passage text — only use this if your index documents carry that metadata field |
 
 `retrieve_vllm.py`-only flags: `--tensor-parallel-size`, `--gpu-memory-utilization`,
 `--max-model-len`, `--dtype`, `--trust-remote-code`, `--query-prompt-name`,

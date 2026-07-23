@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir fire json-repair gsutil && \
 
 # Repo code needed at inference time
 COPY scripts/train/inference/vllm_infer.py scripts/train/inference/vllm_infer.py
-COPY scripts/data/generation_v3/ scripts/data/generation_v3/
+COPY scripts/data/generation/ scripts/data/generation/
 COPY ontologies/ ontologies/
 
 # Make scripts importable from repo root

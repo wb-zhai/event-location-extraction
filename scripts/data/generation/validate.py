@@ -16,6 +16,7 @@ Emits:
 Usage:
     python validate_zhai_v3.py --input silver.jsonl --output-stem silver.validated
 """
+
 import argparse
 import json
 import re
@@ -25,7 +26,15 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
-SYSTEM_PROMPT_PATH = REPO_ROOT / "scripts" / "data" / "generation_v3" / "prompts" / "teacher" / "system_prompt.txt"
+SYSTEM_PROMPT_PATH = (
+    REPO_ROOT
+    / "scripts"
+    / "data"
+    / "generation"
+    / "prompts"
+    / "teacher"
+    / "system_prompt.txt"
+)
 
 VALID_TIME_STATUS = {"past", "ongoing", "forecast", "not_stated"}
 VALID_SEVERITY = {"low", "medium", "high", "extreme", "not_stated"}
@@ -175,7 +184,10 @@ def main() -> None:
     ontology = load_ontology_labels(args.ontology)
     prompt_labels = load_prompt_labels(args.system_prompt)
     if any("{{" in label for label in prompt_labels):
-        print("Ontology cross-check skipped — system_prompt contains unfilled placeholders", file=sys.stderr)
+        print(
+            "Ontology cross-check skipped — system_prompt contains unfilled placeholders",
+            file=sys.stderr,
+        )
     elif ontology != prompt_labels:
         only_ont = sorted(ontology - prompt_labels)
         only_pmt = sorted(prompt_labels - ontology)
@@ -185,7 +197,10 @@ def main() -> None:
         if only_pmt:
             print(f"  in prompt only   : {only_pmt}", file=sys.stderr)
     else:
-        print(f"Ontology cross-check OK — {len(ontology)} labels match prompt", file=sys.stderr)
+        print(
+            f"Ontology cross-check OK — {len(ontology)} labels match prompt",
+            file=sys.stderr,
+        )
 
     records: list[dict[str, Any]] = []
     with args.input.open(encoding="utf-8") as fh:
@@ -199,8 +214,9 @@ def main() -> None:
     invalid_path = Path(stem + ".invalid.jsonl")
     clean_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with clean_path.open("w", encoding="utf-8") as ch, \
-         invalid_path.open("w", encoding="utf-8") as ih:
+    with clean_path.open("w", encoding="utf-8") as ch, invalid_path.open(
+        "w", encoding="utf-8"
+    ) as ih:
         stats = process(records, ontology, ch, ih)
 
     total = stats["total_events"]
@@ -208,7 +224,9 @@ def main() -> None:
     clean = stats["events_clean"]
 
     print(f"\n=== Validation summary ===")
-    print(f"Records processed   : {stats['total']}  ({stats['skipped_error_status']} error-status skipped)")
+    print(
+        f"Records processed   : {stats['total']}  ({stats['skipped_error_status']} error-status skipped)"
+    )
     print(f"Events total        : {total}")
     print(f"Events clean        : {clean}  ({100*clean/max(total,1):.1f}%)")
     print(f"Events invalid      : {invalid}  ({100*invalid/max(total,1):.1f}%)")

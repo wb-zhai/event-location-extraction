@@ -20,7 +20,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v3.io_utils import iter_jsonl, load_json_tolerant, load_records, resolve_path, write_jsonl
+from scripts.data.generation.io_utils import (
+    iter_jsonl,
+    load_json_tolerant,
+    load_records,
+    resolve_path,
+    write_jsonl,
+)
 
 FOOD_INSECURITY_KEYWORDS: tuple[tuple[str, float], ...] = (
     ("food insecurity", 4.0),
@@ -186,10 +192,15 @@ def stratified_sample_by_source(
 
     if ref_domain_counts is not None:
         local_ref_total = sum(ref_domain_counts.get(k, 0) for k in by_source) or 1
-        alloc = {k: int(take * ref_domain_counts.get(k, 0) / local_ref_total) for k in by_source}
+        alloc = {
+            k: int(take * ref_domain_counts.get(k, 0) / local_ref_total)
+            for k in by_source
+        }
         by_frac = sorted(
             by_source.keys(),
-            key=lambda k: -(take * ref_domain_counts.get(k, 0) / local_ref_total - alloc[k]),
+            key=lambda k: -(
+                take * ref_domain_counts.get(k, 0) / local_ref_total - alloc[k]
+            ),
         )
     else:
         total = len(rows)
@@ -256,7 +267,10 @@ def text_shingles(text: str, size: int = TEXT_SHINGLE_SIZE) -> frozenset[str]:
     tokens = re.findall(r"[a-z0-9]+", text.lower())
     if len(tokens) < size:
         return frozenset(tokens)
-    return frozenset(" ".join(tokens[index : index + size]) for index in range(len(tokens) - size + 1))
+    return frozenset(
+        " ".join(tokens[index : index + size])
+        for index in range(len(tokens) - size + 1)
+    )
 
 
 def sparse_text_shingles(text: str) -> frozenset[str]:
@@ -274,8 +288,7 @@ def sparse_text_shingles(text: str) -> frozenset[str]:
     total = n - TEXT_SHINGLE_SIZE + 1
     stride = max(1, total // TEXT_SHINGLE_SAMPLE_SIZE)
     return frozenset(
-        " ".join(tokens[i : i + TEXT_SHINGLE_SIZE])
-        for i in range(0, total, stride)
+        " ".join(tokens[i : i + TEXT_SHINGLE_SIZE]) for i in range(0, total, stride)
     )
 
 
@@ -315,21 +328,27 @@ def article_identity_seen(
     seen_shingles: "list[frozenset[str]] | dict[int, frozenset[str]]",
     shingle_index: dict[str, list[int]] | None = None,
 ) -> bool:
-    return any(value is not None and value in seen[key] for key, value in keys.items()) or is_near_duplicate_text(
+    return any(
+        value is not None and value in seen[key] for key, value in keys.items()
+    ) or is_near_duplicate_text(
         shingles,
         seen_shingles,
         shingle_index=shingle_index,
     )
 
 
-def remember_article_identity(keys: dict[str, str | None], seen: dict[str, set[str]]) -> None:
+def remember_article_identity(
+    keys: dict[str, str | None], seen: dict[str, set[str]]
+) -> None:
     for key, value in keys.items():
         if value is not None:
             seen[key].add(value)
 
 
 def empty_article_identity_seen() -> dict[str, set[str]]:
-    return {key: set() for key in ("text", "title", "source", "title_date", "source_date")}
+    return {
+        key: set() for key in ("text", "title", "source", "title_date", "source_date")
+    }
 
 
 def quality_score(text: str) -> float:
@@ -338,8 +357,12 @@ def quality_score(text: str) -> float:
     paragraphs = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
     sentences = re.findall(r"[.!?](?:\s|$)", text)
     bad_chars = sum(1 for char in text if char == "\ufffd")
-    uppercase_ratio = sum(1 for char in text if char.isupper()) / max(sum(1 for char in text if char.isalpha()), 1)
-    return len(paragraphs) * 0.5 + len(sentences) * 0.1 - bad_chars * 2 - uppercase_ratio
+    uppercase_ratio = sum(1 for char in text if char.isupper()) / max(
+        sum(1 for char in text if char.isalpha()), 1
+    )
+    return (
+        len(paragraphs) * 0.5 + len(sentences) * 0.1 - bad_chars * 2 - uppercase_ratio
+    )
 
 
 def ontology_terms(ontology_path: Path) -> list[str]:
@@ -360,7 +383,10 @@ def keyword_terms(ontology_path: Path) -> list[tuple[str, float]]:
     for label, description in events.items():
         label_text = str(label).lower()
         description_text = str(description).lower()
-        if any(seed in f"{label_text} {description_text}" for seed in RISK_FACTOR_SEED_WORDS):
+        if any(
+            seed in f"{label_text} {description_text}"
+            for seed in RISK_FACTOR_SEED_WORDS
+        ):
             terms.setdefault(label_text, 2.5)
             for phrase in re.findall(r"[a-z]+(?:\s+[a-z]+){1,3}", description_text):
                 if any(seed in phrase for seed in RISK_FACTOR_SEED_WORDS):
@@ -369,7 +395,9 @@ def keyword_terms(ontology_path: Path) -> list[tuple[str, float]]:
     return sorted(terms.items(), key=lambda item: (-item[1], item[0]))
 
 
-def keyword_quality_score(title: str, text: str, patterns: list[tuple[str, re.Pattern[str], float]]) -> float:
+def keyword_quality_score(
+    title: str, text: str, patterns: list[tuple[str, re.Pattern[str], float]]
+) -> float:
     haystack = f"{title}\n{text}".lower()
     score = 0.0
     for term, pattern, weight in patterns:
@@ -404,7 +432,9 @@ def compact_sample_record(record: dict) -> dict:
     }
 
 
-def overall_score(quality_score_value: float, keyword_quality_score_value: float = 0.0) -> float:
+def overall_score(
+    quality_score_value: float, keyword_quality_score_value: float = 0.0
+) -> float:
     return quality_score_value + keyword_quality_score_value
 
 
@@ -499,11 +529,13 @@ def sample_records(
         initializer=_worker_init,
         initargs=(terms, keyword_patterns, keyword),
     ) as pool:
-        raw_results = list(tqdm(
-            pool.imap_unordered(_score_article, records, chunksize=chunksize),
-            total=len(records),
-            desc="Scoring articles",
-        ))
+        raw_results = list(
+            tqdm(
+                pool.imap_unordered(_score_article, records, chunksize=chunksize),
+                total=len(records),
+                desc="Scoring articles",
+            )
+        )
 
     candidates: list[dict] = []
     for row in raw_results:
@@ -523,8 +555,12 @@ def sample_records(
     candidates.sort(key=score_sort_key)
     for row in candidates:
         identity_keys = article_identity_keys(row)
-        shingles: frozenset[str] = row.pop("_shingles", None) or sparse_text_shingles(str(row.get("text") or ""))
-        if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
+        shingles: frozenset[str] = row.pop("_shingles", None) or sparse_text_shingles(
+            str(row.get("text") or "")
+        )
+        if article_identity_seen(
+            identity_keys, shingles, seen, seen_shingles, shingle_index
+        ):
             if summary is not None:
                 summary.duplicate_removed_count += 1
             continue
@@ -546,14 +582,18 @@ def sample_records(
     for rows in buckets.values():
         rng.shuffle(rows)
     if keyword:
-        buckets["keyword_risk_factor"].sort(key=lambda row: row["keyword_quality_score"], reverse=True)
+        buckets["keyword_risk_factor"].sort(
+            key=lambda row: row["keyword_quality_score"], reverse=True
+        )
 
     if limit is None:
         selected = [row for bucket in buckets.values() for row in bucket]
         selected = sorted(selected, key=score_sort_key) if order_by_score else selected
         if summary is not None:
             summary.selected_count = len(selected)
-            summary.selected_bucket_counts = Counter(str(row["source_bucket"]) for row in selected)
+            summary.selected_bucket_counts = Counter(
+                str(row["source_bucket"]) for row in selected
+            )
         return selected
 
     mix = (
@@ -581,11 +621,15 @@ def sample_records(
     )
 
     all_candidates = [row for bucket_name in mix for row in buckets[bucket_name]]
-    selected = stratified_sample_by_source(all_candidates, limit, rng, ref_domain_counts=global_domain_counts)
+    selected = stratified_sample_by_source(
+        all_candidates, limit, rng, ref_domain_counts=global_domain_counts
+    )
     selected = sorted(selected, key=score_sort_key) if order_by_score else selected
     if summary is not None:
         summary.selected_count = len(selected)
-        summary.selected_bucket_counts = Counter(str(row["source_bucket"]) for row in selected)
+        summary.selected_bucket_counts = Counter(
+            str(row["source_bucket"]) for row in selected
+        )
     return selected
 
 
@@ -612,10 +656,14 @@ def print_sampling_summary(summary: SamplingSummary) -> None:
             print(f"    {bucket}: {count}")
 
 
-def append_sample_records_to_limit(output_path: Path, selected: list[dict], limit: int | None) -> int:
+def append_sample_records_to_limit(
+    output_path: Path, selected: list[dict], limit: int | None
+) -> int:
     existing = list(iter_jsonl(output_path))
     if limit is not None and len(existing) >= limit:
-        print(f"Output already has {len(existing)} sampled rows, meeting limit {limit}: {output_path}")
+        print(
+            f"Output already has {len(existing)} sampled rows, meeting limit {limit}: {output_path}"
+        )
         return 0
 
     target = limit if limit is not None else len(existing) + len(selected)
@@ -639,7 +687,9 @@ def append_sample_records_to_limit(output_path: Path, selected: list[dict], limi
             continue
         identity_keys = article_identity_keys(row)
         shingles = text_shingles(str(row.get("text") or ""))
-        if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
+        if article_identity_seen(
+            identity_keys, shingles, seen, seen_shingles, shingle_index
+        ):
             continue
         appended.append(row)
         existing_ids.add(str(row.get("id")))
@@ -658,10 +708,14 @@ def append_sample_records_to_limit(output_path: Path, selected: list[dict], limi
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Sample clean articles for generation_v2.")
+    parser = argparse.ArgumentParser(
+        description="Sample clean articles for generation_v2."
+    )
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--ontology", type=Path, default=Path("ontologies/zhai/ontology.json"))
+    parser.add_argument(
+        "--ontology", type=Path, default=Path("ontologies/zhai/ontology.json")
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument(

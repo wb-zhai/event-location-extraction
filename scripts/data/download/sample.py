@@ -58,13 +58,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v3.sample_articles import (
+from scripts.data.generation.sample_articles import (
     article_identity_keys,
     article_identity_seen,
     empty_article_identity_seen,
     remember_article_identity,
 )
-from scripts.data.generation_v3.io_utils import resolve_path
+from scripts.data.generation.io_utils import resolve_path
 
 StratumKey = tuple[str, str, str, str]  # (adm0_code, label, cluster, decade)
 DECADE_AXIS = 3
@@ -80,7 +80,7 @@ DEFAULT_SCIENCE_CLUSTERS_PATH = Path("ontologies/zhai/science_clusters.json")
 ANALYSIS_CHARS = 2000
 SHINGLE_SIZE = 5
 SHINGLE_SAMPLE_SIZE = 200
-# Cap per-shingle posting list length (mirrors generation_v3/sample_articles.py)
+# Cap per-shingle posting list length (mirrors generation/sample_articles.py)
 # to bound near-duplicate lookup cost for common boilerplate 5-grams.
 SHINGLE_POSTING_CAP = 8
 
@@ -113,7 +113,9 @@ def fast_quality_score(text: str) -> float:
     alpha = sum(alpha_mask)
     upper = sum(map(str.isupper, itertools.compress(sample, alpha_mask)))
     uppercase_ratio = upper / max(alpha, 1)
-    return len(paragraphs) * 0.5 + len(sentences) * 0.1 - bad_chars * 2 - uppercase_ratio
+    return (
+        len(paragraphs) * 0.5 + len(sentences) * 0.1 - bad_chars * 2 - uppercase_ratio
+    )
 
 
 def fast_shingles(text: str) -> frozenset[str]:
@@ -124,7 +126,9 @@ def fast_shingles(text: str) -> frozenset[str]:
         return frozenset(tokens)
     total = n - SHINGLE_SIZE + 1
     stride = max(1, total // SHINGLE_SAMPLE_SIZE)
-    return frozenset(" ".join(tokens[i : i + SHINGLE_SIZE]) for i in range(0, total, stride))
+    return frozenset(
+        " ".join(tokens[i : i + SHINGLE_SIZE]) for i in range(0, total, stride)
+    )
 
 
 def load_cluster_map(path: Path) -> dict[str, str]:
@@ -140,7 +144,9 @@ def record_cluster(record: dict, cluster_map: dict[str, str]) -> str:
     scalar is needed for the stratum key, so we pick the cluster that covers the
     most of the record's tags rather than e.g. always taking the first tag.
     """
-    clusters = [cluster_map[rf] for rf in record.get("risk_factors") or [] if rf in cluster_map]
+    clusters = [
+        cluster_map[rf] for rf in record.get("risk_factors") or [] if rf in cluster_map
+    ]
     if not clusters:
         return ""
     counts = Counter(clusters)
@@ -157,10 +163,17 @@ def record_decade(record: dict) -> str:
     return str((int(published_at[:4]) // 10) * 10)
 
 
-def stratum_key(record: dict, cluster_map: dict[str, str] | None, use_decade: bool) -> StratumKey:
+def stratum_key(
+    record: dict, cluster_map: dict[str, str] | None, use_decade: bool
+) -> StratumKey:
     cluster = record_cluster(record, cluster_map) if cluster_map is not None else ""
     decade = record_decade(record) if use_decade else ""
-    return (str(record.get("adm0_code") or ""), str(record.get("label") or ""), cluster, decade)
+    return (
+        str(record.get("adm0_code") or ""),
+        str(record.get("label") or ""),
+        cluster,
+        decade,
+    )
 
 
 _cwstate: dict = {}
@@ -204,7 +217,9 @@ def count_strata(
     return counts
 
 
-def _allocate_proportional(counts: Counter[StratumKey], n: int) -> dict[StratumKey, int]:
+def _allocate_proportional(
+    counts: Counter[StratumKey], n: int
+) -> dict[StratumKey, int]:
     """Largest-remainder allocation of `n` across strata, proportional to `counts`."""
     total = sum(counts.values())
     if total == 0 or n <= 0:
@@ -219,7 +234,9 @@ def _allocate_proportional(counts: Counter[StratumKey], n: int) -> dict[StratumK
     return quotas
 
 
-def _allocate_balanced_by_axis(counts: Counter[StratumKey], n: int, axis: int) -> dict[StratumKey, int]:
+def _allocate_balanced_by_axis(
+    counts: Counter[StratumKey], n: int, axis: int
+) -> dict[StratumKey, int]:
     """Split `n` equally across distinct values of key[axis] seen in `counts`, then
     allocate each share proportionally across the strata within that value.
 
@@ -233,7 +250,9 @@ def _allocate_balanced_by_axis(counts: Counter[StratumKey], n: int, axis: int) -
     base, extra = divmod(n, len(values))
     quotas: dict[StratumKey, int] = {}
     for i, value in enumerate(values):
-        group_counts = Counter({key: c for key, c in counts.items() if key[axis] == value})
+        group_counts = Counter(
+            {key: c for key, c in counts.items() if key[axis] == value}
+        )
         group_n = base + (1 if i < extra else 0)
         quotas.update(_allocate_proportional(group_counts, group_n))
     return quotas
@@ -402,7 +421,9 @@ def _forget_identity(
             del shingle_index[s]
 
 
-def _update_risk_factor_coverage(covered: Counter[str], risk_factors: list, delta: int) -> None:
+def _update_risk_factor_coverage(
+    covered: Counter[str], risk_factors: list, delta: int
+) -> None:
     for rf in risk_factors:
         covered[rf] += delta
         if covered[rf] <= 0:
@@ -422,19 +443,27 @@ def sample_reservoirs(
     risk_factor_diversity_weight: float = 0.0,
 ) -> tuple[dict[StratumKey, list], Counter[str]]:
     rng = random.Random(seed)
-    reservoirs: dict[StratumKey, list] = {key: [] for key, quota in quotas.items() if quota > 0}
+    reservoirs: dict[StratumKey, list] = {
+        key: [] for key, quota in quotas.items() if quota > 0
+    }
     # Risk factors currently held in each stratum's reservoir, kept in sync as
     # entries are pushed/evicted -- used to boost the sampling weight of
     # articles that add risk-factor tags not yet covered in that stratum, so
     # the positive quota doesn't just fill up with the most common tags.
-    risk_factor_coverage: dict[StratumKey, Counter[str]] = {key: Counter() for key in reservoirs}
+    risk_factor_coverage: dict[StratumKey, Counter[str]] = {
+        key: Counter() for key in reservoirs
+    }
     seen = empty_article_identity_seen()
     seen_shingles: dict[int, frozenset[str]] = {}
     shingle_index: dict[str, list[int]] = {}
     seq = itertools.count()
     stats: Counter[str] = Counter()
 
-    chunksize = max(1, min(CHUNK_RECORD_CAP, expected_total // (workers * 8))) if expected_total else 1
+    chunksize = (
+        max(1, min(CHUNK_RECORD_CAP, expected_total // (workers * 8)))
+        if expected_total
+        else 1
+    )
     with input_path.open("rb") as fh, multiprocessing.Pool(
         workers,
         initializer=_worker_init,
@@ -489,24 +518,50 @@ def sample_reservoirs(
             if len(heap) >= quota and es_key <= heap[0][0]:
                 continue
 
-            if article_identity_seen(identity_keys, shingles, seen, seen_shingles, shingle_index):
+            if article_identity_seen(
+                identity_keys, shingles, seen, seen_shingles, shingle_index
+            ):
                 stats["duplicate"] += 1
                 continue
 
             seq_id = next(seq)
-            entry = (es_key, seq_id, qs, result["offset"], result["length"], identity_keys, shingles, risk_factors)
+            entry = (
+                es_key,
+                seq_id,
+                qs,
+                result["offset"],
+                result["length"],
+                identity_keys,
+                shingles,
+                risk_factors,
+            )
 
             if len(heap) < quota:
                 heapq.heappush(heap, entry)
-                _remember_identity(seq_id, identity_keys, shingles, seen, seen_shingles, shingle_index)
-                _update_risk_factor_coverage(risk_factor_coverage[key], risk_factors, +1)
+                _remember_identity(
+                    seq_id, identity_keys, shingles, seen, seen_shingles, shingle_index
+                )
+                _update_risk_factor_coverage(
+                    risk_factor_coverage[key], risk_factors, +1
+                )
                 stats["selected"] += 1
             else:
                 evicted = heapq.heapreplace(heap, entry)
-                _remember_identity(seq_id, identity_keys, shingles, seen, seen_shingles, shingle_index)
-                _forget_identity(evicted[1], evicted[5], evicted[6], seen, seen_shingles, shingle_index)
+                _remember_identity(
+                    seq_id, identity_keys, shingles, seen, seen_shingles, shingle_index
+                )
+                _forget_identity(
+                    evicted[1],
+                    evicted[5],
+                    evicted[6],
+                    seen,
+                    seen_shingles,
+                    shingle_index,
+                )
                 _update_risk_factor_coverage(risk_factor_coverage[key], evicted[7], -1)
-                _update_risk_factor_coverage(risk_factor_coverage[key], risk_factors, +1)
+                _update_risk_factor_coverage(
+                    risk_factor_coverage[key], risk_factors, +1
+                )
 
     return reservoirs, stats
 
@@ -521,7 +576,9 @@ def flatten_output(input_path: Path, reservoirs: dict[StratumKey, list]) -> list
         for heap in reservoirs.values()
         for _es_key, _seq, qs, offset, length, _identity_keys, _shingles, _risk_factors in heap
     ]
-    entries.sort(key=lambda entry: entry[0])  # ascending offset for sequential disk access
+    entries.sort(
+        key=lambda entry: entry[0]
+    )  # ascending offset for sequential disk access
 
     output: list[dict] = []
     with input_path.open("rb") as fh:
@@ -551,7 +608,9 @@ def print_summary(
     output_rows: list[dict],
 ) -> None:
     filled = sum(len(heap) for heap in reservoirs.values())
-    distinct_risk_factors = {rf for row in output_rows for rf in row.get("risk_factors") or []}
+    distinct_risk_factors = {
+        rf for row in output_rows for rf in row.get("risk_factors") or []
+    }
     distinct_clusters = {key[2] for key in quotas if quotas[key] > 0 and key[2]}
     distinct_decades = {key[3] for key in quotas if quotas[key] > 0 and key[3]}
     print("Sampling summary:")
@@ -575,7 +634,9 @@ def print_summary(
         underfilled.sort(key=lambda item: item[1] - item[2], reverse=True)
         print(f"  strata_below_quota: {len(underfilled)} (showing up to 10)")
         for (adm0_code, label, cluster, decade), quota, actual in underfilled[:10]:
-            stratum_desc = "/".join(part for part in (adm0_code, label, cluster, decade) if part)
+            stratum_desc = "/".join(
+                part for part in (adm0_code, label, cluster, decade) if part
+            )
             print(f"    {stratum_desc}: quota={quota} actual={actual}")
 
 
@@ -583,9 +644,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Stratified, quality-weighted subsample of matrix_5M.jsonl.",
     )
-    parser.add_argument("input", type=Path, nargs="?", default=Path("dataset/db/matrix_5M.jsonl"))
+    parser.add_argument(
+        "input", type=Path, nargs="?", default=Path("dataset/db/matrix_5M.jsonl")
+    )
     parser.add_argument("output", type=Path)
-    parser.add_argument("-n", "--sample-size", type=int, required=True, help="Target output record count.")
+    parser.add_argument(
+        "-n",
+        "--sample-size",
+        type=int,
+        required=True,
+        help="Target output record count.",
+    )
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument(
         "--pos-ratio",
@@ -664,9 +733,14 @@ def main() -> int:
         cluster_map = load_cluster_map(resolve_path(args.science_clusters))
 
     workers = args.workers or os.cpu_count() or 1
-    counts = count_strata(input_path, workers, cluster_map=cluster_map, use_decade=args.stratify_by_decade)
+    counts = count_strata(
+        input_path, workers, cluster_map=cluster_map, use_decade=args.stratify_by_decade
+    )
     quotas = allocate_quotas(
-        counts, args.sample_size, pos_ratio=args.pos_ratio, balance_decades=args.stratify_by_decade
+        counts,
+        args.sample_size,
+        pos_ratio=args.pos_ratio,
+        balance_decades=args.stratify_by_decade,
     )
     reservoirs, stats = sample_reservoirs(
         input_path,

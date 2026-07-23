@@ -23,7 +23,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.llms.llm_client import GeminiLLMClient
 
-LOGGER = logging.getLogger("generation_v3")
+LOGGER = logging.getLogger("generation")
 
 DEFAULT_PROMPT = Path(__file__).with_name("annotation_prompt.txt")
 DEFAULT_MODEL = "gemini-2.5-flash"

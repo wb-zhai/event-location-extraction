@@ -20,6 +20,7 @@ Usage:
       --threshold 0.5 \\
       --coarse
 """
+
 # /// script
 # dependencies = [
 #   "gliner2>=1.2.6,<1.3.0",
@@ -46,8 +47,8 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation_v3.io_utils import append_jsonl_row, iter_jsonl  # noqa: E402
-from scripts.location.extractors import build_extractor, coarsen             # noqa: E402
+from scripts.data.generation.io_utils import append_jsonl_row, iter_jsonl  # noqa: E402
+from scripts.location.extractors import build_extractor, coarsen  # noqa: E402
 
 
 def _text_key(text: str) -> str:

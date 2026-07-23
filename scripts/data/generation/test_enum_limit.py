@@ -5,9 +5,9 @@ Runs two sweeps (pydantic Literal and raw dict) across increasing enum sizes,
 printing pass/fail and the inferred limit.
 
 Usage:
-    python scripts/data/generation_v3/test_enum_limit.py
-    python scripts/data/generation_v3/test_enum_limit.py --model gemini-3.1-pro-preview
-    python scripts/data/generation_v3/test_enum_limit.py --sizes 5 10 20 50 100 159
+    python scripts/data/generation/test_enum_limit.py
+    python scripts/data/generation/test_enum_limit.py --model gemini-3.1-pro-preview
+    python scripts/data/generation/test_enum_limit.py --sizes 5 10 20 50 100 159
 """
 
 import argparse
@@ -21,11 +21,15 @@ from google.genai import _transformers as genai_transformers
 from google.genai import types as genai_types
 from pydantic import BaseModel, create_model
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "risk.label.description.training.json"
+ONTOLOGY_PATH = (
+    REPO_ROOT / "ontologies" / "zhai" / "risk.label.description.training.json"
+)
 
-PROBE_TEXT = "A flood devastated Bangladesh in 2020, causing widespread food insecurity."
+PROBE_TEXT = (
+    "A flood devastated Bangladesh in 2020, causing widespread food insecurity."
+)
+
 
 def load_env_file(path: Path) -> None:
     if isinstance(path, str):
@@ -38,9 +42,10 @@ def load_env_file(path: Path) -> None:
             continue
         key, value = line.split("=", maxsplit=1)
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-    
+
 
 # ── label loading ──────────────────────────────────────────────────────────────
+
 
 def all_labels() -> list[str]:
     with open(ONTOLOGY_PATH) as f:
@@ -49,6 +54,7 @@ def all_labels() -> list[str]:
 
 
 # ── schema builders ────────────────────────────────────────────────────────────
+
 
 def pydantic_schema(labels: list[str]) -> dict:
     """Build schema via pydantic Literal (same path as generate.py)."""
@@ -74,7 +80,10 @@ def raw_dict_schema(labels: list[str]) -> dict:
 
 # ── probe ──────────────────────────────────────────────────────────────────────
 
-def probe(client: genai.Client, model: str, schema: dict, label: str) -> tuple[bool, str]:
+
+def probe(
+    client: genai.Client, model: str, schema: dict, label: str
+) -> tuple[bool, str]:
     """Returns (ok, detail). detail is the response text or the error message."""
     try:
         resp = client.models.generate_content(
@@ -91,6 +100,7 @@ def probe(client: genai.Client, model: str, schema: dict, label: str) -> tuple[b
 
 
 # ── sweep ──────────────────────────────────────────────────────────────────────
+
 
 def sweep(
     client: genai.Client,
@@ -119,6 +129,7 @@ def sweep(
 
 # ── main ───────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Binary-search Gemini enum size limit")
     parser.add_argument("--model", default="gemini-2.5-flash")
@@ -146,7 +157,9 @@ def main() -> None:
     client = genai.Client()
 
     if args.mode in ("pydantic", "both"):
-        sweep(client, args.model, labels, args.sizes, pydantic_schema, "pydantic Literal")
+        sweep(
+            client, args.model, labels, args.sizes, pydantic_schema, "pydantic Literal"
+        )
 
     if args.mode in ("raw", "both"):
         sweep(client, args.model, labels, args.sizes, raw_dict_schema, "raw dict")
