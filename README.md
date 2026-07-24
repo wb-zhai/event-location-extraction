@@ -6,52 +6,90 @@ an LLM-distilled extraction model, and geocoded into administrative regions —
 producing `article_uri` ↔ `risk_factor` and `article_uri` ↔ `adm_code` tables ready
 for DB ingestion.
 
+## Setup
+
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
+
+```bash
+uv venv --python 3.13
+source .venv/bin/activate
+
+uv pip install -r requirements.txt
+
+cp .env.example .env   # fill in SQL_* (DB), GEMINI_API_KEY/PROJECT_ID, ARGILLA_*
+```
+
+`requirements.txt` pins `vllm` with a `sys_platform != "darwin"` marker, so `uv pip install`
+installs it everywhere except macOS (no CUDA there) automatically — nothing to toggle by hand.
+
+Re-run `uv pip install -r requirements.txt` any time `requirements.txt` changes to keep the venv
+in sync.
+
 ## Pipeline
 
-Event extraction has three distinct, separately-triggered steps that share the same
-ontology/model but run on different inputs — don't conflate them:
+This repo builds and runs **two separately-trained models** that share the same DB
+sample and Gemini-teacher pattern but are otherwise independent pipelines.
+Each needs its own data-generation and training step before it's usable;
+they only meet at the very end, where the relevance filter gates what the
+event-extraction model sees:
 
-- **Data generation** (`scripts/event_extraction/generation/`) is a one-time, offline step that
-  *produces the SFT training dataset* by running a Gemini teacher over a small
-  stratified DB sample. That sample is **not relevance-filtered** and deliberately
-  includes negatives (articles with no risk-factor tag) alongside positives, so the
-  teacher (and thus the training set) also covers the *no events* case, not just
-  articles known to contain an event.
-- **Training** (`scripts/train/llamafactory/train.sh`, or as a Vertex AI custom job via
-  `vertexai/train/event-extraction/`) then fine-tunes the small student model
-  (Qwen3.5-4B) on that generated dataset — a separate step from data generation itself.
-- **Inference at scale** (`vertexai/inference/event-extraction/`) is the production run of the
-  already-trained model over the **entire** article DB, downstream of the relevance
-  filter (which exists precisely to avoid spending GPU time extracting events from
-  articles the filter has already dropped).
+- **Relevance filter** — a small ModernBERT classifier (`scripts/relevance/`) that
+  cheaply flags whether an article can contain a food-insecurity event at all.
+  - *Data generation* (`scripts/relevance/relevance_filter.py`) — Gemini labels each
+    sampled article `relevant`/`irrelevant`, producing the classifier's training set.
+  - *Training* (`scripts/relevance/train.py`) — fine-tunes the ModernBERT classifier on
+    those Gemini-labeled judgments.
+- **Event extraction** — the small student model (Qwen3.5-4B) that pulls out
+  risk-factor events and their locations.
+  - *Data generation* (`scripts/event_extraction/generation/`) — a one-time, offline
+    step that runs a Gemini teacher over a small stratified DB sample to *produce the
+    SFT training dataset*. That sample is **not relevance-filtered** and deliberately
+    includes negatives (articles with no risk-factor tag) alongside positives, so the
+    teacher (and thus the training set) also covers the *no events* case, not just
+    articles known to contain an event.
+  - *Training* (`scripts/train/llamafactory/train.sh`, or as a Vertex AI custom job via
+    `vertexai/train/event-extraction/`) — fine-tunes Qwen3.5-4B on that generated
+    dataset.
 
 ```text
 Sample from DB (download/)
    │
-   ├─→ Data generation (generation/) ──→ SFT dataset ──→ Training (train/llamafactory/)
-   │   [small pos/neg sample, NOT                              │
-   │    relevance-filtered — negatives                         ▼
-   │    teach the model to emit no events]           small model (Qwen3.5-4B)
-   │                                                               │
-   └─→ Relevance filter (relevance/) ─→ Inference at scale (vertexai/inference/event-extraction/) ─→ Geocoding
-       [gates the full ~130M-article DB]   [runs the trained model on every            (geocoding/)
-                                             article that passes the filter]
+   ├─→ RELEVANCE FILTER
+   │     Data gen (relevance/relevance_filter.py)      [Gemini relevant/irrelevant labels]
+   │       └─→ Training (relevance/train.py)           [→ ModernBERT classifier]
+   │             └─→ Inference at scale                [gates the full ~130M-article DB]
+   │                 (vertexai/inference/relevance/)                  │
+   │                                                                  │
+   └─→ EVENT EXTRACTION                                               │
+         Data gen (event_extraction/generation/)       [Gemini teacher, pos/neg sample]
+           └─→ Training (train/llamafactory/, or       [→ Qwen3.5-4B student]
+                 vertexai/train/event-extraction/)
+                 └─→ Inference at scale  ◄──────────────────────────────┘
+                     (vertexai/inference/event-extraction/)
+                     [runs the trained model on every article that passes the filter]
+                             │
+                             ▼
+                        Geocoding (geocoding/)
 ```
 
 1. **Sample from the DB** — pull a stratified article sample, incl. a positive/negative
    split for training data (`scripts/download/`).
-2. **Data generation** *(offline — produces the training dataset, not the model)* —
-   distill Gemini teacher labels over the sampled positives **and** negatives into an
-   SFT dataset (`scripts/event_extraction/generation/`).
-3. **Training** — fine-tune the small extraction model on that SFT dataset, either
-   locally (`scripts/train/llamafactory/`) or as a Vertex AI custom job
+2. **Relevance filter — data generation** — label the sampled articles
+   `relevant`/`irrelevant` with Gemini (`scripts/relevance/relevance_filter.py`).
+3. **Relevance filter — training** — fine-tune the ModernBERT classifier on those
+   labels (`scripts/relevance/train.py`).
+4. **Event extraction — data generation** *(offline — produces the training dataset,
+   not the model)* — distill Gemini teacher labels over the sampled positives **and**
+   negatives into an SFT dataset (`scripts/event_extraction/generation/`).
+5. **Event extraction — training** — fine-tune the small extraction model on that SFT
+   dataset, either locally (`scripts/train/llamafactory/`) or as a Vertex AI custom job
    (`vertexai/train/event-extraction/`).
-4. **Relevance filter** — cheaply drop articles that can't contain a food-insecurity
-   event before spending inference budget on them; gates the production run only, not
-   data generation (`scripts/relevance/`, `vertexai/inference/relevance/`).
-5. **Event extraction inference** — run the already-trained model over the entire
-   filtered DB (`vertexai/inference/event-extraction/`).
-6. **Geocoding** — resolve each extracted `event_location` string to coordinates and
+6. **Relevance filter — inference at scale** — cheaply drop articles that can't contain
+   a food-insecurity event before spending inference budget on them; gates the
+   production run only, not data generation (`vertexai/inference/relevance/`).
+7. **Event extraction — inference at scale** — run the already-trained model over the
+   entire filtered DB (`vertexai/inference/event-extraction/`).
+8. **Geocoding** — resolve each extracted `event_location` string to coordinates and
    an administrative region, ready for DB ingestion (`scripts/geocoding/`).
 
 ---
@@ -173,6 +211,28 @@ relevance-filtered), which a separate training step then fine-tunes the small mo
 on; inference at scale runs that already-trained model on the whole DB downstream of
 the relevance filter.
 
+### Ontology — `ontologies/zhai/`
+
+Event labels come from a flat `{event_name: description}` ontology JSON, and this
+pipeline only cares about two of them:
+
+- `bona.v4.json` (48 event types) — **the current default.** ZHAI-specific, authored
+  by Bonaventure; this is what data generation, training, and inference all use now.
+- `science.json` (167 event types) — the original ontology, taken from the food-
+  insecurity science paper this project started from. Used at the beginning of the
+  project and still supported (e.g. by `retrieve/`), but superseded by `bona.v4.json`
+  for anything current.
+
+Each is paired with a `*_clusters.json` (`bona.v4.clusters.json`,
+`science_clusters.json`) mapping every flat event type to a higher-level cluster —
+`bona.v4`'s 48 events roll up into 10 clusters (e.g. "conflict and security",
+"weather and natural hazards"), `science`'s 167 into 12. `scripts/download/sample.py
+--stratify-by-cluster` and the `scripts/data/stats/` tools read these for
+cluster-stratified sampling/reporting.
+
+The other ontology files under `ontologies/` (`dwie/`, `maven/`, `maven-arg/`, `rams/`)
+are leftovers from past experiments and are not used anywhere in this pipeline, you can ignore them.
+
 ### Data generation — `scripts/event_extraction/generation/`
 
 Context/prompt-distillation pipeline: a Gemini teacher (elaborate prompt, few-shot)
@@ -211,12 +271,9 @@ python scripts/event_extraction/generation/to_sft.py \
     dataset/zhai/v3/silver.sft.json
 ```
 
-`costs.py` reports token usage/cost per model from any pipeline JSONL. Event labels
-come from an ontology JSON — the current default is `ontologies/zhai/bona.v4.json`
-(48 event types); the older, larger `ontologies/zhai/science.json` (167 event types)
-is still supported and referenced throughout this pipeline. Training does not
-deduplicate against the same closed label set used at inference time — student and
-teacher must use byte-identical prompts.
+`costs.py` reports token usage/cost per model from any pipeline JSONL. Training does
+not deduplicate against the same closed label set used at inference time — student
+and teacher must use byte-identical prompts.
 
 ### Training — `scripts/train/llamafactory/` (local) / `vertexai/train/event-extraction/` (cloud)
 
