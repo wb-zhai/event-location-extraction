@@ -38,6 +38,7 @@
         "installGpuDrivers": false,
         "policy": {
           "machineType": "a2-highgpu-1g",
+          "reservation": "NO_RESERVATION",
           "accelerators": [
             {
               "type": "nvidia-tesla-a100",

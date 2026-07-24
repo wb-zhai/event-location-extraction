@@ -307,8 +307,29 @@ def build_settings():
             rg.TermsMetadataProperty(name="risk_factors"),
             rg.TermsMetadataProperty(name="generation_llm"),
             rg.FloatMetadataProperty(name="quality_score"),
+            rg.TermsMetadataProperty(name="publish_date"),
         ],
     )
+
+
+def sync_dataset_settings(dataset) -> None:
+    """Add any fields/questions/metadata from build_settings() that are missing
+    from an existing dataset, and refresh guidelines.
+
+    Only additions are applied. Wholesale-replacing dataset.settings (the
+    previous approach) hands Argilla fresh Field/Question/Metadata objects with
+    no server-side id, so its update path calls create() on every one of them
+    -- including ones that already exist -- and the server rejects the
+    duplicate create() with a Conflict error.
+    """
+    target = build_settings()
+    dataset.settings.guidelines = target.guidelines
+    for collection_name in ("fields", "questions", "metadata"):
+        existing_names = {item.name for item in getattr(dataset.settings, collection_name)}
+        for item in getattr(target, collection_name):
+            if item.name not in existing_names:
+                getattr(dataset.settings, collection_name).add(item)
+    dataset.update()
 
 
 def get_or_create_workspace(client, name: str):
@@ -332,8 +353,7 @@ def get_or_create_dataset(client, name: str, workspace: str, update_settings: bo
         print(f"[dataset] found existing dataset {name!r} in workspace {workspace!r}.", flush=True)
         if update_settings:
             print(f"[dataset] updating schema + guidelines for {name!r}...", flush=True)
-            dataset.settings = build_settings()
-            dataset.update()
+            sync_dataset_settings(dataset)
             print(f"[dataset] updated {name!r}.", flush=True)
         else:
             print(
@@ -404,6 +424,10 @@ def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str)
     quality_score = rec.get("quality_score")
     if quality_score is not None:
         metadata["quality_score"] = float(quality_score)
+    source = rec.get("source") or {}
+    publish_date = (source.get("publish_date") or source.get("published_at")) if isinstance(source, dict) else None
+    if publish_date:
+        metadata["publish_date"] = str(publish_date)
 
     suggestions = [
         rg.Suggestion(

@@ -38,6 +38,7 @@
         "installGpuDrivers": false,
         "policy": {
           "machineType": "g2-standard-8",
+          "reservation": "NO_RESERVATION",
           "accelerators": [
             {
               "type": "nvidia-l4",

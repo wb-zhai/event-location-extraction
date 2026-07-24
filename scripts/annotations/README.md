@@ -60,7 +60,30 @@ ARGILLA_API_URL=http://localhost:6900
 ARGILLA_API_KEY=<your api key>
 ```
 
-## 2. Relevance: push articles for annotation
+## 2. Create users and assign workspaces
+
+[`manage_users.py`](manage_users.py) creates Argilla users and adds them to
+workspaces. Requires an `owner`-role API key (see step 1).
+
+```bash
+python scripts/annotations/manage_users.py add \
+  --username alice \
+  --password <password> \
+  --role annotator \
+  --workspace events-review \
+  --create-workspace
+```
+
+`--role` is one of `annotator`/`admin`/`owner` (only `owner` can create
+workspaces). `--workspace` may be repeated to add the user to several
+workspaces at once; `--create-workspace` creates any that don't already exist.
+
+`add` is idempotent for the user itself: if `--username` already exists, it
+skips creation (so `--password` can be omitted) and just adds the existing
+user to the given `--workspace`(s) — handy for granting an existing annotator
+access to a new dataset's workspace.
+
+## 3. Relevance: push articles for annotation
 
 Input is the same JSONL format used by `relevance_filter.py` (records with
 `title`/`text` or `source.title`/`source.text`, optionally an existing
@@ -85,7 +108,7 @@ Annotate in the browser at http://localhost:6900. Re-running `push` on the
 same `--dataset-name` upserts records (keyed by article id/url), so it's safe
 to run repeatedly as new data arrives.
 
-## 3. Relevance: export human labels
+## 4. Relevance: export human labels
 
 ```bash
 python scripts/annotations/relevance_argilla.py export \
@@ -98,7 +121,7 @@ Each output row has `human_relevance`, `gemini_relevance`, and an `agreement`
 flag, ready for scoring the Gemini gate's precision/recall against human
 judgment.
 
-## 4. Events: push articles for annotation
+## 5. Events: push articles for annotation
 
 Input is JSONL with records shaped like
 `dataset/db/relevance/matrix_5M.sample_1000.3.1pro.extracted.jsonl`: each
@@ -135,7 +158,7 @@ and edit the `event_details_json` field directly — fix values on existing
 entries, delete entries that aren't valid events, or add new entries for
 events the model missed. Submit `[]` if the article has no valid events.
 
-## 5. Events: export human-corrected events
+## 6. Events: export human-corrected events
 
 ```bash
 python scripts/annotations/events_argilla.py export \
@@ -153,7 +176,7 @@ article are written to `--output`. Invalid rows are written to
 `<output stem>.invalid<suffix>` by default, or to `--invalid-output`, with
 `events_validation_errors` explaining what needs review.
 
-## 6. Relevance comparison: push two predictions for the same articles
+## 7. Relevance comparison: push two predictions for the same articles
 
 Input is two JSONL files in the same format as `relevance_argilla.py push`
 (records keyed by `id`, with a `relevance.decision` block), covering the same
@@ -186,7 +209,7 @@ disagreement cases already pushed, use Argilla's metadata filter on
 `agreement` (`disagree`); if you pushed with `--include-agreements`, that
 filter also lets you drill into agreement cases.
 
-## 7. Relevance comparison: export preferences
+## 8. Relevance comparison: export preferences
 
 ```bash
 python scripts/annotations/relevance_comparison_argilla.py export \

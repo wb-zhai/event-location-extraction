@@ -132,12 +132,42 @@ Total GPU-time is fixed (~328 GPU-h); more shards just finish faster.
 |    100 |            1.3M |     ~3.3 h |
 |    140 |            0.9M |     ~2.3 h |
 
-**Cost** (spot-l4, ~$0.30/GPU-h): ~328 GPU-h × $0.30 ≈ **$98**, plus ~130.49M GCS reads
-(Class B ops, ~$0.004/10k) ≈ **$52** ≈ **~$150 total**. E.g. 100 shards ≈ ~3.3 h wall-clock.
+### Cost by `TIER`
 
-These numbers come from a real, verified Cloud Batch run (see "Local timing test" below) —
-re-verify throughput if you change `--max-chars`/`--max-length`/the model, since those
-directly affect articles/sec.
+GPU-hours are fixed at the **measured** L4 rate (328 GPU-h, see "Local timing test" below) — A100
+rows assume the *same* 328 GPU-h, since classify throughput hasn't been benchmarked on A100
+(unlike `vertexai/inference`, where L4 vs A100 was measured separately for the generative
+workload). A100 is very likely faster at this encoder-classify workload too, so treat the A100
+rows below as a **conservative ceiling**, not a verified number — re-run the "Local timing test"
+on an `a100`-tier task before trusting it for a real run. **Total cost** below = GPU-h × $/GPU-h,
+plus a fixed **$52** for ~130.49M GCS Class B reads (~$0.004/10k) added to every row.
+
+| `TIER` | GPU | GPU-h | $/GPU-h | **Total cost** |
+|---|---|---|---|---|
+| `spot-l4` | L4 | 328 | $0.30 | **~$150** |
+| `flex-l4` | L4 | 328 | $0.54 | **~$229** |
+| `l4` | L4 | 328 | $0.85 | **~$331** |
+| `spot-a100` | A100 | 328† | $1.10 | **~$413†** |
+| `flex-a100` | A100 | 328† | $2.20 | **~$774†** |
+| `a100` | A100 | 328† | $3.50 | **~$1200†** |
+
+† unverified — assumes A100 throughput equals the measured L4 rate; likely an overestimate.
+
+### GPU tiers
+
+| `TIER` | Machine | GPU | Spot? | ~$/GPU-h | Notes |
+|---|---|---|---|---|---|
+| `spot-l4` | g2-standard-8 | 1× L4 24GB | Yes | ~$0.30 | Cheapest; measured/verified baseline; `.env` default |
+| `flex-l4` | g2-standard-8 | 1× L4 24GB | Flex | ~$0.54 | Lower interruption risk than spot; GCP queues until capacity available |
+| `l4` | g2-standard-8 | 1× L4 24GB | No | ~$0.85 | No interruptions |
+| `spot-a100` | a2-highgpu-1g | 1× A100 40GB | Yes | ~$1.10 | Throughput unverified for this classify workload |
+| `flex-a100` | a2-highgpu-1g | 1× A100 40GB | Flex | ~$2.20 | Throughput unverified for this classify workload |
+| `a100` | a2-highgpu-1g | 1× A100 40GB | No | ~$3.50 | Throughput unverified for this classify workload |
+
+`spot-l4` is cheapest and matches the measured, verified numbers above. `flex-*` trades the spot
+discount for lower interruption risk (GCP queues for capacity instead of preempting) — see "Spot
+preemption / recovery" below. Re-verify GPU-hours if you change `--max-chars`/`--max-length`/the
+model, since those directly affect articles/sec.
 
 ---
 

@@ -1,0 +1,2 @@
+ZHAI: Code and history of work (git commits) are available at: https://github.com/wb-zhai/event-location-extraction/tree/ric (from commit 5594aeb to 859a2ba, authored by Riccorl)
+ImpactAI: Code and history of work (git commits) are available at: https://github.com/worldbank/impactAI-summarizer/tree/new-retriever (from commit 8182b96 to 2b53231, authored by Riccorl) and https://github.com/worldbank/impactAI-predictions/tree/master (from commit f84e8f9 to 3ffbea6, authored by Riccorl)

@@ -224,10 +224,12 @@ def relevance_infer(
     gpu_memory_utilization: float = 0.9,
     tensor_parallel_size: int = 1,
     gcs_read_concurrency: int = 64,
-    batch_size: int = 2000,
+    batch_size: int | None = 2000,
     limit: int | None = None,
 ):
-    """Classify articles from a manifest and write id,label CSV rows."""
+    """Classify articles from a manifest and write id,label CSV rows.
+
+    batch_size=None disables batching (the whole input is classified in one batch)."""
     input_path = Path(input)
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -267,7 +269,7 @@ def relevance_infer(
         for article_id, text in stream_fetched(rows, fetcher, gcs_read_concurrency):
             batch_ids.append(article_id)
             batch_texts.append(text)
-            if len(batch_texts) >= batch_size:
+            if batch_size is not None and len(batch_texts) >= batch_size:
                 flush()
         flush()
 

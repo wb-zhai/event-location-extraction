@@ -50,19 +50,22 @@ def get_or_create_workspace(client, name: str):
 def add_user(args: argparse.Namespace) -> None:
     client = get_client()
 
-    if client.users(args.username) is not None:
-        raise SystemExit(f"User {args.username!r} already exists.")
-
-    user = rg.User(
-        username=args.username,
-        password=args.password,
-        first_name=args.first_name or args.username,
-        last_name=args.last_name,
-        role=args.role.value,
-        client=client,
-    )
-    user.create()
-    print(f"Created user {args.username!r} with role {args.role.value!r}.")
+    user = client.users(args.username)
+    if user is not None:
+        print(f"User {args.username!r} already exists, skipping creation.")
+    else:
+        if not args.password:
+            raise SystemExit("--password is required when creating a new user.")
+        user = rg.User(
+            username=args.username,
+            password=args.password,
+            first_name=args.first_name or args.username,
+            last_name=args.last_name,
+            role=args.role.value,
+            client=client,
+        )
+        user.create()
+        print(f"Created user {args.username!r} with role {args.role.value!r}.")
 
     for workspace_name in args.workspace:
         if args.create_workspace:
@@ -90,7 +93,12 @@ def main() -> None:
 
     add_parser = subparsers.add_parser("add", help="Create a new Argilla user.")
     add_parser.add_argument("--username", required=True, type=str)
-    add_parser.add_argument("--password", required=True, type=str)
+    add_parser.add_argument(
+        "--password",
+        type=str,
+        default=None,
+        help="Required when creating a new user; ignored if the user already exists.",
+    )
     add_parser.add_argument("--first-name", type=str, default=None)
     add_parser.add_argument("--last-name", type=str, default=None)
     add_parser.add_argument(
