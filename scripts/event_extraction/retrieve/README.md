@@ -64,8 +64,8 @@ Input ontology format:
 # Local Sentence Transformers model
 python scripts/event_extraction/retrieve/generate_index.py \
   ontologies/zhai/science.json \
-  dataset/zhai/v3/index/science-bge-m3 \
-  BAAI/bge-m3 \
+  dataset/zhai/v3/index/science-harrier \
+  microsoft/harrier-oss-v1-0.6b \
   --sentence-transformers \
   --device cuda:0 \
   --normalize-embeddings
@@ -134,12 +134,13 @@ kept and written back out to the output alongside the new `candidates` field.
 ```bash
 python scripts/event_extraction/retrieve/retrieve.py \
   --queries dataset/zhai/v3/dev.jsonl \
-  --index   dataset/zhai/v3/index/science-bge-m3 \
+  --index   dataset/zhai/v3/index/science-harrier \
   --output  dataset/zhai/v3/dev.candidates.jsonl \
-  --model-name BAAI/bge-m3 \
+  --model-name microsoft/harrier-oss-v1-0.6b \
   --top-k 50 \
   --device cuda:0 \
-  --normalize-embeddings
+  --normalize-embeddings \
+  --query-prompt-name sts_query
 ```
 
 ### `retrieve_vllm.py` — vLLM pooling model (GPU only, faster for large query sets)
@@ -147,13 +148,14 @@ python scripts/event_extraction/retrieve/retrieve.py \
 ```bash
 python scripts/event_extraction/retrieve/retrieve_vllm.py \
   --queries dataset/zhai/v3/dev.jsonl \
-  --index   dataset/zhai/v3/index/science-bge-m3 \
+  --index   dataset/zhai/v3/index/science-harrier \
   --output  dataset/zhai/v3/dev.candidates.jsonl \
-  --model-name BAAI/bge-m3 \
+  --model-name microsoft/harrier-oss-v1-0.6b \
   --top-k 50 \
   --normalize-embeddings \
   --tensor-parallel-size 1 \
-  --gpu-memory-utilization 0.9
+  --gpu-memory-utilization 0.9 \
+  --query-prompt-name sts_query
 ```
 
 `retrieve_vllm.py` auto-detects a query prompt template from the model's

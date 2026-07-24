@@ -322,18 +322,19 @@ per query, and can score Recall@K against gold annotations. Full detail in
 ```bash
 # science.json (167 event types) needs retrieval to fit Gemini's 100-candidate cap
 python scripts/event_extraction/retrieve/generate_index.py \
-    ontologies/zhai/science.json dataset/zhai/v3/index/science-bge-m3 \
-    BAAI/bge-m3 --sentence-transformers --device cuda:0 --normalize-embeddings
+    ontologies/zhai/science.json dataset/zhai/v3/index/science-harrier \
+    microsoft/harrier-oss-v1-0.6b --sentence-transformers --device cuda:0 --normalize-embeddings
 
 # bona.v4.json (48 event types) — optional, mainly for ranking quality
 python scripts/event_extraction/retrieve/generate_index.py \
-    ontologies/zhai/bona.v4.json dataset/zhai/v3/index/bona-v4-bge-m3 \
-    BAAI/bge-m3 --sentence-transformers --device cuda:0 --normalize-embeddings
+    ontologies/zhai/bona.v4.json dataset/zhai/v3/index/bona-v4-harrier \
+    microsoft/harrier-oss-v1-0.6b --sentence-transformers --device cuda:0 --normalize-embeddings
 
 python scripts/event_extraction/retrieve/retrieve.py \
-    --queries dataset/zhai/v3/dev.jsonl --index dataset/zhai/v3/index/science-bge-m3 \
+    --queries dataset/zhai/v3/dev.jsonl --index dataset/zhai/v3/index/science-harrier \
     --output  dataset/zhai/v3/dev.candidates.jsonl \
-    --model-name BAAI/bge-m3 --top-k 50 --device cuda:0 --normalize-embeddings
+    --model-name microsoft/harrier-oss-v1-0.6b --top-k 50 --device cuda:0 --normalize-embeddings \
+    --query-prompt-name sts_query
 
 python scripts/event_extraction/retrieve/eval_recall_at_k.py \
     dataset/zhai/v3/dev.candidates.jsonl --k 1 3 5 10 20 50 70 100
