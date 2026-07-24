@@ -26,7 +26,7 @@ fi
 for checkpoint_path in "$CHECKPOINT_FOLDER"/checkpoint-*; do
     if [ -d "$checkpoint_path" ]; then
         echo "Running inference for checkpoint: $checkpoint_path"
-        python scripts/train/inference/vllm_infer.py \
+        python scripts/event_extraction/inference/vllm_infer.py \
             --model_name_or_path "$model_name" \
             --adapter_name_or_path "$checkpoint_path" \
             --input dataset/zhai/v3/science/dev.jsonl \

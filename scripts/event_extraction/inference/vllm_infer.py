@@ -30,7 +30,7 @@ HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
 DEFAULT_PROMPT_DIR = (
-    REPO_ROOT / "scripts" / "data" / "generation" / "prompts" / "student"
+    REPO_ROOT / "scripts" / "event_extraction" / "generation" / "prompts" / "student"
 )
 
 if str(REPO_ROOT) not in sys.path:

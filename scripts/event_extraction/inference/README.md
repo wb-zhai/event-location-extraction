@@ -15,7 +15,7 @@ Each line of the input JSONL must contain a `source` object with at least a `tex
 ### Basic usage
 
 ```bash
-python scripts/train/inference/vllm_infer.py \
+python scripts/event_extraction/inference/vllm_infer.py \
   --model_name_or_path <hf-repo-or-local-path> \
   --input data/articles.jsonl \
   --output outputs/predictions.jsonl \
@@ -29,7 +29,7 @@ python scripts/train/inference/vllm_infer.py \
 With a LoRA adapter:
 
 ```bash
-python scripts/train/inference/vllm_infer.py \
+python scripts/event_extraction/inference/vllm_infer.py \
   --model_name_or_path <base-model> \
   --adapter_name_or_path <adapter-path> \
   --input data/articles.jsonl \
@@ -44,7 +44,7 @@ python scripts/train/inference/vllm_infer.py \
 ### Multi-GPU tensor parallelism
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 python scripts/train/inference/vllm_infer.py \
+CUDA_VISIBLE_DEVICES=0,1,2,3 python scripts/event_extraction/inference/vllm_infer.py \
   --model_name_or_path <model> \
   --input data/articles.jsonl \
   --output outputs/predictions.jsonl \
@@ -57,43 +57,56 @@ To split work across multiple nodes, pass `--num_shards` and `--shard_index` (st
 
 ```bash
 # Node 0
-python scripts/train/inference/vllm_infer.py ... --num_shards 4 --shard_index 0
+python scripts/event_extraction/inference/vllm_infer.py ... --num_shards 4 --shard_index 0
 
 # Node 1
-python scripts/train/inference/vllm_infer.py ... --num_shards 4 --shard_index 1
+python scripts/event_extraction/inference/vllm_infer.py ... --num_shards 4 --shard_index 1
 ```
 
 ### Key arguments
 
-| Argument                 | Default  | Description                                                            |
-| ------------------------ | -------- | ---------------------------------------------------------------------- |
-| `model_name_or_path`     | required | HuggingFace repo or local path                                         |
-| `input`                  | required | Input JSONL file                                                       |
-| `output`                 | required | Output JSONL file (appended; processed articles are skipped on re-run) |
-| `adapter_name_or_path`   | `None`   | Path to a LoRA adapter directory                                       |
-| `ontology`               | built-in | Path to ontology JSON for event labels                                 |
-| `prompt_dir`             | built-in | Directory containing `system_prompt.txt` and `user_prompt.txt`         |
-| `top_k_candidates`       | `None`   | Limit candidate event labels shown in the prompt                       |
-| `shard_index`            | `0`      | Index of this shard (0-based)                                          |
-| `num_shards`             | `1`      | Total number of shards                                                 |
-| **Windowing**            |          |                                                                        |
-| `max_chars`              | `3000`   | Maximum characters per window                                          |
-| `min_chars`              | `200`    | Minimum characters to keep a window                                    |
-| `max_paras`              | `15`     | Maximum paragraphs per window                                          |
-| `overlap_paras`          | `1`      | Overlap paragraphs between adjacent windows                            |
-| **Sampling**             |          |                                                                        |
-| `temperature`            | `0.0`    | Sampling temperature (0 = greedy)                                      |
-| `max_new_tokens`         | `4096`   | Maximum tokens to generate                                             |
-| `top_p`                  | `0.8`    | Top-p nucleus sampling                                                 |
-| `top_k`                  | `0`      | Top-k sampling                                                         |
-| `repetition_penalty`     | `1.05`   | Repetition penalty                                                     |
-| `seed`                   | `None`   | Random seed for reproducibility                                        |
-| **Engine**               |          |                                                                        |
-| `max_model_len`          | `None`   | vLLM max sequence length (input + output tokens)                       |
-| `gpu_memory_utilization` | `0.95`   | Fraction of GPU memory vLLM may use                                    |
-| `tensor_parallel_size`   | `1`      | Number of GPUs for tensor parallelism                                  |
-| `batch_size`             | `1000`   | Prompts handed to vLLM per call                                        |
-| `max_num_seqs`           | `None`   | vLLM max concurrent sequences                                          |
+| Argument                           | Default    | Description                                                                              |
+| ---------------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| `model_name_or_path`               | required   | HuggingFace repo or local path                                                           |
+| `input`                            | required   | Input JSONL file                                                                         |
+| `output`                           | required   | Output JSONL file (appended; processed articles are skipped on re-run)                   |
+| `adapter_name_or_path`             | `None`     | Path to a LoRA adapter directory                                                         |
+| `ontology`                         | built-in   | Path to ontology JSON for event labels                                                   |
+| `prompt_dir`                       | built-in   | Directory containing `system_prompt.txt` and `user_prompt.txt`                           |
+| `top_k_candidates`                 | `None`     | Limit candidate event labels shown in the prompt                                         |
+| `shard_index`                      | `0`        | Index of this shard (0-based)                                                            |
+| `num_shards`                       | `1`        | Total number of shards                                                                   |
+| **Windowing**                      |            |                                                                                          |
+| `max_chars`                        | `3000`     | Maximum characters per window                                                            |
+| `min_chars`                        | `200`      | Minimum characters to keep a window                                                      |
+| `max_paras`                        | `15`       | Maximum paragraphs per window                                                            |
+| `overlap_paras`                    | `1`        | Overlap paragraphs between adjacent windows                                              |
+| **Sampling**                       |            |                                                                                          |
+| `temperature`                      | `0.0`      | Sampling temperature (0 = greedy)                                                        |
+| `max_new_tokens`                   | `4096`     | Maximum tokens to generate                                                               |
+| `top_p`                            | `0.8`      | Top-p nucleus sampling                                                                   |
+| `top_k`                            | `0`        | Top-k sampling                                                                           |
+| `repetition_penalty`               | `1.05`     | Repetition penalty                                                                       |
+| `seed`                             | `None`     | Random seed for reproducibility                                                          |
+| **Engine**                         |            |                                                                                          |
+| `max_model_len`                    | `None`     | vLLM max sequence length (input + output tokens)                                         |
+| `gpu_memory_utilization`           | `0.95`     | Fraction of GPU memory vLLM may use                                                      |
+| `tensor_parallel_size`             | `1`        | Number of GPUs for tensor parallelism                                                    |
+| `batch_size`                       | `1000`     | Prompts handed to vLLM per call                                                          |
+| `max_num_seqs`                     | `None`     | vLLM max concurrent sequences                                                            |
+| `quantization`                     | `None`     | vLLM quantization method (e.g. `awq`, `gptq`), if the model needs one                    |
+| **Structured output**              |            |                                                                                          |
+| `use_guided_decoding`              | `True`     | Constrain generation to the JSON event schema via vLLM guided decoding                   |
+| `guided_decoding_backend`          | `outlines` | Guided-decoding backend passed to vLLM                                                   |
+| **Retriever (optional)**           |            |                                                                                          |
+| `retriever_model_name`             | `None`     | Enables candidate retrieval; embedding model used to query the index                     |
+| `retriever_index`                  | `None`     | Path to a prebuilt index (required when `retriever_model_name` is set)                   |
+| `index_device`                     | `cpu`      | Device the retriever index is loaded on                                                  |
+| `retriever_gpu_memory_utilization` | `0.1`      | GPU memory fraction reserved for the retriever model                                     |
+| `retriever_max_model_len`          | `None`     | Max sequence length for the retriever model                                              |
+| `retriever_query_mode`             | `full_doc` | `full_doc` retrieves once per article; `per_window` retrieves separately for each window |
+
+> **Retriever mode** replaces the static ontology candidate list with the top-`top_k_candidates` labels retrieved from `retriever_index` for each article (or each window, in `per_window` mode). `gpu_memory_utilization` + `retriever_gpu_memory_utilization` must not exceed `1.0`. Indexes are built with [scripts/event_extraction/retrieve/generate_index.py](../retrieve/generate_index.py) — see [scripts/event_extraction/retrieve/README.md](../retrieve/README.md).
 
 ### Output format
 
@@ -135,16 +148,39 @@ Long articles are split into overlapping paragraph-based windows inside `vllm_in
 
 ---
 
-# eval_v3_sft.py — Evaluation Guide
+## gradio_ui.py — Interactive UI
+
+A single-article playground for the same extraction pipeline used by `vllm_infer.py` (same windowing, same prompt templates, same vLLM engine), for quick manual testing without building a JSONL file.
+
+```bash
+python scripts/event_extraction/inference/gradio_ui.py
+```
+
+Opens a local Gradio app (`share=False`) with:
+
+- **Model picker** — auto-discovers merged checkpoints under `models/*/*/merged/` (any directory containing a `config.json`). Pick one and click **Load Model** to spin up the vLLM engine; loading a different model tears down the previous engine first.
+- **Load from dataset JSON row** — paste a full JSONL row (as produced elsewhere in this repo) and it populates the article text, publish date, and candidates fields for you.
+- **Article / candidates inputs** — paste article text directly, optionally a publish date, and optionally a newline-separated candidate label list (leave empty to use the full ontology).
+- **Inference parameters** — the same windowing and sampling knobs as `vllm_infer.py` (`top_k_candidates`, `max_chars`, `min_chars`, `max_paras`, `overlap_paras`, `temperature`, `max_new_tokens`, `top_p`, `top_k`, `repetition_penalty`), adjustable per run via sliders.
+- **Output** — the merged/deduplicated `events` list plus the raw per-window predictions, as JSON.
+
+Notes:
+
+- The UI does not use guided decoding or the retriever path — it's meant for fast manual inspection, not exact parity with a full `vllm_infer.py` batch run.
+- Only one model is loaded at a time (single vLLM engine in process).
+
+---
+
+## eval_v3_sft.py — Evaluation Guide
 
 Evaluates a distilled event-location extraction model against annotated gold data.
 Each line of the input JSONL contains both the ground-truth annotation and the model
 predictions for one document.
 
-## Usage
+### Usage
 
 ```bash
-python scripts/train/inference/eval_v3_sft.py \
+python scripts/event_extraction/inference/eval_v3_sft.py \
   --pred-jsonl dataset/risk-factor/run-15062025/predictions/quick_dev.jsonl \
   [--report-json /tmp/report.json] \
   [--errors-jsonl /tmp/errors.jsonl] \
@@ -160,7 +196,7 @@ python scripts/train/inference/eval_v3_sft.py \
 
 ---
 
-## Output format
+### Report output format
 
 The report prints P/R/F1 tables plus conditional accuracy tables:
 
@@ -183,9 +219,9 @@ Each table has two column groups:
 
 ---
 
-## Core metric families (always computed)
+### Core metric families (always computed)
 
-### 1. Event extraction
+#### 1. Event extraction
 
 Measures whether the model finds the right events at all.
 
@@ -204,7 +240,7 @@ Exact tier additionally requires identical normalized quotes (ratio = 1.0).
 
 ---
 
-### 2. Event type (multiset)
+#### 2. Event type (multiset)
 
 Measures whether the model identifies the correct categories of events, independent
 of how well it grounds them.
@@ -219,7 +255,7 @@ equality (no fuzzy component).
 
 ---
 
-### 3. Event type (doc-level set)
+#### 3. Event type (doc-level set)
 
 Same as family 2 but **deduplicates** event types per document before comparing.
 If gold has two "displaced" events and the model predicts one, that counts as
@@ -232,7 +268,7 @@ string equality).
 
 ---
 
-### 4. Location extraction
+#### 4. Location extraction
 
 Measures whether the model extracts the correct place names, independent of which
 event they are attached to. This is useful as a diagnostic, but it does not answer
@@ -255,7 +291,7 @@ A predicted location matches a gold location if:
 
 ---
 
-### 5. Event-location linking
+#### 5. Event-location linking
 
 Measures whether the model correctly associates a location **with the right event**.
 For reporting linked-location quality, prefer the conditional accuracy rows:
@@ -280,7 +316,7 @@ The conditional accuracy rows isolate location linking:
 
 ---
 
-### 6. Event-time linking
+#### 6. Event-time linking
 
 Measures whether the model correctly associates a time expression **with the right
 event**. As with location, prefer the conditional accuracy rows for reporting
@@ -306,13 +342,13 @@ The conditional accuracy rows isolate time linking:
 
 ---
 
-## Cluster metric families (require `--cluster`)
+### Cluster metric families (require `--cluster`)
 
 When `--cluster` is passed, each event's `event_type` is mapped to a coarser cluster
 label (e.g. `"displaced"` → `"forced displacement"`) before comparison. This adds
 four extra rows to the report.
 
-### 7. Cluster event extraction
+#### 7. Cluster event extraction
 
 Like family 1, but the bipartite matching uses **cluster labels** instead of
 fine-grained types. Two events that differ in fine-grained type but share the same
@@ -321,7 +357,7 @@ match, provided their grounding quotes also overlap.
 
 ---
 
-### 8. Cluster type (multiset)
+#### 8. Cluster type (multiset)
 
 Like family 2 (event type multiset) but each `event_type` is replaced by its cluster
 label before the bag comparison. Tells you whether the model covers the right broad
@@ -329,7 +365,7 @@ categories regardless of exact type naming.
 
 ---
 
-### 9. Cluster type (doc-level set)
+#### 9. Cluster type (doc-level set)
 
 Like family 3 (event type set) but using cluster labels. Answers *"did the model
 cover all distinct risk-factor clusters mentioned in this document?"*
@@ -338,13 +374,13 @@ As with families 2–3, exact and relaxed scores are identical.
 
 ---
 
-### 10. Cluster event-location linking
+#### 10. Cluster event-location linking
 
 Like family 5, but the alignment step uses **cluster-level event matching** from
 family 7. The conditional cluster rows ask: once events are aligned by cluster and
 quote, how often does the linked location match?
 
-### 11. Cluster event-time linking
+#### 11. Cluster event-time linking
 
 Like family 6, but the alignment step uses cluster-level event matching from family
 7. The conditional cluster rows ask: once events are aligned by cluster and quote,
@@ -356,7 +392,7 @@ alignment step before checking the linked field.
 
 ---
 
-## Interpreting the numbers
+### Interpreting the numbers
 
 **Relaxed ≫ exact on event extraction** is expected. The model often extends
 the grounding quote to include location or time context, which is semantically

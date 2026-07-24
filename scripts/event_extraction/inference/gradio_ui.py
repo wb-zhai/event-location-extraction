@@ -17,7 +17,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.event_extraction.generation.to_sft import load_ontology_labels  # noqa: E402
-from scripts.train.inference.vllm_infer import (  # noqa: E402
+from scripts.event_extraction.inference.vllm_infer import (  # noqa: E402
     _build_windows,
     _parse_json_output,
     _resolve_events,
@@ -25,7 +25,7 @@ from scripts.train.inference.vllm_infer import (  # noqa: E402
 
 DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
 DEFAULT_PROMPT_DIR = (
-    REPO_ROOT / "scripts" / "data" / "generation" / "prompts" / "student"
+    REPO_ROOT / "scripts" / "event_extraction" / "generation" / "prompts" / "student"
 )
 
 _state: dict = {"llm": None, "tokenizer": None, "loaded_model": None}
