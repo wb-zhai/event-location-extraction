@@ -25,7 +25,9 @@ def main() -> None:
     labels: Counter[str] = Counter()
     decisions: Counter[str] = Counter()
     risk_factors: Counter[str] = Counter()
+    countries: Counter[str] = Counter()
     label_by_decision: Counter[tuple[str, str]] = Counter()
+    decision_by_country: Counter[tuple[str, str]] = Counter()
     total = 0
 
     with args.input.open(encoding="utf-8") as f:
@@ -38,9 +40,12 @@ def main() -> None:
 
             label = rec.get("label") or "none"
             decision = get_decision(rec)
+            country = rec.get("country_name") or "none"
             labels[label] += 1
             decisions[decision] += 1
+            countries[country] += 1
             label_by_decision[(label, decision)] += 1
+            decision_by_country[(country, decision)] += 1
 
             for rf in rec.get("risk_factors") or []:
                 risk_factors[rf] += 1
@@ -63,6 +68,23 @@ def main() -> None:
     print(f"Top {args.top_n} risk_factors:")
     for rf, count in risk_factors.most_common(args.top_n):
         print(f"  {rf}: {count}")
+    print()
+
+    print(f"Top {args.top_n} countries:")
+    for country, count in countries.most_common(args.top_n):
+        pct = count / total * 100 if total else 0.0
+        print(f"  {country}: {count} ({pct:.1f}%)")
+    print()
+
+    print(f"Relevance decision by country (top {args.top_n}):")
+    for country, country_total in countries.most_common(args.top_n):
+        print(f"  {country} ({country_total}):")
+        for decision in sorted(decisions):
+            count = decision_by_country[(country, decision)]
+            if count == 0:
+                continue
+            pct = count / country_total * 100 if country_total else 0.0
+            print(f"    {decision}: {count} ({pct:.1f}%)")
     print()
 
     print("Label vs. relevance decision:")

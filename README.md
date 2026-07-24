@@ -103,6 +103,11 @@ and requiring `psycopg2`. Both avoid ever scanning `article_concept_association`
 probes instead, run in parallel across `--workers` connections, with clean Ctrl+C
 cancellation of in-flight server-side queries.
 
+There are two separate scripts because French articles have no risk-factor tags in the
+DB (`article_risk_factor_tags` is English-only), so the positive/negative balancing that
+`from_db_matrix_v2.py` does isn't possible for French — `sample_french_by_country.py`
+drops that split and just samples/stratifies by country.
+
 ### `from_db_matrix_v2.py` — positive/negative risk-factor sample
 
 Downloads a country-stratified sample split into **positives** (risk-factor-tagged,
@@ -122,7 +127,7 @@ Key flags: `--pos-ratio` (default 0.7), `--language` (default `eng`), `--start-m
 
 Same discovery/stratification approach without the positive/negative split — samples
 N articles in one language (default `fra`), stratified by country. Supports `--resume`
-for interrupted multi-hour runs (content-fetch chunks are flushed to disk as they land
+for interrupted runs (content-fetch chunks are flushed to disk as they land
 and matched by article id on restart).
 
 ```bash
@@ -408,4 +413,81 @@ tables (hard error on any unmapped value).
 
 ```bash
 python scripts/geocoding/to_csv_ingest.py predictions_dir/   # merges all *.geo.jsonl shards
+```
+
+---
+
+## Reproducibility
+
+Exact commands used to produce the current (latest) version of each trained artifact.
+Kept up to date as the pipeline evolves — if a step's commands change, update its entry
+here rather than adding a new one.
+
+### Relevance filter model
+
+**1. Sample from the DB** (§1) — one run per language, English via the pos/neg matrix
+sampler, French via the country sampler (no risk-factor tags exist for French):
+
+```bash
+python scripts/download/from_db_matrix_v2.py --n 20000 --output dataset/en_20k.jsonl
+python scripts/download/sample_french_by_country.py --n 20000 --output dataset/fr_20k.jsonl
+```
+
+**2. Gemini data annotation** (§2, `relevance_filter.py`) — label each sample
+`relevant`/`irrelevant` with Gemini 3.1 Pro via the Batch API, one run per language
+(`--french` switches the prompt for the French sample):
+
+```bash
+python scripts/relevance/relevance_filter.py \
+    --input  dataset/en_20k.jsonl \
+    --output dataset/relevance/en_20k.relevance.3.1pro.jsonl \
+    --use-llm --model gemini-3.1-pro-preview --batch-api
+
+python scripts/relevance/relevance_filter.py \
+    --input  dataset/fr_20k.jsonl \
+    --output dataset/relevance/fr_20k.relevance.3.1pro.jsonl \
+    --use-llm --model gemini-3.1-pro-preview --batch-api --french
+```
+
+**3. Train the classifier** (§2, `train.py`) — fine-tunes `jhu-clsp/mmBERT-small` on
+the combined English + French Gemini labels:
+
+```bash
+python scripts/relevance/train.py \
+    --input dataset/relevance/en_20k.relevance.3.1pro.jsonl dataset/relevance/fr_20k.relevance.3.1pro.jsonl \
+    --output-dir outputs/relevance/relevance-mmbert-small --wandb-project zhai-relevance \
+    --num-epochs 10 --model-name jhu-clsp/mmBERT-small
+```
+
+`train.py` writes each run to a timestamped subdirectory of `--output-dir`
+(`outputs/relevance/relevance-mmbert-small/<timestamp>/`), with the checkpoint under
+`final/` and the stratified train/dev split saved alongside it as
+`train_<source>.jsonl`/`dev_<source>.jsonl` (one pair per input file) — no separate
+data-splitting step is needed before inference/eval below.
+
+**4. Inference + eval on the held-out dev split** — one run per language, reusing the
+`dev_*.jsonl` files `train.py` saved into the run directory:
+
+```bash
+# English
+python scripts/relevance/inference.py \
+    --checkpoint outputs/relevance/relevance-mmbert-small/20260721_195341/final \
+    --input  outputs/relevance/relevance-mmbert-small/20260721_195341/dev_en_20k.relevance.3.1pro.jsonl \
+    --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_en_20k.relevance.3.1pro.jsonl \
+    --backend vllm
+
+python scripts/relevance/eval.py \
+    --predictions outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_en_20k.relevance.3.1pro.jsonl \
+    --labels outputs/relevance/relevance-mmbert-small/20260721_195341/dev_en_20k.relevance.3.1pro.jsonl
+
+# French
+python scripts/relevance/inference.py \
+    --checkpoint outputs/relevance/relevance-mmbert-small/20260721_195341/final \
+    --input  outputs/relevance/relevance-mmbert-small/20260721_195341/dev_fr_20k.relevance.3.1pro.jsonl \
+    --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_fr_20k.relevance.3.1pro.jsonl \
+    --backend vllm
+
+python scripts/relevance/eval.py \
+    --predictions outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_fr_20k.relevance.3.1pro.jsonl \
+    --labels outputs/relevance/relevance-mmbert-small/20260721_195341/dev_fr_20k.relevance.3.1pro.jsonl
 ```

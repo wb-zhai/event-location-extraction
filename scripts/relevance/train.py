@@ -7,7 +7,7 @@ from other scripts in this repo. Accepts one or more --input files (concatenated
 deduped by id/url). The pretrained backbone trains at --backbone-lr (default 2e-4)
 while the classification head trains at --learning-rate.
 
-    python scripts/relevance/train.py \\
+    python scripts/data/relevance/train.py \\
         --input dataset/db/relevance/matrix_5M.sample_1000.3.1pro.2label_prompt.jsonl \\
         --output-dir /tmp/relevance-modernbert-smoke \\
         --num-epochs 1 --batch-size 8 --precision fp32
@@ -43,8 +43,8 @@ DEFAULT_MODEL_NAME = "answerdotai/ModernBERT-base"
 DEFAULT_MAX_LENGTH = 2048
 DEFAULT_MAX_CHARS = 4000
 DEFAULT_BATCH_SIZE = 8
-DEFAULT_LEARNING_RATE = 2e-5
-DEFAULT_BACKBONE_LR = 2e-4
+DEFAULT_LEARNING_RATE = 2e-4
+DEFAULT_BACKBONE_LR = 2e-5
 DEFAULT_NUM_EPOCHS = 5.0
 DEFAULT_WEIGHT_DECAY = 0.01
 DEFAULT_WARMUP_RATIO = 0.1
