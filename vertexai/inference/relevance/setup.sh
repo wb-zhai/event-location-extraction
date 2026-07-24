@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# One-time setup: create Artifact Registry repo, build and push the inference image.
-# Run from the repo root:
-#   bash vertexai/inference/setup.sh [--local] [--tag TAG]
+# One-time setup: create Artifact Registry repo, build and push the relevance image.
+# The image is self-contained — the build context is THIS folder only.
+#   bash vertexai/inference/relevance/setup.sh [--local] [--tag TAG]
 #
-# Reads vertexai/inference/.env if present; CLI flags override.
+# Reads vertexai/inference/relevance/.env if present; CLI flags override.
 
 set -euo pipefail
 
@@ -30,8 +30,8 @@ done
 
 [[ -z "${PROJECT}" ]] && { echo "ERROR: set GCP_PROJECT in .env or pass --project" >&2; exit 1; }
 
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/event-extraction/event-infer:${TAG}"
 REPO="event-extraction"
+IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/relevance-infer:${TAG}"
 
 echo "=== Config ==="
 echo "  project : ${PROJECT}"
@@ -52,17 +52,16 @@ else
     echo "Repo '${REPO}' created."
 fi
 
-# 2 — Build and push
+# 2 — Build and push (context = this folder; image is self-contained)
 echo ""
 if [[ "${LOCAL}" == true ]]; then
     echo "--- Step 2: Local build + push ---"
     gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
-    REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
-    docker build -t "${IMAGE}" -f "${HERE}/Dockerfile" "${REPO_ROOT}"
+    docker build -t "${IMAGE}" -f "${HERE}/Dockerfile" "${HERE}"
     docker push "${IMAGE}"
 else
     echo "--- Step 2: Cloud Build ---"
-    gcloud builds submit . \
+    gcloud builds submit "${HERE}" \
         --config="${HERE}/cloudbuild.yaml" \
         --substitutions="_REGION=${REGION},_TAG=${TAG}" \
         --project="${PROJECT}"
@@ -70,4 +69,4 @@ fi
 
 echo ""
 echo "Done. Image available at: ${IMAGE}"
-echo "You can now run: vertexai/inference/submit_batch.sh ..."
+echo "You can now run: vertexai/inference/relevance/submit_batch.sh ..."

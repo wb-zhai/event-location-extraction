@@ -3,7 +3,7 @@ steps:
     args:
       - build
       - -f
-      - vertexai/inference/Dockerfile
+      - vertexai/inference/event-extraction/Dockerfile
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/event-extraction/event-infer:${_TAG}
       - .

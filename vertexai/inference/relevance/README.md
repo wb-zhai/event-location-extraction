@@ -4,7 +4,7 @@ Classifies **every** article in `article_downloads` (**130,490,360** — 118,746
 11,743,601 French) as `relevant` / `not relevant` using the trained relevance encoder
 (ModernBERT, served via vLLM's pooling `classify`), and writes `id,label` CSV shards to GCS.
 
-This pipeline is **self-contained**: every file lives in `vertexai/relevance/` and imports
+This pipeline is **self-contained**: every file lives in `vertexai/inference/relevance/` and imports
 nothing from the rest of the repo.
 
 ## How it works
@@ -39,7 +39,7 @@ fetch + tokenize/truncate + vLLM classify + CSV write), so total GPU-time is fix
 ## Step 0 — Configure `.env`
 
 ```bash
-cd vertexai/relevance
+cd vertexai/inference/relevance
 cp .env.example .env
 # edit .env: GCP_PROJECT, GCP_REGION, IMAGE, MANIFEST_GCS_PREFIX, OUTPUT_GCS_PREFIX, MODEL_GCS, ...
 ```
@@ -64,7 +64,7 @@ Pick your shard count first (it fixes the number of manifest files, which must m
 in `.env`/Step 4):
 
 ```bash
-python vertexai/relevance/build_manifest.py \
+python vertexai/inference/relevance/build_manifest.py \
     --output-prefix "${MANIFEST_GCS_PREFIX}" \
     --num-shards    "${SHARDS}"
 # optional: --language {eng,fra,both}   --limit N (testing)
@@ -80,7 +80,7 @@ gsutil -m cp -r outputs/relevance/relevance-modernbert/…/checkpoint-XXXX/ \
 ## Step 3 — Build and push the image (one-time, idempotent)
 
 ```bash
-bash vertexai/relevance/setup.sh          # add --local to build with local Docker
+bash vertexai/inference/relevance/setup.sh          # add --local to build with local Docker
 ```
 
 Reads `.env` for `GCP_PROJECT`/`GCP_REGION`/`IMAGE`; override with `--project`, `--region`, `--tag`
@@ -89,7 +89,7 @@ only if you want to deviate from `.env` for this invocation.
 ## Step 4 — Submit the job
 
 ```bash
-cd vertexai/relevance
+cd vertexai/inference/relevance
 chmod +x submit_batch.sh
 
 ./submit_batch.sh
@@ -136,7 +136,7 @@ Total GPU-time is fixed (~328 GPU-h); more shards just finish faster.
 
 GPU-hours are fixed at the **measured** L4 rate (328 GPU-h, see "Local timing test" below) — A100
 rows assume the *same* 328 GPU-h, since classify throughput hasn't been benchmarked on A100
-(unlike `vertexai/inference`, where L4 vs A100 was measured separately for the generative
+(unlike `vertexai/inference/event-extraction`, where L4 vs A100 was measured separately for the generative
 workload). A100 is very likely faster at this encoder-classify workload too, so treat the A100
 rows below as a **conservative ceiling**, not a verified number — re-run the "Local timing test"
 on an `a100`-tier task before trusting it for a real run. **Total cost** below = GPU-h × $/GPU-h,
@@ -198,7 +198,7 @@ gsutil ls "${OUTPUT_GCS_PREFIX}/shard-*.csv"
 Run a batch of articles on one L4, measure throughput, extrapolate:
 
 ```bash
-python vertexai/relevance/relevance_vllm_infer.py \
+python vertexai/inference/relevance/relevance_vllm_infer.py \
     --model_name_or_path /path/to/checkpoint \
     --input   manifest-000.jsonl \
     --output  /tmp/relevance.csv \

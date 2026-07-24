@@ -1,6 +1,6 @@
 # Build context must be this folder:
-#   docker build -t IMAGE -f vertexai/relevance/Dockerfile vertexai/relevance
-# (the pipeline is self-contained — nothing outside vertexai/relevance/ is needed).
+#   docker build -t IMAGE -f vertexai/inference/relevance/Dockerfile vertexai/inference/relevance
+# (the pipeline is self-contained — nothing outside vertexai/inference/relevance/ is needed).
 #
 # Base image ships CUDA + torch + vLLM. Verify this tag exists:
 #   docker pull vllm/vllm-openai:v0.23.0

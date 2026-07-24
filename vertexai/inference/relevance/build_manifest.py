@@ -17,16 +17,16 @@ This script is deliberately self-contained — it defines its own DB connection,
 cursor, and GCS writers and imports nothing from the rest of the repo.
 
 Usage:
-    python vertexai/relevance/build_manifest.py \
+    python vertexai/inference/relevance/build_manifest.py \
         --output-prefix gs://my-bucket/relevance/manifests \
         --num-shards 100
 
     # local dry run
-    python vertexai/relevance/build_manifest.py \
+    python vertexai/inference/relevance/build_manifest.py \
         --output-prefix /tmp/manifests --num-shards 4 --limit 1000
 
     # restrict to English, French, or both
-    python vertexai/relevance/build_manifest.py \
+    python vertexai/inference/relevance/build_manifest.py \
         --output-prefix gs://my-bucket/relevance/manifests --num-shards 100 --language both
 
 Requires: psycopg2-binary, google-cloud-storage.

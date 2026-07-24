@@ -1,5 +1,5 @@
 # Build context must be the repo root:
-#   docker build -t IMAGE -f vertexai/inference/Dockerfile .
+#   docker build -t IMAGE -f vertexai/inference/event-extraction/Dockerfile .
 #
 # Base image ships CUDA + torch + vLLM. Verify this tag exists:
 #   docker pull vllm/vllm-openai:v0.23.0
@@ -23,7 +23,7 @@ COPY ontologies/ ontologies/
 # Make scripts importable from repo root
 ENV PYTHONPATH=/app
 
-COPY vertexai/inference/entrypoint.sh /entrypoint.sh
+COPY vertexai/inference/event-extraction/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

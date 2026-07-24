@@ -20,7 +20,7 @@ ontology/model but run on different inputs — don't conflate them:
 - **Training** (`scripts/train/llamafactory/train.sh`) then fine-tunes the small
   student model (Qwen3-4B) on that generated dataset — a separate step from data
   generation itself.
-- **Inference at scale** (`vertexai/inference/`) is the production run of the
+- **Inference at scale** (`vertexai/inference/event-extraction/`) is the production run of the
   already-trained model over the **entire** article DB, downstream of the relevance
   filter (which exists precisely to avoid spending GPU time extracting events from
   articles the filter has already dropped).
@@ -33,7 +33,7 @@ Sample from DB (download/)
    │    relevance-filtered — negatives                         ▼
    │    teach the model to emit no events]           small model (Qwen3-4B)
    │                                                               │
-   └─→ Relevance filter (relevance/) ─→ Inference at scale (vertexai/inference/) ─→ Geocoding
+   └─→ Relevance filter (relevance/) ─→ Inference at scale (vertexai/inference/event-extraction/) ─→ Geocoding
        [gates the full ~130M-article DB]   [runs the trained model on every            (geocoding/)
                                              article that passes the filter]
 ```
@@ -47,9 +47,9 @@ Sample from DB (download/)
    (`scripts/train/llamafactory/`).
 4. **Relevance filter** — cheaply drop articles that can't contain a food-insecurity
    event before spending inference budget on them; gates the production run only, not
-   data generation (`scripts/data/relevance/`, `vertexai/relevance/`).
+   data generation (`scripts/data/relevance/`, `vertexai/inference/relevance/`).
 5. **Event extraction inference** — run the already-trained model over the entire
-   filtered DB (`vertexai/inference/`).
+   filtered DB (`vertexai/inference/event-extraction/`).
 6. **Geocoding** — resolve each extracted `event_location` string to coordinates and
    an administrative region, ready for DB ingestion (`scripts/geocoding/`).
 
@@ -141,7 +141,7 @@ python scripts/data/relevance/train.py \
 `inference.py` (HF or vLLM backend) and `eval.py` (accuracy/precision/recall/F1
 against labeled data) round out local iteration on a checkpoint.
 
-### Inference at scale — `vertexai/relevance/`
+### Inference at scale — `vertexai/inference/relevance/`
 
 Classifies the **entire** `article_downloads` table (~130M articles) with a trained
 checkpoint via a GCP Cloud Batch job running vLLM's pooling `classify()`, reading
@@ -150,7 +150,7 @@ self-contained — no imports from the rest of the repo. Output is `id,label` CS
 shards, no merge step (read downstream with a wildcard).
 
 ```bash
-cd vertexai/relevance
+cd vertexai/inference/relevance
 cp .env.example .env   # fill in GCP_PROJECT, MANIFEST_GCS_PREFIX, MODEL_GCS, ...
 python build_manifest.py --output-prefix "${MANIFEST_GCS_PREFIX}" --num-shards "${SHARDS}"
 bash setup.sh           # build + push image (one-time)
@@ -159,7 +159,7 @@ bash setup.sh           # build + push image (one-time)
 
 Measured ~110.5 articles/s per L4 GPU end-to-end; full detail (throughput, cost,
 shard-count tuning, spot-preemption recovery) in
-[`vertexai/relevance/README.md`](vertexai/relevance/README.md).
+[`vertexai/inference/relevance/README.md`](vertexai/inference/relevance/README.md).
 
 ---
 
@@ -220,7 +220,7 @@ teacher must use byte-identical prompts.
 
 Shrinks the full event-type ontology down to a small per-document `candidates` list,
 for both teacher generation (`generate.py --top-k-candidates`) and scaled inference
-(`vertexai/inference`'s `--top-k-candidates`). Two reasons to use it:
+(`vertexai/inference/event-extraction`'s `--top-k-candidates`). Two reasons to use it:
 
 - **Hard limit** — Gemini structured generation caps out at 100 candidate event
   types per call (beyond that, hallucination/schema errors rise sharply), so any
@@ -259,7 +259,7 @@ python scripts/data/retrieve/eval_recall_at_k.py \
 `retrieve_vllm.py` is a GPU-only, faster alternative to `retrieve.py` for large query
 sets (vLLM pooling-mode encoding instead of in-process Sentence Transformers).
 
-### Inference at scale — `vertexai/inference/`
+### Inference at scale — `vertexai/inference/event-extraction/`
 
 The production run: takes the model already trained on the data-generation dataset
 (above) and runs it over the **whole** article DB, on input that has already been
@@ -267,12 +267,12 @@ through the relevance filter (§2) — the inverse of data generation's unfilter
 pos/neg sample. Runs the fine-tuned model (`scripts/train/inference/vllm_infer.py`) as an N-shard GCP
 Cloud Batch array job, one GPU VM per shard, merged after completion. Full detail —
 GPU tier costs, shard-count sizing, spot recovery — in
-[`vertexai/inference/README.md`](vertexai/inference/README.md).
+[`vertexai/inference/event-extraction/README.md`](vertexai/inference/event-extraction/README.md).
 
 ```bash
-bash vertexai/inference/setup.sh    # build + push image (one-time)
+bash vertexai/inference/event-extraction/setup.sh    # build + push image (one-time)
 
-cd vertexai/inference
+cd vertexai/inference/event-extraction
 ./submit_batch.sh \
     --tier spot-a100 --shards 20 \
     --input  gs://BUCKET/data/input.jsonl \

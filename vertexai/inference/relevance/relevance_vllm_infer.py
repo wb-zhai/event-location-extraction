@@ -14,7 +14,7 @@ This script is deliberately self-contained — it defines its own text builder, 
 and vLLM classifier wrapper and imports nothing from the rest of the repo.
 
 Usage (single process, e.g. the timing test):
-    python vertexai/relevance/relevance_vllm_infer.py \
+    python vertexai/inference/relevance/relevance_vllm_infer.py \
         --model_name_or_path /local/model \
         --input manifest-000.jsonl \
         --output /tmp/relevance.csv \

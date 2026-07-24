@@ -29,11 +29,11 @@ gsutil cp /path/to/input.jsonl gs://BUCKET/data/input.jsonl
 Run the setup script from the **repo root** (one-time; idempotent):
 
 ```bash
-bash vertexai/inference/setup.sh
+bash vertexai/inference/event-extraction/setup.sh
 ```
 
 This creates the Artifact Registry repo if needed, then submits a Cloud Build job to build and push the image.
-Reads `vertexai/inference/.env` automatically; override with `--project`, `--region`, or `--tag`.
+Reads `vertexai/inference/event-extraction/.env` automatically; override with `--project`, `--region`, or `--tag`.
 
 Add `--local` to build with local Docker instead of Cloud Build.
 
@@ -42,7 +42,7 @@ Add `--local` to build with local Docker instead of Cloud Build.
 ## Step 3 — Submit the job
 
 ```bash
-cd vertexai/inference
+cd vertexai/inference/event-extraction
 chmod +x submit_batch.sh merge_shards.sh
 
 ./submit_batch.sh \
@@ -182,7 +182,7 @@ Both layers together mean a preempted task loses at most ~90 s of work and retri
 ## Scripts
 
 ```
-bash vertexai/inference/submit_batch.sh \
+bash vertexai/inference/event-extraction/submit_batch.sh \
     --tier              spot-a100 \
     --shards            20 \
     --job-id            south-sudan-a100-$(date -u +%Y%m%d-%H%M%S) \
@@ -203,7 +203,7 @@ bash vertexai/inference/submit_batch.sh \
 ```
 
 ```
-bash vertexai/inference/submit_batch.sh \
+bash vertexai/inference/event-extraction/submit_batch.sh \
     --tier    flex-a100 \
     --shards  1 \
     --job-id  infer-test-a100-$(date -u +%Y%m%d-%H%M%S) \
@@ -231,7 +231,7 @@ bash vertexai/inference/submit_batch.sh \
 > `CODE_GCE_BAD_REQUEST` and produces **no task logs**.
 
 ```
-bash vertexai/inference/submit_batch.sh \
+bash vertexai/inference/event-extraction/submit_batch.sh \
     --tier    flex-a100 \
     --shards  20 \
     --image   "${IMAGE}" \
