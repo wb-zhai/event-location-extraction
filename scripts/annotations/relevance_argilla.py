@@ -19,7 +19,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from dotenv import load_dotenv
 
-from scripts.data.relevance.relevance_filter import _record_key
+from scripts.relevance.relevance_filter import _record_key
 
 RELEVANCE_QUESTION_NAME = "relevance"
 DEFAULT_WORKSPACE = "default"

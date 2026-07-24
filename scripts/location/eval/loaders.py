@@ -28,7 +28,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation.io_utils import iter_jsonl, resolve_path  # noqa: E402
+from scripts.event_extraction.generation.io_utils import iter_jsonl, resolve_path  # noqa: E402
 
 DEFAULT_ZHAI_PATH = "dataset/zhai/v3/science/train.jsonl"
 

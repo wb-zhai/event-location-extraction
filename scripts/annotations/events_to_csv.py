@@ -34,7 +34,7 @@ from scripts.annotations.events_argilla import (
     load_allowed_event_types,
     render_event_type_reference,
 )
-from scripts.data.relevance.relevance_filter import _record_key
+from scripts.relevance.relevance_filter import _record_key
 
 # Human-facing explanation of this sheet's layout, written for annotators
 # opening the export in Google Sheets/Excel (not for developers — see the

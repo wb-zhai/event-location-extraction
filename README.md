@@ -11,15 +11,15 @@ for DB ingestion.
 Event extraction has three distinct, separately-triggered steps that share the same
 ontology/model but run on different inputs — don't conflate them:
 
-- **Data generation** (`scripts/data/generation/`) is a one-time, offline step that
+- **Data generation** (`scripts/event_extraction/generation/`) is a one-time, offline step that
   *produces the SFT training dataset* by running a Gemini teacher over a small
   stratified DB sample. That sample is **not relevance-filtered** and deliberately
   includes negatives (articles with no risk-factor tag) alongside positives, so the
   teacher (and thus the training set) also covers the *no events* case, not just
   articles known to contain an event.
-- **Training** (`scripts/train/llamafactory/train.sh`) then fine-tunes the small
-  student model (Qwen3-4B) on that generated dataset — a separate step from data
-  generation itself.
+- **Training** (`scripts/train/llamafactory/train.sh`, or as a Vertex AI custom job via
+  `vertexai/train/event-extraction/`) then fine-tunes the small student model
+  (Qwen3.5-4B) on that generated dataset — a separate step from data generation itself.
 - **Inference at scale** (`vertexai/inference/event-extraction/`) is the production run of the
   already-trained model over the **entire** article DB, downstream of the relevance
   filter (which exists precisely to avoid spending GPU time extracting events from
@@ -31,7 +31,7 @@ Sample from DB (download/)
    ├─→ Data generation (generation/) ──→ SFT dataset ──→ Training (train/llamafactory/)
    │   [small pos/neg sample, NOT                              │
    │    relevance-filtered — negatives                         ▼
-   │    teach the model to emit no events]           small model (Qwen3-4B)
+   │    teach the model to emit no events]           small model (Qwen3.5-4B)
    │                                                               │
    └─→ Relevance filter (relevance/) ─→ Inference at scale (vertexai/inference/event-extraction/) ─→ Geocoding
        [gates the full ~130M-article DB]   [runs the trained model on every            (geocoding/)
@@ -39,15 +39,16 @@ Sample from DB (download/)
 ```
 
 1. **Sample from the DB** — pull a stratified article sample, incl. a positive/negative
-   split for training data (`scripts/data/download/`).
+   split for training data (`scripts/download/`).
 2. **Data generation** *(offline — produces the training dataset, not the model)* —
    distill Gemini teacher labels over the sampled positives **and** negatives into an
-   SFT dataset (`scripts/data/generation/`).
-3. **Training** — fine-tune the small extraction model on that SFT dataset
-   (`scripts/train/llamafactory/`).
+   SFT dataset (`scripts/event_extraction/generation/`).
+3. **Training** — fine-tune the small extraction model on that SFT dataset, either
+   locally (`scripts/train/llamafactory/`) or as a Vertex AI custom job
+   (`vertexai/train/event-extraction/`).
 4. **Relevance filter** — cheaply drop articles that can't contain a food-insecurity
    event before spending inference budget on them; gates the production run only, not
-   data generation (`scripts/data/relevance/`, `vertexai/inference/relevance/`).
+   data generation (`scripts/relevance/`, `vertexai/inference/relevance/`).
 5. **Event extraction inference** — run the already-trained model over the entire
    filtered DB (`vertexai/inference/event-extraction/`).
 6. **Geocoding** — resolve each extracted `event_location` string to coordinates and
@@ -57,7 +58,7 @@ Sample from DB (download/)
 
 ## 1. Sampling from the DB
 
-Two stratified samplers in `scripts/data/download/`, both reading connection params
+Two stratified samplers in `scripts/download/`, both reading connection params
 from the repo-root `.env` (`SQL_HOST`/`SQL_PORT`/`SQL_DATABASE`/`SQL_USERNAME`/`SQL_PASSWORD`)
 and requiring `psycopg2`. Both avoid ever scanning `article_concept_association`
 (2.3B rows / 470 GB) directly — candidate discovery goes through chunked, indexed
@@ -72,7 +73,7 @@ data. Country stratification is round-robin, rarest-country-first; positives are
 additionally prioritized by risk-factor diversity.
 
 ```bash
-python scripts/data/download/from_db_matrix_v2.py \
+python scripts/download/from_db_matrix_v2.py \
     --n 50000 --pos-ratio 0.7 --output dataset/matrix_sample.jsonl
 ```
 
@@ -87,7 +88,7 @@ for interrupted multi-hour runs (content-fetch chunks are flushed to disk as the
 and matched by article id on restart).
 
 ```bash
-python scripts/data/download/sample_french_by_country.py \
+python scripts/download/sample_french_by_country.py \
     --n 500 --output dataset/french_sample.jsonl
 ```
 
@@ -103,19 +104,19 @@ run for smoke-testing output shape before a large download.
 Pre-filters articles before the expensive extraction step. Composes a cheap
 keyword/regex first pass with an optional LLM (Gemini) second pass; the trained
 encoder classifier is the cheap, high-throughput option once labeled data exists.
-See [`scripts/data/relevance/README.md`](scripts/data/relevance/README.md) for full detail.
+See [`scripts/relevance/README.md`](scripts/relevance/README.md) for full detail.
 
 This filter gates **inference at scale** (§3, the whole-DB production run) only. It is
 not applied ahead of data generation — that training pipeline uses its own DB sample
 and needs both relevant and irrelevant articles (see §3 below).
 
-### Data generation — `scripts/data/relevance/`
+### Data generation — `scripts/relevance/`
 
 `relevance_filter.py` labels articles `relevant`/`not relevant`, optionally cascading
 a cheap model's positive calls to a stronger one for cheaper high-quality labels:
 
 ```bash
-python scripts/data/relevance/relevance_filter.py \
+python scripts/relevance/relevance_filter.py \
     --input dataset/zhai/v3/articles.jsonl \
     --output dataset/zhai/v3/articles.filtered.jsonl \
     --use-llm --cascade --model gemini-2.5-flash --cascade-model gemini-3.1-pro-preview \
@@ -127,13 +128,13 @@ model as a cheap stand-in), `encoder.py` (local encoder classifier, no LLM cost)
 `view_relevance.py` (Gradio browser for labeled output), `agreement.py` (compare two
 labeled files — accuracy/kappa).
 
-### Train the relevance model — `scripts/data/relevance/train.py`
+### Train the relevance model — `scripts/relevance/train.py`
 
 Fine-tunes a binary sequence classifier (default `answerdotai/ModernBERT-base`) on
 `relevance_filter.py`'s labeled output:
 
 ```bash
-python scripts/data/relevance/train.py \
+python scripts/relevance/train.py \
     --input dataset/db/relevance/matrix_5M.sample_1000.3.1pro.2label_prompt.jsonl \
     --output-dir /tmp/relevance-modernbert
 ```
@@ -172,17 +173,18 @@ relevance-filtered), which a separate training step then fine-tunes the small mo
 on; inference at scale runs that already-trained model on the whole DB downstream of
 the relevance filter.
 
-### Data generation — `scripts/data/generation/`
+### Data generation — `scripts/event_extraction/generation/`
 
 Context/prompt-distillation pipeline: a Gemini teacher (elaborate prompt, few-shot)
 labels articles with events, producing an SFT dataset that a small student model
-(Qwen3-4B) is later trained on to reproduce those labels from a simpler prompt (the
-training step itself lives in `scripts/train/llamafactory/`, not here). Runs on the
+(Qwen3.5-4B) is later trained on to reproduce those labels from a simpler prompt (the
+training step itself lives in `scripts/train/llamafactory/` or `vertexai/train/event-extraction/`,
+not here). Runs on the
 `from_db_matrix_v2.py` positive/negative sample from §1 — **not** on relevance-filtered
 input — so the teacher (and thus the resulting training set) also covers negatives,
 teaching the student to emit no events on them, rather than only ever seeing articles
 known to contain an event. Full detail in
-[`scripts/data/generation/README.md`](scripts/data/generation/README.md).
+[`scripts/event_extraction/generation/README.md`](scripts/event_extraction/generation/README.md).
 
 | Step | Script                    | Purpose                                                                    |
 | ---- | ------------------------- | -------------------------------------------------------------------------- |
@@ -194,17 +196,17 @@ known to contain an event. Full detail in
 | 3    | `to_sft.py`               | window articles into paragraph chunks, emit LlamaFactory Alpaca SFT format |
 
 ```bash
-python scripts/data/generation/generate.py \
+python scripts/event_extraction/generation/generate.py \
     --input  dataset/zhai/v3/<stratified-articles>.jsonl \
     --output dataset/zhai/v3/silver.gemini.jsonl \
     --model  gemini-2.5-flash --temperature 1.0 --reasoning-effort low \
     --batch-api --batch-size 100
 
-python scripts/data/generation/validate.py \
+python scripts/event_extraction/generation/validate.py \
     --input dataset/zhai/v3/silver.gemini.jsonl \
     --output-stem dataset/zhai/v3/silver.validated
 
-python scripts/data/generation/to_sft.py \
+python scripts/event_extraction/generation/to_sft.py \
     dataset/zhai/v3/silver.final.jsonl \
     dataset/zhai/v3/silver.sft.json
 ```
@@ -216,7 +218,26 @@ is still supported and referenced throughout this pipeline. Training does not
 deduplicate against the same closed label set used at inference time — student and
 teacher must use byte-identical prompts.
 
-### Candidate retrieval — `scripts/data/retrieve/`
+### Training — `scripts/train/llamafactory/` (local) / `vertexai/train/event-extraction/` (cloud)
+
+Fine-tunes the small student model (Qwen3.5-4B, LoRA) on the SFT dataset produced by
+data generation (above), via LlamaFactory. `scripts/train/llamafactory/train.sh` runs
+this directly on a local/on-prem GPU. `vertexai/train/event-extraction/` packages the
+same LoRA SFT configs as a Vertex AI custom job — a self-contained image that clones
+upstream [hiyouga/LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory) at a pinned
+commit, with no dependency on the rest of this repo. Full detail in
+[`vertexai/train/event-extraction/README.md`](vertexai/train/event-extraction/README.md).
+
+```bash
+cd vertexai/train/event-extraction
+cp .env.example .env    # fill in GCP_PROJECT, GCS_BUCKET, WANDB_API_KEY, ...
+
+bash build_push.sh --cloud latest    # build + push image (one-time; rebuild only on Dockerfile changes)
+gsutil cp config/qwen3_5_4b_base_new_schema.yaml "gs://${GCS_BUCKET}/${GCS_TRAIN_CONFIG}"
+bash submit_job.sh                   # submit the Vertex AI custom job (A100 40GB by default)
+```
+
+### Candidate retrieval — `scripts/event_extraction/retrieve/`
 
 Shrinks the full event-type ontology down to a small per-document `candidates` list,
 for both teacher generation (`generate.py --top-k-candidates`) and scaled inference
@@ -234,25 +255,25 @@ for both teacher generation (`generate.py --top-k-candidates`) and scaled infere
 
 Builds a dense vector index over the ontology, retrieves top-K nearest event types
 per query, and can score Recall@K against gold annotations. Full detail in
-[`scripts/data/retrieve/README.md`](scripts/data/retrieve/README.md).
+[`scripts/event_extraction/retrieve/README.md`](scripts/event_extraction/retrieve/README.md).
 
 ```bash
 # science.json (167 event types) needs retrieval to fit Gemini's 100-candidate cap
-python scripts/data/retrieve/generate_index.py \
+python scripts/event_extraction/retrieve/generate_index.py \
     ontologies/zhai/science.json dataset/zhai/v3/index/science-bge-m3 \
     BAAI/bge-m3 --sentence-transformers --device cuda:0 --normalize-embeddings
 
 # bona.v4.json (48 event types) — optional, mainly for ranking quality
-python scripts/data/retrieve/generate_index.py \
+python scripts/event_extraction/retrieve/generate_index.py \
     ontologies/zhai/bona.v4.json dataset/zhai/v3/index/bona-v4-bge-m3 \
     BAAI/bge-m3 --sentence-transformers --device cuda:0 --normalize-embeddings
 
-python scripts/data/retrieve/retrieve.py \
+python scripts/event_extraction/retrieve/retrieve.py \
     --queries dataset/zhai/v3/dev.jsonl --index dataset/zhai/v3/index/science-bge-m3 \
     --output  dataset/zhai/v3/dev.candidates.jsonl \
     --model-name BAAI/bge-m3 --top-k 50 --device cuda:0 --normalize-embeddings
 
-python scripts/data/retrieve/eval_recall_at_k.py \
+python scripts/event_extraction/retrieve/eval_recall_at_k.py \
     dataset/zhai/v3/dev.candidates.jsonl --k 1 3 5 10 20 50 70 100
 ```
 
@@ -277,14 +298,14 @@ cd vertexai/inference/event-extraction
     --tier spot-a100 --shards 20 \
     --input  gs://BUCKET/data/input.jsonl \
     --output gs://BUCKET/output/run-001 \
-    --model  gs://BUCKET/models/qwen3-4b-merged \
+    --model  gs://BUCKET/models/qwen3.5-4b-merged \
     --top-k-candidates 90 --quantization fp8
 
 ./merge_shards.sh --output gs://BUCKET/output/run-001 --dest combined.jsonl
 ```
 
 Supports an optional retriever (e.g. `microsoft/harrier-oss-v1-0.6b`, see
-[Candidate retrieval](#candidate-retrieval--scriptsdataretrieve) above) to restrict
+[Candidate retrieval](#candidate-retrieval--scriptsevent_extractionretrieve) above) to restrict
 and/or rank the ontology candidates sent per article/window — required to fit
 `ontologies/zhai/science.json`'s 167 event types under the 100-candidate cap, optional
 for `ontologies/zhai/bona.v4.json`'s 48. Spot preemption loses at most ~90s of work

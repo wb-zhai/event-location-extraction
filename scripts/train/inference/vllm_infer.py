@@ -36,7 +36,7 @@ DEFAULT_PROMPT_DIR = (
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation.to_sft import (  # noqa: E402
+from scripts.event_extraction.generation.to_sft import (  # noqa: E402
     build_paragraph_windows,
     build_user_message,
     coalesce_short_windows,

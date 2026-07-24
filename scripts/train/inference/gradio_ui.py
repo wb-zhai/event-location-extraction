@@ -16,7 +16,7 @@ MODELS_ROOT = REPO_ROOT / "models"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.data.generation.to_sft import load_ontology_labels  # noqa: E402
+from scripts.event_extraction.generation.to_sft import load_ontology_labels  # noqa: E402
 from scripts.train.inference.vllm_infer import (  # noqa: E402
     _build_windows,
     _parse_json_output,

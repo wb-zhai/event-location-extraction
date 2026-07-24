@@ -119,7 +119,7 @@ Each output line is the original input row with two fields added:
 
 ## Windowing strategy
 
-Long articles are split into overlapping paragraph-based windows inside `vllm_infer.py` itself (via helpers in `scripts/data/generation/to_sft.py`). No external windowing script is needed.
+Long articles are split into overlapping paragraph-based windows inside `vllm_infer.py` itself (via helpers in `scripts/event_extraction/generation/to_sft.py`). No external windowing script is needed.
 
 ### How it works
 

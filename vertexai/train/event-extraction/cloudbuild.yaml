@@ -1,0 +1,24 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/llamafactory/trainer:${_TAG}
+      - .
+    timeout: 3600s
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/llamafactory/trainer:${_TAG}
+
+substitutions:
+  _REGION: us-central1
+  _TAG: latest
+
+options:
+  machineType: E2_HIGHCPU_32
+  diskSizeGb: 200        # NGC base image is ~20 GB; layers add up during build
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 3600s

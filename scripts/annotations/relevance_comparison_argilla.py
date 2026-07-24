@@ -26,7 +26,7 @@ if str(REPO_ROOT) not in sys.path:
 from dotenv import load_dotenv
 
 from scripts.annotations.relevance_argilla import LABEL_DISPLAY, normalize_decision
-from scripts.data.relevance.relevance_filter import _record_key
+from scripts.relevance.relevance_filter import _record_key
 
 PREFERENCE_QUESTION_NAME = "preference"
 DEFAULT_WORKSPACE = "default"

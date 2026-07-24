@@ -6,7 +6,7 @@ CLI shape:
 - **Relevance** ([`relevance_argilla.py`](relevance_argilla.py)) — is an
   article relevant / irrelevant to food-security risk-event extraction, to
   build a gold set for scoring the Gemini relevance gate in
-  [`relevance_filter.py`](../data/relevance/relevance_filter.py). A single
+  [`relevance_filter.py`](../relevance/relevance_filter.py). A single
   label per document, which Argilla's `LabelQuestion` handles well.
 - **Events** ([`events_argilla.py`](events_argilla.py)) — validate/correct/add
   to the structured `annotation.events` list extracted for each article. Each
@@ -129,7 +129,7 @@ record has `title`/`text` or `source.title`/`source.text`, an existing
 `relevance` block (only `relevant`/`partially_relevant` records are pushed —
 see `keep_by_relevance`), and an `annotation` block
 (`{"document_relevance": ..., "events": [...]}`) produced by
-[`generate.py`](../data/generation/generate.py).
+[`generate.py`](../event_extraction/generation/generate.py).
 
 ```bash
 python scripts/annotations/events_argilla.py push \
