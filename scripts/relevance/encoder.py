@@ -22,9 +22,6 @@ from pathlib import Path
 import sys
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.relevance.relevance_filter import (
     _record_key,
@@ -63,7 +60,11 @@ def build_relevance_decision(
 ) -> dict[str, Any]:
     is_relevant = label in RELEVANT_LABELS
     reason = f"The news is classified as {label} therefore it is {'relevant' if is_relevant else 'not relevant'}."
-    decision = {"is_relevant": is_relevant, "confidence": float(score), "reason": reason}
+    decision = {
+        "is_relevant": is_relevant,
+        "confidence": float(score),
+        "reason": reason,
+    }
     return {
         "decision": "relevant" if is_relevant else "irrelevant",
         "is_relevant": is_relevant,
@@ -164,8 +165,14 @@ def process_file(args: argparse.Namespace) -> None:
                 record_id = str(record.get("id", record.get("url", "")))
                 try:
                     if args.use_regex:
-                        title = str(record.get("title") or (record.get("source") or {}).get("title", ""))
-                        text = str(record.get("text") or (record.get("source") or {}).get("text", ""))
+                        title = str(
+                            record.get("title")
+                            or (record.get("source") or {}).get("title", "")
+                        )
+                        text = str(
+                            record.get("text")
+                            or (record.get("source") or {}).get("text", "")
+                        )
                         if not food_insecurity_regex.search(title + " " + text):
                             record["relevance"] = {
                                 "decision": "irrelevant",
@@ -179,7 +186,9 @@ def process_file(args: argparse.Namespace) -> None:
                             chunk_results.append(record)
                             continue
 
-                    _, preview_text, combined = record_preview_text(record, args.max_chars)
+                    _, preview_text, combined = record_preview_text(
+                        record, args.max_chars
+                    )
                     to_classify.append(record)
                     texts.append(combined)
                 except Exception as e:
@@ -223,28 +232,53 @@ def main() -> None:
     )
     parser.add_argument("--input", required=True, type=str, help="Input JSONL file")
     parser.add_argument("--output", required=True, type=str, help="Output JSONL file")
-    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help="HF text-classification model")
     parser.add_argument(
-        "--device", type=str, default=None, help="Device for inference (cuda/mps/cpu). Default: auto-detect."
+        "--model", type=str, default=DEFAULT_MODEL, help="HF text-classification model"
     )
-    parser.add_argument("--max-length", type=int, default=512, help="Tokenizer max sequence length")
-    parser.add_argument("--max-chars", type=int, default=2000, help="Max characters to use for relevance")
-    parser.add_argument("--batch-size", type=int, default=32, help="Pipeline batch size")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Device for inference (cuda/mps/cpu). Default: auto-detect.",
+    )
+    parser.add_argument(
+        "--max-length", type=int, default=512, help="Tokenizer max sequence length"
+    )
+    parser.add_argument(
+        "--max-chars",
+        type=int,
+        default=2000,
+        help="Max characters to use for relevance",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=32, help="Pipeline batch size"
+    )
     parser.add_argument(
         "--chunk-size", type=int, default=500, help="Records per progress/flush chunk"
     )
     parser.add_argument(
-        "--confidence-threshold", type=float, default=0.0, help="Confidence threshold to filter"
+        "--confidence-threshold",
+        type=float,
+        default=0.0,
+        help="Confidence threshold to filter",
     )
-    parser.add_argument("--filter-only", action="store_true", help="Do not write filtered records to output")
+    parser.add_argument(
+        "--filter-only",
+        action="store_true",
+        help="Do not write filtered records to output",
+    )
     parser.add_argument(
         "--use-regex",
         action="store_true",
         help="Pre-filter with the food_insecurity_regex before calling the classifier.",
     )
-    parser.add_argument("--limit", type=int, default=None, help="Maximum number of records to process.")
     parser.add_argument(
-        "--resume", action="store_true", help="Skip records already present in the output file and append new results."
+        "--limit", type=int, default=None, help="Maximum number of records to process."
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip records already present in the output file and append new results.",
     )
     parser.add_argument(
         "--overwrite",

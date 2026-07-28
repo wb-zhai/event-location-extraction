@@ -116,7 +116,7 @@ data. Country stratification is round-robin, rarest-country-first; positives are
 additionally prioritized by risk-factor diversity.
 
 ```bash
-python scripts/download/from_db_matrix_v2.py \
+PYTHONPATH=. python scripts/download/from_db_matrix_v2.py \
     --n 50000 --pos-ratio 0.7 --output dataset/matrix_sample.jsonl
 ```
 
@@ -131,7 +131,7 @@ for interrupted runs (content-fetch chunks are flushed to disk as they land
 and matched by article id on restart).
 
 ```bash
-python scripts/download/sample_french_by_country.py \
+PYTHONPATH=. python scripts/download/sample_french_by_country.py \
     --n 500 --output dataset/french_sample.jsonl
 ```
 
@@ -153,13 +153,17 @@ This filter gates **inference at scale** (§3, the whole-DB production run) only
 not applied ahead of data generation — that training pipeline uses its own DB sample
 and needs both relevant and irrelevant articles (see §3 below).
 
+Some notes from Notion:
+
+- https://app.notion.com/p/Relevance-Filter-3964fc796fae8004b69efd501788a830 
+
 ### Data generation — `scripts/relevance/`
 
 `relevance_filter.py` labels articles `relevant`/`not relevant`, optionally cascading
 a cheap model's positive calls to a stronger one for cheaper high-quality labels:
 
 ```bash
-python scripts/relevance/relevance_filter.py \
+PYTHONPATH=. python scripts/relevance/relevance_filter.py \
     --input dataset/zhai/v3/articles.jsonl \
     --output dataset/zhai/v3/articles.filtered.jsonl \
     --use-llm --cascade --model gemini-2.5-flash --cascade-model gemini-3.1-pro-preview \
@@ -177,7 +181,7 @@ Fine-tunes a binary sequence classifier (default `answerdotai/ModernBERT-base`) 
 `relevance_filter.py`'s labeled output:
 
 ```bash
-python scripts/relevance/train.py \
+PYTHONPATH=. python scripts/relevance/train.py \
     --input dataset/db/relevance/matrix_5M.sample_1000.3.1pro.2label_prompt.jsonl \
     --output-dir /tmp/relevance-modernbert
 ```
@@ -261,17 +265,17 @@ known to contain an event. Full detail in
 | 3    | `to_sft.py`               | window articles into paragraph chunks, emit LlamaFactory Alpaca SFT format |
 
 ```bash
-python scripts/event_extraction/generation/generate.py \
+PYTHONPATH=. python scripts/event_extraction/generation/generate.py \
     --input  dataset/zhai/v3/<stratified-articles>.jsonl \
     --output dataset/zhai/v3/silver.gemini.jsonl \
     --model  gemini-2.5-flash --temperature 1.0 --reasoning-effort low \
     --batch-api --batch-size 100
 
-python scripts/event_extraction/generation/validate.py \
+PYTHONPATH=. python scripts/event_extraction/generation/validate.py \
     --input dataset/zhai/v3/silver.gemini.jsonl \
     --output-stem dataset/zhai/v3/silver.validated
 
-python scripts/event_extraction/generation/to_sft.py \
+PYTHONPATH=. python scripts/event_extraction/generation/to_sft.py \
     dataset/zhai/v3/silver.final.jsonl \
     dataset/zhai/v3/silver.sft.json
 ```
@@ -321,22 +325,22 @@ per query, and can score Recall@K against gold annotations. Full detail in
 
 ```bash
 # science.json (167 event types) needs retrieval to fit Gemini's 100-candidate cap
-python scripts/event_extraction/retrieve/generate_index.py \
+PYTHONPATH=. python scripts/event_extraction/retrieve/generate_index.py \
     ontologies/zhai/science.json dataset/zhai/v3/index/science-harrier \
     microsoft/harrier-oss-v1-0.6b --sentence-transformers --device cuda:0 --normalize-embeddings
 
 # bona.v4.json (48 event types) — optional, mainly for ranking quality
-python scripts/event_extraction/retrieve/generate_index.py \
+PYTHONPATH=. python scripts/event_extraction/retrieve/generate_index.py \
     ontologies/zhai/bona.v4.json dataset/zhai/v3/index/bona-v4-harrier \
     microsoft/harrier-oss-v1-0.6b --sentence-transformers --device cuda:0 --normalize-embeddings
 
-python scripts/event_extraction/retrieve/retrieve.py \
+PYTHONPATH=. python scripts/event_extraction/retrieve/retrieve.py \
     --queries dataset/zhai/v3/dev.jsonl --index dataset/zhai/v3/index/science-harrier \
     --output  dataset/zhai/v3/dev.candidates.jsonl \
     --model-name microsoft/harrier-oss-v1-0.6b --top-k 50 --device cuda:0 --normalize-embeddings \
     --query-prompt-name sts_query
 
-python scripts/event_extraction/retrieve/eval_recall_at_k.py \
+PYTHONPATH=. python scripts/event_extraction/retrieve/eval_recall_at_k.py \
     dataset/zhai/v3/dev.candidates.jsonl --k 1 3 5 10 20 50 70 100
 ```
 
@@ -399,7 +403,7 @@ Two phases:
    `gs://zhai-data-geotaxonomy` if missing locally) to attach `adm_code`/`adm_level`.
 
 ```bash
-python scripts/geocoding/add_geotaxonomy.py predictions.jsonl -o predictions.geo.jsonl
+PYTHONPATH=. python scripts/geocoding/add_geotaxonomy.py predictions.jsonl -o predictions.geo.jsonl
 
 # Batch a whole directory
 ./scripts/geocoding/run_geotaxonomy.sh --workers 10 --parallel 4 predictions/ predictions-geo/
@@ -413,7 +417,7 @@ Converts `.geo.jsonl` files into `risk_matches.csv` (`article_uri, risk_id`) and
 tables (hard error on any unmapped value).
 
 ```bash
-python scripts/geocoding/to_csv_ingest.py predictions_dir/   # merges all *.geo.jsonl shards
+PYTHONPATH=. python scripts/geocoding/to_csv_ingest.py predictions_dir/   # merges all *.geo.jsonl shards
 ```
 
 ---
@@ -430,8 +434,8 @@ here rather than adding a new one.
 sampler, French via the country sampler (no risk-factor tags exist for French):
 
 ```bash
-python scripts/download/from_db_matrix_v2.py --n 20000 --output dataset/en_20k.jsonl
-python scripts/download/sample_french_by_country.py --n 20000 --output dataset/fr_20k.jsonl
+PYTHONPATH=. python scripts/download/from_db_matrix_v2.py --n 20000 --output dataset/en_20k.jsonl
+PYTHONPATH=. python scripts/download/sample_french_by_country.py --n 20000 --output dataset/fr_20k.jsonl
 ```
 
 **2. Gemini data annotation** (§2, `relevance_filter.py`) — label each sample
@@ -439,14 +443,14 @@ python scripts/download/sample_french_by_country.py --n 20000 --output dataset/f
 (`--french` switches the prompt for the French sample):
 
 ```bash
-python scripts/relevance/relevance_filter.py \
+PYTHONPATH=. python scripts/relevance/relevance_filter.py \
     --input  dataset/en_20k.jsonl \
-    --output dataset/relevance/en_20k.relevance.3.1pro.jsonl \
+    --output dataset/relevance/en_20k.relevance.jsonl \
     --use-llm --model gemini-3.1-pro-preview --batch-api
 
-python scripts/relevance/relevance_filter.py \
+PYTHONPATH=. python scripts/relevance/relevance_filter.py \
     --input  dataset/fr_20k.jsonl \
-    --output dataset/relevance/fr_20k.relevance.3.1pro.jsonl \
+    --output dataset/relevance/fr_20k.relevance.jsonl \
     --use-llm --model gemini-3.1-pro-preview --batch-api --french
 ```
 
@@ -454,8 +458,8 @@ python scripts/relevance/relevance_filter.py \
 the combined English + French Gemini labels:
 
 ```bash
-python scripts/relevance/train.py \
-    --input dataset/relevance/en_20k.relevance.3.1pro.jsonl dataset/relevance/fr_20k.relevance.3.1pro.jsonl \
+PYTHONPATH=. python scripts/relevance/train.py \
+    --input dataset/relevance/en_20k.relevance.jsonl dataset/relevance/fr_20k.relevance.jsonl \
     --output-dir outputs/relevance/relevance-mmbert-small --wandb-project zhai-relevance \
     --num-epochs 10 --model-name jhu-clsp/mmBERT-small
 ```
@@ -471,24 +475,94 @@ data-splitting step is needed before inference/eval below.
 
 ```bash
 # English
-python scripts/relevance/inference.py \
+PYTHONPATH=. python scripts/relevance/inference.py \
     --checkpoint outputs/relevance/relevance-mmbert-small/20260721_195341/final \
-    --input  outputs/relevance/relevance-mmbert-small/20260721_195341/dev_en_20k.relevance.3.1pro.jsonl \
-    --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_en_20k.relevance.3.1pro.jsonl \
+    --input  outputs/relevance/relevance-mmbert-small/20260721_195341/dev_en_20k.relevance.jsonl \
+    --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_en_20k.relevance.jsonl \
     --backend vllm
 
-python scripts/relevance/eval.py \
-    --predictions outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_en_20k.relevance.3.1pro.jsonl \
-    --labels outputs/relevance/relevance-mmbert-small/20260721_195341/dev_en_20k.relevance.3.1pro.jsonl
+PYTHONPATH=. python scripts/relevance/eval.py \
+    --predictions outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_en_20k.relevance.jsonl \
+    --labels outputs/relevance/relevance-mmbert-small/20260721_195341/dev_en_20k.relevance.jsonl
 
 # French
-python scripts/relevance/inference.py \
+PYTHONPATH=. python scripts/relevance/inference.py \
     --checkpoint outputs/relevance/relevance-mmbert-small/20260721_195341/final \
-    --input  outputs/relevance/relevance-mmbert-small/20260721_195341/dev_fr_20k.relevance.3.1pro.jsonl \
-    --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_fr_20k.relevance.3.1pro.jsonl \
+    --input  outputs/relevance/relevance-mmbert-small/20260721_195341/dev_fr_20k.relevance.jsonl \
+    --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_fr_20k.relevance.jsonl \
     --backend vllm
 
-python scripts/relevance/eval.py \
-    --predictions outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_fr_20k.relevance.3.1pro.jsonl \
-    --labels outputs/relevance/relevance-mmbert-small/20260721_195341/dev_fr_20k.relevance.3.1pro.jsonl
+PYTHONPATH=. python scripts/relevance/eval.py \
+    --predictions outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_fr_20k.relevance.jsonl \
+    --labels outputs/relevance/relevance-mmbert-small/20260721_195341/dev_fr_20k.relevance.jsonl
 ```
+
+**5. Inference at scale** (§2, `vertexai/inference/relevance/`) — run the trained classifier over the entire ~130M-article DB.
+
+```bash
+cd vertexai/inference/relevance
+cp .env.example .env   # fill in GCP_PROJECT, MANIFEST_GCS_PREFIX, MODEL_GCS, ...
+# SHARDS=100 and MANIFEST_GCS_PREFIX=gs://zhai-risk-factor-extraction/relevance/manifests
+python build_manifest.py --output-prefix "${MANIFEST_GCS_PREFIX}" --num-shards "${SHARDS}"
+bash setup.sh           # build + push image (one-time)
+./submit_batch.sh       # submit the Cloud Batch job
+
+```
+
+#### Paths
+
+- Data: gs://zhai-risk-factor-extraction/relevance/data
+- Model: zhai-risk-factor-extraction/relevance/models/experiments/relevance-mmbert-small/20260721_195341/final
+- Inference output: gs://zhai-risk-factor-extraction/relevance/output/run-001
+
+**6. DB Ingestion**  — TODO
+
+### Event Extraction model
+
+**1. Sample from the DB or use the samples from the previous step** (§1) — For this experiment, we reuse the same 20k English and 20k French samples from the relevance filter step. We randomly sample 5k articles from each language for the event extraction data generation step. We want to have both relevant and irrelevant articles in the sample to ensure the model learns to distinguish between them. We use a relevant/irrelevant ratio of 0.85 for both languages.
+
+```bash
+PYTHONPATH=. python scripts/event_extraction/generation/sample_articles.py \
+    dataset/relevance/en_20k.relevance.jsonl \
+    dataset/extraction/en_5k.relevance.jsonl \
+    -n 5000
+
+PYTHONPATH=. python scripts/event_extraction/generation/sample_articles.py \
+    dataset/relevance/fr_20k.relevance.jsonl \
+    dataset/extraction/fr_5k.relevance.jsonl \
+    -n 5000
+```
+
+**2. Gemini data annotation** (§2) - We are using the latest zhai ontology (`ontologies/zhai/bona.v4.json`) for event extraction. The ontology has 48 event types, which is below the 100-candidate cap for Gemini structured generation, so we do not need to use the candidate retrieval step here. We will run the Gemini teacher on the sampled articles to produce silver labels for training.
+
+```bash
+PYTHONPATH=. python scripts/event_extraction/generation/generate.py \
+  --input  dataset/extraction/en_5k.relevance.jsonl \
+  --output dataset/extraction/en_5k.relevance.annotated.jsonl \
+  --model  gemini-3.1-pro-preview \
+  --temperature 0.3 \
+  --workers 8 --batch-api --reasoning medium --stratified url
+
+PYTHONPATH=. python scripts/event_extraction/generation/generate.py \
+  --input  dataset/extraction/fr_5k.relevance.jsonl \
+  --output dataset/extraction/fr_5k.relevance.annotated.jsonl \
+  --model  gemini-3.1-pro-preview \
+  --temperature 0.3 \
+  --workers 8 --batch-api --reasoning medium --stratified url
+```
+
+**3. Train the event extraction model** (§3)
+
+**4. Inference and eval on the held-out dev split** (§4)
+
+**5. Inference at scale** (§5)
+
+**6. Geocoding** (§6)
+
+**7. DB Ingestion** (§7)
+
+#### Paths
+
+- Data: gs://zhai-risk-factor-extraction/extraction/data
+- Model: zhai-risk-factor-extraction/extraction/models/
+- Inference output: gs://zhai-risk-factor-extraction/extraction/output/run-001

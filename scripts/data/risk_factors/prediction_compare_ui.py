@@ -10,12 +10,8 @@ from pathlib import Path
 from socketserver import TCPServer
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from src.inference.text_anchor import AnchorStatus, TextAnchorResolver  # noqa: E402
-
 
 DEFAULT_JSONL = (
     "dataset/risk-factor/run-15052025/sft/predictions/"
@@ -241,9 +237,7 @@ def build_record_payload(row: dict[str, Any], index: int) -> dict[str, Any]:
             "matched" if event_key(event) in prediction_keys else "missing"
         )
     for event in prediction_events:
-        event["match_status"] = (
-            "matched" if event_key(event) in gold_keys else "extra"
-        )
+        event["match_status"] = "matched" if event_key(event) in gold_keys else "extra"
 
     summary = summarize_record(row, index)
     return {

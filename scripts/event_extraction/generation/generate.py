@@ -17,9 +17,6 @@ from google.genai import types as genai_types
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from src.llms.llm_client import GeminiLLMClient
 
@@ -30,9 +27,15 @@ DEFAULT_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "system_prompt.txt"
 USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "teacher" / "user_prompt.txt"
-SYSTEM_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "teacher" / "system_prompt.fr.txt"
-USER_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "teacher" / "user_prompt.fr.txt"
-ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
+SYSTEM_PROMPT_PATH_FR = (
+    Path(__file__).parent / "prompts" / "teacher" / "system_prompt.fr.txt"
+)
+USER_PROMPT_PATH_FR = (
+    Path(__file__).parent / "prompts" / "teacher" / "user_prompt.fr.txt"
+)
+ONTOLOGY_PATH = (
+    Path(__file__).parent.parent.parent.parent / "ontologies" / "zhai" / "bona.v4.json"
+)
 
 
 class AnnotationEvent(BaseModel):
@@ -276,9 +279,7 @@ def validate_candidate_event_types(
             )
 
 
-def apply_grounding_verification(
-    annotation: dict[str, Any], article_text: str
-) -> None:
+def apply_grounding_verification(annotation: dict[str, Any], article_text: str) -> None:
     _VERBATIM_FIELDS = ("grounding_quote", "event_location_text", "event_time_text")
     article_text_lower = article_text.lower()
     verified: list[dict[str, Any]] = []
@@ -287,7 +288,11 @@ def apply_grounding_verification(
         failed_field = None
         for field in _VERBATIM_FIELDS:
             value = event.get(field)
-            if value and value != "not_stated" and value.lower() not in article_text_lower:
+            if (
+                value
+                and value != "not_stated"
+                and value.lower() not in article_text_lower
+            ):
                 failed_field = field
                 break
         if failed_field is None:
@@ -964,7 +969,7 @@ def parse_args() -> argparse.Namespace:
         help="Use the French translation of the teacher system/user prompts "
         "(event categories and output format stay in English).",
     )
-    parser.add_argument("--env-file", type=Path, default=REPO_ROOT / ".env")
+    parser.add_argument("--env-file", type=Path, default=".env")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=16384)

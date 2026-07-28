@@ -31,9 +31,6 @@ from pathlib import Path
 import sys
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from src.llms.llm_client import OpenAILLMClient
 from scripts.relevance.relevance_filter import _record_key, food_insecurity_regex
@@ -90,7 +87,9 @@ async def classify_relevance_simple(
     }
 
 
-async def process_record(client: OpenAILLMClient, record: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+async def process_record(
+    client: OpenAILLMClient, record: dict[str, Any], args: argparse.Namespace
+) -> dict[str, Any]:
     source = record.get("source") or {}
     if not isinstance(source, dict):
         source = {}
@@ -108,7 +107,10 @@ async def process_record(client: OpenAILLMClient, record: dict[str, Any], args: 
             }
         else:
             relevance_info = await classify_relevance_simple(
-                client=client, title=title, text=text, max_chars=args.max_chars,
+                client=client,
+                title=title,
+                text=text,
+                max_chars=args.max_chars,
                 override_settings=args.override_settings,
             )
         record["relevance"] = relevance_info
@@ -150,7 +152,10 @@ async def process_file(args: argparse.Namespace) -> None:
                 break
 
     client = OpenAILLMClient(
-        model_name=args.model, base_url=args.base_url, api_key=args.api_key, system_prompt=None
+        model_name=args.model,
+        base_url=args.base_url,
+        api_key=args.api_key,
+        system_prompt=None,
     )
     sem = asyncio.Semaphore(args.concurrency)
 
@@ -174,7 +179,9 @@ async def process_file(args: argparse.Namespace) -> None:
     try:
         from tqdm.asyncio import tqdm
 
-        for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Filtering"):
+        for coro in tqdm(
+            asyncio.as_completed(tasks), total=len(tasks), desc="Filtering"
+        ):
             await coro
     except ImportError:
         for coro in asyncio.as_completed(tasks):
@@ -195,23 +202,48 @@ def main() -> None:
     )
     parser.add_argument("--input", required=True, type=str, help="Input JSONL file")
     parser.add_argument("--output", required=True, type=str, help="Output JSONL file")
-    parser.add_argument("--model", type=str, default="LFM2.5-350M", help="Model name as reported by the server")
     parser.add_argument(
-        "--base-url", type=str, default="http://127.0.0.1:8080/v1", help="OpenAI-compatible server base URL"
+        "--model",
+        type=str,
+        default="LFM2.5-350M",
+        help="Model name as reported by the server",
     )
-    parser.add_argument("--api-key", type=str, default=None, help="API key, if the server checks one")
-    parser.add_argument("--max-chars", type=int, default=2000, help="Max characters to use for relevance")
-    parser.add_argument("--concurrency", type=int, default=8, help="Concurrent requests")
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default="http://127.0.0.1:8080/v1",
+        help="OpenAI-compatible server base URL",
+    )
+    parser.add_argument(
+        "--api-key", type=str, default=None, help="API key, if the server checks one"
+    )
+    parser.add_argument(
+        "--max-chars",
+        type=int,
+        default=2000,
+        help="Max characters to use for relevance",
+    )
+    parser.add_argument(
+        "--concurrency", type=int, default=8, help="Concurrent requests"
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument("--filter-only", action="store_true", help="Do not write filtered records to output")
+    parser.add_argument(
+        "--filter-only",
+        action="store_true",
+        help="Do not write filtered records to output",
+    )
     parser.add_argument(
         "--use-regex",
         action="store_true",
         help="Pre-filter with the food_insecurity_regex before calling the local model.",
     )
-    parser.add_argument("--limit", type=int, default=None, help="Maximum number of records to process.")
     parser.add_argument(
-        "--resume", action="store_true", help="Skip records already present in the output file and append new results."
+        "--limit", type=int, default=None, help="Maximum number of records to process."
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip records already present in the output file and append new results.",
     )
     parser.add_argument(
         "--overwrite",
@@ -219,12 +251,33 @@ def main() -> None:
         help="Allow overwriting an existing output file. Required if the output file "
         "already exists and --resume is not set.",
     )
-    parser.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature")
-    parser.add_argument("--top-p", type=float, default=None, help="Nucleus sampling top-p")
-    parser.add_argument("--top-k", type=int, default=None, help="Top-k sampling (llama.cpp/vLLM extra)")
-    parser.add_argument("--min-p", type=float, default=None, help="Min-p sampling (llama.cpp/vLLM extra)")
-    parser.add_argument("--repetition-penalty", type=float, default=None, help="Repetition penalty (llama.cpp/vLLM extra)")
-    parser.add_argument("--presence-penalty", type=float, default=None, help="Presence penalty (standard OpenAI sampling param)")
+    parser.add_argument(
+        "--temperature", type=float, default=0.0, help="Sampling temperature"
+    )
+    parser.add_argument(
+        "--top-p", type=float, default=None, help="Nucleus sampling top-p"
+    )
+    parser.add_argument(
+        "--top-k", type=int, default=None, help="Top-k sampling (llama.cpp/vLLM extra)"
+    )
+    parser.add_argument(
+        "--min-p",
+        type=float,
+        default=None,
+        help="Min-p sampling (llama.cpp/vLLM extra)",
+    )
+    parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        default=None,
+        help="Repetition penalty (llama.cpp/vLLM extra)",
+    )
+    parser.add_argument(
+        "--presence-penalty",
+        type=float,
+        default=None,
+        help="Presence penalty (standard OpenAI sampling param)",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Sampling seed")
     parser.add_argument(
         "--enable-thinking",
@@ -232,10 +285,18 @@ def main() -> None:
         default=None,
         help="Toggle Qwen3 thinking mode via chat_template_kwargs (--no-enable-thinking to disable)",
     )
-    parser.add_argument("--max-tokens", type=int, default=512, help="Max tokens to generate for the decision")
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=512,
+        help="Max tokens to generate for the decision",
+    )
     args = parser.parse_args()
 
-    override_settings: dict[str, Any] = {"temperature": args.temperature, "max_tokens": args.max_tokens}
+    override_settings: dict[str, Any] = {
+        "temperature": args.temperature,
+        "max_tokens": args.max_tokens,
+    }
     for flag, key in (
         ("top_p", "top_p"),
         ("top_k", "top_k"),

@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import itertools
 import json
 import logging
 import re
@@ -9,17 +10,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yasbd
 from dotenv import load_dotenv
 from google.genai import types as genai_types
 from pydantic import BaseModel, Field
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+
 
 from src.llms.llm_client import GeminiContentBlockedError, GeminiLLMClient, LLMClient
 
-load_dotenv(dotenv_path=REPO_ROOT / ".env")
+load_dotenv()
 
 LOGGER = logging.getLogger(__name__)
 
@@ -280,6 +280,39 @@ def truncate_text(text: str, max_chars: int) -> str:
     return text[:max_chars].rstrip()
 
 
+_SENTENCE_DETECTORS: dict[str, yasbd.BoundaryDetector] = {}
+
+
+def _get_sentence_detector(lang: str) -> yasbd.BoundaryDetector:
+    detector = _SENTENCE_DETECTORS.get(lang)
+    if detector is None:
+        detector = yasbd.BoundaryDetector(lang=lang)
+        _SENTENCE_DETECTORS[lang] = detector
+    return detector
+
+
+def truncate_text_by_sentences(text: str, sentences: int, lang: str) -> str:
+    detector = _get_sentence_detector(lang)
+    return " ".join(itertools.islice(detector.segment(text), sentences))
+
+
+def build_preview_text(
+    text: str, *, max_chars: int, sentences: int | None, lang: str
+) -> str:
+    """Build the article-text preview used for relevance classification. The
+    title is never passed through here and is always kept intact. When
+    *sentences* is set it overrides *max_chars* and the preview is the first
+    *sentences* sentences of *text* (via yasbd); otherwise the preview is
+    *text* truncated to *max_chars* characters."""
+    if sentences:
+        return truncate_text_by_sentences(text, sentences, lang)
+    return truncate_text(text, max_chars)
+
+
+def _sentence_lang(args: argparse.Namespace) -> str:
+    return "fr" if args.french else "en"
+
+
 def should_filter_by_relevance(
     decision: dict[str, Any], confidence_threshold: float
 ) -> bool:
@@ -302,13 +335,17 @@ async def classify_article_relevance(
     override_settings: dict[str, Any] | None = None,
     max_attempts: int = 3,
     retry_backoff_seconds: float = 2.0,
+    sentences: int | None = None,
+    sentence_lang: str = "en",
 ) -> dict[str, Any]:
     if system_prompt is None:
         system_prompt = DEFAULT_RELEVANCE_SYSTEM_PROMPT
     if user_prompt_template is None:
         user_prompt_template = DEFAULT_RELEVANCE_USER_PROMPT
 
-    preview_text = truncate_text(text, max_chars)
+    preview_text = build_preview_text(
+        text, max_chars=max_chars, sentences=sentences, lang=sentence_lang
+    )
     prompt = user_prompt_template.format(title=title, text=preview_text)
     log_llm_call(
         enabled=verbose,
@@ -368,6 +405,7 @@ async def classify_article_relevance(
                 "threshold": confidence_threshold,
                 "model": client.model_name,
                 "max_chars": max_chars,
+                "sentences": sentences,
                 "text_chars_used": len(preview_text),
                 "metadata": response.metadata,
             }
@@ -389,6 +427,7 @@ async def classify_article_relevance(
                 "threshold": confidence_threshold,
                 "model": client.model_name,
                 "max_chars": max_chars,
+                "sentences": sentences,
                 "text_chars_used": len(preview_text),
                 "blocked": True,
                 "block_reason": str(exc.block_reason),
@@ -484,6 +523,8 @@ async def process_record(client, record, args, cascade_client=None):
                     override_settings=getattr(args, "override_settings", None),
                     max_attempts=args.max_attempts,
                     retry_backoff_seconds=args.retry_backoff_seconds,
+                    sentences=args.sentences,
+                    sentence_lang=_sentence_lang(args),
                 )
 
             relevance_info = await _classify(client)
@@ -846,9 +887,12 @@ async def run_batch_relevance(
             record=r,
             prompt=user_prompt_template.format(
                 title=str(r.get("title") or (r.get("source") or {}).get("title", "")),
-                text=(str(r.get("text") or (r.get("source") or {}).get("text", "")))[
-                    : args.max_chars
-                ],
+                text=build_preview_text(
+                    str(r.get("text") or (r.get("source") or {}).get("text", "")),
+                    max_chars=args.max_chars,
+                    sentences=args.sentences,
+                    lang=_sentence_lang(args),
+                ),
             ),
         )
         for i, r in enumerate(records)
@@ -856,27 +900,38 @@ async def run_batch_relevance(
 
     chunks = list(enumerate(_chunked(tasks, args.batch_size), start=1))
     all_results: list[dict[str, Any]] = []
+    sem = asyncio.Semaphore(args.workers)
 
-    for chunk_index, chunk in chunks:
-        print(f"Processing chunk {chunk_index}/{len(chunks)} ({len(chunk)} records)...")
-        chunk_results = await _execute_batch_chunk(
-            client=client,
-            tasks=chunk,
-            system_prompt=system_prompt,
-            model=args.model,
-            output_path=output_path,
-            chunk_index=chunk_index,
-            poll_interval=args.batch_poll_interval_seconds,
-            confidence_threshold=args.confidence_threshold,
-        )
-        all_results.extend(chunk_results)
+    async def run_chunk(
+        chunk_index: int, chunk: list["_BatchTask"]
+    ) -> list[dict[str, Any]]:
+        async with sem:
+            print(
+                f"Processing chunk {chunk_index}/{len(chunks)} ({len(chunk)} records)..."
+            )
+            return await _execute_batch_chunk(
+                client=client,
+                tasks=chunk,
+                system_prompt=system_prompt,
+                model=args.model,
+                output_path=output_path,
+                chunk_index=chunk_index,
+                poll_interval=args.batch_poll_interval_seconds,
+                confidence_threshold=args.confidence_threshold,
+            )
 
-        write_mode = "a" if append or chunk_index > 1 else "w"
-        with output_path.open(write_mode, encoding="utf-8") as fh:
+    write_mode = "a" if append else "w"
+    with output_path.open(write_mode, encoding="utf-8") as fh:
+        for coro in asyncio.as_completed(
+            [run_chunk(chunk_index, chunk) for chunk_index, chunk in chunks]
+        ):
+            chunk_results = await coro
+            all_results.extend(chunk_results)
             for r in chunk_results:
                 if args.filter_only and r.get("relevance", {}).get("filtered", False):
                     continue
                 fh.write(json.dumps(r) + "\n")
+            fh.flush()
 
     totals = aggregate(all_results)
     report(output_path.name, totals, batch=True)
@@ -931,9 +986,12 @@ async def run_batch_relevance_cascade(
                     title=str(
                         r.get("title") or (r.get("source") or {}).get("title", "")
                     ),
-                    text=(
-                        str(r.get("text") or (r.get("source") or {}).get("text", ""))
-                    )[: args.max_chars],
+                    text=build_preview_text(
+                        str(r.get("text") or (r.get("source") or {}).get("text", "")),
+                        max_chars=args.max_chars,
+                        sentences=args.sentences,
+                        lang=_sentence_lang(args),
+                    ),
                 ),
             )
             for i, r in enumerate(recs)
@@ -959,28 +1017,37 @@ async def run_batch_relevance_cascade(
         ) -> AsyncIterator[list[dict[str, Any]]]:
             tasks = build_tasks(recs)
             chunks = list(enumerate(_chunked(tasks, args.batch_size), start=1))
-            for chunk_index, chunk in chunks:
-                print(
-                    f"[cascade:{label}] chunk {chunk_index}/{len(chunks)} "
-                    f"({len(chunk)} records)..."
-                )
-                chunk_results = await _execute_batch_chunk(
-                    client=client,
-                    tasks=chunk,
-                    system_prompt=system_prompt,
-                    model=model,
-                    output_path=output_path,
-                    chunk_index=chunk_index,
-                    poll_interval=args.batch_poll_interval_seconds,
-                    confidence_threshold=args.confidence_threshold,
-                )
-                # _execute_batch_chunk's order follows the batch API's response
-                # order, not the input order -- restore input order per chunk so
-                # incremental writes stay ordered the same way a full-buffer
-                # write would have been.
-                by_key = {_record_key(r): r for r in chunk_results}
-                chunk_results = [by_key[t.key] for t in chunk]
-                yield chunk_results
+            sem = asyncio.Semaphore(args.workers)
+
+            async def run_chunk(
+                chunk_index: int, chunk: list["_BatchTask"]
+            ) -> list[dict[str, Any]]:
+                async with sem:
+                    print(
+                        f"[cascade:{label}] chunk {chunk_index}/{len(chunks)} "
+                        f"({len(chunk)} records)..."
+                    )
+                    chunk_results = await _execute_batch_chunk(
+                        client=client,
+                        tasks=chunk,
+                        system_prompt=system_prompt,
+                        model=model,
+                        output_path=output_path,
+                        chunk_index=chunk_index,
+                        poll_interval=args.batch_poll_interval_seconds,
+                        confidence_threshold=args.confidence_threshold,
+                    )
+                    # _execute_batch_chunk's order follows the batch API's response
+                    # order, not the input order -- restore input order per chunk so
+                    # incremental writes stay ordered the same way a full-buffer
+                    # write would have been.
+                    by_key = {_record_key(r): r for r in chunk_results}
+                    return [by_key[t.key] for t in chunk]
+
+            for coro in asyncio.as_completed(
+                [run_chunk(chunk_index, chunk) for chunk_index, chunk in chunks]
+            ):
+                yield await coro
 
         first_pass: list[dict[str, Any]] = []
         escalate: list[dict[str, Any]] = []
@@ -1051,6 +1118,15 @@ async def process_file(args):
     input_path = Path(args.input)
     output_path = Path(args.output)
 
+    if args.sentences:
+        print(
+            f"[relevance_filter] Preview truncation mode: sentences "
+            f"(first {args.sentences} sentences, lang={_sentence_lang(args)}); "
+            f"--max-chars={args.max_chars} is ignored."
+        )
+    else:
+        print(f"[relevance_filter] Preview truncation mode: chars (max_chars={args.max_chars})")
+
     if output_path.exists() and not args.resume and not args.overwrite:
         raise SystemExit(
             f"Output file {output_path} already exists. Use --resume to continue "
@@ -1116,7 +1192,7 @@ async def process_file(args):
                     model_name=args.cascade_model, system_prompt=None
                 )
 
-        sem = asyncio.Semaphore(args.concurrency)
+        sem = asyncio.Semaphore(args.workers)
 
         async def bounded_process(record):
             async with sem:
@@ -1228,13 +1304,27 @@ def main():
         help="Max characters to use for relevance",
     )
     parser.add_argument(
+        "--sentences",
+        type=int,
+        default=None,
+        help="If set, overrides --max-chars: the preview is the first N sentences "
+        "of the article text (segmented with yasbd) instead of a character "
+        "truncation. The title is always kept intact.",
+    )
+    parser.add_argument(
         "--confidence-threshold",
         type=float,
         default=0.0,
         help="Confidence threshold to filter",
     )
     parser.add_argument(
-        "--concurrency", type=int, default=10, help="Concurrent requests"
+        "--workers",
+        type=int,
+        default=10,
+        help="Concurrency. In streaming mode (default), the number of concurrent "
+        "per-record LLM requests. In --batch-api mode, the number of batch job "
+        "chunks (--batch-size records each) submitted and polled concurrently, "
+        "instead of one at a time.",
     )
     parser.add_argument(
         "--max-attempts",

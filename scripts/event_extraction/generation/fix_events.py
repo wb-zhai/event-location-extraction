@@ -13,9 +13,6 @@ from google.genai import types as genai_types
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from src.llms.llm_client import GeminiLLMClient
 
@@ -25,7 +22,9 @@ DEFAULT_MODEL = "gemini-3.1-pro-preview"
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "prompts" / "fixer" / "system_prompt.txt"
 USER_PROMPT_PATH = Path(__file__).parent / "prompts" / "fixer" / "user_prompt.txt"
-SYSTEM_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "fixer" / "system_prompt.fr.txt"
+SYSTEM_PROMPT_PATH_FR = (
+    Path(__file__).parent / "prompts" / "fixer" / "system_prompt.fr.txt"
+)
 USER_PROMPT_PATH_FR = Path(__file__).parent / "prompts" / "fixer" / "user_prompt.fr.txt"
 ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 
@@ -80,7 +79,9 @@ def iter_jsonl(path: Path) -> list[dict[str, Any]]:
                 try:
                     records.append(json.loads(line))
                 except json.JSONDecodeError as exc:
-                    raise ValueError(f"Invalid JSONL at {path}:{line_no}: {exc}") from exc
+                    raise ValueError(
+                        f"Invalid JSONL at {path}:{line_no}: {exc}"
+                    ) from exc
     return records
 
 
@@ -128,10 +129,14 @@ def print_summary(stats: dict[str, int], skipped: int, output: Path) -> None:
     print(f"Processed this run     : {t}")
     if t == 0:
         return
-    print(f"  Fixed                : {stats['fixed']}  ({100 * stats['fixed'] / t:.1f}%)")
+    print(
+        f"  Fixed                : {stats['fixed']}  ({100 * stats['fixed'] / t:.1f}%)"
+    )
     print(f"    revalidation ok    : {stats['fixed_revalidated_ok']}")
     print(f"    revalidation fail  : {stats['fixed_revalidated_fail']}")
-    print(f"  Dropped              : {stats['dropped']}  ({100 * stats['dropped'] / t:.1f}%)")
+    print(
+        f"  Dropped              : {stats['dropped']}  ({100 * stats['dropped'] / t:.1f}%)"
+    )
     print(f"  API errors           : {stats['error']}")
     print(f"\nOutput: {output}")
 
@@ -147,11 +152,12 @@ def completed_rows(path: Path) -> set[int]:
     return seen
 
 
-def render_user_prompt(template: str, publish_date: str, source_text: str, events: list[dict[str, Any]]) -> str:
+def render_user_prompt(
+    template: str, publish_date: str, source_text: str, events: list[dict[str, Any]]
+) -> str:
     article = source_text
     return (
-        template
-        .replace("{{PUBLISH_DATE}}", publish_date or "not_stated")
+        template.replace("{{PUBLISH_DATE}}", publish_date or "not_stated")
         .replace("{{ARTICLE_TEXT}}", article)
         .replace("{{INVALID_EVENTS}}", json.dumps(events, ensure_ascii=False, indent=2))
     )
@@ -289,7 +295,9 @@ def make_output_record(
         "original_event": row.event,
         "errors": row.errors,
         "decision": decision.decision,
-        "fixed_event": decision.fixed_event.model_dump() if decision.fixed_event else None,
+        "fixed_event": (
+            decision.fixed_event.model_dump() if decision.fixed_event else None
+        ),
         "revalidation": revalidation,
         "reason": decision.reason,
         "llm": {"model": model, "metadata": metadata or {}},
@@ -346,7 +354,9 @@ async def process_task(
     mode: str,
 ) -> list[dict[str, Any]]:
     response_format = EventDecision if mode == "per-event" else ArticleFixResult
-    parsed, metadata = await call_llm(client, task.prompt, response_format, include_thoughts=True)
+    parsed, metadata = await call_llm(
+        client, task.prompt, response_format, include_thoughts=True
+    )
 
     if mode == "per-event":
         row = task.rows[0]
@@ -354,7 +364,11 @@ async def process_task(
             decision = EventDecision.model_validate(parsed)
         except Exception as exc:
             return [make_error_record(row, str(exc), model=model)]
-        return [make_output_record(row, decision, model=model, ontology=ontology, metadata=metadata)]
+        return [
+            make_output_record(
+                row, decision, model=model, ontology=ontology, metadata=metadata
+            )
+        ]
 
     # per-article
     try:
@@ -375,10 +389,16 @@ async def process_task(
     for i, row in enumerate(task.rows):
         if i < len(decisions):
             records.append(
-                make_output_record(row, decisions[i], model=model, ontology=ontology, metadata=metadata)
+                make_output_record(
+                    row, decisions[i], model=model, ontology=ontology, metadata=metadata
+                )
             )
         else:
-            records.append(make_error_record(row, "Decision missing from model response.", model=model))
+            records.append(
+                make_error_record(
+                    row, "Decision missing from model response.", model=model
+                )
+            )
     return records
 
 
@@ -410,7 +430,10 @@ async def run_sync(
                 )
             except Exception as exc:
                 LOGGER.exception("Failed task rows=%s", [r.row for r in task.rows])
-                return [make_error_record(row, str(exc), model=args.model) for row in task.rows]
+                return [
+                    make_error_record(row, str(exc), model=args.model)
+                    for row in task.rows
+                ]
 
     stats = empty_stats()
     coroutines = [run_task(task) for task in tasks]
@@ -453,7 +476,9 @@ def thinking_level(reasoning_effort: str | None) -> str:
     return "high"
 
 
-def batch_request_config(args: argparse.Namespace, response_format: type) -> dict[str, Any]:
+def batch_request_config(
+    args: argparse.Namespace, response_format: type
+) -> dict[str, Any]:
     generation_config: dict[str, Any] = {
         "responseMimeType": "application/json",
         "responseSchema": genai_transformers.t_schema(None, response_format).model_dump(
@@ -475,7 +500,9 @@ def batch_request_config(args: argparse.Namespace, response_format: type) -> dic
     return {"generationConfig": generation_config}
 
 
-def batch_request_line(key: str, prompt: str, request_config: dict[str, Any]) -> dict[str, Any]:
+def batch_request_line(
+    key: str, prompt: str, request_config: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "key": key,
         "request": {
@@ -509,10 +536,26 @@ def batch_response_metadata(response: dict[str, Any]) -> dict[str, Any]:
     if isinstance(usage, dict):
         metadata.update(
             {
-                "prompt_tokens": int(usage.get("prompt_token_count") or usage.get("promptTokenCount") or 0),
-                "completion_tokens": int(usage.get("candidates_token_count") or usage.get("candidatesTokenCount") or 0),
-                "cached_tokens": int(usage.get("cached_content_token_count") or usage.get("cachedContentTokenCount") or 0),
-                "thoughts_token_count": int(usage.get("thoughts_token_count") or usage.get("thoughtsTokenCount") or 0),
+                "prompt_tokens": int(
+                    usage.get("prompt_token_count")
+                    or usage.get("promptTokenCount")
+                    or 0
+                ),
+                "completion_tokens": int(
+                    usage.get("candidates_token_count")
+                    or usage.get("candidatesTokenCount")
+                    or 0
+                ),
+                "cached_tokens": int(
+                    usage.get("cached_content_token_count")
+                    or usage.get("cachedContentTokenCount")
+                    or 0
+                ),
+                "thoughts_token_count": int(
+                    usage.get("thoughts_token_count")
+                    or usage.get("thoughtsTokenCount")
+                    or 0
+                ),
             }
         )
     thought_summaries: list[str] = []
@@ -529,7 +572,12 @@ def chunked(items: list[Any], size: int) -> list[list[Any]]:
 
 
 async def poll_batch_job(client: GeminiLLMClient, name: str, interval: int) -> Any:
-    done = {"JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED", "JOB_STATE_EXPIRED"}
+    done = {
+        "JOB_STATE_SUCCEEDED",
+        "JOB_STATE_FAILED",
+        "JOB_STATE_CANCELLED",
+        "JOB_STATE_EXPIRED",
+    }
     job = await asyncio.to_thread(client.client.batches.get, name=name)
     while job.state.name not in done:
         LOGGER.info("batch=%s state=%s", name, job.state.name)
@@ -547,13 +595,20 @@ async def execute_batch_chunk(
     chunk_index: int,
     ontology: set[str],
 ) -> list[dict[str, Any]]:
-    request_path = args.output.with_suffix(f".batch.part-{chunk_index:04d}.requests.jsonl")
-    result_path = args.output.with_suffix(f".batch.part-{chunk_index:04d}.results.jsonl")
+    request_path = args.output.with_suffix(
+        f".batch.part-{chunk_index:04d}.requests.jsonl"
+    )
+    result_path = args.output.with_suffix(
+        f".batch.part-{chunk_index:04d}.results.jsonl"
+    )
 
     task_keys = [str(chunk_index * 100000 + i) for i in range(len(task_chunk))]
     request_path.write_text(
         "".join(
-            json.dumps(batch_request_line(key, task.prompt, request_config), ensure_ascii=False) + "\n"
+            json.dumps(
+                batch_request_line(key, task.prompt, request_config), ensure_ascii=False
+            )
+            + "\n"
             for key, task in zip(task_keys, task_chunk)
         ),
         encoding="utf-8",
@@ -576,14 +631,22 @@ async def execute_batch_chunk(
     job = await poll_batch_job(client, job.name, args.batch_poll_interval_seconds)
 
     def all_error(msg: str) -> list[dict[str, Any]]:
-        return [make_error_record(row, msg, model=args.model) for task in task_chunk for row in task.rows]
+        return [
+            make_error_record(row, msg, model=args.model)
+            for task in task_chunk
+            for row in task.rows
+        ]
 
     if job.state.name != "JOB_STATE_SUCCEEDED":
-        return all_error(f"Batch job {job.name} ended with {job.state.name}: {job.error}")
+        return all_error(
+            f"Batch job {job.name} ended with {job.state.name}: {job.error}"
+        )
     if not job.dest or not job.dest.file_name:
         return all_error(f"Batch job {job.name} succeeded without a result file.")
 
-    data = await asyncio.to_thread(client.client.files.download, file=job.dest.file_name)
+    data = await asyncio.to_thread(
+        client.client.files.download, file=job.dest.file_name
+    )
     result_path.write_bytes(data)
 
     task_by_key = {key: task for key, task in zip(task_keys, task_chunk)}
@@ -606,7 +669,13 @@ async def execute_batch_chunk(
             if args.mode == "per-event":
                 decision = EventDecision.model_validate(parsed)
                 records.append(
-                    make_output_record(task.rows[0], decision, model=args.model, ontology=ontology, metadata=meta)
+                    make_output_record(
+                        task.rows[0],
+                        decision,
+                        model=args.model,
+                        ontology=ontology,
+                        metadata=meta,
+                    )
                 )
             else:
                 result = ArticleFixResult.model_validate(parsed)
@@ -614,17 +683,32 @@ async def execute_batch_chunk(
                 for i, row in enumerate(task.rows):
                     if i < len(decisions):
                         records.append(
-                            make_output_record(row, decisions[i], model=args.model, ontology=ontology, metadata=meta)
+                            make_output_record(
+                                row,
+                                decisions[i],
+                                model=args.model,
+                                ontology=ontology,
+                                metadata=meta,
+                            )
                         )
                     else:
-                        records.append(make_error_record(row, "Decision missing from model response.", model=args.model))
+                        records.append(
+                            make_error_record(
+                                row,
+                                "Decision missing from model response.",
+                                model=args.model,
+                            )
+                        )
         except Exception as exc:
-            records.extend(make_error_record(row, str(exc), model=args.model) for row in task.rows)
+            records.extend(
+                make_error_record(row, str(exc), model=args.model) for row in task.rows
+            )
 
     for key, task in task_by_key.items():
         if key not in seen_keys:
             records.extend(
-                make_error_record(row, "Batch result missing.", model=args.model) for row in task.rows
+                make_error_record(row, "Batch result missing.", model=args.model)
+                for row in task.rows
             )
 
     request_path.unlink(missing_ok=True)
@@ -650,7 +734,9 @@ async def run_batch(
     chunks = list(enumerate(chunked(tasks, args.batch_size), start=1))
     semaphore = asyncio.Semaphore(args.workers)
 
-    async def run_chunk(chunk_index: int, task_chunk: list[FixTask]) -> list[dict[str, Any]]:
+    async def run_chunk(
+        chunk_index: int, task_chunk: list[FixTask]
+    ) -> list[dict[str, Any]]:
         async with semaphore:
             try:
                 return await execute_batch_chunk(
@@ -672,7 +758,9 @@ async def run_batch(
     stats = empty_stats()
     coroutines = [run_chunk(ci, tc) for ci, tc in chunks]
     with args.output.open("a", encoding="utf-8") as handle:
-        for future in tqdm(asyncio.as_completed(coroutines), total=len(coroutines), desc="batch chunks"):
+        for future in tqdm(
+            asyncio.as_completed(coroutines), total=len(coroutines), desc="batch chunks"
+        ):
             for record in await future:
                 append_jsonl(handle, record)
                 tally(stats, record)
@@ -685,10 +773,14 @@ async def run_batch(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fix invalid v3 annotations using Gemini.")
+    parser = argparse.ArgumentParser(
+        description="Fix invalid v3 annotations using Gemini."
+    )
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--mode", choices=["per-article", "per-event"], default="per-article")
+    parser.add_argument(
+        "--mode", choices=["per-article", "per-event"], default="per-article"
+    )
     parser.add_argument("--prompt", type=Path, default=None)
     parser.add_argument(
         "--french",

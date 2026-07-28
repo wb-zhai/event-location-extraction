@@ -22,11 +22,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-load_dotenv(dotenv_path=REPO_ROOT / ".env")
+load_dotenv()
 
 from src.llms.llm_client import GeminiLLMClient  # noqa: E402
 
@@ -90,18 +86,31 @@ def main() -> None:
         description="Recover a crashed --batch-api --cascade relevance_filter.py run "
         "from already-submitted Gemini batch jobs."
     )
-    parser.add_argument("--input", required=True, help="Original input JSONL (same file "
-        "passed to relevance_filter.py --input)")
-    parser.add_argument("--output", required=True, help="Output JSONL to write recovered "
-        "records to (same file passed to relevance_filter.py --output)")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Original input JSONL (same file "
+        "passed to relevance_filter.py --input)",
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output JSONL to write recovered "
+        "records to (same file passed to relevance_filter.py --output)",
+    )
     parser.add_argument("--model", default="gemini-2.5-flash", help="First-pass model")
-    parser.add_argument("--cascade-model", default="gemini-3.1-pro-preview",
-        help="Escalation model")
+    parser.add_argument(
+        "--cascade-model", default="gemini-3.1-pro-preview", help="Escalation model"
+    )
     parser.add_argument("--confidence-threshold", type=float, default=0.0)
     parser.add_argument("--filter-only", action="store_true")
-    parser.add_argument("--job-name-prefix", default=None, help="Batch job display-name "
+    parser.add_argument(
+        "--job-name-prefix",
+        default=None,
+        help="Batch job display-name "
         "prefix to match (default: --output's filename stem, same as relevance_filter.py "
-        "uses when submitting jobs)")
+        "uses when submitting jobs)",
+    )
     args = parser.parse_args()
 
     output_path = Path(args.output)
@@ -120,7 +129,8 @@ def main() -> None:
 
     all_jobs = list(client.client.batches.list())
     matching = [
-        j for j in all_jobs
+        j
+        for j in all_jobs
         if j.display_name and j.display_name.startswith(f"{prefix}-part-")
     ]
     matching.sort(key=lambda j: j.create_time)
@@ -138,7 +148,9 @@ def main() -> None:
         for j in jobs:
             part = _parse_part_index(j.display_name)
             if j.state.name != "JOB_STATE_SUCCEEDED":
-                print(f"  [{label}] part-{part}: {j.state.name} (skipping, not done yet)")
+                print(
+                    f"  [{label}] part-{part}: {j.state.name} (skipping, not done yet)"
+                )
                 continue
             results = _download_results(client, j)
             print(f"  [{label}] part-{part}: {j.state.name}, {len(results)} results")
@@ -162,9 +174,11 @@ def main() -> None:
         if fp.get("error") or not fp.get("is_relevant"):
             relevance_info = {
                 **fp,
-                "filtered": should_filter_by_relevance(fp, args.confidence_threshold)
-                if not fp.get("error")
-                else False,
+                "filtered": (
+                    should_filter_by_relevance(fp, args.confidence_threshold)
+                    if not fp.get("error")
+                    else False
+                ),
                 "threshold": args.confidence_threshold,
                 "cascade_escalated": False,
             }
@@ -180,9 +194,11 @@ def main() -> None:
 
         relevance_info = {
             **esc,
-            "filtered": should_filter_by_relevance(esc, args.confidence_threshold)
-            if not esc.get("error")
-            else False,
+            "filtered": (
+                should_filter_by_relevance(esc, args.confidence_threshold)
+                if not esc.get("error")
+                else False
+            ),
             "threshold": args.confidence_threshold,
             "cascade_escalated": True,
             "cascade_first_pass": {

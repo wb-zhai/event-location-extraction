@@ -33,11 +33,13 @@ the same input text as at training time. Each record is enriched with a
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import logging
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+import yasbd
 from tqdm import tqdm
 
 LOGGER = logging.getLogger(__name__)
@@ -60,13 +62,46 @@ def record_key(record: dict[str, Any]) -> str:
     return str(record.get("id") or record.get("url") or "")
 
 
-def build_text(record: dict[str, Any], max_chars: int) -> str:
+_SENTENCE_DETECTORS: dict[str, yasbd.BoundaryDetector] = {}
+
+
+def _get_sentence_detector(lang: str) -> yasbd.BoundaryDetector:
+    detector = _SENTENCE_DETECTORS.get(lang)
+    if detector is None:
+        detector = yasbd.BoundaryDetector(lang=lang)
+        _SENTENCE_DETECTORS[lang] = detector
+    return detector
+
+
+def truncate_text_by_sentences(text: str, sentences: int, lang: str) -> str:
+    detector = _get_sentence_detector(lang)
+    return " ".join(itertools.islice(detector.segment(text), sentences))
+
+
+def build_preview_text(
+    text: str, *, max_chars: int, sentences: int | None, lang: str
+) -> str:
+    """Build the article-text preview used for the model input. When
+    *sentences* is set it overrides *max_chars* and the preview is the first
+    *sentences* sentences of *text* (via yasbd); otherwise the preview is
+    *text* truncated to *max_chars* characters."""
+    if sentences:
+        return truncate_text_by_sentences(text, sentences, lang)
+    return text[:max_chars]
+
+
+def build_text(
+    record: dict[str, Any],
+    max_chars: int,
+    sentences: int | None = None,
+    lang: str = "en",
+) -> str:
     source = record.get("source") or {}
     if not isinstance(source, dict):
         source = {}
     title = str(record.get("title") or source.get("title") or "")
     text = str(record.get("text") or source.get("text") or "")
-    text = text[:max_chars]
+    text = build_preview_text(text, max_chars=max_chars, sentences=sentences, lang=lang)
     if title and text:
         return f"{title}\n\n{text}"
     return title or text
@@ -253,9 +288,11 @@ def process_records(
     max_chars: int,
     checkpoint: str,
     backend: str,
+    sentences: int | None = None,
+    lang: str = "en",
 ) -> Iterator[dict[str, Any]]:
     for batch in chunked(list(records), batch_size):
-        texts = [build_text(record, max_chars) for record in batch]
+        texts = [build_text(record, max_chars, sentences, lang) for record in batch]
         predictions = predictor.predict(texts)
         for record, prediction, text in zip(batch, predictions, texts):
             record["relevance"] = {
@@ -266,6 +303,7 @@ def process_records(
                 "model": str(checkpoint),
                 "backend": backend,
                 "max_chars": max_chars,
+                "sentences": sentences,
                 "text_chars_used": len(text),
             }
             yield record
@@ -275,7 +313,16 @@ def run_on_text(args: argparse.Namespace, predictor: Any) -> None:
     records = [{"id": f"text-{i}", "text": text} for i, text in enumerate(args.text)]
     batch_size = effective_batch_size(args, len(records))
     out_records = list(
-        process_records(records, predictor, batch_size, args.max_chars, args.checkpoint, args.backend)
+        process_records(
+            records,
+            predictor,
+            batch_size,
+            args.max_chars,
+            args.checkpoint,
+            args.backend,
+            args.sentences,
+            args.lang,
+        )
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -310,7 +357,14 @@ def run_on_input(args: argparse.Namespace, predictor: Any) -> None:
         batch_size = effective_batch_size(args, len(records))
         with out_path.open("w", encoding="utf-8") as f:
             predicted = process_records(
-                records, predictor, batch_size, args.max_chars, args.checkpoint, args.backend
+                records,
+                predictor,
+                batch_size,
+                args.max_chars,
+                args.checkpoint,
+                args.backend,
+                args.sentences,
+                args.lang,
             )
             for record in tqdm(predicted, total=len(records), desc=source_path.name):
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -350,6 +404,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "with --text, defaults to stdout if omitted.",
     )
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS, help="Max article chars used for text")
+    parser.add_argument(
+        "--sentences",
+        type=int,
+        default=None,
+        help="If set, overrides --max-chars: the preview is the first N sentences "
+        "of the article text (segmented with yasbd) instead of a character "
+        "truncation. The title is always kept intact.",
+    )
+    parser.add_argument(
+        "--lang",
+        type=str,
+        default="en",
+        help="Language used for yasbd sentence segmentation when --sentences is set.",
+    )
     parser.add_argument("--max-length", type=int, default=DEFAULT_MAX_LENGTH, help="Tokenizer max sequence length")
     parser.add_argument(
         "--batch-size",
@@ -386,6 +454,17 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.input is not None and args.output is None:
         raise SystemExit("--output is required when using --input")
+
+    if args.sentences:
+        LOGGER.info(
+            "Preview truncation mode: sentences (first %d sentences, lang=%s); "
+            "--max-chars=%d is ignored.",
+            args.sentences,
+            args.lang,
+            args.max_chars,
+        )
+    else:
+        LOGGER.info("Preview truncation mode: chars (max_chars=%d)", args.max_chars)
 
     if args.backend == "hf":
         # Only touch torch.cuda in the main process for the hf backend. For
