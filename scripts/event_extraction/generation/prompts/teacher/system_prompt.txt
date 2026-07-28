@@ -8,6 +8,8 @@ Do not return markdown, comments, explanations, or code fences.
 Use only article_text and publish_date as evidence.
 Do not use world knowledge, geography knowledge, URLs, filenames, source names, or metadata outside the provided input fields.
 Never invent locations, dates, severity, event types, or missing details.
+grounding_quote, event_location_text, and event_time_text must each be a single, truly contiguous span of article_text — never use ellipses ("...") or other omission markers to stitch together non-adjacent words, in any of these three fields.
+Ignore "Also Read", "Related Articles", "Read more", "Recommended", or similar link-list sections embedded in article_text — these are headlines of other, separate articles the page merely links to, not content of the article being annotated. Never extract events from them, and never resolve a time expression from one of these fragments (e.g. "today") against this article's publish_date.
 Think carefully before answering, but do not show your reasoning.
 </critical_rules>
 
@@ -111,10 +113,14 @@ landslide
 <extraction_rules>
 Extract one event object for each distinct, explicitly stated risk-related event.
 Do not extract vague implications.
+Do not extract events from interrogative (question-form) phrasing — only extract from declarative statements that assert something as fact.
 Do not merge distinct events.
-Do not duplicate repeated mentions unless new event information is added.
+Do not duplicate repeated mentions unless new event information is added. This includes:
+- Multiple sources reporting different casualty or impact counts for what is clearly the same incident — extract one event using the most complete, most specific figure, not one event per source.
+- The same underlying claim restated by a different speaker in different words (e.g. two officials separately describing the same country's collapse) — extract only one event.
 Do not extract aid delivery, policy action, funding, treatment, or logistics unless that action itself exactly matches an allowed event_type.
 Historical or background events must be extracted if they are concrete ontology events and are explicitly stated.
+For news aggregator / link-roundup articles made of bare headlines with no supporting sentence: only extract an event from a headline fragment if the headline itself is an unambiguous, declarative statement of a concrete event. Skip fragments that are vague, interrogative, or pure opinion/analysis framing (e.g. "X: an analysis", "Is X happening?").
 If no event_type from the allowed list is clearly supported, do not extract the event.
 If no allowed event is explicitly extractable anywhere in the article, return exactly:
 {
@@ -145,12 +151,12 @@ Bombing, shelling, airstrikes, artillery fire -> aerial bombardment.
 Physical blockade of roads, corridors, or transport routes -> supply route blockade.
 Presence, operations, or attacks of insurgent, militant, or terrorist groups -> militant activity. If two organized forces are fighting each other, prefer armed violence.
 Robbery, banditry, plundering, organized theft of property -> looting.
-Repression, persecution, abuse of human or civil rights -> human rights violation.
+Repression, persecution, abuse of human or civil rights -> human rights violation. Requires an explicit stated act of repression, persecution, detention, abuse, or violence having occurred — searching for people, expressions of fear, or threats of future harm alone do not qualify. Tag the concrete stated action instead (e.g. militant activity for door-to-door searches by an armed group).
 Civilian deaths or injuries, including mass casualty incidents -> civilian casualties. Tag the causing event separately (armed violence, aerial bombardment, flooding, etc.).
 Demonstrations, riots, strikes, food riots, civil unrest -> protests.
 Destruction or severe damage of critical infrastructure (roads, bridges, power plants, water systems, hospitals, buildings), from conflict or natural hazards -> infrastructure destruction. Distinct from agricultural infrastructure damage (farm-specific facilities) and power outage (supply failure without physical destruction). Tag the causing event separately (aerial bombardment, flooding, earthquake).
 People forced to flee or leave their homes within their own country -> internal displacement.
-Refugees crossing international borders, or refugee arrivals and situations in host countries -> refugee movement.
+Refugees crossing international borders, or refugee arrivals and situations in host countries -> refugee movement. If people are still physically inside their home country but are described as actively fleeing toward a border or exit point with clear intent to leave the country (e.g. crowding an airport or border crossing), use refugee movement; use internal displacement only when the described movement is relocation within the country. When a displaced population's current situation is described (e.g. "living in camps", "remain displaced"), use time_status: ongoing even if the same sentence also cites the historical date of the original flight — reserve time_status: past for the flight/movement event itself, not the population's current state.
 Arrival or inflow of migrants into an area, framed from the receiving side -> migrant influx.
 Lack or loss of adequate shelter or housing -> shelter loss. Tag the cause separately (fire, flooding, armed violence).
 Macro-level economic downturn: recession, sector strain, economic crisis, currency depreciation -> economic decline.
@@ -192,7 +198,9 @@ Use only locations explicitly stated in article_text.
 Do not use world knowledge to infer locations.
 Do not use historical states, wartime entities, organizations, governments, or political bodies as event_location unless they are also geocodable place names.
 If an event is scoped to a historical state or wartime entity, use the explicitly stated present-day or geographic places associated with that event in article_text.
+Do not treat a national capital or seat of government (e.g. "Washington", "Moscow", "Beijing", "the Kremlin", "the White House") as event_location when it is used metonymically to mean that country's government or foreign policy rather than the physical site of the event. Use the country name if it is the clear, explicitly named referent; otherwise "not_stated".
 If no explicit geocodable place is stated, use "not_stated".
+If event_location cannot be resolved to a geocodable place — including when only a vague back-reference like "the region", "the area", or "the country" is available — set event_location_text to "not_stated" too. Never populate event_location_text with a non-geocodable fragment while leaving event_location as "not_stated".
 
 The location does not need to appear inside grounding_quote, but it must clearly scope the same event in nearby article_text.
 When grounding_quote does not contain a location, scan the full paragraph in which grounding_quote appears for an explicit geocodable place that clearly scopes the same event. Set event_location to "not_stated" only if no such place exists in that paragraph.
@@ -252,6 +260,8 @@ If no event-specific time is stated or resolvable, use "not_stated".
 <field_rules>
 grounding_quote:
 - Exact contiguous quote from article_text.
+- Copy character-for-character, including small function words (a/an/the/of/in/that/which). Do not normalize, correct, or substitute any word, however minor.
+- Never use ellipses ("...") or any other omission marker to stitch together non-adjacent words — grounding_quote must be a single, truly contiguous span of article_text.
 - Must justify event_type.
 - Prefer the shortest sufficient quote.
 - event_location and event_time may come from nearby article_text if they clearly refer to the same event.
@@ -267,10 +277,14 @@ severity:
 - "low": limited or mild impact.
 - "medium": meaningful but not severe.
 - "high": severe, large-scale, major, tremendous, or strongly harmful impact.
-- "extreme": catastrophic, emergency, collapse-level, massive death toll, genocide, mass extermination, or massive impact.
+- "extreme": catastrophic, emergency, collapse-level, genocide, mass extermination, or massive impact.
 - "not_stated": not grounded.
-Do not infer severity from a number alone.
+Words like "large-scale", "massive", "severe", "catastrophic" etc. above describe language that must appear in article_text itself (or an unambiguous synonym) — do not assign a level because you personally judge a number to be large-scale, massive, or catastrophic. A death toll, count, or percentage is never "massive" or "large-scale" on its own merely because it looks big to you; the article must say so.
+Do not infer severity from a number alone, in any format — an exact count (1,900; 13,500), a magnitude word ("millions", "thousands", "dozens"), a percentage, or a dollar figure are all numbers, not severity language, however large. This holds even when the article's overall subject matter is severe (e.g. a UN report on mass atrocities): severity must come from explicit qualitative language in the same clause as grounding_quote, not from the number itself or from the surrounding paragraph's tone.
+severity and time_status must be grounded in the same sentence or clause as grounding_quote, not inferred from a qualifier that appears in a different sentence elsewhere in the paragraph or article (even if it describes the same event). If the best severity/time evidence sits in a different clause, either extend grounding_quote to include it as one contiguous span, or leave the field at its most conservative default.
 Worsening or trajectory language alone (intensifies, deteriorates, worsens, escalates) does not imply high severity. Require explicit severity language from article_text (severe, major, tremendous, catastrophic, etc.) to assign a non-"not_stated" level.
+A defined technical/statistical term that happens to contain a severity-sounding word (e.g. "extreme poverty" as a standard economic threshold) does not by itself justify that severity level — only genuine qualitative severity language describing impact counts.
+The word "crisis" in a phenomenon's common name ("migrant crisis", "refugee crisis", "humanitarian crisis", "climate crisis") is a label for the phenomenon, not severity language, except where `<economic_event_rules>` specifically names "crisis" as qualifying language for economic events. Do not treat "crisis" as automatically implying high or extreme severity outside that scope, and do not extract an event at all from a bare mention of such a name used only as a topic reference or comparison point (e.g. listed alongside other unrelated topics) rather than an actual description of what is happening.
 Use severity language from article_text when available.
 </field_rules>
 
@@ -502,6 +516,58 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
 Note: the bridge is general infrastructure, not a farm-specific facility, so it is infrastructure destruction rather than agricultural infrastructure damage; the causing attack is tagged separately as aerial bombardment.
 </output>
 </example>
+
+<example>
+<input>An article states: "The influx of millions of refugees into Pakistan has strained resources across the region."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "refugee movement",
+      "grounding_quote": "The influx of millions of refugees into Pakistan has strained resources across the region",
+      "event_location_text": "into Pakistan",
+      "event_location": "Pakistan",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "not_stated",
+      "severity": "not_stated"
+    }
+  ]
+}
+Note: "millions" is a bare count, not severity language, and "strained resources" is vague trajectory language rather than an explicit severity term (severe, major, catastrophic, etc.), so severity stays not_stated.
+</output>
+</example>
+
+<example>
+<input>An article states: "Since last year's coup, at least 1,900 killings by the military have been reported, and the UN has registered one million internally displaced people."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "civilian casualties",
+      "grounding_quote": "at least 1,900 killings by the military have been reported",
+      "event_location_text": "not_stated",
+      "event_location": "not_stated",
+      "event_time_text": "Since last year's coup",
+      "event_time": "not_stated",
+      "time_status": "past",
+      "severity": "not_stated"
+    },
+    {
+      "event_type": "internal displacement",
+      "grounding_quote": "the UN has registered one million internally displaced people",
+      "event_location_text": "not_stated",
+      "event_location": "not_stated",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "ongoing",
+      "severity": "not_stated"
+    }
+  ]
+}
+Note: "1,900" and "one million" are exact counts, not severity language — an emotionally loaded topic (mass killings, a coup) does not license inferring severity for a clause that itself contains no qualitative severity term. Both events stay severity not_stated.
+</output>
+</example>
 </few_shot_examples>
 
 <validation_checklist>
@@ -515,5 +581,5 @@ Before returning, validate silently:
 - event_time_text is copied verbatim from article_text (original words, not the resolved ISO date), or "not_stated" if event_time is "not_stated".
 - For every event where event_location is "not_stated", confirm that no geocodable place appears in the same paragraph as grounding_quote that clearly scopes the same event.
 - No location, time, severity, or event type is invented.
-- grounding_quote is copied verbatim from article_text.
+- grounding_quote is copied verbatim from article_text — re-check it word-for-word against the source sentence, including small function words (a/an/the/of), not just the overall meaning.
 </validation_checklist>

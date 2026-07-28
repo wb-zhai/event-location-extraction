@@ -8,6 +8,8 @@ Ne retournez ni markdown, ni commentaires, ni explications, ni blocs de code.
 Utilisez uniquement article_text et publish_date comme preuves.
 N'utilisez pas de connaissances générales, de connaissances géographiques, d'URLs, de noms de fichiers, de noms de sources, ni de métadonnées en dehors des champs d'entrée fournis.
 N'inventez jamais de lieux, de dates, de sévérité, de types d'événements, ou de détails manquants.
+grounding_quote, event_location_text, et event_time_text doivent chacun être un segment unique et véritablement contigu de article_text — n'utilisez jamais de points de suspension (« ... ») ni d'autres marqueurs d'omission pour assembler des mots non adjacents, dans aucun de ces trois champs.
+Ignorez les sections de type « À lire aussi », « Articles connexes », « Lire la suite », « Recommandé », ou les listes de liens similaires intégrées dans article_text — ce sont les titres d'autres articles distincts vers lesquels la page renvoie simplement, et non le contenu de l'article annoté. N'en extrayez jamais d'événements, et ne résolvez jamais une expression temporelle tirée d'un de ces fragments (par ex. « aujourd'hui ») par rapport à la publish_date de cet article.
 Réfléchissez soigneusement avant de répondre, mais ne montrez pas votre raisonnement.
 </critical_rules>
 
@@ -111,10 +113,14 @@ landslide
 <extraction_rules>
 Extrayez un objet événement pour chaque événement distinct, lié à un risque et explicitement énoncé.
 N'extrayez pas les implications vagues.
+N'extrayez pas d'événements à partir de formulations interrogatives (sous forme de question) — n'extrayez qu'à partir d'énoncés déclaratifs qui affirment un fait.
 Ne fusionnez pas des événements distincts.
-Ne dupliquez pas les mentions répétées, sauf si une nouvelle information sur l'événement est ajoutée.
+Ne dupliquez pas les mentions répétées, sauf si une nouvelle information sur l'événement est ajoutée. Cela inclut :
+- Plusieurs sources rapportant des bilans de victimes ou d'impact différents pour ce qui est clairement le même incident — extrayez un seul événement en utilisant le chiffre le plus complet et le plus précis, pas un événement par source.
+- La même affirmation sous-jacente reformulée par un locuteur différent avec des mots différents (par ex. deux responsables décrivant séparément l'effondrement du même pays) — n'extrayez qu'un seul événement.
 N'extrayez pas la livraison d'aide, l'action politique, le financement, le traitement, ou la logistique, sauf si cette action elle-même correspond exactement à un event_type autorisé.
 Les événements historiques ou de contexte doivent être extraits s'il s'agit d'événements concrets de l'ontologie et qu'ils sont explicitement énoncés.
+Pour les articles d'agrégation d'actualités / de compilation de liens composés de simples titres sans phrase à l'appui : n'extrayez un événement à partir d'un fragment de titre que si le titre lui-même est un énoncé déclaratif non ambigu d'un événement concret. Ignorez les fragments vagues, interrogatifs, ou relevant purement d'un cadrage d'opinion/analyse (par ex. « X : une analyse », « X se produit-il ? »).
 Si aucun event_type de la liste autorisée n'est clairement étayé, n'extrayez pas l'événement.
 Si aucun événement autorisé n'est explicitement extractible où que ce soit dans l'article, retournez exactement :
 {
@@ -145,12 +151,12 @@ Bombardement, tirs d'obus, frappes aériennes, tirs d'artillerie -> aerial bomba
 Blocus physique de routes, corridors, ou voies de transport -> supply route blockade.
 Présence, opérations, ou attaques de groupes insurgés, militants, ou terroristes -> militant activity. Si deux forces organisées s'affrontent, préférez armed violence.
 Vol, banditisme, pillage, vol organisé de biens -> looting.
-Répression, persécution, atteinte aux droits humains ou civils -> human rights violation.
+Répression, persécution, atteinte aux droits humains ou civils -> human rights violation. Nécessite qu'un acte explicite de répression, persécution, détention, abus, ou violence soit énoncé comme s'étant produit — la recherche de personnes, l'expression de peur, ou les menaces de préjudice futur seules ne suffisent pas. Indiquez plutôt l'action concrète énoncée (par ex. militant activity pour des perquisitions de porte à porte menées par un groupe armé).
 Décès ou blessures de civils, y compris les incidents à victimes multiples -> civilian casualties. Indiquez l'événement causal séparément (armed violence, aerial bombardment, flooding, etc.).
 Manifestations, émeutes, grèves, émeutes de la faim, troubles civils -> protests.
 Destruction ou dommages sévères aux infrastructures critiques (routes, ponts, centrales électriques, systèmes d'eau, hôpitaux, bâtiments), du fait d'un conflit ou d'un aléa naturel -> infrastructure destruction. Distinct de agricultural infrastructure damage (installations spécifiques à l'agriculture) et de power outage (défaillance d'approvisionnement sans destruction physique). Indiquez l'événement causal séparément (aerial bombardment, flooding, earthquake).
 Personnes contraintes de fuir ou de quitter leur foyer à l'intérieur de leur propre pays -> internal displacement.
-Réfugiés traversant des frontières internationales, ou arrivées et situations de réfugiés dans les pays d'accueil -> refugee movement.
+Réfugiés traversant des frontières internationales, ou arrivées et situations de réfugiés dans les pays d'accueil -> refugee movement. Si des personnes se trouvent encore physiquement dans leur pays d'origine mais sont décrites comme fuyant activement vers une frontière ou un point de sortie avec l'intention claire de quitter le pays (par ex. se massant dans un aéroport ou un poste-frontière), utilisez refugee movement ; utilisez internal displacement uniquement lorsque le mouvement décrit est une relocalisation à l'intérieur du pays. Lorsque la situation actuelle d'une population déplacée est décrite (par ex. « vivant dans des camps », « restent déplacés »), utilisez time_status: ongoing même si la même phrase mentionne aussi la date historique de la fuite initiale — réservez time_status: past à l'événement de fuite/mouvement lui-même, et non à l'état actuel de la population.
 Arrivée ou afflux de migrants dans une zone, présenté du point de vue du pays d'accueil -> migrant influx.
 Manque ou perte d'un abri ou d'un logement adéquat -> shelter loss. Indiquez la cause séparément (fire, flooding, armed violence).
 Ralentissement économique de niveau macro : récession, tensions sectorielles, crise économique, dépréciation monétaire -> economic decline.
@@ -192,7 +198,9 @@ N'utilisez que des localisations explicitement énoncées dans article_text.
 N'utilisez pas de connaissances générales pour déduire des localisations.
 N'utilisez pas d'États historiques, d'entités de guerre, d'organisations, de gouvernements, ou d'entités politiques comme event_location, sauf s'il s'agit aussi de noms de lieux géocodables.
 Si un événement est circonscrit à un État historique ou une entité de guerre, utilisez les lieux actuels ou géographiques explicitement énoncés associés à cet événement dans article_text.
+Ne traitez pas une capitale nationale ou un siège du gouvernement (par ex. « Washington », « Moscou », « Pékin », « le Kremlin », « la Maison Blanche ») comme event_location lorsqu'il est utilisé de manière métonymique pour désigner le gouvernement ou la politique étrangère de ce pays plutôt que le site physique de l'événement. Utilisez le nom du pays s'il s'agit du référent clair et explicitement nommé ; sinon "not_stated".
 Si aucun lieu géocodable explicite n'est énoncé, utilisez "not_stated".
+Si event_location ne peut être résolu en un lieu géocodable — y compris lorsque seule une référence vague comme « la région », « la zone », ou « le pays » est disponible — définissez aussi event_location_text à "not_stated". Ne renseignez jamais event_location_text avec un fragment non géocodable tout en laissant event_location à "not_stated".
 
 La localisation n'a pas besoin d'apparaître dans grounding_quote, mais elle doit clairement circonscrire le même événement dans le article_text à proximité.
 Lorsque grounding_quote ne contient pas de localisation, parcourez l'ensemble du paragraphe où apparaît grounding_quote à la recherche d'un lieu géocodable explicite qui circonscrit clairement le même événement. Ne définissez event_location à "not_stated" que si aucun tel lieu n'existe dans ce paragraphe.
@@ -252,6 +260,8 @@ Si aucun temps spécifique à l'événement n'est énoncé ou résoluble, utilis
 <field_rules>
 grounding_quote :
 - Citation exacte et contiguë tirée de article_text.
+- Copiez caractère pour caractère, y compris les petits mots grammaticaux (un/une/le/la/de/dans/que/qui). Ne normalisez, ne corrigez, et ne substituez aucun mot, aussi mineur soit-il.
+- N'utilisez jamais de points de suspension (« ... ») ni aucun autre marqueur d'omission pour assembler des mots non adjacents — grounding_quote doit être un segment unique et véritablement contigu de article_text.
 - Doit justifier event_type.
 - Préférez la citation suffisante la plus courte.
 - event_location et event_time peuvent provenir du article_text à proximité s'ils se réfèrent clairement au même événement.
@@ -269,8 +279,12 @@ severity :
 - "high" : sévère, à grande échelle, majeur, considérable, ou fortement dommageable.
 - "extreme" : catastrophique, urgence, niveau d'effondrement, bilan de morts massif, génocide, extermination de masse, ou impact massif.
 - "not_stated" : non étayé.
-N'inférez pas la sévérité à partir d'un chiffre seul.
+Les termes tels que « à grande échelle », « massif », « sévère », « catastrophique », etc. ci-dessus désignent un langage qui doit apparaître dans article_text lui-même (ou un synonyme non ambigu) — n'attribuez pas un niveau parce que vous jugez personnellement qu'un chiffre est à grande échelle, massif, ou catastrophique. Un bilan de morts, un décompte, ou un pourcentage n'est jamais « massif » ou « à grande échelle » en soi simplement parce qu'il vous semble important ; l'article doit le dire explicitement.
+N'inférez pas la sévérité à partir d'un chiffre seul, sous quelque forme que ce soit — un décompte exact (1 900 ; 13 500), un mot de magnitude (« millions », « milliers », « dizaines »), un pourcentage, ou un montant en dollars sont tous des chiffres, pas un langage de sévérité, aussi élevés soient-ils. Cela vaut même lorsque le sujet global de l'article est grave (par ex. un rapport de l'ONU sur des atrocités de masse) : la sévérité doit provenir d'un langage qualitatif explicite dans la même proposition que grounding_quote, pas du chiffre lui-même ni du ton du paragraphe environnant.
+severity et time_status doivent être ancrés dans la même phrase ou proposition que grounding_quote, et non déduits d'un qualificatif apparaissant dans une autre phrase ailleurs dans le paragraphe ou l'article (même s'il décrit le même événement). Si la meilleure preuve de sévérité/temps se trouve dans une proposition différente, étendez grounding_quote pour l'inclure comme un segment unique contigu, ou laissez le champ à sa valeur par défaut la plus prudente.
 Un langage de trajectoire ou d'aggravation seul (s'intensifie, se détériore, s'aggrave, s'accélère) n'implique pas une sévérité élevée. Exigez un langage de sévérité explicite dans article_text (sévère, majeur, considérable, catastrophique, etc.) pour attribuer un niveau autre que "not_stated".
+Un terme technique/statistique défini qui contient incidemment un mot à consonance sévère (par ex. « pauvreté extrême » en tant que seuil économique standard) ne justifie pas à lui seul ce niveau de sévérité — seul un véritable langage de sévérité qualitatif décrivant des bilans d'impact compte.
+Le mot « crise » dans le nom courant d'un phénomène (« crise migratoire », « crise des réfugiés », « crise humanitaire », « crise climatique ») est une étiquette pour le phénomène, pas un langage de sévérité, sauf lorsque `<economic_event_rules>` désigne spécifiquement « crise » comme langage qualifiant pour les événements économiques. Ne traitez pas « crise » comme impliquant automatiquement une sévérité élevée ou extrême en dehors de ce cadre, et n'extrayez aucun événement à partir d'une simple mention d'un tel nom utilisé uniquement comme référence thématique ou point de comparaison (par ex. listé aux côtés d'autres sujets sans rapport) plutôt que comme une description réelle de ce qui se passe.
 Utilisez le langage de sévérité de article_text lorsqu'il est disponible.
 </field_rules>
 
@@ -502,6 +516,58 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
 Remarque : le pont est une infrastructure générale, pas une installation spécifique à l'agriculture, il s'agit donc de infrastructure destruction plutôt que de agricultural infrastructure damage ; l'attaque causale est indiquée séparément comme aerial bombardment.
 </output>
 </example>
+
+<example>
+<input>Un article énonce : "L'afflux de millions de réfugiés au Pakistan a mis à rude épreuve les ressources dans toute la région."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "refugee movement",
+      "grounding_quote": "L'afflux de millions de réfugiés au Pakistan a mis à rude épreuve les ressources dans toute la région",
+      "event_location_text": "au Pakistan",
+      "event_location": "Pakistan",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "not_stated",
+      "severity": "not_stated"
+    }
+  ]
+}
+Remarque : « millions » est un simple décompte, pas un langage de sévérité, et « mis à rude épreuve » est un langage de trajectoire vague plutôt qu'un terme de sévérité explicite (sévère, majeur, catastrophique, etc.), donc la sévérité reste not_stated.
+</output>
+</example>
+
+<example>
+<input>Un article énonce : "Depuis le coup d'État de l'année dernière, au moins 1 900 personnes ont été tuées par l'armée selon les rapports, et l'ONU a enregistré un million de personnes déplacées à l'intérieur du pays."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "civilian casualties",
+      "grounding_quote": "au moins 1 900 personnes ont été tuées par l'armée selon les rapports",
+      "event_location_text": "not_stated",
+      "event_location": "not_stated",
+      "event_time_text": "Depuis le coup d'État de l'année dernière",
+      "event_time": "not_stated",
+      "time_status": "past",
+      "severity": "not_stated"
+    },
+    {
+      "event_type": "internal displacement",
+      "grounding_quote": "l'ONU a enregistré un million de personnes déplacées à l'intérieur du pays",
+      "event_location_text": "not_stated",
+      "event_location": "not_stated",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "ongoing",
+      "severity": "not_stated"
+    }
+  ]
+}
+Remarque : « 1 900 » et « un million » sont des décomptes exacts, pas un langage de sévérité — un sujet chargé émotionnellement (tuerie de masse, coup d'État) ne permet pas d'inférer la sévérité pour une proposition qui ne contient elle-même aucun terme de sévérité qualitatif. La sévérité des deux événements reste not_stated.
+</output>
+</example>
 </few_shot_examples>
 
 <validation_checklist>
@@ -515,5 +581,5 @@ Avant de retourner la réponse, validez silencieusement :
 - event_time_text est copié verbatim depuis article_text (mots d'origine, pas la date ISO résolue), ou "not_stated" si event_time est "not_stated".
 - Pour chaque événement où event_location est "not_stated", confirmez qu'aucun lieu géocodable n'apparaît dans le même paragraphe que grounding_quote et ne circonscrit clairement le même événement.
 - Aucune localisation, temps, sévérité, ou type d'événement n'est inventé.
-- grounding_quote est copié verbatim depuis article_text.
+- grounding_quote est copié verbatim depuis article_text — revérifiez-le mot pour mot par rapport à la phrase source, y compris les petits mots grammaticaux (un/une/le/la/de), et pas seulement le sens général.
 </validation_checklist>
