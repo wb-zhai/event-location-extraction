@@ -276,9 +276,14 @@ PYTHONPATH=. python scripts/event_extraction/generation/validate.py \
     --output-stem dataset/zhai/v3/silver.validated
 
 PYTHONPATH=. python scripts/event_extraction/generation/to_sft.py \
-    dataset/zhai/v3/silver.final.jsonl \
-    dataset/zhai/v3/silver.sft.json
+    --input  dataset/zhai/v3/silver.final.jsonl \
+    --output dataset/zhai/v3/sft/
 ```
+
+`to_sft.py` accepts multiple input JSONL files and writes `train.json`/`dev.json`
+plus a ready-to-use `dataset_info.json` into the given output directory, split
+at the article level and balanced by (source file, has-events) — see
+`--dev-ratio` (default `0.1`).
 
 `costs.py` reports token usage/cost per model from any pipeline JSONL. Training does
 not deduplicate against the same closed label set used at inference time — student
@@ -566,3 +571,6 @@ PYTHONPATH=. python scripts/event_extraction/generation/generate.py \
 - Data: gs://zhai-risk-factor-extraction/extraction/data
 - Model: zhai-risk-factor-extraction/extraction/models/
 - Inference output: gs://zhai-risk-factor-extraction/extraction/output/run-001
+
+
+python scripts/relevance/inference.py   --checkpoint outputs/relevance/relevance-mmbert-small/20260721_195341/final   --input outputs/relevance/relevance-mmbert-small/20260721_195341/dev_french_sample_5M.20000.relevance.cascade.jsonl --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_french_sample_5M.20000.relevance.cascade.sents.jsonl --backend vllm --sentences 3

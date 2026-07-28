@@ -260,11 +260,14 @@ Models not in the dict are reported as "pricing unknown".
 
 ```bash
 python scripts/event_extraction/generation/to_sft.py \
-  dataset/zhai/v3/silver.final.jsonl \
-  dataset/zhai/v3/silver.sft.json
+  --input  dataset/zhai/v3/silver.final.jsonl \
+  --output dataset/zhai/v3/sft/
 ```
 
-Produces a JSON array in LlamaFactory **Alpaca** format:
+Accepts one or more input JSONL files and a single output **directory**. Writes
+`train.json`, `dev.json`, and a matching `dataset_info.json` into that
+directory. `train.json`/`dev.json` are each a JSON array in LlamaFactory
+**Alpaca** format:
 
 ```json
 [
@@ -280,6 +283,15 @@ Produces a JSON array in LlamaFactory **Alpaca** format:
 The output is the `annotation` JSON with intermediate/verbose fields stripped.
 Defaults strip: `document_relevance`, `event_location_text`, `event_time_text`,
 `affected_group`, `affected_entity`, `severity`.
+
+#### Train/dev split
+
+The split happens at the article level (`--dev-ratio`, default `0.1`), *before*
+windowing, so overlapping windows from the same article never end up on both
+sides. Articles are grouped by `(source file, has-events)` and each group is
+shuffled and split independently, so both the mix of input files and the
+event/no-event ratio stay proportionally represented in train and dev. Pass
+`--seed` for a reproducible split.
 
 ---
 
@@ -321,48 +333,64 @@ Window character and event statistics are printed after conversion. Pass
 | `--prompt-dir`       | `prompts/student`              | Directory containing `system_prompt.txt` and `user_prompt.txt`                       |
 | `--ontology`         | `ontologies/zhai/science.json` | Label list JSON; used to fill `{{ALLOWED_EVENT_TYPES}}` in the student system prompt |
 | `--top-k-candidates` | None                           | Limit per-record candidate label list to the first N entries                         |
+| `--dev-ratio`        | `0.1`                          | Fraction of articles held out for dev, balanced by (source file, has-events)          |
+| `--seed`             | None                           | Random seed for the train/dev split and `--max-empty-ratio` sampling                 |
+| `--dataset-train-name` | `train`                      | Dataset key for the train split in the generated `dataset_info.json`                 |
+| `--dataset-dev-name`   | `dev`                        | Dataset key for the dev split in the generated `dataset_info.json`                   |
 
 **Examples:**
 
 ```bash
-# Default: 3000-char windows, 1-para overlap, student prompts
+# Default: 3000-char windows, 1-para overlap, student prompts, 90/10 train/dev split
 python scripts/event_extraction/generation/to_sft.py \
-  dataset/zhai/v3/silver.final.jsonl \
-  dataset/zhai/v3/silver.sft.json
+  --input  dataset/zhai/v3/silver.final.jsonl \
+  --output dataset/zhai/v3/sft/
 
-# Larger windows for a model with more context
+# Multiple input files, larger windows, reproducible 80/20 split
 python scripts/event_extraction/generation/to_sft.py \
-  dataset/zhai/v3/silver.final.jsonl \
-  dataset/zhai/v3/silver.sft.json \
-  --max-chars 6000 --overlap-paras 2
+  --input  dataset/zhai/v3/silver.final.jsonl dataset/zhai/v4/silver.final.jsonl \
+  --output dataset/zhai/combined_sft/ \
+  --max-chars 6000 --overlap-paras 2 --dev-ratio 0.2 --seed 0
 
 # Whole-article mode (no windowing) with teacher prompts
 python scripts/event_extraction/generation/to_sft.py \
-  dataset/zhai/v3/silver.final.jsonl \
-  dataset/zhai/v3/silver.sft.json \
+  --input  dataset/zhai/v3/silver.final.jsonl \
+  --output dataset/zhai/v3/sft/ \
   --no-window --prompt-dir scripts/event_extraction/generation/prompts/teacher
 
 # Strip only grounding-quote helper fields, keep document_relevance
-python scripts/event_extraction/generation/to_sft.py input.jsonl output.json \
+python scripts/event_extraction/generation/to_sft.py \
+  --input input.jsonl --output output_dir/ \
   --ignore event_location_text event_time_text
 
 # Report token counts (requires transformers)
 python scripts/event_extraction/generation/to_sft.py \
-  dataset/zhai/v3/silver.final.jsonl \
-  dataset/zhai/v3/silver.sft.json \
+  --input  dataset/zhai/v3/silver.final.jsonl \
+  --output dataset/zhai/v3/sft/ \
   --tokenizer Qwen/Qwen3-4B
 ```
 
 ---
 
-Register the output in LlamaFactory's `dataset_info.json`:
+`to_sft.py` writes a ready-to-use `dataset_info.json` alongside `train.json`/`dev.json`:
 
 ```json
-"zhai_v3_sft": {
-  "file_name": "silver.sft.json",
-  "columns": {"prompt": "instruction", "query": "input", "response": "output", "system": "system"}
+{
+  "train": {
+    "file_name": "train.json",
+    "columns": {"prompt": "instruction", "query": "input", "response": "output", "system": "system"}
+  },
+  "dev": {
+    "file_name": "dev.json",
+    "columns": {"prompt": "instruction", "query": "input", "response": "output", "system": "system"}
+  }
 }
 ```
+
+Point LlamaFactory's `dataset_dir` at the output directory directly, or merge
+these entries into an existing `dataset_info.json`. Use `--dataset-train-name`
+/ `--dataset-dev-name` to change the dataset keys (e.g. to avoid collisions
+when merging multiple runs into one `dataset_info.json`).
 
 ---
 
@@ -372,7 +400,7 @@ The following steps from the distillation plan are pending:
 
 | Step | Description                                                                          |
 | ---- | ------------------------------------------------------------------------------------ |
-| 4    | Train/dev/test split by document id (80/10/10)                                       |
+| 4    | Held-out test split (`to_sft.py` step 3 already does a balanced train/dev split by article — see [above](#traindev-split); a third, held-out test split is not yet wired in) |
 | 6    | LlamaFactory LoRA training — Qwen3-4B, `lora_target all`, rank 32, lr 2e-4, 2 epochs |
 | 7    | vLLM inference + eval (event-type P/R/F1, grounding rate, JSON-valid rate)           |
 
@@ -405,13 +433,13 @@ python scripts/event_extraction/generation/merge.py \
 
 # Step 3 — convert
 python scripts/event_extraction/generation/to_sft.py \
-  /tmp/sample_final.jsonl \
-  /tmp/sample.sft.json
+  --input  /tmp/sample_final.jsonl \
+  --output /tmp/sample_sft/
 
 # Inspect final output
 python -c "
 import json
-data = json.load(open('/tmp/sample.sft.json'))
+data = json.load(open('/tmp/sample_sft/train.json'))
 ev = json.loads(data[0]['output'])
 print('records:', len(data))
 print('events:', len(ev['events']))

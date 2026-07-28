@@ -26,6 +26,13 @@ DEFAULT_IGNORE = {
     "severity",
 }
 
+LLAMAFACTORY_COLUMNS = {
+    "prompt": "instruction",
+    "query": "input",
+    "response": "output",
+    "system": "system",
+}
+
 
 # ---------------------------------------------------------------------------
 # Paragraph splitting
@@ -512,10 +519,129 @@ def _build_windowed_records(
 # Main
 # ---------------------------------------------------------------------------
 
+def _load_rows(paths: list[pathlib.Path]) -> list[tuple[str, dict]]:
+    """Read JSONL *paths*, returning (source_file_name, row) tuples."""
+    rows: list[tuple[str, dict]] = []
+    for path in paths:
+        with open(path) as f:
+            for lineno, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError as e:
+                    print(f"Skipping {path.name}:{lineno}: {e}", file=sys.stderr)
+                    continue
+                rows.append((path.name, row))
+    return rows
+
+
+def _row_has_events(row: dict) -> bool:
+    annotation = row.get("annotation") or {}
+    return bool(annotation.get("events"))
+
+
+def _split_rows(
+    rows: list[tuple[str, dict]], dev_ratio: float, rng: random.Random
+) -> tuple[list[tuple[str, dict]], list[tuple[str, dict]]]:
+    """Stratified article-level split, balanced by (source file, has-events).
+
+    Each (source_file, has_events) group is shuffled and split independently so
+    both dimensions stay proportionally represented in train and dev. Splitting
+    at the row/article level (rather than per-window) keeps overlapping windows
+    from the same article on the same side of the split.
+    """
+    groups: dict[tuple[str, bool], list[tuple[str, dict]]] = {}
+    for source_name, row in rows:
+        key = (source_name, _row_has_events(row))
+        groups.setdefault(key, []).append((source_name, row))
+
+    train_rows: list[tuple[str, dict]] = []
+    dev_rows: list[tuple[str, dict]] = []
+    for group in groups.values():
+        shuffled = list(group)
+        rng.shuffle(shuffled)
+        dev_count = round(len(shuffled) * dev_ratio)
+        dev_rows.extend(shuffled[:dev_count])
+        train_rows.extend(shuffled[dev_count:])
+
+    return train_rows, dev_rows
+
+
+def _rows_to_records(
+    rows: list[tuple[str, dict]],
+    args: argparse.Namespace,
+    ignore: set[str],
+    default_labels: list[str],
+    system_template: str,
+    user_template: str,
+) -> list[dict]:
+    records = []
+    for source_name, row in rows:
+        annotation = row.get("annotation")
+        if annotation is None:
+            print(f"Skipping row from {source_name} (id: {row.get('id')}): no annotation", file=sys.stderr)
+            continue
+
+        try:
+            system_prompt = render_system_prompt(
+                system_template,
+                row_labels(row, default_labels, args.top_k_candidates),
+            )
+        except ValueError as e:
+            print(f"Skipping row from {source_name} (id: {row.get('id')}): {e}", file=sys.stderr)
+            continue
+
+        if args.no_window:
+            source = row.get("source", {})
+            user_msg = build_user_message(
+                user_template,
+                source.get("publish_date", ""),
+                source.get("text", ""),
+            )
+            assistant_msg = json.dumps(filter_annotation(annotation, ignore), ensure_ascii=False)
+            records.append({
+                "system": system_prompt,
+                "instruction": "",
+                "input": user_msg,
+                "output": assistant_msg,
+                "_window_chars": len(source.get("text", "")),
+                "_window_paras": None,
+                "_window_events": len((annotation.get("events") or [])),
+            })
+        else:
+            records.extend(
+                _build_windowed_records(
+                    row,
+                    system_prompt,
+                    user_template,
+                    ignore,
+                    max_chars=args.max_chars,
+                    max_paras=args.max_paras,
+                    overlap=args.overlap_paras,
+                    min_chars=args.min_chars,
+                )
+            )
+
+    return records
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", help="Input JSONL file")
-    parser.add_argument("output", help="Output JSON file (LlamaFactory Alpaca)")
+    parser.add_argument(
+        "--input",
+        nargs="+",
+        required=True,
+        metavar="FILE",
+        help="Input JSONL file(s)",
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        metavar="DIR",
+        help="Output directory (writes train.json and dev.json)",
+    )
     parser.add_argument(
         "--ignore",
         nargs="*",
@@ -587,10 +713,32 @@ def main():
         help="Randomly drop empty windows so they make up at most this fraction of all windows (0–1). Default: keep all.",
     )
     parser.add_argument(
+        "--dev-ratio",
+        type=float,
+        default=0.1,
+        metavar="RATIO",
+        help=(
+            "Fraction of articles held out for dev, balanced by (source file, "
+            "has-events) so both stay proportionally represented (default: 0.1)"
+        ),
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=None,
-        help="Random seed for --max-empty-ratio sampling (default: non-deterministic)",
+        help="Random seed for the train/dev split and --max-empty-ratio sampling (default: non-deterministic)",
+    )
+    parser.add_argument(
+        "--dataset-train-name",
+        default="train",
+        metavar="NAME",
+        help="Dataset key for the train split in dataset_info.json (default: train)",
+    )
+    parser.add_argument(
+        "--dataset-dev-name",
+        default="dev",
+        metavar="NAME",
+        help="Dataset key for the dev split in dataset_info.json (default: dev)",
     )
     args = parser.parse_args()
 
@@ -606,6 +754,8 @@ def main():
         parser.error("--overlap-paras must be >= 0")
     if args.max_empty_ratio is not None and not (0.0 <= args.max_empty_ratio <= 1.0):
         parser.error("--max-empty-ratio must be between 0 and 1")
+    if not (0.0 <= args.dev_ratio <= 1.0):
+        parser.error("--dev-ratio must be between 0 and 1")
 
     ignore = set(args.ignore)
     default_labels = load_ontology_labels(args.ontology)
@@ -614,80 +764,56 @@ def main():
     system_template = (prompt_dir / "system_prompt.txt").read_text()
     user_template = (prompt_dir / "user_prompt.txt").read_text()
 
-    records = []
-    with open(args.input) as f:
-        for lineno, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as e:
-                print(f"Skipping line {lineno}: {e}", file=sys.stderr)
-                continue
+    input_paths = [pathlib.Path(p) for p in args.input]
+    rows = _load_rows(input_paths)
 
-            annotation = row.get("annotation")
-            if annotation is None:
-                print(f"Skipping line {lineno} (id: {row.get('id')}): no annotation", file=sys.stderr)
-                continue
+    rng = random.Random(args.seed)
+    train_rows, dev_rows = _split_rows(rows, args.dev_ratio, rng)
 
-            try:
-                system_prompt = render_system_prompt(
-                    system_template,
-                    row_labels(row, default_labels, args.top_k_candidates),
-                )
-            except ValueError as e:
-                print(f"Skipping line {lineno} (id: {row.get('id')}): {e}", file=sys.stderr)
-                continue
+    output_dir = pathlib.Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-            if args.no_window:
-                source = row.get("source", {})
-                user_msg = build_user_message(
-                    user_template,
-                    source.get("publish_date", ""),
-                    source.get("text", ""),
-                )
-                assistant_msg = json.dumps(filter_annotation(annotation, ignore), ensure_ascii=False)
-                records.append({
-                    "system": system_prompt,
-                    "instruction": "",
-                    "input": user_msg,
-                    "output": assistant_msg,
-                    "_window_chars": len(source.get("text", "")),
-                    "_window_paras": None,
-                    "_window_events": len((annotation.get("events") or [])),
-                })
-            else:
-                records.extend(
-                    _build_windowed_records(
-                        row,
-                        system_prompt,
-                        user_template,
-                        ignore,
-                        max_chars=args.max_chars,
-                        max_paras=args.max_paras,
-                        overlap=args.overlap_paras,
-                        min_chars=args.min_chars,
-                    )
-                )
+    for split_name, split_rows in (("train", train_rows), ("dev", dev_rows)):
+        records = _rows_to_records(
+            split_rows, args, ignore, default_labels, system_template, user_template
+        )
 
-    if args.max_empty_ratio is not None:
-        rng = random.Random(args.seed)
-        records = _drop_empty_windows(records, args.max_empty_ratio, rng)
+        if args.max_empty_ratio is not None:
+            records = _drop_empty_windows(records, args.max_empty_ratio, rng)
 
-    # Strip internal metadata before writing
-    output_records = [
-        {k: v for k, v in r.items() if not k.startswith("_")}
-        for r in records
-    ]
-    with open(args.output, "w") as f:
-        json.dump(output_records, f, ensure_ascii=False, indent=2)
+        # Strip internal metadata before writing
+        output_records = [
+            {k: v for k, v in r.items() if not k.startswith("_")}
+            for r in records
+        ]
+        output_path = output_dir / f"{split_name}.json"
+        with open(output_path, "w") as f:
+            json.dump(output_records, f, ensure_ascii=False, indent=2)
 
-    print(f"Wrote {len(output_records)} records to {args.output}")
-    _print_window_stats(records)
+        print(f"Wrote {len(output_records)} records to {output_path}")
+        _print_window_stats(records, label=split_name)
 
-    if args.tokenizer and records:
-        _print_token_stats(output_records, args.tokenizer)
+        if args.tokenizer and records:
+            _print_token_stats(output_records, args.tokenizer, label=split_name)
+
+    dataset_info_path = _write_dataset_info(
+        output_dir, args.dataset_train_name, args.dataset_dev_name
+    )
+    print(f"Wrote {dataset_info_path}")
+
+
+def _write_dataset_info(
+    output_dir: pathlib.Path, train_name: str, dev_name: str
+) -> pathlib.Path:
+    """Write a LlamaFactory dataset_info.json pointing at train.json/dev.json."""
+    info = {
+        train_name: {"file_name": "train.json", "columns": LLAMAFACTORY_COLUMNS},
+        dev_name: {"file_name": "dev.json", "columns": LLAMAFACTORY_COLUMNS},
+    }
+    path = output_dir / "dataset_info.json"
+    with open(path, "w") as f:
+        json.dump(info, f, ensure_ascii=False, indent=2)
+    return path
 
 
 def _drop_empty_windows(
@@ -713,7 +839,7 @@ def _drop_empty_windows(
     return result
 
 
-def _print_window_stats(records: list[dict]) -> None:
+def _print_window_stats(records: list[dict], *, label: str = "") -> None:
     if not records:
         return
     chars = [r["_window_chars"] for r in records]
@@ -726,7 +852,8 @@ def _print_window_stats(records: list[dict]) -> None:
         avg = sum(vals) / len(vals)
         return f"{label}: avg={avg:.0f}  min={min(vals)}  max={max(vals)}"
 
-    print(f"\n=== Window statistics ({len(records)} windows) ===")
+    prefix = f"{label} " if label else ""
+    print(f"\n=== {prefix}window statistics ({len(records)} windows) ===")
     print(_stats(chars, "chars/window"))
     if paras:
         print(_stats(paras, "paras/window"))
@@ -736,9 +863,10 @@ def _print_window_stats(records: list[dict]) -> None:
     print(f"windows without events: {no_event_count} ({no_event_pct:.1f}%)")
 
 
-def _print_token_stats(records: list[dict], tokenizer_name: str) -> None:
+def _print_token_stats(records: list[dict], tokenizer_name: str, *, label: str = "") -> None:
     from transformers import AutoTokenizer
 
+    prefix = f"{label} " if label else ""
     print(f"\nLoading tokenizer: {tokenizer_name}")
     tok = AutoTokenizer.from_pretrained(tokenizer_name)
 
@@ -751,9 +879,9 @@ def _print_token_stats(records: list[dict], tokenizer_name: str) -> None:
     def _stats(counts: list[int]) -> str:
         return f"avg={sum(counts)/len(counts):.0f}  min={min(counts)}  max={max(counts)}"
 
-    print(f"Input  tokens: {_stats(input_counts)}")
-    print(f"Output tokens: {_stats(output_counts)}")
-    print(f"Total  tokens: {_stats([i + o for i, o in zip(input_counts, output_counts)])}")
+    print(f"{prefix}input  tokens: {_stats(input_counts)}")
+    print(f"{prefix}output tokens: {_stats(output_counts)}")
+    print(f"{prefix}total  tokens: {_stats([i + o for i, o in zip(input_counts, output_counts)])}")
 
 
 if __name__ == "__main__":
