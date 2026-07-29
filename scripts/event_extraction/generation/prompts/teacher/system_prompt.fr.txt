@@ -21,6 +21,7 @@ Réfléchissez soigneusement avant de répondre, mais ne montrez pas votre raiso
       "grounding_quote": "string",
       "event_location_text": "string | not_stated",
       "event_location": "string | not_stated",
+      "event_location_admin_level": "country | state | county | city | district | not_stated",
       "event_time_text": "string | not_stated",
       "event_time": "string | not_stated",
       "time_status": "past | ongoing | forecast | not_stated",
@@ -39,6 +40,7 @@ Réfléchissez soigneusement avant de répondre, mais ne montrez pas votre raiso
       "grounding_quote": "les récoltes ont échoué à travers le pays alors que la saison sèche s'aggrave",
       "event_location_text": "Dans le nord de l'Éthiopie",
       "event_location": "Éthiopie",
+      "event_location_admin_level": "country",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
@@ -49,6 +51,7 @@ Réfléchissez soigneusement avant de répondre, mais ne montrez pas votre raiso
       "grounding_quote": "Des milliers d'agriculteurs sont confrontés à de graves pénuries alimentaires",
       "event_location_text": "Dans le nord de l'Éthiopie",
       "event_location": "Éthiopie",
+      "event_location_admin_level": "country",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
@@ -236,6 +239,19 @@ Les portées larges ne sont pas des localisations :
 
 Si une phrase nomme à la fois des pays spécifiques et une région large et vague, n'incluez que les localisations géocodables spécifiques :
 - "l'Allemagne, l'Italie et d'autres pays européens" -> "Allemagne; Italie"
+
+event_location_admin_level classifie chaque localisation de event_location par niveau administratif :
+- "country" : un État-nation souverain (par ex. "Éthiopie", "Bangladesh", "Soudan du Sud").
+- "state" : une division administrative de premier niveau d'un pays (état, province, région) (par ex. "province du Shandong", "Darfour du Nord", "Khyber Pakhtunkhwa").
+- "county" : une division administrative de deuxième niveau (comté, district, préfecture, département) qui subdivise un état ou une province (par ex. "district de Satkhira").
+- "city" : une ville, un bourg, ou une municipalité (par ex. "Lagos", "Alep", "Katmandou").
+- "district" : un quartier, un arrondissement, ou une subdivision à l'intérieur d'une ville.
+- "not_stated" : event_location est "not_stated", ou la localisation ne correspond clairement à aucun des niveaux ci-dessus (par ex. une région multi-pays comme "Asie du Sud", un bassin fluvial, une vallée, ou toute autre zone nommée qui n'est pas une unité administrative ou municipale).
+Déterminez le niveau à partir de la façon dont le lieu est nommé ou décrit dans article_text — n'utilisez pas de connaissances externes pour rechercher le niveau administratif réel d'un lieu du monde réel.
+Si event_location contient plusieurs localisations séparées par des points-virgules, event_location_admin_level doit contenir le même nombre de valeurs séparées par des points-virgules, dans le même ordre, une par localisation :
+- event_location "Allemagne; Italie" -> event_location_admin_level "country; country"
+- event_location "Chine; Népal; Inde; Bangladesh" -> event_location_admin_level "country; country; country; country"
+Si event_location est "not_stated", event_location_admin_level doit être "not_stated".
 </event_location_rules>
 
 <event_time_rules>
@@ -306,6 +322,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "120 millions à 1,2 milliard de personnes connaîtront un stress hydrique sévère en Asie du Sud et en Asie du Sud-Est",
       "event_location_text": "en Asie du Sud et en Asie du Sud-Est",
       "event_location": "Asie du Sud; Asie du Sud-Est",
+      "event_location_admin_level": "not_stated; not_stated",
       "event_time_text": "D'ici les années 2020",
       "event_time": "/2029",
       "time_status": "forecast",
@@ -326,6 +343,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "Une inondation catastrophique a ravagé le sud-ouest du Bangladesh en 2000",
       "event_location_text": "le sud-ouest du Bangladesh",
       "event_location": "Bangladesh",
+      "event_location_admin_level": "country",
       "event_time_text": "en 2000",
       "event_time": "2000",
       "time_status": "past",
@@ -346,6 +364,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "La récolte de céréales de 1995 dans la province du Shandong a connu un déclin significatif, chutant de 2,7 millions de tonnes",
       "event_location_text": "dans la province du Shandong",
       "event_location": "province du Shandong",
+      "event_location_admin_level": "state",
       "event_time_text": "La récolte de céréales de 1995",
       "event_time": "1995",
       "time_status": "past",
@@ -366,6 +385,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "la contamination à l'arsenic dans le nord-est du Bangladesh, détectée pour la première fois en 1993, de plus grand empoisonnement de masse de l'histoire",
       "event_location_text": "dans le nord-est du Bangladesh",
       "event_location": "Bangladesh",
+      "event_location_admin_level": "country",
       "event_time_text": "en 1993",
       "event_time": "1993",
       "time_status": "past",
@@ -386,6 +406,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "L'éclatement brutal des guerres en Croatie au printemps 1991 a dévasté la région",
       "event_location_text": "en Croatie",
       "event_location": "Croatie",
+      "event_location_admin_level": "country",
       "event_time_text": "au printemps 1991",
       "event_time": "1991",
       "time_status": "past",
@@ -406,6 +427,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "Il y a actuellement un conflit sévère qui fait rage en Bosnie",
       "event_location_text": "en Bosnie",
       "event_location": "Bosnie",
+      "event_location_admin_level": "country",
       "event_time_text": "actuellement",
       "event_time": "1994-03-10",
       "time_status": "ongoing",
@@ -426,6 +448,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "Des extrémistes de droite en Croatie ont mené une série d'attaques militaires sévères contre des communautés serbes le mois dernier",
       "event_location_text": "en Croatie",
       "event_location": "Croatie",
+      "event_location_admin_level": "country",
       "event_time_text": "le mois dernier",
       "event_time": "1998-10",
       "time_status": "past",
@@ -446,6 +469,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "L'Allemagne, l'Italie et d'autres pays européens souffrent actuellement énormément des sanctions",
       "event_location_text": "L'Allemagne, l'Italie et d'autres pays européens",
       "event_location": "Allemagne; Italie",
+      "event_location_admin_level": "country; country",
       "event_time_text": "actuellement",
       "event_time": "2022-05-03",
       "time_status": "ongoing",
@@ -466,6 +490,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "Une brève panne de courant a touché plusieurs quartiers de Lagos hier, causant seulement une perturbation mineure des activités quotidiennes",
       "event_location_text": "de Lagos",
       "event_location": "Lagos",
+      "event_location_admin_level": "city",
       "event_time_text": "hier",
       "event_time": "2015-07-01",
       "time_status": "past",
@@ -486,6 +511,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "Des frappes aériennes ont touché un hôpital et détruit le pont principal menant à la ville d'Alep",
       "event_location_text": "menant à la ville d'Alep",
       "event_location": "Alep",
+      "event_location_admin_level": "city",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -496,6 +522,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "détruit le pont principal menant à la ville d'Alep",
       "event_location_text": "menant à la ville d'Alep",
       "event_location": "Alep",
+      "event_location_admin_level": "city",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -506,6 +533,7 @@ Pour le chômage, l'inflation, la récession, la stagnation, la dette, la baisse
       "grounding_quote": "coupant les habitants de l'accès aux soins d'urgence",
       "event_location_text": "menant à la ville d'Alep",
       "event_location": "Alep",
+      "event_location_admin_level": "city",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -527,6 +555,7 @@ Remarque : le pont est une infrastructure générale, pas une installation spéc
       "grounding_quote": "L'afflux de millions de réfugiés au Pakistan a mis à rude épreuve les ressources dans toute la région",
       "event_location_text": "au Pakistan",
       "event_location": "Pakistan",
+      "event_location_admin_level": "country",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -548,6 +577,7 @@ Remarque : « millions » est un simple décompte, pas un langage de sévérité
       "grounding_quote": "au moins 1 900 personnes ont été tuées par l'armée selon les rapports",
       "event_location_text": "not_stated",
       "event_location": "not_stated",
+      "event_location_admin_level": "not_stated",
       "event_time_text": "Depuis le coup d'État de l'année dernière",
       "event_time": "not_stated",
       "time_status": "past",
@@ -558,6 +588,7 @@ Remarque : « millions » est un simple décompte, pas un langage de sévérité
       "grounding_quote": "l'ONU a enregistré un million de personnes déplacées à l'intérieur du pays",
       "event_location_text": "not_stated",
       "event_location": "not_stated",
+      "event_location_admin_level": "not_stated",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
@@ -577,6 +608,7 @@ Avant de retourner la réponse, validez silencieusement :
 - Chaque événement possède exactement les clés du schéma.
 - Chaque event_type provient de allowed_event_types.
 - Chaque event_location est soit explicitement énoncé et géocodable, soit "not_stated".
+- event_location_admin_level est "not_stated" chaque fois que event_location est "not_stated", et contient sinon une valeur séparée par un point-virgule par localisation dans event_location, dans le même ordre.
 - event_location_text est copié verbatim depuis article_text, ou "not_stated" si event_location est "not_stated".
 - event_time_text est copié verbatim depuis article_text (mots d'origine, pas la date ISO résolue), ou "not_stated" si event_time est "not_stated".
 - Pour chaque événement où event_location est "not_stated", confirmez qu'aucun lieu géocodable n'apparaît dans le même paragraphe que grounding_quote et ne circonscrit clairement le même événement.

@@ -21,6 +21,7 @@ Think carefully before answering, but do not show your reasoning.
       "grounding_quote": "string",
       "event_location_text": "string | not_stated",
       "event_location": "string | not_stated",
+      "event_location_admin_level": "country | state | county | city | district | not_stated",
       "event_time_text": "string | not_stated",
       "event_time": "string | not_stated",
       "time_status": "past | ongoing | forecast | not_stated",
@@ -39,6 +40,7 @@ Given publish_date "2003-06-15" and an article containing: "In northern Ethiopia
       "grounding_quote": "crops have failed across the country as the dry season worsens",
       "event_location_text": "In northern Ethiopia",
       "event_location": "Ethiopia",
+      "event_location_admin_level": "country",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
@@ -49,6 +51,7 @@ Given publish_date "2003-06-15" and an article containing: "In northern Ethiopia
       "grounding_quote": "Thousands of farmers are facing severe food shortages",
       "event_location_text": "In northern Ethiopia",
       "event_location": "Ethiopia",
+      "event_location_admin_level": "country",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
@@ -236,6 +239,19 @@ Broad scopes are not locations:
 
 If a sentence names both specific countries and a vague broad region, include only the specific geocodable locations:
 - "Germany, Italy and other European countries" -> "Germany; Italy"
+
+event_location_admin_level classifies each location in event_location by administrative level:
+- "country": a sovereign nation-state (e.g. "Ethiopia", "Bangladesh", "South Sudan").
+- "state": a first-level administrative division of a country (state, province, region) (e.g. "Shandong province", "North Darfur", "Khyber Pakhtunkhwa").
+- "county": a second-level administrative division (county, district, prefecture, department) that subdivides a state or province (e.g. "Satkhira district").
+- "city": a city, town, or municipality (e.g. "Lagos", "Aleppo", "Kathmandu").
+- "district": a neighborhood, borough, or subdivision within a city.
+- "not_stated": event_location is "not_stated", or the location does not clearly fit one of the levels above (e.g. a multi-country region like "South Asia", a river basin, a valley, or any other named area that is not an administrative or municipal unit).
+Determine the level from how the place is named or described in article_text — do not use outside knowledge to look up a real-world place's actual administrative level.
+If event_location contains multiple semicolon-separated locations, event_location_admin_level must contain the same number of semicolon-separated values, in the same order, one per location:
+- event_location "Germany; Italy" -> event_location_admin_level "country; country"
+- event_location "China; Nepal; India; Bangladesh" -> event_location_admin_level "country; country; country; country"
+If event_location is "not_stated", event_location_admin_level must be "not_stated".
 </event_location_rules>
 
 <event_time_rules>
@@ -306,6 +322,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "120 million to 1.2 billion people will experience severe water stress in South and South East Asia",
       "event_location_text": "in South and South East Asia",
       "event_location": "South Asia; South East Asia",
+      "event_location_admin_level": "not_stated; not_stated",
       "event_time_text": "By the 2020s",
       "event_time": "/2029",
       "time_status": "forecast",
@@ -326,6 +343,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "A catastrophic flood ravaged the southwestern part of Bangladesh in 2000",
       "event_location_text": "the southwestern part of Bangladesh",
       "event_location": "Bangladesh",
+      "event_location_admin_level": "country",
       "event_time_text": "in 2000",
       "event_time": "2000",
       "time_status": "past",
@@ -346,6 +364,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "The 1995 grain harvest in Shandong province suffered a significant decline, falling by 2.7 million tons",
       "event_location_text": "in Shandong province",
       "event_location": "Shandong province",
+      "event_location_admin_level": "state",
       "event_time_text": "The 1995 grain harvest",
       "event_time": "1995",
       "time_status": "past",
@@ -366,6 +385,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "the arsenic contamination in northeast Bangladesh, first detected in 1993, as the largest mass poisoning in history",
       "event_location_text": "in northeast Bangladesh",
       "event_location": "Bangladesh",
+      "event_location_admin_level": "country",
       "event_time_text": "in 1993",
       "event_time": "1993",
       "time_status": "past",
@@ -386,6 +406,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "The brutal outbreak of the wars in Croatia in the spring of 1991 devastated the region",
       "event_location_text": "in Croatia",
       "event_location": "Croatia",
+      "event_location_admin_level": "country",
       "event_time_text": "in the spring of 1991",
       "event_time": "1991",
       "time_status": "past",
@@ -406,6 +427,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "There is currently a severe conflict raging in Bosnia",
       "event_location_text": "in Bosnia",
       "event_location": "Bosnia",
+      "event_location_admin_level": "country",
       "event_time_text": "currently",
       "event_time": "1994-03-10",
       "time_status": "ongoing",
@@ -426,6 +448,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "Right-wing extremists in Croatia carried out a series of severe military attacks on Serbian communities last month",
       "event_location_text": "in Croatia",
       "event_location": "Croatia",
+      "event_location_admin_level": "country",
       "event_time_text": "last month",
       "event_time": "1998-10",
       "time_status": "past",
@@ -446,6 +469,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "Germany, Italy and other European countries are currently suffering tremendously from the sanctions",
       "event_location_text": "Germany, Italy and other European countries",
       "event_location": "Germany; Italy",
+      "event_location_admin_level": "country; country",
       "event_time_text": "currently",
       "event_time": "2022-05-03",
       "time_status": "ongoing",
@@ -466,6 +490,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "A brief power outage affected several neighborhoods in Lagos yesterday, causing only minor disruption to daily activities",
       "event_location_text": "in Lagos",
       "event_location": "Lagos",
+      "event_location_admin_level": "city",
       "event_time_text": "yesterday",
       "event_time": "2015-07-01",
       "time_status": "past",
@@ -486,6 +511,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "Airstrikes hit a hospital and destroyed the main bridge into the city of Aleppo",
       "event_location_text": "into the city of Aleppo",
       "event_location": "Aleppo",
+      "event_location_admin_level": "city",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -496,6 +522,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "destroyed the main bridge into the city of Aleppo",
       "event_location_text": "into the city of Aleppo",
       "event_location": "Aleppo",
+      "event_location_admin_level": "city",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -506,6 +533,7 @@ For unemployment, inflation, recession, stagnation, debt, reduced trade, reduced
       "grounding_quote": "cutting off residents from emergency care",
       "event_location_text": "into the city of Aleppo",
       "event_location": "Aleppo",
+      "event_location_admin_level": "city",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -527,6 +555,7 @@ Note: the bridge is general infrastructure, not a farm-specific facility, so it 
       "grounding_quote": "The influx of millions of refugees into Pakistan has strained resources across the region",
       "event_location_text": "into Pakistan",
       "event_location": "Pakistan",
+      "event_location_admin_level": "country",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "not_stated",
@@ -548,6 +577,7 @@ Note: "millions" is a bare count, not severity language, and "strained resources
       "grounding_quote": "at least 1,900 killings by the military have been reported",
       "event_location_text": "not_stated",
       "event_location": "not_stated",
+      "event_location_admin_level": "not_stated",
       "event_time_text": "Since last year's coup",
       "event_time": "not_stated",
       "time_status": "past",
@@ -558,6 +588,7 @@ Note: "millions" is a bare count, not severity language, and "strained resources
       "grounding_quote": "the UN has registered one million internally displaced people",
       "event_location_text": "not_stated",
       "event_location": "not_stated",
+      "event_location_admin_level": "not_stated",
       "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "ongoing",
@@ -577,6 +608,7 @@ Before returning, validate silently:
 - Every event has exactly the schema keys.
 - Every event_type is from allowed_event_types.
 - Every event_location is either explicitly stated and geocodable, or "not_stated".
+- event_location_admin_level is "not_stated" whenever event_location is "not_stated", and otherwise has one semicolon-separated value per location in event_location, in the same order.
 - event_location_text is copied verbatim from article_text, or "not_stated" if event_location is "not_stated".
 - event_time_text is copied verbatim from article_text (original words, not the resolved ISO date), or "not_stated" if event_time is "not_stated".
 - For every event where event_location is "not_stated", confirm that no geocodable place appears in the same paragraph as grounding_quote that clearly scopes the same event.

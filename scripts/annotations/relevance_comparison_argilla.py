@@ -306,11 +306,11 @@ def export(args: argparse.Namespace) -> None:
 
     rows = []
     for record in dataset.records(with_responses=True):
-        responses = (
-            list(record.responses[PREFERENCE_QUESTION_NAME])
-            if PREFERENCE_QUESTION_NAME in record.responses
-            else []
-        )
+        # record.responses only implements __iter__/__getitem__, not
+        # __contains__, so `name in record.responses` always evaluates False
+        # (it iterates Response objects and compares them to the string).
+        # Index directly -- it's a defaultdict(list), safe on a missing key.
+        responses = list(record.responses[PREFERENCE_QUESTION_NAME])
         submitted = [
             r for r in responses if getattr(r, "status", "submitted") == "submitted"
         ]

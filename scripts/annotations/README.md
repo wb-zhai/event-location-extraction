@@ -104,6 +104,13 @@ guidelines rewritten from `DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL` (see
 `load_guidelines` in `relevance_argilla.py`) so annotators apply the same
 criteria as the Gemini gate.
 
+Pass `--title-only` to only push the `title` field — no article text, no
+`gemini_assessment` field, and no pre-filled Gemini suggestion. Use this for a
+pure title-based relevance pass; the pushed guidelines are rewritten to match
+(annotators are told to judge from the title alone). This only takes effect
+when creating a new dataset, so pick a fresh `--dataset-name` rather than
+reusing one already pushed without the flag.
+
 Annotate in the browser at http://localhost:6900. Re-running `push` on the
 same `--dataset-name` upserts records (keyed by article id/url), so it's safe
 to run repeatedly as new data arrives.

@@ -13,10 +13,6 @@ from typing import Any
 
 import argilla as rg
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 from dotenv import load_dotenv
 
 from scripts.relevance.relevance_filter import _record_key
@@ -74,23 +70,41 @@ LABEL_DISPLAY_2LABEL = {
     "not_relevant": "Not relevant",
 }
 
-# Descriptions adapted from DEFAULT_RELEVANCE_SYSTEM_PROMPT's <policy> block
-# (the binary prompt), not the 3-label one, so annotators apply the same
-# criteria as whatever gate produced this dataset's suggestions.
-LABEL_DESCRIPTIONS_2LABEL = {
-    "relevant": LABEL_DESCRIPTIONS["relevant"],
-    "not_relevant": (
-        "The title and preview give no indication of any real, current, "
-        "concrete instance of any event category — i.e. all category-related "
-        "language is rhetorical, historical, hypothetical, or quoted without "
-        "describing a genuine current occurrence."
-    ),
-}
 
-RELEVANCE_QUESTION_DESCRIPTION_2LABEL = "\n".join(
-    f"- {LABEL_DISPLAY_2LABEL[label]}: {LABEL_DESCRIPTIONS_2LABEL[label]}"
-    for label in LABEL_DISPLAY_2LABEL
-)
+def label_descriptions_2label(title_only: bool = False) -> dict[str, str]:
+    """Descriptions for the binary label set, adapted from
+    DEFAULT_RELEVANCE_SYSTEM_PROMPT's <policy> block (the binary prompt).
+
+    The not_relevant wording names what's actually shown to the annotator —
+    title only under --title-only, title+preview otherwise — so it doesn't
+    reference material they can't see.
+    """
+    if title_only:
+        not_relevant = (
+            "The title gives no indication of any real, current, concrete "
+            "instance of any event category — i.e. all category-related "
+            "language is rhetorical, historical, hypothetical, or quoted "
+            "without describing a genuine current occurrence."
+        )
+    else:
+        not_relevant = (
+            "The title and preview give no indication of any real, current, "
+            "concrete instance of any event category — i.e. all category-related "
+            "language is rhetorical, historical, hypothetical, or quoted without "
+            "describing a genuine current occurrence."
+        )
+    return {
+        "relevant": LABEL_DESCRIPTIONS["relevant"],
+        "not_relevant": not_relevant,
+    }
+
+
+def relevance_question_description_2label(title_only: bool = False) -> str:
+    descriptions = label_descriptions_2label(title_only)
+    return "\n".join(
+        f"- {LABEL_DISPLAY_2LABEL[label]}: {descriptions[label]}"
+        for label in LABEL_DISPLAY_2LABEL
+    )
 
 # Event categories the extraction pipeline looks for, from
 # DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL's <event_categories> block.
@@ -115,9 +129,7 @@ GUIDELINES_TEMPLATE = """Decide whether this article should be sent on to the fu
 
 ## Workflow
 
-1. Read the title and article preview.
-2. Check the **gemini_assessment** field, if present — it shows the automated gate's label, confidence, and reasoning. You are confirming or correcting that call, not labeling from scratch.
-3. Pick one label for the **relevance** question below.
+{workflow}
 
 ## Event categories
 
@@ -134,31 +146,74 @@ The pipeline only extracts events in these categories — judge relevance agains
 {policy}
 """
 
-POLICY_3LABEL = """- **Favor recall over precision**: what matters is whether a real, current occurrence of a category is reported at all, not how prominent it is in the article. A brief, factual side mention of a real event should be Relevant, not Partially relevant — reserve Partially relevant for genuine ambiguity or lack of detail, not for prominence.
-- **Opinion/analysis pieces** are Relevant if they factually reference a concrete, current event in one of the categories, even briefly, and Not relevant if they only use category language rhetorically (e.g. domestic politics, culture, sports, entertainment, or personal profiles that merely borrow a related term or metaphor).
-- **When borderline**: if the article is ambiguous or only partially visible in the preview, prefer Partially relevant over Not relevant; prefer Relevant over Partially relevant when a real, current in-scope occurrence is clearly described, however briefly.
-- **Use only what's shown**: judge from the title and article preview here, not outside knowledge of the event."""
+WORKFLOW_FULL = """1. Read the title and article preview.
+2. Check the **gemini_assessment** field, if present — it shows the automated gate's label, confidence, and reasoning. You are confirming or correcting that call, not labeling from scratch.
+3. Pick one label for the **relevance** question below."""
+
+# Used under --title-only: the article body and gemini_assessment aren't
+# pushed as fields at all, so those workflow steps are dropped and this is
+# an independent human judgment rather than a confirm/correct pass.
+WORKFLOW_TITLE_ONLY = """1. Read the title only — the article body and Gemini's assessment are not shown for this dataset.
+2. Pick one label for the **relevance** question below, using only the title and no outside knowledge of the story."""
+
+POLICY_3LABEL_HEAD = """- **Favor recall over precision**: what matters is whether a real, current occurrence of a category is reported at all, not how prominent it is in the article. A brief, factual side mention of a real event should be Relevant, not Partially relevant — reserve Partially relevant for genuine ambiguity or lack of detail, not for prominence.
+- **Opinion/analysis pieces** are Relevant if they factually reference a concrete, current event in one of the categories, even briefly, and Not relevant if they only use category language rhetorically (e.g. domestic politics, culture, sports, entertainment, or personal profiles that merely borrow a related term or metaphor)."""
 
 # Adapted from DEFAULT_RELEVANCE_SYSTEM_PROMPT's <policy> block (the binary
 # prompt) for datasets detected as 2-label — no "partially relevant" middle
 # ground is offered, so borderline cases resolve straight to Relevant.
-POLICY_2LABEL = """- **Favor recall over precision**: what matters is whether a real, current occurrence of a category is reported at all, not how prominent it is in the article. A brief, factual side mention of a real event should be Relevant.
-- **Opinion/analysis pieces** are Relevant if they factually reference a concrete, current event in one of the categories, even briefly, and Not relevant if they only use category language rhetorically (e.g. domestic politics, culture, sports, entertainment, or personal profiles that merely borrow a related term or metaphor).
-- **When borderline**: if the article is ambiguous or only partially visible in the preview, prefer Relevant over Not relevant.
-- **Use only what's shown**: judge from the title and article preview here, not outside knowledge of the event."""
+POLICY_2LABEL_HEAD = """- **Favor recall over precision**: what matters is whether a real, current occurrence of a category is reported at all, not how prominent it is in the article. A brief, factual side mention of a real event should be Relevant.
+- **Opinion/analysis pieces** are Relevant if they factually reference a concrete, current event in one of the categories, even briefly, and Not relevant if they only use category language rhetorically (e.g. domestic politics, culture, sports, entertainment, or personal profiles that merely borrow a related term or metaphor)."""
 
 
-def load_guidelines(two_label: bool = False) -> str:
+def _borderline_bullet(two_label: bool = False, title_only: bool = False) -> str:
+    ambiguous = "the title is ambiguous" if title_only else "the article is ambiguous or only partially visible in the preview"
+    if two_label:
+        return f"- **When borderline**: if {ambiguous}, prefer Relevant over Not relevant."
+    return (
+        f"- **When borderline**: if {ambiguous}, prefer Partially relevant over "
+        "Not relevant; prefer Relevant over Partially relevant when a real, "
+        "current in-scope occurrence is clearly described, however briefly."
+    )
+
+
+def _use_only_bullet(title_only: bool = False) -> str:
+    if title_only:
+        return (
+            "- **Use only the title**: judge from the title alone, not outside "
+            "knowledge of the event — the article body is not shown for this dataset."
+        )
+    return (
+        "- **Use only what's shown**: judge from the title and article preview "
+        "here, not outside knowledge of the event."
+    )
+
+
+def build_policy(two_label: bool = False, title_only: bool = False) -> str:
+    head = POLICY_2LABEL_HEAD if two_label else POLICY_3LABEL_HEAD
+    return "\n".join(
+        [
+            head,
+            _borderline_bullet(two_label, title_only),
+            _use_only_bullet(title_only),
+        ]
+    )
+
+
+def load_guidelines(two_label: bool = False, title_only: bool = False) -> str:
     label_display = LABEL_DISPLAY_2LABEL if two_label else LABEL_DISPLAY
-    label_descriptions = LABEL_DESCRIPTIONS_2LABEL if two_label else LABEL_DESCRIPTIONS
+    label_descriptions = (
+        label_descriptions_2label(title_only) if two_label else LABEL_DESCRIPTIONS
+    )
     labels = "\n".join(
         f"- **{label_display[label]}**: {label_descriptions[label]}"
         for label in label_display
     )
     return GUIDELINES_TEMPLATE.format(
+        workflow=WORKFLOW_TITLE_ONLY if title_only else WORKFLOW_FULL,
         categories="\n".join(f"- {c}" for c in EVENT_CATEGORIES),
         labels=labels,
-        policy=POLICY_2LABEL if two_label else POLICY_3LABEL,
+        policy=build_policy(two_label, title_only),
     )
 
 
@@ -223,25 +278,28 @@ def get_client():
     return rg.Argilla(api_url=api_url, api_key=api_key)
 
 
-def build_settings(two_label: bool = False):
+def build_settings(two_label: bool = False, title_only: bool = False):
+
+    fields = [rg.TextField(name="title")]
+    if not title_only:
+        fields.append(rg.TextField(name="text"))
+        fields.append(rg.TextField(name="gemini_assessment", required=False))
+
+    description = (
+        relevance_question_description_2label(title_only)
+        if two_label
+        else RELEVANCE_QUESTION_DESCRIPTION
+    )
 
     return rg.Settings(
-        guidelines=load_guidelines(two_label),
-        fields=[
-            rg.TextField(name="title"),
-            rg.TextField(name="text"),
-            rg.TextField(name="gemini_assessment", required=False),
-        ],
+        guidelines=load_guidelines(two_label, title_only),
+        fields=fields,
         questions=[
             rg.LabelQuestion(
                 name=RELEVANCE_QUESTION_NAME,
                 labels=LABEL_DISPLAY_2LABEL if two_label else LABEL_DISPLAY,
                 title="Is this article relevant to food-security risk-event extraction?",
-                description=(
-                    RELEVANCE_QUESTION_DESCRIPTION_2LABEL
-                    if two_label
-                    else RELEVANCE_QUESTION_DESCRIPTION
-                ),
+                description=description,
             ),
         ],
         metadata=[
@@ -264,14 +322,16 @@ def get_or_create_workspace(client, name: str):
     return workspace
 
 
-def get_or_create_dataset(client, name: str, workspace: str, two_label: bool = False):
+def get_or_create_dataset(
+    client, name: str, workspace: str, two_label: bool = False, title_only: bool = False
+):
 
     get_or_create_workspace(client, workspace)
     dataset = client.datasets(name=name, workspace=workspace)
     if dataset is not None:
         return dataset
     dataset = rg.Dataset(
-        name=name, workspace=workspace, settings=build_settings(two_label)
+        name=name, workspace=workspace, settings=build_settings(two_label, title_only)
     )
     dataset.create()
     return dataset
@@ -295,7 +355,7 @@ def gemini_assessment_str(relevance: dict[str, Any]) -> str:
     return f"gemini: {LABEL_DISPLAY[label]} ({confidence:.2f}) — {reason}"
 
 
-def build_record(rec: dict[str, Any], max_chars: int):
+def build_record(rec: dict[str, Any], max_chars: int, title_only: bool = False):
 
     title, text = extract_title_text(rec)
     relevance = rec.get("relevance") or {}
@@ -319,7 +379,9 @@ def build_record(rec: dict[str, Any], max_chars: int):
         metadata["gemini_confidence"] = float(relevance.get("confidence", 0.0) or 0.0)
 
     suggestions = []
-    if label is not None:
+    # Title-only annotation is an independent human judgment, not a
+    # confirm/correct pass over Gemini's call, so don't pre-fill its answer.
+    if label is not None and not title_only:
         suggestions.append(
             rg.Suggestion(
                 RELEVANCE_QUESTION_NAME,
@@ -329,12 +391,13 @@ def build_record(rec: dict[str, Any], max_chars: int):
             )
         )
 
+    fields = {"title": title}
+    if not title_only:
+        fields["text"] = text[:max_chars]
+        fields["gemini_assessment"] = gemini_assessment_str(relevance)
+
     return rg.Record(
-        fields={
-            "title": title,
-            "text": text[:max_chars],
-            "gemini_assessment": gemini_assessment_str(relevance),
-        },
+        fields=fields,
         metadata=metadata,
         suggestions=suggestions,
         id=_record_key(rec) or None,
@@ -353,14 +416,16 @@ def push(args: argparse.Namespace) -> None:
     two_label = detect_two_label(records)
     if two_label:
         print("Detected 2-label relevance data — using binary Relevant/Not relevant question.")
+    if args.title_only:
+        print("Title-only mode: annotators will see only the title (no article text, no Gemini suggestion).")
     dataset = get_or_create_dataset(
-        client, args.dataset_name, args.workspace, two_label
+        client, args.dataset_name, args.workspace, two_label, args.title_only
     )
 
     if args.limit:
         records = records[: args.limit]
 
-    rg_records = [build_record(rec, args.max_chars) for rec in records]
+    rg_records = [build_record(rec, args.max_chars, args.title_only) for rec in records]
     dataset.records.log(rg_records)
     print(f"Pushed {len(rg_records)} records to dataset {args.dataset_name!r}.")
 
@@ -380,11 +445,7 @@ def push(args: argparse.Namespace) -> None:
         for record in existing:
             if record.id not in new_by_id:
                 continue
-            responses = (
-                list(record.responses[RELEVANCE_QUESTION_NAME])
-                if RELEVANCE_QUESTION_NAME in record.responses
-                else []
-            )
+            responses = list(record.responses[RELEVANCE_QUESTION_NAME])
             has_submitted = any(
                 getattr(r, "status", "submitted") == "submitted" for r in responses
             )
@@ -422,11 +483,13 @@ def export(args: argparse.Namespace) -> None:
 
     rows = []
     for record in dataset.records(with_suggestions=True, with_responses=True):
-        responses = (
-            list(record.responses[RELEVANCE_QUESTION_NAME])
-            if RELEVANCE_QUESTION_NAME in record.responses
-            else []
-        )
+        # record.responses/record.suggestions only implement __iter__ and
+        # __getitem__, not __contains__, so `name in record.responses` falls
+        # back to iterating and comparing each Response/Suggestion object to
+        # the string `name` -- always False. Index directly instead:
+        # responses is a defaultdict(list) (safe on a missing key), while
+        # suggestions is a plain dict (raises KeyError on a missing key).
+        responses = list(record.responses[RELEVANCE_QUESTION_NAME])
         submitted = [
             r for r in responses if getattr(r, "status", "submitted") == "submitted"
         ]
@@ -435,11 +498,10 @@ def export(args: argparse.Namespace) -> None:
         if args.only_submitted and human_value is None:
             continue
 
-        suggestion = (
-            record.suggestions[RELEVANCE_QUESTION_NAME]
-            if RELEVANCE_QUESTION_NAME in record.suggestions
-            else None
-        )
+        try:
+            suggestion = record.suggestions[RELEVANCE_QUESTION_NAME]
+        except KeyError:
+            suggestion = None
         gemini_value = suggestion.value if suggestion else None
 
         rows.append(
@@ -476,7 +538,7 @@ def main() -> None:
     parser.add_argument(
         "--env-file",
         type=Path,
-        default=REPO_ROOT / ".env",
+        default=".env",
         help="Path to a .env file with ARGILLA_API_URL / ARGILLA_API_KEY (default: repo .env).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -498,6 +560,15 @@ def main() -> None:
             "After pushing, delete any existing records not present in --input, "
             "making the dataset an exact mirror of the file (same dataset/URL, "
             "content fully replaced). Not compatible with --limit."
+        ),
+    )
+    push_parser.add_argument(
+        "--title-only",
+        action="store_true",
+        help=(
+            "Only show annotators the title — no article text or gemini_assessment "
+            "field, and no pre-filled Gemini suggestion. Only takes effect when "
+            "creating a new dataset."
         ),
     )
     push_parser.set_defaults(func=push)

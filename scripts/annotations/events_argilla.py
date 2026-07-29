@@ -19,10 +19,6 @@ from typing import Any
 
 import argilla as rg
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 from dotenv import load_dotenv
 
 from scripts.annotations.relevance_argilla import normalize_decision
@@ -136,9 +132,8 @@ EVENT_JSON_TEMPLATE = """```json
 ```"""
 
 SYSTEM_PROMPT_PATH = (
-    REPO_ROOT
-    / "scripts"
-    / "data"
+    Path(__file__).parent.parent
+    / "event_extraction"
     / "generation"
     / "prompts"
     / "teacher"
@@ -303,6 +298,7 @@ def build_settings():
             ),
         ],
         metadata=[
+            rg.TermsMetadataProperty(name="id"),
             rg.TermsMetadataProperty(name="adm0_code"),
             rg.TermsMetadataProperty(name="risk_factors"),
             rg.TermsMetadataProperty(name="generation_llm"),
@@ -412,7 +408,11 @@ def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str)
 
     events = [normalize_event(ev) for ev in (annotation.get("events") or []) if isinstance(ev, dict)]
 
+    record_id = _record_key(rec) or None
+
     metadata: dict[str, Any] = {}
+    if record_id:
+        metadata["id"] = record_id
     adm0_code = rec.get("adm0_code")
     if adm0_code:
         metadata["adm0_code"] = str(adm0_code)
@@ -445,7 +445,7 @@ def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str)
         },
         metadata=metadata,
         suggestions=suggestions,
-        id=_record_key(rec) or None,
+        id=record_id,
     )
 
 
@@ -575,7 +575,9 @@ def export(args: argparse.Namespace) -> None:
         )
     print(f"[fetch] downloading records from {args.dataset_name!r}...", flush=True)
 
-    def submitted_value(record, question_name: str):
+    usernames_by_id = {str(user.id): user.username for user in client.users}
+
+    def chosen_response(record, question_name: str):
         # record.responses[name] is a defaultdict(list) — safe for missing keys.
         try:
             responses = list(record.responses[question_name])
@@ -584,8 +586,7 @@ def export(args: argparse.Namespace) -> None:
         submitted = [
             r for r in responses if getattr(r, "status", "submitted") == "submitted"
         ]
-        chosen = submitted[0] if submitted else (responses[0] if responses else None)
-        return chosen.value if chosen else None
+        return submitted[0] if submitted else (responses[0] if responses else None)
 
     def get_suggestion(record, question_name: str):
         # record.suggestions has no __contains__; iterating yields Suggestion
@@ -601,11 +602,16 @@ def export(args: argparse.Namespace) -> None:
     parse_errors = 0
     validation_error_count = 0
     for record in dataset.records(with_suggestions=True, with_responses=True):
-        json_value = submitted_value(record, EVENT_DETAILS_JSON_QUESTION_NAME)
+        response = chosen_response(record, EVENT_DETAILS_JSON_QUESTION_NAME)
+        json_value = response.value if response else None
+        annotated_by = (
+            usernames_by_id.get(str(response.user_id)) if response else None
+        )
 
         if args.only_submitted and json_value is None:
             continue
 
+        title = record.fields.get("title", "")
         text = record.fields.get("text", "")
 
         parse_error = None
@@ -637,7 +643,7 @@ def export(args: argparse.Namespace) -> None:
                 f"{EVENT_DETAILS_JSON_QUESTION_NAME} is invalid: {parse_error}"
             )
         validation_errors.extend(
-            validate_events_annotation(events, text, allowed_event_types)
+            validate_events_annotation(events, f"{title}\n\n{text}", allowed_event_types)
         )
         if validation_errors:
             validation_error_count += 1
@@ -648,12 +654,13 @@ def export(args: argparse.Namespace) -> None:
             "text": text,
             "annotation": {
                 "events": events,
+                "annotated_by": annotated_by,
+                "original_annotation": {
+                    "events": model_events,
+                },
             },
             "events_parse_error": parse_error,
             "events_validation_errors": validation_errors or None,
-            "model_annotation": {
-                "events": model_events,
-            },
         }
         if validation_errors:
             invalid_rows.append(
@@ -700,7 +707,7 @@ def main() -> None:
     parser.add_argument(
         "--env-file",
         type=Path,
-        default=REPO_ROOT / ".env",
+        default=".env",
         help="Path to a .env file with ARGILLA_API_URL / ARGILLA_API_KEY (default: repo .env).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

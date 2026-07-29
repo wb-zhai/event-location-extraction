@@ -427,6 +427,156 @@ PYTHONPATH=. python scripts/geocoding/to_csv_ingest.py predictions_dir/   # merg
 
 ---
 
+## Output schema reference
+
+The event object's shape changes at each pipeline stage. This section documents the
+three that matter most: what the Gemini teacher produces (data generation), what the
+distilled student model produces (inference), and what geocoding adds on top.
+
+### 1. Data generation (Gemini teacher) — `scripts/event_extraction/generation/generate.py`
+
+Each event, per `AnnotationEvent`
+([generate.py:41-49](scripts/event_extraction/generation/generate.py#L41-L49)), has 8 fields:
+
+```json
+{
+  "event_type": "geopolitical tension",
+  "grounding_quote": "Iran moved Wednesday to head off a potential crisis...",
+  "event_location_text": "in the Gulf",
+  "event_location": "Gulf",
+  "event_time_text": "Wednesday",
+  "event_time": "2016-01-13",
+  "time_status": "past",
+  "severity": "not_stated"
+}
+```
+
+`time_status` ∈ `past | ongoing | forecast | not_stated`; `severity` ∈
+`low | medium | high | extreme | not_stated`. `event_type` must be one of the 48
+`bona.v4.json` labels. `_text` fields hold the raw phrase as it appears in the article;
+the non-`_text` counterpart (`event_location`, `event_time`) holds the normalized form
+(`event_time` resolved to an ISO date where possible).
+
+The full output row (`output_record()`,
+[generate.py:319-333](scripts/event_extraction/generation/generate.py#L319-L333)) wraps
+the article metadata around an `annotation` object:
+
+```json
+{
+  "id": "...", "title": "...", "text": "...", "source_url": "...", "publish_date": "...",
+  "status": "ok",
+  "annotation": {
+    "events": [ /* AnnotationEvent, ... */ ],
+    "unverified_events": [ /* optional — events that failed grounding verification */ ]
+  },
+  "generation_llm": {"model": "gemini-3.1-pro-preview", "metadata": {"...": "..."}}
+}
+```
+
+**Training-target format differs from this.** `to_sft.py` converts these rows into
+LlamaFactory Alpaca SFT records, and by default drops `event_location_text`,
+`event_time_text`, and **`severity`** (`DEFAULT_IGNORE`,
+[to_sft.py:23-27](scripts/event_extraction/generation/to_sft.py#L23-L27)) — so the
+actual SFT `output` target has only 5 event fields (`event_type`, `grounding_quote`,
+`event_location`, `event_time`, `time_status`), even though the student prompt below
+still declares `severity` as part of its schema.
+
+### 2. Output of the distilled model — `scripts/event_extraction/inference/vllm_infer.py`
+
+The student is *prompted* with a 6-field schema
+([prompts/student/system_prompt.txt:4-17](scripts/event_extraction/generation/prompts/student/system_prompt.txt#L4-L17)):
+
+```json
+{
+  "events": [
+    {
+      "event_type": "displaced",
+      "grounding_quote": "5,000 internally displaced persons (IDPs) households in Maiduguri",
+      "event_location": "Maiduguri",
+      "event_time": "not_stated",
+      "time_status": "ongoing",
+      "severity": "not_stated"
+    }
+  ]
+}
+```
+
+> **Known drift, worth being aware of:** when `use_guided_decoding=True` (the default),
+> `vllm_infer.py` constrains generation with `_BASE_ANNOTATION_SCHEMA`
+> ([vllm_infer.py:54-98](scripts/event_extraction/inference/vllm_infer.py#L54-L98)),
+> an older **11-field** schema left over from the `science.json`/v3 ontology —
+> `document_relevance` at the document level, plus per-event `event_location_text`,
+> `event_time_text`, `affected_entity`, `affected_group`, and `modality`, all marked
+> `required`. That schema doesn't match either the current teacher schema (stage 1) or
+> the student prompt's declared 6-field schema above. A checkpoint trained on current
+> `bona.v4` SFT data run with guided decoding on would be constrained to also emit
+> fields it was never trained to produce. `vllm_infer.py`'s default `--ontology` is
+> also still `science.json`, not `bona.v4.json`. This script likely needs updating to
+> match the current data-generation schema before its guided-decoding path is used
+> against a `bona.v4`-trained checkpoint.
+
+The output row wraps windowed predictions plus a merged/deduplicated view
+(`_resolve_events()`, dedup key is `grounding_quote`;
+[vllm_infer.py:165-178](scripts/event_extraction/inference/vllm_infer.py#L165-L178)):
+
+```json
+{
+  "source": {"text": "...", "publish_date": "..."},
+  "window_predictions": [
+    {"window_start": 0, "window_end": 1500, "window_text": "...", "prediction": {"events": [ /* ... */ ]}}
+  ],
+  "predictions": [ /* deduplicated events across all windows, same event shape as above */ ]
+}
+```
+
+### 3. After geocoding — `scripts/geocoding/add_geotaxonomy.py`
+
+Geocoding mutates events **in place** (both under `annotation.events` and
+`predictions`), adding a `geotaxonomy` list — one entry per `;`-separated part of
+`event_location` (`process_events()`,
+[add_geotaxonomy.py:241-249](scripts/geocoding/add_geotaxonomy.py#L241-L249);
+`resolve_location()`,
+[add_geotaxonomy.py:151-201](scripts/geocoding/add_geotaxonomy.py#L151-L201)):
+
+```json
+{
+  "event_type": "pests",
+  "grounding_quote": "pest outbreaks in Uganda",
+  "event_location": "Uganda",
+  "event_time": "not_stated",
+  "time_status": "ongoing",
+  "severity": "not_stated",
+  "geotaxonomy": [
+    {
+      "query": "Uganda",
+      "resolved_name": "Uganda",
+      "zhai": "country",
+      "photon_type": "country",
+      "lat": 1.5333554,
+      "lon": 32.2166578,
+      "osm_id": 192796,
+      "osm_type": "R",
+      "country": "Uganda",
+      "countrycode": "UG",
+      "adm_code": "UG",
+      "adm_level": 0
+    }
+  ]
+}
+```
+
+`query`/`resolved_name`/`zhai`/`photon_type`/`lat`/`lon` are always present once a
+location resolves; `osm_id`, `osm_type`, `country`, `countrycode`, `province`,
+`district`, `city` are only added when Photon's response includes them.
+`adm_code`/`adm_level` are added in a second pass (spatial join against
+`geotaxonomy_prewb_{0,1,2}.geojson`) and are `None` if the point falls outside every
+boundary file. There is no Google-style `place_id`/address-components object — this
+pipeline geocodes via [Photon](https://photon.komoot.io/) (OSM-based), so identity is
+`osm_id` + `osm_type`. Full field-by-field detail in
+[`scripts/geocoding/README.md`](scripts/geocoding/README.md#geotaxonomy-schema).
+
+---
+
 ## Reproducibility
 
 Exact commands used to produce the current (latest) version of each trained artifact.
