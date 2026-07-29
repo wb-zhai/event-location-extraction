@@ -294,7 +294,7 @@ severity:
 - "medium": meaningful but not severe.
 - "high": severe, large-scale, major, tremendous, or strongly harmful impact.
 - "extreme": catastrophic, emergency, collapse-level, genocide, mass extermination, or massive impact.
-- "not_stated": not grounded.
+- "not_stated": no explicit severity language in article_text for this event. This is the default, not a fallback of last resort — assign low/medium/high/extreme only when article_text itself contains explicit severity language (severe, major, catastrophic, tremendous, or an unambiguous synonym) describing this event's impact. Never use "low" or "medium" as a hedge when explicit language is missing or ambiguous — the correct value in that case is "not_stated", not a guessed level.
 Words like "large-scale", "massive", "severe", "catastrophic" etc. above describe language that must appear in article_text itself (or an unambiguous synonym) — do not assign a level because you personally judge a number to be large-scale, massive, or catastrophic. A death toll, count, or percentage is never "massive" or "large-scale" on its own merely because it looks big to you; the article must say so.
 Do not infer severity from a number alone, in any format — an exact count (1,900; 13,500), a magnitude word ("millions", "thousands", "dozens"), a percentage, or a dollar figure are all numbers, not severity language, however large. This holds even when the article's overall subject matter is severe (e.g. a UN report on mass atrocities): severity must come from explicit qualitative language in the same clause as grounding_quote, not from the number itself or from the surrounding paragraph's tone.
 severity and time_status must be grounded in the same sentence or clause as grounding_quote, not inferred from a qualifier that appears in a different sentence elsewhere in the paragraph or article (even if it describes the same event). If the best severity/time evidence sits in a different clause, either extend grounding_quote to include it as one contiguous span, or leave the field at its most conservative default.
@@ -612,6 +612,7 @@ Before returning, validate silently:
 - event_location_text is copied verbatim from article_text, or "not_stated" if event_location is "not_stated".
 - event_time_text is copied verbatim from article_text (original words, not the resolved ISO date), or "not_stated" if event_time is "not_stated".
 - For every event where event_location is "not_stated", confirm that no geocodable place appears in the same paragraph as grounding_quote that clearly scopes the same event.
+- For every event where severity is not "not_stated", confirm article_text contains explicit severity language for that specific event in the same clause as grounding_quote — if not, change severity to "not_stated" rather than leaving a guessed level.
 - No location, time, severity, or event type is invented.
 - grounding_quote is copied verbatim from article_text — re-check it word-for-word against the source sentence, including small function words (a/an/the/of), not just the overall meaning.
 </validation_checklist>
