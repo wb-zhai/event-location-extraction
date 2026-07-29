@@ -1,12 +1,12 @@
 ### Model
-model_name_or_path: Qwen/Qwen3-4B-Instruct-2507
-template: qwen3_nothink
+model_name_or_path: Qwen/Qwen3.5-4B
+template: qwen3_5_nothink
 trust_remote_code: true
 
 ### Method
 stage: sft
 do_train: true
-do_eval: true
+do_eval: false
 finetuning_type: lora
 lora_rank: 32
 lora_alpha: 64
@@ -14,10 +14,10 @@ lora_dropout: 0.05
 lora_target: all
 
 ### Dataset
-dataset: risk_v2_train_no_desc_700_args_dropped
-eval_dataset: risk_v2_dev_no_desc_700_args_dropped
+dataset: train
+# eval_dataset: dev
 cutoff_len: 16784
-max_samples: 10
+max_samples: 1000000
 preprocessing_num_workers: 8
 
 ### Training
@@ -33,8 +33,8 @@ weight_decay: 0.01
 optim: adamw_torch
 
 ### Evaluation & saving
-eval_strategy: steps
-eval_steps: 200
+# eval_strategy: steps
+# eval_steps: 200
 save_steps: 200
 logging_steps: 5
 
@@ -54,5 +54,5 @@ include_num_input_tokens_seen: true
 
 ### Tracking
 report_to: wandb
-run_name: qwen3-4b-risk-v3-train-vertex
+run_name: qwen3_5-4b-risk-v4-train-vertex
 plot_loss: true

@@ -37,11 +37,16 @@ RUN python3 -c "import subprocess,json; pkgs=json.loads(subprocess.check_output(
         -c /tmp/torch_constraints.txt \
         -r requirements/metrics.txt -r requirements/deepspeed.txt -r /tmp/requirements-extra.txt
 
-# torchaudio is a LlamaFactory dependency only needed for audio inputs. The PyPI build
-# ships a CUDA version that mismatches the NGC base image's PyTorch, which crashes
-# `import torchaudio` at startup. The import is guarded in data/mm_plugin.py, so it is
-# safe to drop here for text/vision training.
-RUN pip uninstall -y torchaudio
+
+# mm_plugin.py unconditionally does `import torchaudio` (needed only for audio
+# inputs; we train text-only). The PyPI wheel bundles a CUDA build (13.0) that
+# mismatches the NGC base image's PyTorch (13.2), so importing it raises
+# RuntimeError at process startup and crash-loops every job. Replace it with an
+# empty stub that satisfies the import without pulling in the real extension.
+RUN pip uninstall -y torchaudio && \
+    SITE_PKGS=$(python3 -c "import site; print(site.getsitepackages()[0])") && \
+    mkdir -p "${SITE_PKGS}/torchaudio" && \
+    touch "${SITE_PKGS}/torchaudio/__init__.py"
 
 # Install Google Cloud SDK for gsutil
 RUN apt-get update -qq && \

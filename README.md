@@ -558,6 +558,42 @@ PYTHONPATH=. python scripts/event_extraction/generation/generate.py \
 
 **3. Train the event extraction model** (§3)
 
+First, we need to convert the annotated JSONL files into the LlamaFactory SFT format. We will use the `to_sft.py` script for this purpose.
+
+```bash
+python scripts/event_extraction/generation/to_sft.py \
+    --input dataset/extraction/en_5k.relevance.annotated.jsonl \
+    dataset/extraction/fr_5k.relevance.annotated.jsonl \
+    --output dataset/extraction/llamafactory \
+    --max-chars 3000 \
+    --tokenizer Qwen/Qwen3.5-4B \
+    --max-empty-ratio 0.3
+```
+
+Then we upload the SFT dataset to GCS and submit a Vertex AI custom job to train the Qwen3.5-4B model with LoRA.
+
+```bash
+gcloud storage cp -r dataset/extraction/llamafactory gs://zhai-risk-factor-extraction/extraction/data/
+```
+
+and then submit the training job:
+
+```bash
+cd vertexai/train/event-extraction
+cp .env.example .env    # fill in GCP_PROJECT, GCS_BUCKET, WANDB_API_KEY, ...
+set -a && source .env && set +a 
+
+# copy the SFT dataset to GCS
+gcloud storage cp -r dataset/extraction/llamafactory gs://zhai-risk-factor-extraction/extraction/data/
+
+# copy the training config to GCS
+gsutil cp config/qwen3_5_4b.yaml "gs://${GCS_BUCKET}/${GCS_TRAIN_CONFIG}"
+
+# push the training image and submit the Vertex AI custom job
+bash build_push.sh --cloud latest    # build + push image (one-time; rebuild only on Dockerfile changes)
+bash submit_job.sh                   # submit the Vertex AI custom job (A100 40GB by default)
+```
+
 **4. Inference and eval on the held-out dev split** (§4)
 
 **5. Inference at scale** (§5)

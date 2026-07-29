@@ -352,6 +352,17 @@ def row_labels(row: dict, default_labels: list[str], top_k: int | None) -> list[
     return labels
 
 
+def row_language(row: dict) -> str:
+    """Return "fra" or "eng" for *row*, inferred from its "language" field.
+
+    Follows the 3-letter code convention used by the download scripts
+    (e.g. scripts/download/from_db_matrix.py). Defaults to "eng" when the
+    field is absent or unrecognized.
+    """
+    lang = str(row.get("language") or "eng").strip().lower()
+    return "fra" if lang in ("fra", "fr", "french", "français", "francais") else "eng"
+
+
 def render_system_prompt(system_prompt: str, labels: list[str]) -> str:
     rendered, count = re.subn(
         r"\{\{ALLOWED_EVENT_TYPES\}\}",
@@ -574,8 +585,7 @@ def _rows_to_records(
     args: argparse.Namespace,
     ignore: set[str],
     default_labels: list[str],
-    system_template: str,
-    user_template: str,
+    templates: dict[str, tuple[str, str]],
 ) -> list[dict]:
     records = []
     for source_name, row in rows:
@@ -583,6 +593,16 @@ def _rows_to_records(
         if annotation is None:
             print(f"Skipping row from {source_name} (id: {row.get('id')}): no annotation", file=sys.stderr)
             continue
+
+        lang = row_language(row)
+        if lang not in templates:
+            print(
+                f"Skipping row from {source_name} (id: {row.get('id')}): "
+                f"no prompt templates available for language {lang!r}",
+                file=sys.stderr,
+            )
+            continue
+        system_template, user_template = templates[lang]
 
         try:
             system_prompt = render_system_prompt(
@@ -761,8 +781,16 @@ def main():
     default_labels = load_ontology_labels(args.ontology)
 
     prompt_dir = pathlib.Path(args.prompt_dir) if args.prompt_dir else HERE / "prompts" / "student"
-    system_template = (prompt_dir / "system_prompt.txt").read_text()
-    user_template = (prompt_dir / "user_prompt.txt").read_text()
+    templates: dict[str, tuple[str, str]] = {
+        "eng": (
+            (prompt_dir / "system_prompt.txt").read_text(),
+            (prompt_dir / "user_prompt.txt").read_text(),
+        ),
+    }
+    system_prompt_fr = prompt_dir / "system_prompt.fr.txt"
+    user_prompt_fr = prompt_dir / "user_prompt.fr.txt"
+    if system_prompt_fr.exists() and user_prompt_fr.exists():
+        templates["fra"] = (system_prompt_fr.read_text(), user_prompt_fr.read_text())
 
     input_paths = [pathlib.Path(p) for p in args.input]
     rows = _load_rows(input_paths)
@@ -775,7 +803,7 @@ def main():
 
     for split_name, split_rows in (("train", train_rows), ("dev", dev_rows)):
         records = _rows_to_records(
-            split_rows, args, ignore, default_labels, system_template, user_template
+            split_rows, args, ignore, default_labels, templates
         )
 
         if args.max_empty_ratio is not None:

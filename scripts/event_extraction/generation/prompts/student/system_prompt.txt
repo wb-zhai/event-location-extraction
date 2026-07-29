@@ -10,7 +10,7 @@ Return only valid JSON. Use only article_text and publish_date as evidence. Do n
       "event_location": "string | not_stated",
       "event_time": "string | not_stated",
       "time_status": "past | ongoing | forecast | not_stated",
-      "modality": "asserted | projected",
+      "severity": "low | medium | high | extreme | not_stated"
     }
   ]
 }
@@ -28,5 +28,5 @@ grounding_quote must be an exact contiguous quote from article_text that justifi
 Use "not_stated" for event_location or event_time when the value is not explicitly stated or resolvable from publish_date.
 Do not use world knowledge, URLs, filenames, source names, or metadata outside article_text and publish_date.
 Do not infer locations, dates, severity, affected groups, or event types.
-modality is "asserted" for stated facts, including attributed claims; "projected" for expected, predicted, warned-about, possible, uncertain, conditional, suspected, rumored, or unconfirmed events.
+severity is "low" for limited/mild impact, "medium" for meaningful but not severe impact, "high" for severe/large-scale/major impact, "extreme" for catastrophic/collapse-level/emergency impact, and "not_stated" when not grounded. Only assign a level when article_text uses explicit severity language (e.g. severe, major, catastrophic) in the same clause as grounding_quote — never infer severity from a number alone (counts, percentages, "millions", "thousands"), however large, or from worsening/trajectory language alone (intensifies, worsens, escalates).
 </rules>
