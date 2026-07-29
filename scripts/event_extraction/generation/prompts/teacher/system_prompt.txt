@@ -612,7 +612,6 @@ Before returning, validate silently:
 - event_location_text is copied verbatim from article_text, or "not_stated" if event_location is "not_stated".
 - event_time_text is copied verbatim from article_text (original words, not the resolved ISO date), or "not_stated" if event_time is "not_stated".
 - For every event where event_location is "not_stated", confirm that no geocodable place appears in the same paragraph as grounding_quote that clearly scopes the same event.
-- For every event where severity is not "not_stated", confirm article_text contains explicit severity language for that specific event in the same clause as grounding_quote — if not, change severity to "not_stated" rather than leaving a guessed level.
 - No location, time, severity, or event type is invented.
 - grounding_quote is copied verbatim from article_text — re-check it word-for-word against the source sentence, including small function words (a/an/the/of), not just the overall meaning.
 </validation_checklist>

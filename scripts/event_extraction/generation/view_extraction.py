@@ -48,6 +48,7 @@ def format_events(events: list[dict]) -> str:
             f"   - Grounding quote: _{ev.get('grounding_quote', '')}_\n"
             f"   - Event location: {ev.get('event_location', 'n/a')}\n"
             f"   - Event location text: {ev.get('event_location_text', 'n/a')}\n"
+            f"   - Event location admin level: {ev.get('event_location_admin_level', 'n/a')}\n"
             f"   - Event time: {ev.get('event_time', 'n/a')}\n"
             f"   - Event time text: {ev.get('event_time_text', 'n/a')}\n"
             f"   - Time status: {ev.get('time_status', 'n/a')}\n"

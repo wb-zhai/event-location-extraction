@@ -18,6 +18,7 @@ EVENT_FIELDS = [
     "grounding_quote",
     "event_location_text",
     "event_location",
+    "event_location_admin_level",
     "event_time_text",
     "event_time",
     "time_status",
@@ -91,7 +92,7 @@ def format_events_side(events: list[dict[str, Any]], other_by_quote: dict[str, d
         status, diffs = event_status(ev, other_by_quote)
         marker = {"unchanged": "", "modified": "✏️ ", "unmatched": f"🔶 {unmatched_label} "}[status]
         parts.append(f"{i}. {marker}**{ev.get('event_type', 'n/a')}** — _{ev.get('grounding_quote', '')}_")
-        for field in ["event_location", "event_time", "time_status", "severity"]:
+        for field in ["event_location", "event_location_admin_level", "event_time", "time_status", "severity"]:
             value = ev.get(field, "n/a")
             if field in diffs:
                 parts.append(f"   - **{field}: {value}**")

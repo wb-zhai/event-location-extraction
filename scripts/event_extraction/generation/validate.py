@@ -7,6 +7,8 @@ Checks per event:
   - event_location_text (when not "not_stated") is an exact substring of source.text
   - event_time_text (when not "not_stated") is an exact substring of source.text
   - time_status / severity are valid enum values
+  - event_location_admin_level values are valid enum values, and its ";"-separated
+    segment count matches event_location's
   - no duplicate events per document (same event_type + grounding_quote)
 
 Emits:
@@ -29,7 +31,7 @@ ONTOLOGY_PATH = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 SYSTEM_PROMPT_PATH = (
     REPO_ROOT
     / "scripts"
-    / "data"
+    / "event_extraction"
     / "generation"
     / "prompts"
     / "teacher"
@@ -38,6 +40,7 @@ SYSTEM_PROMPT_PATH = (
 
 VALID_TIME_STATUS = {"past", "ongoing", "forecast", "not_stated"}
 VALID_SEVERITY = {"low", "medium", "high", "extreme", "not_stated"}
+VALID_ADMIN_LEVEL = {"country", "state", "county", "city", "district", "not_stated"}
 
 
 def load_ontology_labels(path: Path) -> set[str]:
@@ -92,6 +95,23 @@ def check_event(
     if event.get("severity") not in VALID_SEVERITY:
         errors.append(f"invalid severity: {event.get('severity')!r}")
         categories.add("enum")
+
+    admin_level = event.get("event_location_admin_level", "")
+    admin_level_parts = [p.strip() for p in admin_level.split(";")] if admin_level else []
+    invalid_admin_levels = [p for p in admin_level_parts if p not in VALID_ADMIN_LEVEL]
+    if invalid_admin_levels:
+        errors.append(f"invalid event_location_admin_level: {admin_level!r}")
+        categories.add("enum")
+    else:
+        location = event.get("event_location", "")
+        location_parts = [p.strip() for p in location.split(";")] if location else []
+        if len(admin_level_parts) != len(location_parts):
+            errors.append(
+                "event_location_admin_level segment count "
+                f"({len(admin_level_parts)}) does not match event_location "
+                f"({len(location_parts)})"
+            )
+            categories.add("enum")
 
     key = (event_type, gq)
     if key in seen_keys:

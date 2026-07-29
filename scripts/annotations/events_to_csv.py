@@ -5,7 +5,7 @@ Each article becomes a block of rows:
 
     id  title  published_at  source_url  risk_factors  text  event_type_reference
     <id> <title> <published_at> <source_url> <risk_factors> <text> <event type + description list>
-    event_index  event_type  grounding_quote  event_location_text  event_location  event_time_text  event_time  time_status  severity
+    event_index  event_type  grounding_quote  event_location_text  event_location  event_location_admin_level  event_time_text  event_time  time_status  severity
     1  <event 1 fields...>
     2  <event 2 fields...>
     (blank row)
@@ -50,8 +50,9 @@ Each article is a repeating block of rows:
    event_type_reference repeats the allowed event types + descriptions from
    the labels table below, for quick reference without switching tabs.
 2. A header row for events (event_index, event_type, grounding_quote,
-   event_location_text, event_location, event_time_text, event_time,
-   time_status, severity), followed by one row per extracted event.
+   event_location_text, event_location, event_location_admin_level,
+   event_time_text, event_time, time_status, severity), followed by one row
+   per extracted event.
 3. A blank row separating this article's block from the next.
 
 Both header rows repeat above every article's block, so the sheet reads

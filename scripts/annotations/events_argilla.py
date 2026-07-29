@@ -32,6 +32,7 @@ DEFAULT_WORKSPACE = "default"
 DETAIL_FIELDS = [
     "event_location_text",
     "event_location",
+    "event_location_admin_level",
     "event_time_text",
     "event_time",
     "time_status",
@@ -42,6 +43,7 @@ CHOICE_DETAIL_FIELDS = {
     "time_status": ["past", "ongoing", "forecast", "not_stated"],
     "severity": ["low", "medium", "high", "extreme", "not_stated"],
 }
+ADMIN_LEVEL_CHOICES = ["country", "state", "county", "city", "district", "not_stated"]
 VERBATIM_FIELDS = ["event_location_text", "event_time_text"]
 MISSING_TEXT_VALUES = {"", "not_stated"}
 
@@ -123,6 +125,7 @@ EVENT_JSON_TEMPLATE = """```json
     "grounding_quote": "The 1995 grain harvest in Shandong province suffered a significant decline, falling by 2.7 million tons",
     "event_location_text": "in Shandong province",
     "event_location": "Shandong province",
+    "event_location_admin_level": "state",
     "event_time_text": "The 1995 grain harvest",
     "event_time": "1995",
     "time_status": "past",
@@ -171,7 +174,7 @@ anything that isn't a valid event, and add any events it missed.
 2. Open the **Events** field — it holds a JSON list of event objects, one per event, seeded
    from the model's prediction.
 3. Go through it: fix wrong field values, delete entries that aren't valid events, and add
-   new entries for events the model missed. Keep every object to exactly the eight keys below.
+   new entries for events the model missed. Keep every object to exactly the nine keys below.
 4. Submit `[]` if the article contains no valid events.
 
 ## What counts as an event
@@ -187,7 +190,7 @@ anything that isn't a valid event, and add any events it missed.
 - Skip vague implications, and skip anything whose most specific fitting type isn't in the
   **Allowed event types** reference shown under the article.
 
-## The eight fields (per event)
+## The nine fields (per event)
 
 - **event_type** — must exactly match one of the allowed types below. Use the most specific
   one the text directly supports.
@@ -202,6 +205,13 @@ anything that isn't a valid event, and add any events it missed.
   ("North Darfur state" -> "North Darfur"). Broad scopes ("world", "many countries", "globally")
   are `not_stated`. Livelihood/pastoral zones aren't geocodable — use the named region/country
   containing them, or `not_stated`.
+- **event_location_admin_level** — the administrative level of each place in event_location:
+  `country` · `state` (province/region) · `county` (district/prefecture within a state) ·
+  `city` · `district` (a neighborhood/borough within a city) · `not_stated`. For multiple
+  places, give one `;`-separated value per place in the same order as event_location (e.g.
+  event_location `"Germany; Italy"` -> event_location_admin_level `"country; country"`).
+  `not_stated` whenever event_location is `not_stated`, or the place doesn't cleanly fit one
+  of these levels (e.g. a multi-country region like "South Asia").
 - **event_time_text** — the shortest verbatim quote carrying the time evidence, copied in the
   article's own words (e.g. "last month", not the resolved date), or `not_stated`.
 - **event_time** — ISO 8601 derived from event_time_text: `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`;
@@ -210,10 +220,12 @@ anything that isn't a valid event, and add any events it missed.
   (early/mid/late/season) to just the year.
 - **time_status** — `past` (completed/historical) · `ongoing` (current/continuing/worsening) ·
   `forecast` (expected/projected/predicted/planned/warned about) · `not_stated`.
-- **severity** — `low` · `medium` · `high` · `extreme` · `not_stated`. Assign a level **only**
-  from explicit severity language in the text (severe, major, catastrophic, etc.). Worsening
-  or trajectory language alone (intensifies, escalates, deteriorates) does **not** imply high,
-  and never infer severity from a number alone.
+- **severity** — `low` · `medium` · `high` · `extreme` · `not_stated`. `not_stated` is the
+  **default**, not a last resort — assign a level **only** when the text uses explicit
+  severity language (severe, major, catastrophic, etc.) describing that event's impact.
+  Worsening or trajectory language alone (intensifies, escalates, deteriorates) does **not**
+  imply high. Never infer severity from a number alone, and never pick `low`/`medium` as a
+  safer-sounding guess when explicit language is missing — use `not_stated` instead.
 
 ## Picking event_type — common distinctions
 
@@ -554,6 +566,29 @@ def validate_events_annotation(
             value = event.get(field)
             if isinstance(value, str) and value not in choices:
                 errors.append(f"event {i}: {field} must be one of {choices}; got {value!r}")
+
+        admin_level = event.get("event_location_admin_level")
+        if isinstance(admin_level, str):
+            admin_level_parts = [p.strip() for p in admin_level.split(";")]
+            bad_parts = [p for p in admin_level_parts if p not in ADMIN_LEVEL_CHOICES]
+            if bad_parts:
+                errors.append(
+                    f"event {i}: event_location_admin_level parts must be one of "
+                    f"{ADMIN_LEVEL_CHOICES}; got {admin_level!r}"
+                )
+            else:
+                location = event.get("event_location")
+                location_parts = (
+                    [p.strip() for p in location.split(";")]
+                    if isinstance(location, str)
+                    else []
+                )
+                if isinstance(location, str) and len(admin_level_parts) != len(location_parts):
+                    errors.append(
+                        f"event {i}: event_location_admin_level has "
+                        f"{len(admin_level_parts)} ';'-separated value(s) but event_location "
+                        f"has {len(location_parts)}"
+                    )
     return errors
 
 

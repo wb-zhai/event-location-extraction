@@ -43,6 +43,7 @@ class AnnotationEvent(BaseModel):
     grounding_quote: str
     event_location_text: str
     event_location: str
+    event_location_admin_level: str
     event_time_text: str
     event_time: str
     time_status: Literal["past", "ongoing", "forecast", "not_stated"]
