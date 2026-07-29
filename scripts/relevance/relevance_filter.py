@@ -132,6 +132,105 @@ Indiquez si cet article doit être transmis au pipeline complet d'extraction des
 """
 
 
+DEFAULT_RELEVANCE_SYSTEM_PROMPT_TITLE_ONLY = """<role>
+You are a high-recall relevance gate for the extraction of risk events contributing to food crises.
+</role>
+
+<goal>
+Decide whether the article is likely to discuss an explicit risk event or food crisis itself, thus worth sending to the full extraction pipeline.
+</goal>
+
+<event_categories>
+The pipeline extracts events in these categories:
+- agricultural issues
+- conflict and security
+- displacement and migration
+- economic stress
+- environmental issues
+- food insecurity
+- humanitarian disruption
+- political instability
+- public health
+- weather and natural hazards
+</event_categories>
+
+<policy>
+- Favor recall over precision. Relevance depends on whether a real, current, concrete instance of a category is reported at all -- NOT on whether it is the article's main subject. A brief indication of an actual event (e.g. a title noting "amid extreme rainfall affecting the region") makes the article relevant.
+- What disqualifies a mention is not its prominence but its nature: category language used only as a quote, historical anecdote, hypothetical, or rhetorical comparison (e.g. "prices rose like the famine of the 1980s") does NOT describe a real, current occurrence, and does not make the article relevant on its own.
+- If the title is borderline, ambiguous, or gives insufficient information to decide, mark it relevant.
+- Mark it irrelevant only when the title gives no indication of any real, current, concrete instance of any event category -- i.e. all category-related language is rhetorical, historical, hypothetical, or quoted without describing a genuine current occurrence.
+- Use only the provided title. No article text or preview is available.
+</policy>
+"""
+
+DEFAULT_RELEVANCE_USER_PROMPT_TITLE_ONLY = """<context>
+<title>
+{title}
+</title>
+</context>
+
+<task>
+Return whether this article should proceed to the full food-security risk/event extraction pipeline.
+</task>
+
+<decision_rule>
+- is_relevant=true if the title reports a real, current, concrete instance of at least one of the following event categories, even as a brief or secondary detail: agricultural issues, conflict and security, displacement and migration, economic stress, environmental issues, food insecurity, humanitarian disruption, political instability, public health, or weather and natural hazards.
+- A historical anecdote, hypothetical, or rhetorical comparison that uses category-related language without describing a real current occurrence does not count as evidence.
+- If uncertain whether the title describes a real, current in-scope occurrence, return is_relevant=true.
+- is_relevant=false only when the title is clearly unrelated to all of the above categories, or when all category-related language is rhetorical, historical, hypothetical, or quoted rather than describing a genuine current occurrence.
+</decision_rule>
+"""
+
+DEFAULT_RELEVANCE_SYSTEM_PROMPT_TITLE_ONLY_FR = """<role>
+Vous êtes un filtre de pertinence à haut rappel pour l'extraction d'événements à risque contribuant aux crises alimentaires.
+</role>
+
+<goal>
+Déterminez si l'article est susceptible de traiter d'un événement à risque explicite ou d'une crise alimentaire elle-même, et mérite donc d'être transmis au pipeline d'extraction complet.
+</goal>
+
+<event_categories>
+Le pipeline extrait des événements dans les catégories suivantes :
+- agricultural issues
+- conflict and security
+- displacement and migration
+- economic stress
+- environmental issues
+- food insecurity
+- humanitarian disruption
+- political instability
+- public health
+- weather and natural hazards
+</event_categories>
+
+<policy>
+- Privilégiez le rappel plutôt que la précision. La pertinence dépend du fait qu'une instance réelle, actuelle et concrète d'une catégorie soit rapportée -- PAS du fait qu'il s'agisse du sujet principal de l'article. Une brève indication d'un événement réel (par exemple, un titre notant « en pleines pluies extrêmes touchant la région ») rend l'article pertinent.
+- Ce qui disqualifie une mention n'est pas sa proéminence mais sa nature : un langage de catégorie utilisé seulement comme citation, anecdote historique, hypothèse ou comparaison rhétorique (par exemple « les prix ont grimpé comme lors de la famine des années 1980 ») ne décrit PAS une occurrence réelle et actuelle, et ne rend pas l'article pertinent à lui seul.
+- Si le titre est limite, ambigu, ou ne donne pas assez d'information pour décider, marquez-le comme pertinent.
+- Ne marquez l'article comme non pertinent que lorsque le titre ne donne aucune indication d'une instance réelle, actuelle et concrète d'une catégorie d'événement -- c'est-à-dire que tout le langage lié à une catégorie est rhétorique, historique, hypothétique, ou cité sans décrire une occurrence réelle actuelle.
+- Utilisez uniquement le titre fourni. Aucun texte ou aperçu d'article n'est disponible.
+</policy>
+"""
+
+DEFAULT_RELEVANCE_USER_PROMPT_TITLE_ONLY_FR = """<context>
+<title>
+{title}
+</title>
+</context>
+
+<task>
+Indiquez si cet article doit être transmis au pipeline complet d'extraction des risques/événements de sécurité alimentaire.
+</task>
+
+<decision_rule>
+- is_relevant=true si le titre rapporte une instance réelle, actuelle et concrète d'au moins une des catégories d'événements suivantes, même comme détail bref ou secondaire : agricultural issues, conflict and security, displacement and migration, economic stress, environmental issues, food insecurity, humanitarian disruption, political instability, public health, or weather and natural hazards.
+- Une anecdote historique, une hypothèse, ou une comparaison rhétorique qui utilise un langage lié à une catégorie sans décrire une occurrence réelle actuelle ne compte pas comme preuve.
+- En cas d'incertitude quant à savoir si le titre décrit une occurrence réelle, actuelle et dans le périmètre, retournez is_relevant=true.
+- is_relevant=false uniquement lorsque le titre est clairement sans rapport avec toutes les catégories ci-dessus, ou lorsque tout le langage lié à une catégorie est rhétorique, historique, hypothétique, ou cité plutôt que de décrire une occurrence réelle actuelle.
+</decision_rule>
+"""
+
+
 food_insecurity_regex = re.compile(
     r"\b(?:"
     r"food insecurity|acute food insecurity|food security crisis|food crisis|"
@@ -313,6 +412,30 @@ def _sentence_lang(args: argparse.Namespace) -> str:
     return "fr" if args.french else "en"
 
 
+def _default_system_prompt(args: argparse.Namespace) -> str:
+    if args.title_only:
+        return (
+            DEFAULT_RELEVANCE_SYSTEM_PROMPT_TITLE_ONLY_FR
+            if args.french
+            else DEFAULT_RELEVANCE_SYSTEM_PROMPT_TITLE_ONLY
+        )
+    return (
+        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+    )
+
+
+def _default_user_prompt_template(args: argparse.Namespace) -> str:
+    if args.title_only:
+        return (
+            DEFAULT_RELEVANCE_USER_PROMPT_TITLE_ONLY_FR
+            if args.french
+            else DEFAULT_RELEVANCE_USER_PROMPT_TITLE_ONLY
+        )
+    return (
+        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else DEFAULT_RELEVANCE_USER_PROMPT
+    )
+
+
 def should_filter_by_relevance(
     decision: dict[str, Any], confidence_threshold: float
 ) -> bool:
@@ -337,14 +460,27 @@ async def classify_article_relevance(
     retry_backoff_seconds: float = 2.0,
     sentences: int | None = None,
     sentence_lang: str = "en",
+    title_only: bool = False,
 ) -> dict[str, Any]:
     if system_prompt is None:
-        system_prompt = DEFAULT_RELEVANCE_SYSTEM_PROMPT
+        system_prompt = (
+            DEFAULT_RELEVANCE_SYSTEM_PROMPT_TITLE_ONLY
+            if title_only
+            else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+        )
     if user_prompt_template is None:
-        user_prompt_template = DEFAULT_RELEVANCE_USER_PROMPT
+        user_prompt_template = (
+            DEFAULT_RELEVANCE_USER_PROMPT_TITLE_ONLY
+            if title_only
+            else DEFAULT_RELEVANCE_USER_PROMPT
+        )
 
-    preview_text = build_preview_text(
-        text, max_chars=max_chars, sentences=sentences, lang=sentence_lang
+    preview_text = (
+        ""
+        if title_only
+        else build_preview_text(
+            text, max_chars=max_chars, sentences=sentences, lang=sentence_lang
+        )
     )
     prompt = user_prompt_template.format(title=title, text=preview_text)
     log_llm_call(
@@ -407,6 +543,7 @@ async def classify_article_relevance(
                 "max_chars": max_chars,
                 "sentences": sentences,
                 "text_chars_used": len(preview_text),
+                "title_only": title_only,
                 "metadata": response.metadata,
             }
         except GeminiContentBlockedError as exc:
@@ -429,6 +566,7 @@ async def classify_article_relevance(
                 "max_chars": max_chars,
                 "sentences": sentences,
                 "text_chars_used": len(preview_text),
+                "title_only": title_only,
                 "blocked": True,
                 "block_reason": str(exc.block_reason),
             }
@@ -513,18 +651,15 @@ async def process_record(client, record, args, cascade_client=None):
                     record_id=record_id,
                     max_chars=args.max_chars,
                     confidence_threshold=args.confidence_threshold,
-                    system_prompt=(
-                        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else None
-                    ),
-                    user_prompt_template=(
-                        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else None
-                    ),
+                    system_prompt=_default_system_prompt(args),
+                    user_prompt_template=_default_user_prompt_template(args),
                     verbose=args.verbose,
                     override_settings=getattr(args, "override_settings", None),
                     max_attempts=args.max_attempts,
                     retry_backoff_seconds=args.retry_backoff_seconds,
                     sentences=args.sentences,
                     sentence_lang=_sentence_lang(args),
+                    title_only=args.title_only,
                 )
 
             relevance_info = await _classify(client)
@@ -865,21 +1000,13 @@ async def run_batch_relevance(
     from scripts.event_extraction.generation.costs import aggregate, report
 
     client = GeminiLLMClient(model_name=args.model, system_prompt=None)
-    default_system_prompt = (
-        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR
-        if args.french
-        else DEFAULT_RELEVANCE_SYSTEM_PROMPT
-    )
+    default_system_prompt = _default_system_prompt(args)
     system_prompt = (
         args.system_prompt
         if hasattr(args, "system_prompt") and args.system_prompt
         else default_system_prompt
     )
-    user_prompt_template = (
-        DEFAULT_RELEVANCE_USER_PROMPT_FR
-        if args.french
-        else DEFAULT_RELEVANCE_USER_PROMPT
-    )
+    user_prompt_template = _default_user_prompt_template(args)
 
     tasks = [
         _BatchTask(
@@ -887,11 +1014,15 @@ async def run_batch_relevance(
             record=r,
             prompt=user_prompt_template.format(
                 title=str(r.get("title") or (r.get("source") or {}).get("title", "")),
-                text=build_preview_text(
-                    str(r.get("text") or (r.get("source") or {}).get("text", "")),
-                    max_chars=args.max_chars,
-                    sentences=args.sentences,
-                    lang=_sentence_lang(args),
+                text=(
+                    ""
+                    if args.title_only
+                    else build_preview_text(
+                        str(r.get("text") or (r.get("source") or {}).get("text", "")),
+                        max_chars=args.max_chars,
+                        sentences=args.sentences,
+                        lang=_sentence_lang(args),
+                    )
                 ),
             ),
         )
@@ -961,21 +1092,13 @@ async def run_batch_relevance_cascade(
     from scripts.event_extraction.generation.costs import aggregate, report
 
     client = GeminiLLMClient(model_name=args.model, system_prompt=None)
-    default_system_prompt = (
-        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR
-        if args.french
-        else DEFAULT_RELEVANCE_SYSTEM_PROMPT
-    )
+    default_system_prompt = _default_system_prompt(args)
     system_prompt = (
         args.system_prompt
         if hasattr(args, "system_prompt") and args.system_prompt
         else default_system_prompt
     )
-    user_prompt_template = (
-        DEFAULT_RELEVANCE_USER_PROMPT_FR
-        if args.french
-        else DEFAULT_RELEVANCE_USER_PROMPT
-    )
+    user_prompt_template = _default_user_prompt_template(args)
 
     def build_tasks(recs: list[dict[str, Any]]) -> list[_BatchTask]:
         return [
@@ -986,11 +1109,18 @@ async def run_batch_relevance_cascade(
                     title=str(
                         r.get("title") or (r.get("source") or {}).get("title", "")
                     ),
-                    text=build_preview_text(
-                        str(r.get("text") or (r.get("source") or {}).get("text", "")),
-                        max_chars=args.max_chars,
-                        sentences=args.sentences,
-                        lang=_sentence_lang(args),
+                    text=(
+                        ""
+                        if args.title_only
+                        else build_preview_text(
+                            str(
+                                r.get("text")
+                                or (r.get("source") or {}).get("text", "")
+                            ),
+                            max_chars=args.max_chars,
+                            sentences=args.sentences,
+                            lang=_sentence_lang(args),
+                        )
                     ),
                 ),
             )
@@ -1118,7 +1248,12 @@ async def process_file(args):
     input_path = Path(args.input)
     output_path = Path(args.output)
 
-    if args.sentences:
+    if args.title_only:
+        print(
+            "[relevance_filter] Title-only mode: only the article title is used as "
+            "model input; --max-chars/--sentences are ignored."
+        )
+    elif args.sentences:
         print(
             f"[relevance_filter] Preview truncation mode: sentences "
             f"(first {args.sentences} sentences, lang={_sentence_lang(args)}); "
@@ -1373,6 +1508,13 @@ def main():
         action="store_true",
         help="Use the French translation of the relevance system/user prompts "
         "(event categories and output format stay in English).",
+    )
+    parser.add_argument(
+        "--title-only",
+        action="store_true",
+        help="Use only the article title as model input for LLM relevance "
+        "classification (no article text/preview). Uses dedicated title-only "
+        "prompt templates and ignores --max-chars/--sentences.",
     )
     parser.add_argument(
         "--limit",
