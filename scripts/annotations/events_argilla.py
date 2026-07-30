@@ -613,16 +613,18 @@ def export(args: argparse.Namespace) -> None:
 
     usernames_by_id = {str(user.id): user.username for user in client.users}
 
-    def chosen_response(record, question_name: str):
+    def chosen_responses(record, question_name: str):
         # record.responses[name] is a defaultdict(list) — safe for missing keys.
+        # Returns every submitted response (one per annotator); if none were
+        # submitted, falls back to a single draft response, as before.
         try:
             responses = list(record.responses[question_name])
         except KeyError:
-            return None
+            return []
         submitted = [
             r for r in responses if getattr(r, "status", "submitted") == "submitted"
         ]
-        return submitted[0] if submitted else (responses[0] if responses else None)
+        return submitted if submitted else responses[:1]
 
     def get_suggestion(record, question_name: str):
         # record.suggestions has no __contains__; iterating yields Suggestion
@@ -639,79 +641,83 @@ def export(args: argparse.Namespace) -> None:
     validation_error_count = 0
     validation_warning_count = 0
     for record in dataset.records(with_suggestions=True, with_responses=True):
-        response = chosen_response(record, EVENT_DETAILS_JSON_QUESTION_NAME)
-        json_value = response.value if response else None
-        annotated_by = (
-            usernames_by_id.get(str(response.user_id)) if response else None
-        )
-
-        if args.only_submitted and json_value is None:
-            continue
+        responses = chosen_responses(record, EVENT_DETAILS_JSON_QUESTION_NAME)
+        if not responses:
+            responses = [None]
 
         title = record.fields.get("title", "")
         text = record.fields.get("text", "")
-
-        parse_error = None
-        events: list[dict[str, Any]] = []
-        if json_value is not None:
-            try:
-                parsed = json.loads(json_value)
-            except json.JSONDecodeError as exc:
-                parse_error = str(exc)
-                parse_errors += 1
-            else:
-                if isinstance(parsed, list):
-                    events = parsed
-                else:
-                    parse_error = (
-                        f"{EVENT_DETAILS_JSON_QUESTION_NAME} must be a JSON list; "
-                        f"got {type(parsed).__name__}"
-                    )
-                    parse_errors += 1
 
         model_suggestion = get_suggestion(record, EVENT_DETAILS_JSON_QUESTION_NAME)
         model_events = None
         if model_suggestion is not None:
             model_events = json.loads(model_suggestion.value)
 
-        validation_errors = []
-        if parse_error is not None:
-            validation_errors.append(
-                f"{EVENT_DETAILS_JSON_QUESTION_NAME} is invalid: {parse_error}"
+        for response in responses:
+            json_value = response.value if response else None
+            annotated_by = (
+                usernames_by_id.get(str(response.user_id)) if response else None
             )
-        event_errors, validation_warnings = validate_events_annotation(
-            events, f"{title}\n\n{text}", allowed_event_types
-        )
-        validation_errors.extend(event_errors)
-        if validation_errors:
-            validation_error_count += 1
-        if validation_warnings:
-            validation_warning_count += 1
 
-        row = {
-            "id": record.id,
-            "title": record.fields.get("title"),
-            "text": text,
-            "annotation": {
-                "events": events,
-                "annotated_by": annotated_by,
-                "original_annotation": {
-                    "events": model_events,
-                },
-            },
-            "events_parse_error": parse_error,
-            "events_validation_errors": validation_errors or None,
-            "events_validation_warnings": validation_warnings or None,
-        }
-        if validation_errors:
-            invalid_rows.append(
-                {
-                    **row,
-                    EVENT_DETAILS_JSON_QUESTION_NAME: json_value,
-                }
+            if args.only_submitted and json_value is None:
+                continue
+
+            parse_error = None
+            events: list[dict[str, Any]] = []
+            if json_value is not None:
+                try:
+                    parsed = json.loads(json_value)
+                except json.JSONDecodeError as exc:
+                    parse_error = str(exc)
+                    parse_errors += 1
+                else:
+                    if isinstance(parsed, list):
+                        events = parsed
+                    else:
+                        parse_error = (
+                            f"{EVENT_DETAILS_JSON_QUESTION_NAME} must be a JSON list; "
+                            f"got {type(parsed).__name__}"
+                        )
+                        parse_errors += 1
+
+            validation_errors = []
+            if parse_error is not None:
+                validation_errors.append(
+                    f"{EVENT_DETAILS_JSON_QUESTION_NAME} is invalid: {parse_error}"
+                )
+            event_errors, validation_warnings = validate_events_annotation(
+                events, f"{title}\n\n{text}", allowed_event_types
             )
-        if not args.valid_only or not validation_errors:
-            rows.append(row)
+            validation_errors.extend(event_errors)
+            if validation_errors:
+                validation_error_count += 1
+            if validation_warnings:
+                validation_warning_count += 1
+
+            row = {
+                "id": record.id,
+                "title": record.fields.get("title"),
+                "text": text,
+                "annotation": {
+                    "events": events,
+                    "annotated_by": annotated_by,
+                    "original_annotation": {
+                        "events": model_events,
+                    },
+                },
+                "events_parse_error": parse_error,
+                "events_validation_errors": validation_errors or None,
+                "events_validation_warnings": validation_warnings or None,
+            }
+            if validation_errors:
+                invalid_rows.append(
+                    {
+                        **row,
+                        EVENT_DETAILS_JSON_QUESTION_NAME: json_value,
+                    }
+                )
+            if not args.valid_only or not validation_errors:
+                rows.append(row)
 
     output_path = Path(args.output)
     with output_path.open("w", encoding="utf-8") as handle:

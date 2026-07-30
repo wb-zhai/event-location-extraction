@@ -36,13 +36,14 @@ from geotaxonomy_utils import get_latlon_to_id_from_path
 PHOTON_URL = "http://localhost:2322/api"
 
 PHOTON_TYPE_TO_OURS = {
+    "continent": "country",
     "country": "country",
     "state": "province",
     "county": "district",
-    "city": "city",
-    "town": "city",
-    "village": "village",
-    "suburb": "suburb",
+    "city": "district",
+    "town": "district",
+    "village": "district",
+    "suburb": "district",
     "borough": "district",
     "district": "district",
     "municipality": "district",
@@ -171,7 +172,7 @@ def resolve_location(query: str) -> dict | None:
     if admin_level is not None:
         our_type = _admin_level_to_ours(int(admin_level))
     else:
-        our_type = PHOTON_TYPE_TO_OURS.get(photon_type, photon_type)
+        our_type = PHOTON_TYPE_TO_OURS.get(photon_type, "district")
 
     result: dict = {
         "query": query,
