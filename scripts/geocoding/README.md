@@ -73,6 +73,15 @@ pip install requests tqdm pandas geopandas google-cloud-storage
 
 The script defaults to a **local** Photon instance (`http://localhost:2322/api`). To use the public Photon API instead, change `PHOTON_URL` at the top of the script to `https://photon.komoot.io/api/` and respect their rate-limit (use `--delay 1.0` and `--workers 1`).
 
+There is a ready-to-use VM on GCP that runs Photon with the full OSM planet data. To use it, SSH into the VM and run:
+
+```bash
+cd /home/pleum/photon
+java -Xmx32G -jar photon-opensearch-0.7.4.jar
+```
+
+The VM is currently named `geocoder-photon`.
+
 ### Boundary files
 
 The spatial join requires `geotaxonomy_prewb_0.geojson`, `geotaxonomy_prewb_1.geojson`, and `geotaxonomy_prewb_2.geojson` (country, province, and district-level World Bank boundaries). By default the script looks for them in `dataset/geotaxonomy/` at the repository root. Override with `--geotaxonomy-dir`.
@@ -129,7 +138,7 @@ score = reranker_factor × importance_proxy
 ```
 
 Each signal guards against a different failure mode that arises with free-text event location strings:
-
+n
 - **Importance proxy alone** would pick the most geographically significant entity regardless of name. A query for "Berlin" could resolve to a large rural relation called "Berlin Township, Ohio" simply because it is an OSM relation with broad coverage.
 - **Reranker factor alone** would pick the best string match regardless of significance. A query for "Germany" could resolve to a minor OSM node called "Germany" in Pennsylvania because the name is an exact match.
 
@@ -220,7 +229,7 @@ Converts `.geo.jsonl` prediction files (produced by `add_geotaxonomy.py`) into t
 
 ## Usage
 
-### Single file
+### Single file 
 
 ```bash
 python to_csv_ingest.py path/to/shard.geo.jsonl

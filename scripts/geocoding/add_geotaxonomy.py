@@ -35,6 +35,8 @@ from geotaxonomy_utils import get_latlon_to_id_from_path
 # PHOTON_URL = "https://photon.komoot.io/api/"
 PHOTON_URL = "http://localhost:2322/api"
 
+_PHOTON_LAYERS = {"country", "state", "county", "city", "district", "locality", "street", "house", "poi"}
+
 PHOTON_TYPE_TO_OURS = {
     "continent": "country",
     "country": "country",
@@ -149,11 +151,14 @@ def _get_session() -> requests.Session:
     return _thread_local.session
 
 
-def resolve_location(query: str) -> dict | None:
+def resolve_location(query: str, layer: str | None = None) -> dict | None:
     """Query Photon for a single location string, return a geotaxonomy dict."""
     session = _get_session()
+    params: list[tuple[str, str]] = [("q", query), ("limit", "10"), ("lang", "en")]
+    if layer:
+        params.append(("layer", layer))
     try:
-        resp = session.get(PHOTON_URL, params={"q": query, "limit": 10, "lang": "en"}, timeout=10)
+        resp = session.get(PHOTON_URL, params=params, timeout=10)
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"  WARNING: request failed for '{query}': {e}", file=sys.stderr)
@@ -207,29 +212,37 @@ def resolve_event_location(
     cache: dict,
     cache_lock: threading.Lock,
     delay: float,
+    admin_level: str | None = None,
 ) -> list[dict]:
-    """
-    Split a potentially semicolon-separated location string and resolve each part.
-    Returns a list of geotaxonomy dicts.
-    """
-    parts = [p.strip() for p in location_str.split(";") if p.strip()]
+    """Split a potentially semicolon-separated location string and resolve each part."""
+    raw_parts = [p.strip() for p in location_str.split(";")]
+    raw_levels = [a.strip() for a in (admin_level or "").split(";")]
+    # Broadcast a single admin level to all parts; pad shorter lists with "" so no
+    # location is silently dropped when counts don't match.
+    if len(raw_levels) == 1:
+        raw_levels = raw_levels * len(raw_parts)
+    elif len(raw_levels) < len(raw_parts):
+        raw_levels += [""] * (len(raw_parts) - len(raw_levels))
+
     results = []
 
-    for part in parts:
-        if part.lower() == "not_stated":
+    for part, lvl in zip(raw_parts, raw_levels):
+        if not part or part.lower() == "not_stated":
             continue
 
+        layer = lvl if lvl in _PHOTON_LAYERS else None
+        cache_key = (part, layer)
         with cache_lock:
-            if part in cache:
-                val = cache[part]
+            if cache_key in cache:
+                val = cache[cache_key]
                 if val is not None:
                     results.append(val)
                 continue
 
-        geo = resolve_location(part)
+        geo = resolve_location(part, layer)
 
         with cache_lock:
-            cache.setdefault(part, geo)
+            cache.setdefault(cache_key, geo)
 
         if geo is not None:
             results.append(geo)
@@ -247,7 +260,8 @@ def process_events(
         loc = event.get("event_location", "")
         if not loc or loc.lower() == "not_stated":
             continue
-        event["geotaxonomy"] = resolve_event_location(loc, cache, cache_lock, delay)
+        admin_level = event.get("event_location_admin_level") or None
+        event["geotaxonomy"] = resolve_event_location(loc, cache, cache_lock, delay, admin_level)
 
 
 def process_obj(
