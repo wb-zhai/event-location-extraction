@@ -15,7 +15,7 @@ import sys
 
 HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
+DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -23,7 +23,6 @@ if str(REPO_ROOT) not in sys.path:
 DEFAULT_IGNORE = {
     "event_location_text",
     "event_time_text",
-    "severity",
 }
 
 LLAMAFACTORY_COLUMNS = {
@@ -313,6 +312,22 @@ def load_ontology_labels(path: pathlib.Path) -> list[str]:
     raise ValueError(f"Unsupported ontology format at {path}")
 
 
+def load_ontology_descriptions(path: pathlib.Path) -> dict[str, str]:
+    """Return {label: description} for ontologies that carry descriptions.
+
+    Only the ``{"events": {label: description}}`` shape has them; every other
+    supported shape is a bare label list, so this returns ``{}``.
+    """
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict) and isinstance(payload.get("events"), dict):
+        return {
+            str(label): str(desc)
+            for label, desc in payload["events"].items()
+            if isinstance(desc, str) and desc.strip()
+        }
+    return {}
+
+
 def _normalize_labels(raw_labels: object, *, key: str) -> list[str]:
     if isinstance(raw_labels, str):
         raw_labels = [raw_labels]
@@ -363,10 +378,21 @@ def row_language(row: dict) -> str:
     return "fra" if lang in ("fra", "fr", "french", "français", "francais") else "eng"
 
 
-def render_system_prompt(system_prompt: str, labels: list[str]) -> str:
+def render_system_prompt(
+    system_prompt: str,
+    labels: list[str],
+    descriptions: dict[str, str] | None = None,
+) -> str:
+    if descriptions:
+        block = "\n".join(
+            f"{label}: {descriptions[label]}" if label in descriptions else label
+            for label in labels
+        )
+    else:
+        block = "\n".join(labels)
     rendered, count = re.subn(
         r"\{\{ALLOWED_EVENT_TYPES\}\}",
-        "\n".join(labels),
+        block,
         system_prompt,
         count=1,
     )
@@ -585,6 +611,7 @@ def _rows_to_records(
     args: argparse.Namespace,
     ignore: set[str],
     default_labels: list[str],
+    descriptions: dict[str, str],
     templates: dict[str, tuple[str, str]],
 ) -> list[dict]:
     records = []
@@ -608,6 +635,7 @@ def _rows_to_records(
             system_prompt = render_system_prompt(
                 system_template,
                 row_labels(row, default_labels, args.top_k_candidates),
+                descriptions,
             )
         except ValueError as e:
             print(f"Skipping row from {source_name} (id: {row.get('id')}): {e}", file=sys.stderr)
@@ -690,6 +718,17 @@ def main():
         default=None,
         metavar="N",
         help="Limit row candidate labels to the first N labels",
+    )
+    parser.add_argument(
+        "--ontology-descriptions",
+        choices=("none", "all"),
+        default="none",
+        help=(
+            "Render each allowed_event_types entry as 'label: description' using the "
+            "ontology's descriptions ('all'), or as a bare label ('none'). Descriptions "
+            "add roughly 2.2k tokens to every example with bona.v4.json, so 'none' is the "
+            "default; train and serve with the same setting (default: %(default)s)"
+        ),
     )
     parser.add_argument(
         "--no-window",
@@ -779,6 +818,14 @@ def main():
 
     ignore = set(args.ignore)
     default_labels = load_ontology_labels(args.ontology)
+    descriptions: dict[str, str] = {}
+    if args.ontology_descriptions == "all":
+        descriptions = load_ontology_descriptions(args.ontology)
+        if not descriptions:
+            parser.error(
+                f"--ontology-descriptions all: {args.ontology} carries no descriptions "
+                '(expected {"events": {label: description}})'
+            )
 
     prompt_dir = pathlib.Path(args.prompt_dir) if args.prompt_dir else HERE / "prompts" / "student"
     templates: dict[str, tuple[str, str]] = {
@@ -803,7 +850,7 @@ def main():
 
     for split_name, split_rows in (("train", train_rows), ("dev", dev_rows)):
         records = _rows_to_records(
-            split_rows, args, ignore, default_labels, templates
+            split_rows, args, ignore, default_labels, descriptions, templates
         )
 
         if args.max_empty_ratio is not None:

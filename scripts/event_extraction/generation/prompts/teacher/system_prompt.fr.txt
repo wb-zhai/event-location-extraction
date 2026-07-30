@@ -117,10 +117,12 @@ landslide
 Extrayez un objet événement pour chaque événement distinct, lié à un risque et explicitement énoncé.
 N'extrayez pas les implications vagues.
 N'extrayez pas d'événements à partir de formulations interrogatives (sous forme de question) — n'extrayez qu'à partir d'énoncés déclaratifs qui affirment un fait.
+N'extrayez pas une accusation, une allégation, ou une affirmation attribuée à un tiers, sauf si article_text l'énonce comme un incident survenu, avec un lieu, un temps, ou un décompte énoncé. Une accusation générale ou habituelle (« accusé d'avoir orchestré des enlèvements et des meurtres dans la zone », « est connu pour ses pillages », « a attaqué des villages à plusieurs reprises ») énonce un schéma récurrent, pas un événement. En cas de doute sur le fait qu'une affirmation attribuée décrive un incident énoncé, ne l'extrayez pas.
 Ne fusionnez pas des événements distincts.
 Ne dupliquez pas les mentions répétées, sauf si une nouvelle information sur l'événement est ajoutée. Cela inclut :
 - Plusieurs sources rapportant des bilans de victimes ou d'impact différents pour ce qui est clairement le même incident — extrayez un seul événement en utilisant le chiffre le plus complet et le plus précis, pas un événement par source.
 - La même affirmation sous-jacente reformulée par un locuteur différent avec des mots différents (par ex. deux responsables décrivant séparément l'effondrement du même pays) — n'extrayez qu'un seul événement.
+Lorsque le même événement est énoncé plusieurs fois, conservez la mention dont la proposition porte l'ancrage le plus explicite — préférez la mention contenant un langage de sévérité, une expression temporelle précise, ou un lieu nommé, plutôt qu'une mention antérieure ou plus dépouillée du même événement. Ne retenez pas la première mention par défaut.
 N'extrayez pas la livraison d'aide, l'action politique, le financement, le traitement, ou la logistique, sauf si cette action elle-même correspond exactement à un event_type autorisé.
 Les événements historiques ou de contexte doivent être extraits s'il s'agit d'événements concrets de l'ontologie et qu'ils sont explicitement énoncés.
 Pour les articles d'agrégation d'actualités / de compilation de liens composés de simples titres sans phrase à l'appui : n'extrayez un événement à partir d'un fragment de titre que si le titre lui-même est un énoncé déclaratif non ambigu d'un événement concret. Ignorez les fragments vagues, interrogatifs, ou relevant purement d'un cadrage d'opinion/analyse (par ex. « X : une analyse », « X se produit-il ? »).
@@ -131,11 +133,12 @@ Si aucun événement autorisé n'est explicitement extractible où que ce soit d
 }
 
 Soyez exhaustif :
-0. Parcourez l'article paragraphe par paragraphe. Pour chaque paragraphe, demandez-vous : ce paragraphe énonce-t-il explicitement un événement autorisé ?
-1. Identifiez chaque phrase ou proposition qui énonce explicitement un événement autorisé.
+0. Parcourez l'article paragraphe par paragraphe, du premier au dernier. Pour chaque paragraphe, demandez-vous : ce paragraphe énonce-t-il explicitement un événement autorisé ? Ne sautez pas un paragraphe parce que des paragraphes antérieurs ont déjà produit des événements, et ne vous arrêtez pas en cours de route dans un article long — les paragraphes ultérieurs, y compris ceux de la fin, portent régulièrement des événements énoncés nulle part ailleurs.
+1. Identifiez chaque phrase ou proposition qui énonce explicitement un événement autorisé. Incluez les événements énoncés dans les propos rapportés de responsables, de témoins, ou d'organisations lorsque la citation affirme un événement concret comme un fait.
 2. Associez chaque candidat à l'allowed_event_type le plus spécifique.
 3. Ne retirez que les candidats qui sont des implications vagues, non étayés par article_text, dupliqués sans nouvelle information, ou absents de l'ontologie autorisée.
 4. Retournez tous les événements distincts restants.
+5. Reparcourez une dernière fois l'article paragraphe par paragraphe et vérifiez que chaque paragraphe énonçant un événement autorisé est représenté dans la sortie. La couverture signifie que chaque paragraphe a été examiné — elle ne signifie pas que la plupart des paragraphes doivent produire un événement. Beaucoup d'articles n'énoncent que peu d'événements autorisés, voire aucun.
 Ne vous arrêtez pas après avoir trouvé les événements les plus importants.
 </extraction_rules>
 
@@ -194,19 +197,28 @@ Glissements de terrain et mouvements de terrain de masse, souvent à la suite de
 </event_type_rules>
 
 <event_location_rules>
-event_location_text est la citation verbatim la plus courte tirée de article_text qui contient la preuve de localisation.
-Copiez-la exactement telle qu'elle apparaît. Si aucune localisation explicite n'est énoncée, utilisez "not_stated".
-event_location est dérivé de event_location_text — une chaîne de caractères correspondant à un nom de lieu géocodable.
+Résolvez D'ABORD event_location, puis écrivez event_location_text. Les deux champs sont renseignés dans cet ordre et doivent concorder :
+- Si vous pouvez nommer un lieu géocodable pour cet événement, event_location est ce lieu et event_location_text est le segment verbatim de article_text qui le nomme.
+- Sinon, LES DEUX champs valent "not_stated".
+N'inscrivez jamais un fragment dans event_location_text tout en laissant event_location à "not_stated". Une expression telle que « à travers le pays », « la région », « la zone », ou « dans le sud » n'est pas en soi une preuve de localisation — soit elle se résout en un lieu nommé (voir la règle de référence anaphorique ci-dessous), auquel cas event_location_text doit citer le segment qui nomme ce lieu, soit les deux champs valent "not_stated".
+
+event_location_text est la citation verbatim la plus courte tirée de article_text qui nomme la localisation.
+Copiez-la exactement telle qu'elle apparaît.
+event_location est une chaîne de caractères correspondant à un nom de lieu géocodable.
 N'utilisez que des localisations explicitement énoncées dans article_text.
 N'utilisez pas de connaissances générales pour déduire des localisations.
 N'utilisez pas d'États historiques, d'entités de guerre, d'organisations, de gouvernements, ou d'entités politiques comme event_location, sauf s'il s'agit aussi de noms de lieux géocodables.
 Si un événement est circonscrit à un État historique ou une entité de guerre, utilisez les lieux actuels ou géographiques explicitement énoncés associés à cet événement dans article_text.
 Ne traitez pas une capitale nationale ou un siège du gouvernement (par ex. « Washington », « Moscou », « Pékin », « le Kremlin », « la Maison Blanche ») comme event_location lorsqu'il est utilisé de manière métonymique pour désigner le gouvernement ou la politique étrangère de ce pays plutôt que le site physique de l'événement. Utilisez le nom du pays s'il s'agit du référent clair et explicitement nommé ; sinon "not_stated".
-Si aucun lieu géocodable explicite n'est énoncé, utilisez "not_stated".
-Si event_location ne peut être résolu en un lieu géocodable — y compris lorsque seule une référence vague comme « la région », « la zone », ou « le pays » est disponible — définissez aussi event_location_text à "not_stated". Ne renseignez jamais event_location_text avec un fragment non géocodable tout en laissant event_location à "not_stated".
+Si aucun lieu géocodable explicite n'est énoncé et qu'aucun ne peut être résolu par la règle de référence anaphorique ci-dessous, utilisez "not_stated" pour les deux champs de localisation.
 
-La localisation n'a pas besoin d'apparaître dans grounding_quote, mais elle doit clairement circonscrire le même événement dans le article_text à proximité.
-Lorsque grounding_quote ne contient pas de localisation, parcourez l'ensemble du paragraphe où apparaît grounding_quote à la recherche d'un lieu géocodable explicite qui circonscrit clairement le même événement. Ne définissez event_location à "not_stated" que si aucun tel lieu n'existe dans ce paragraphe.
+La localisation n'a pas besoin d'apparaître dans grounding_quote, mais elle doit clairement circonscrire le même événement dans article_text.
+Lorsque grounding_quote ne contient pas de localisation, résolvez la localisation dans cet ordre :
+1. Parcourez le paragraphe où apparaît grounding_quote à la recherche d'un lieu géocodable explicite qui circonscrit clairement le même événement.
+2. Si le paragraphe désigne au contraire le lieu par une référence anaphorique définie — « le pays », « la capitale », « la région », « la nation », « ce petit pays », « la ville », « la ville du sud », « là-bas », « sur place » — résolvez-la vers le lieu explicitement nommé le plus proche, apparaissant plus haut dans article_text, auquel elle renvoie sans ambiguïté. Définissez event_location à ce lieu nommé, et event_location_text au segment verbatim qui le nomme, et non à la référence anaphorique elle-même.
+3. Sinon, utilisez "not_stated" pour les deux champs.
+Il s'agit d'une résolution de coréférence interne au texte, pas de connaissances générales : le référent doit être explicitement nommé quelque part dans article_text. Si deux lieux nommés ou plus sont des antécédents également plausibles de la référence anaphorique, utilisez "not_stated" pour les deux champs.
+Exemples pour l'étape 2 : « La Russie a pilonné les installations énergétiques de l'Ukraine ... frappant des cibles à travers le pays » -> event_location "Ukraine", event_location_text "de l'Ukraine". Un paragraphe portant sur Kherson suivi de « La ville du sud est privée d'électricité et d'eau » -> event_location "Kherson", event_location_text le segment antérieur qui nomme Kherson.
 N'ajoutez pas de contexte parent tel que pays, province, district, ou région, sauf si article_text utilise lui-même cette expression de localisation.
 Les zones de subsistance, zones pastorales, zones agropastorales, et classifications similaires de subsistance ou administratives (par ex. "Northern Inland Pastoral livelihood zone", "Guban Pastoral") ne sont pas des noms de lieux géocodables. Utilisez le lieu géocodable explicitement énoncé qui les contient (par ex. la région ou le pays nommé), ou "not_stated" si aucun n'est énoncé à proximité.
 Ne convertissez pas les localisations en utilisant des connaissances géographiques externes.
@@ -222,13 +234,16 @@ Retirez les modificateurs vagues lorsqu'un nom de lieu propre subsiste :
 - "le sud du Liban" -> "Liban"
 - "l'est de l'Ukraine" -> "Ukraine"
 - Tout préfixe directionnel ou zonal (nord, sud, est, ouest, nord-est, nord-ouest, sud-est, sud-ouest, central, côtier, rural, urbain, isolé) suivi d'un lieu géocodable -> retirez le préfixe et conservez le nom du lieu.
-- Exception : ne retirez pas les préfixes directionnels qui font partie d'un nom administratif ou géographique propre. Conservez le nom propre complet tel quel et ne retirez que le mot générique de type (état, province, région, district, etc.) : "l'État du Darfour du Nord" -> "Darfour du Nord", "le Soudan du Sud" -> "Soudan du Sud", "la Cisjordanie" -> "Cisjordanie". Le retrait ne s'applique que lorsque la direction est un descripteur vague d'un lieu plus large (par ex. "le nord du Bangladesh" -> "Bangladesh", "le sud du Liban" -> "Liban").
+- Exception : ne retirez pas les préfixes directionnels qui font partie d'un nom administratif ou géographique propre. Conservez le nom propre complet tel quel : "l'État du Darfour du Nord" -> "État du Darfour du Nord", "le Soudan du Sud" -> "Soudan du Sud", "la Cisjordanie" -> "Cisjordanie". Le retrait ne s'applique que lorsque la direction est un descripteur vague d'un lieu plus large (par ex. "le nord du Bangladesh" -> "Bangladesh", "le sud du Liban" -> "Liban").
 
-Conservez les unités nommées :
+Conservez les unités nommées, y compris le mot générique de type (état, province, région, district, oblast, préfecture, etc.) exactement tel que article_text l'écrit. Ne retirez jamais un mot de type rattaché à un nom de lieu unique (seule exception : un mot de type au pluriel partagé par une liste coordonnée, qui est retiré : "les régions de Khyber Pakhtunkhwa, Sindh, Punjab et Baloutchistan" -> "Khyber Pakhtunkhwa; Sindh; Punjab; Baloutchistan") :
 - "la province du Shandong" -> "province du Shandong"
 - "le district de Satkhira" -> "district de Satkhira"
+- "l'État du Darfour du Nord" -> "État du Darfour du Nord"
+- "la région de Kyiv" -> "région de Kyiv"
 - "la vallée de Katmandou" -> "vallée de Katmandou"
 - "le bassin du fleuve Indus" -> "bassin du fleuve Indus"
+Le mot de type est ce qui distingue une division de premier niveau d'une ville portant le même nom ; le retirer change donc le lieu auquel l'événement se réfère : « la région de Kyiv » (state) et « Kyiv » (city) sont des localisations différentes et ne doivent jamais être confondues. Seuls les articles initiaux (« le », « la », « l' », « les ») sont retirés.
 
 Ne scindez pas incorrectement les régions coordonnées :
 - "l'Asie du Sud et l'Asie du Sud-Est" -> "Asie du Sud; Asie du Sud-Est"
@@ -242,7 +257,7 @@ Si une phrase nomme à la fois des pays spécifiques et une région large et vag
 
 event_location_admin_level classifie chaque localisation de event_location par niveau administratif :
 - "country" : un État-nation souverain (par ex. "Éthiopie", "Bangladesh", "Soudan du Sud").
-- "state" : une division administrative de premier niveau d'un pays (état, province, région) (par ex. "province du Shandong", "Darfour du Nord", "Khyber Pakhtunkhwa").
+- "state" : une division administrative de premier niveau d'un pays (état, province, région, oblast) (par ex. "province du Shandong", "État du Darfour du Nord", "région de Kyiv", "Khyber Pakhtunkhwa").
 - "county" : une division administrative de deuxième niveau (comté, district, préfecture, département) qui subdivise un état ou une province (par ex. "district de Satkhira").
 - "city" : une ville, un bourg, ou une municipalité (par ex. "Lagos", "Alep", "Katmandou").
 - "district" : un quartier, un arrondissement, ou une subdivision à l'intérieur d'une ville.
@@ -255,11 +270,23 @@ Si event_location est "not_stated", event_location_admin_level doit être "not_s
 </event_location_rules>
 
 <event_time_rules>
+Résolvez D'ABORD event_time, puis écrivez event_time_text. Les deux champs sont renseignés dans cet ordre et doivent concorder :
+- Si vous pouvez résoudre un temps pour cet événement, event_time est cette valeur ISO et event_time_text est le segment verbatim de article_text dont elle est dérivée.
+- Sinon, LES DEUX champs valent "not_stated".
+N'inscrivez jamais un segment dans event_time_text tout en laissant event_time à "not_stated". Une expression qui ne désigne aucun point ou intervalle temporel résoluble (« des attaques précédentes », « récemment », « ces derniers mois »), ou une expression relative dont le point d'ancrage n'est pas lui-même daté dans article_text (« depuis le coup d'État de l'année dernière »), n'est pas une preuve temporelle utilisable — les deux champs valent "not_stated". time_status peut malgré tout être déterminé à partir de ce langage.
+
 event_time_text est la citation verbatim la plus courte tirée de article_text qui contient la preuve temporelle. Copiez-la exactement telle qu'elle apparaît — pour les expressions relatives, copiez les mots d'origine (par ex. "le mois dernier", "aujourd'hui"), pas la date ISO résolue. Si aucun temps explicite ou résoluble n'est énoncé, utilisez "not_stated".
 event_time est dérivé de event_time_text — l'expression temporelle spécifique à l'événement la plus ancrée et analysable.
 N'utilisez que des temps explicitement énoncés dans article_text ou des temps résolus à partir d'expressions relatives en utilisant publish_date.
 N'utilisez pas la date de publication comme event_time, sauf si l'événement est explicitement présenté par rapport à la date de publication (par ex. "aujourd'hui", "actuellement", "le mois dernier", "cette année").
 Si une date d'événement plus spécifique est énoncée dans article_text, préférez-la à publish_date.
+
+Le temps n'a pas besoin d'apparaître dans grounding_quote, mais il doit clairement circonscrire le même événement dans article_text.
+Lorsque grounding_quote ne contient aucune expression temporelle, résolvez le temps dans cet ordre :
+1. Parcourez le reste de la phrase contenant grounding_quote, puis le reste de son paragraphe, à la recherche d'une expression temporelle qui circonscrit clairement le même événement. Une phrase énonçant deux événements qui partagent une même expression temporelle donne ce temps aux deux (« deux personnes sont mortes mardi après-midi après qu'un projectile a frappé une zone où séchaient des céréales » -> les victimes civiles et la frappe prennent toutes deux « mardi après-midi »).
+2. Si le paragraphe renvoie au contraire à un événement rapporté plus haut par une référence anaphorique définie — « les frappes », « l'attaque », « l'assaut », « le bombardement », « le séisme » — utilisez le temps que article_text a déjà donné pour cet événement, et définissez event_time_text au segment verbatim qui l'énonce.
+3. Sinon, utilisez "not_stated" pour les deux champs.
+Ne reportez pas un temps sur un événement que article_text présente comme un incident distinct de celui que ce temps circonscrit. Une date appartenant à un événement explicitement distinct — une vague d'attaques antérieure, un précédent historique, une échéance future — n'est pas une preuve pour cet événement.
 
 Formatez en ISO 8601, en tronquant à la précision connue (YYYY, YYYY-MM, ou YYYY-MM-DD).
 Retirez les qualificatifs vagues (début/mi/fin, printemps/été/automne/hiver) et ne conservez que l'année.
@@ -292,11 +319,12 @@ time_status :
 severity :
 - "low" : impact limité ou léger.
 - "medium" : significatif mais pas sévère.
-- "high" : sévère, à grande échelle, majeur, considérable, ou fortement dommageable.
-- "extreme" : catastrophique, urgence, niveau d'effondrement, bilan de morts massif, génocide, extermination de masse, ou impact massif.
+- "high" : sévère, à grande échelle, majeur, massif, considérable, ou fortement dommageable.
+- "extreme" : catastrophique, niveau d'urgence, niveau d'effondrement, génocide, ou extermination de masse.
 - "not_stated" : aucun langage de sévérité explicite dans article_text pour cet événement. C'est la valeur par défaut, pas un dernier recours — n'attribuez low/medium/high/extreme que lorsque article_text contient lui-même un langage de sévérité explicite (sévère, majeur, catastrophique, considérable, ou un synonyme non ambigu) décrivant l'impact de cet événement précis. N'utilisez jamais "low" ou "medium" comme choix prudent par défaut lorsque ce langage explicite est absent ou ambigu — la valeur correcte dans ce cas est "not_stated", pas un niveau deviné.
 Les termes tels que « à grande échelle », « massif », « sévère », « catastrophique », etc. ci-dessus désignent un langage qui doit apparaître dans article_text lui-même (ou un synonyme non ambigu) — n'attribuez pas un niveau parce que vous jugez personnellement qu'un chiffre est à grande échelle, massif, ou catastrophique. Un bilan de morts, un décompte, ou un pourcentage n'est jamais « massif » ou « à grande échelle » en soi simplement parce qu'il vous semble important ; l'article doit le dire explicitement.
 N'inférez pas la sévérité à partir d'un chiffre seul, sous quelque forme que ce soit — un décompte exact (1 900 ; 13 500), un mot de magnitude (« millions », « milliers », « dizaines »), un pourcentage, ou un montant en dollars sont tous des chiffres, pas un langage de sévérité, aussi élevés soient-ils. Cela vaut même lorsque le sujet global de l'article est grave (par ex. un rapport de l'ONU sur des atrocités de masse) : la sévérité doit provenir d'un langage qualitatif explicite dans la même proposition que grounding_quote, pas du chiffre lui-même ni du ton du paragraphe environnant.
+Un superlatif décrivant la taille, le nombre, ou l'intensité de l'événement lui-même (« sa plus grande salve de missiles à ce jour », « la plus vaste offensive jusqu'ici », « les bombardements les plus intenses de la guerre ») énonce une magnitude, pas une sévérité d'impact — utilisez "not_stated" sauf si la même proposition caractérise aussi le préjudice causé. Un superlatif qui caractérise le préjudice lui-même (« le plus grand empoisonnement de masse de l'histoire », « l'inondation la plus meurtrière jamais enregistrée ») est bien un langage de sévérité.
 severity et time_status doivent être ancrés dans la même phrase ou proposition que grounding_quote, et non déduits d'un qualificatif apparaissant dans une autre phrase ailleurs dans le paragraphe ou l'article (même s'il décrit le même événement). Si la meilleure preuve de sévérité/temps se trouve dans une proposition différente, étendez grounding_quote pour l'inclure comme un segment unique contigu, ou laissez le champ à sa valeur par défaut la plus prudente.
 Un langage de trajectoire ou d'aggravation seul (s'intensifie, se détériore, s'aggrave, s'accélère) n'implique pas une sévérité élevée. Exigez un langage de sévérité explicite dans article_text (sévère, majeur, considérable, catastrophique, etc.) pour attribuer un niveau autre que "not_stated".
 Un terme technique/statistique défini qui contient incidemment un mot à consonance sévère (par ex. « pauvreté extrême » en tant que seuil économique standard) ne justifie pas à lui seul ce niveau de sévérité — seul un véritable langage de sévérité qualitatif décrivant des bilans d'impact compte.
@@ -578,7 +606,7 @@ Remarque : « millions » est un simple décompte, pas un langage de sévérité
       "event_location_text": "not_stated",
       "event_location": "not_stated",
       "event_location_admin_level": "not_stated",
-      "event_time_text": "Depuis le coup d'État de l'année dernière",
+      "event_time_text": "not_stated",
       "event_time": "not_stated",
       "time_status": "past",
       "severity": "not_stated"
@@ -596,7 +624,29 @@ Remarque : « millions » est un simple décompte, pas un langage de sévérité
     }
   ]
 }
-Remarque : « 1 900 » et « un million » sont des décomptes exacts, pas un langage de sévérité — un sujet chargé émotionnellement (tuerie de masse, coup d'État) ne permet pas d'inférer la sévérité pour une proposition qui ne contient elle-même aucun terme de sévérité qualitatif. La sévérité des deux événements reste not_stated.
+Remarque : « Depuis le coup d'État de l'année dernière » est une expression relative sans date d'ancrage dans article_text ; event_time ne peut donc pas être résolu et event_time_text vaut "not_stated" en conséquence — mais l'expression fonde malgré tout time_status: past. « 1 900 » et « un million » sont des décomptes exacts, pas un langage de sévérité — un sujet chargé émotionnellement (tuerie de masse, coup d'État) ne permet pas d'inférer la sévérité pour une proposition qui ne contient elle-même aucun terme de sévérité qualitatif. La sévérité des deux événements reste not_stated.
+</output>
+</example>
+
+<example>
+<input>Un article énonce : "L'éleveur a été accusé à plusieurs reprises par des habitants d'Ibarapa d'avoir orchestré des enlèvements et des meurtres dans la zone. Ses hommes ont brûlé une maison à Ayete, ont déclaré des habitants."</input>
+<output>
+{
+  "events": [
+    {
+      "event_type": "fire",
+      "grounding_quote": "Ses hommes ont brûlé une maison à Ayete",
+      "event_location_text": "à Ayete",
+      "event_location": "Ayete",
+      "event_location_admin_level": "city",
+      "event_time_text": "not_stated",
+      "event_time": "not_stated",
+      "time_status": "past",
+      "severity": "not_stated"
+    }
+  ]
+}
+Remarque : « accusé ... d'avoir orchestré des enlèvements et des meurtres dans la zone » est une accusation habituelle décrivant un schéma récurrent plutôt qu'un incident énoncé ; rien n'en est donc extrait, même si les enlèvements et les meurtres correspondent à des types d'événements autorisés. L'incendie de la maison est lui aussi attribué (« ont déclaré des habitants »), mais il énonce un incident unique survenu avec un lieu nommé, il est donc extrait.
 </output>
 </example>
 </few_shot_examples>
@@ -609,10 +659,12 @@ Avant de retourner la réponse, validez silencieusement :
 - Chaque event_type provient de allowed_event_types.
 - Chaque event_location est soit explicitement énoncé et géocodable, soit "not_stated".
 - event_location_admin_level est "not_stated" chaque fois que event_location est "not_stated", et contient sinon une valeur séparée par un point-virgule par localisation dans event_location, dans le même ordre.
-- event_location_text est copié verbatim depuis article_text, ou "not_stated" si event_location est "not_stated".
-- event_time_text est copié verbatim depuis article_text (mots d'origine, pas la date ISO résolue), ou "not_stated" si event_time est "not_stated".
-- Pour chaque événement où event_location est "not_stated", confirmez qu'aucun lieu géocodable n'apparaît dans le même paragraphe que grounding_quote et ne circonscrit clairement le même événement.
+- event_location_text est copié verbatim depuis article_text et nomme le lieu figurant dans event_location, ou vaut "not_stated" si event_location est "not_stated". Ce n'est jamais un fragment ne nommant aucun lieu (« à travers le pays », « la région », « là-bas ») associé à un event_location à "not_stated".
+- event_time_text est copié verbatim depuis article_text (mots d'origine, pas la date ISO résolue), ou "not_stated" si event_time est "not_stated". Ce n'est jamais un segment associé à un event_time à "not_stated".
+- Pour chaque événement où event_location est "not_stated", confirmez à la fois qu'aucun lieu géocodable n'apparaît dans le même paragraphe que grounding_quote en circonscrivant le même événement, et que le paragraphe ne contient aucune référence anaphorique définie (« le pays », « la capitale », « la ville », « la région », « là-bas ») résoluble vers un lieu nommé plus haut dans article_text.
+- Pour chaque événement où event_time est "not_stated", confirmez que ni le reste de la phrase contenant grounding_quote ni le reste de son paragraphe ne porte une expression temporelle circonscrivant le même événement, et que le paragraphe ne contient aucune référence anaphorique (« les frappes », « l'attaque ») à un événement antérieur dont article_text a déjà donné le temps.
 - Pour chaque événement où severity n'est pas "not_stated", confirmez que article_text contient un langage de sévérité explicite pour cet événement précis, dans la même proposition que grounding_quote — sinon, remplacez severity par "not_stated" plutôt que de laisser un niveau deviné.
+- Chaque paragraphe de article_text a été examiné, y compris les paragraphes de fin et les propos rapportés, et aucun paragraphe énonçant un événement autorisé n'est absent de la sortie.
 - Aucune localisation, temps, sévérité, ou type d'événement n'est inventé.
 - grounding_quote est copié verbatim depuis article_text — revérifiez-le mot pour mot par rapport à la phrase source, y compris les petits mots grammaticaux (un/une/le/la/de), et pas seulement le sens général.
 </validation_checklist>

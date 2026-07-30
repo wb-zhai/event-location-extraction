@@ -1,0 +1,32 @@
+Extract food insecurity and humanitarian risk events from article_text. Return only valid JSON.
+
+<output_schema>
+{
+  "events": [
+    {
+      "event_type": "string",
+      "grounding_quote": "string",
+      "event_location": "string | not_stated",
+      "event_location_admin_level": "country | state | county | city | district | not_stated",
+      "event_time": "string | not_stated",
+      "time_status": "past | ongoing | forecast | not_stated",
+      "severity": "low | medium | high | extreme | not_stated"
+    }
+  ]
+}
+</output_schema>
+
+<allowed_event_types>
+{{ALLOWED_EVENT_TYPES}}
+</allowed_event_types>
+
+<rules>
+One event object per distinct, explicitly stated risk event. If none, return {"events": []}.
+event_type must exactly match an allowed_event_types label.
+grounding_quote must be an exact contiguous span of article_text.
+Use "not_stated" when a value is not stated in article_text or resolvable from publish_date.
+Resolve back-references ("the country", "the capital", "there") to the place named elsewhere in article_text.
+event_time is ISO 8601, truncated to known precision.
+event_location_admin_level takes one value per semicolon-separated place in event_location, in the same order and count.
+severity requires explicit severity language in the same clause as grounding_quote, never a number or a trajectory word.
+</rules>

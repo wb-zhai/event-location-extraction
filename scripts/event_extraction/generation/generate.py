@@ -457,6 +457,22 @@ async def generate_one(
     raise RuntimeError("Gemini returned no response.")
 
 
+def _cost_ledger_entry(result: dict[str, Any]) -> dict[str, Any] | None:
+    """Keep only this run's own "generation_llm" block for cost reporting, so an
+    upstream step's "llm" field preserved on the row (e.g. relevance-filter
+    tokens) is never counted as event-extraction usage."""
+    generation_llm = result.get("generation_llm")
+    if not isinstance(generation_llm, dict) or not generation_llm.get("metadata"):
+        return None
+    return {"generation_llm": generation_llm}
+
+
+def _print_cost_report(label: str, ledger: list[dict[str, Any]], *, batch: bool) -> None:
+    from scripts.event_extraction.generation.costs import aggregate, report
+
+    report(label, aggregate(ledger), batch=batch)
+
+
 def _print_verification_stats(
     n_records: int,
     total_events: int,
@@ -533,6 +549,7 @@ async def run_sync(
     coroutines = [process_record(index, record) for index, record in pending]
     n_ok = total_events = total_unverified = 0
     field_counts: collections.Counter = collections.Counter()
+    cost_ledger: list[dict[str, Any]] = []
     with args.output.open("a", encoding="utf-8") as handle:
         for future in tqdm(
             asyncio.as_completed(coroutines),
@@ -541,6 +558,9 @@ async def run_sync(
         ):
             result = await future
             append_jsonl(handle, result)
+            entry = _cost_ledger_entry(result)
+            if entry is not None:
+                cost_ledger.append(entry)
             if result.get("status") == "ok":
                 n_ok += 1
                 ann = result.get("annotation") or {}
@@ -549,6 +569,7 @@ async def run_sync(
                     total_unverified += 1
                     field_counts[ev.get("_unverified_field") or "unknown"] += 1
     _print_verification_stats(n_ok, total_events, total_unverified, field_counts)
+    _print_cost_report(args.output.name, cost_ledger, batch=False)
 
 
 async def run_interactive(
@@ -936,6 +957,7 @@ async def run_batch(
     ]
     n_ok = total_events = total_unverified = 0
     field_counts: collections.Counter = collections.Counter()
+    cost_ledger: list[dict[str, Any]] = []
     with args.output.open("a", encoding="utf-8") as handle:
         for task in invalid_tasks:
             append_jsonl(
@@ -949,6 +971,9 @@ async def run_batch(
             chunk_records, _seen = await future
             for result in chunk_records:
                 append_jsonl(handle, result)
+                entry = _cost_ledger_entry(result)
+                if entry is not None:
+                    cost_ledger.append(entry)
                 if result.get("status") == "ok":
                     n_ok += 1
                     ann = result.get("annotation") or {}
@@ -957,6 +982,7 @@ async def run_batch(
                         total_unverified += 1
                         field_counts[ev.get("_unverified_field") or "unknown"] += 1
     _print_verification_stats(n_ok, total_events, total_unverified, field_counts)
+    _print_cost_report(args.output.name, cost_ledger, batch=True)
 
 
 def parse_args() -> argparse.Namespace:
