@@ -302,9 +302,9 @@ def build_settings():
                     "Edit the JSON list directly: fix values, delete invalid entries, add "
                     "missing events. Submit `[]` if there are no valid events.\n\n"
                     f"{EVENT_JSON_TEMPLATE}\n\n"
-                    "Export writes validation errors for invalid JSON, missing/extra keys, "
-                    "invalid choices, off-ontology event_type values, and non-verbatim quote "
-                    "fields."
+                    "Export writes validation errors for invalid JSON, extra keys, invalid "
+                    "choices, off-ontology event_type values, and non-verbatim quote fields "
+                    "(missing keys are written as warnings, not errors)."
                 ),
                 use_markdown=False,
             ),
@@ -515,8 +515,9 @@ def validate_events_annotation(
     events: list[dict[str, Any]],
     text: str,
     allowed_event_types: set[str],
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
     errors: list[str] = []
+    warnings: list[str] = []
     required_keys = set(EVENT_FIELDS)
     for i, event in enumerate(events):
         if not isinstance(event, dict):
@@ -526,7 +527,7 @@ def validate_events_annotation(
         keys = set(event.keys())
         for field in EVENT_FIELDS:
             if field not in keys:
-                errors.append(f"event {i}: missing required key {field!r}")
+                warnings.append(f"event {i}: missing key {field!r}")
         for field in sorted(keys - required_keys):
             errors.append(f"event {i}: unexpected key {field!r}")
 
@@ -589,7 +590,7 @@ def validate_events_annotation(
                         f"{len(admin_level_parts)} ';'-separated value(s) but event_location "
                         f"has {len(location_parts)}"
                     )
-    return errors
+    return errors, warnings
 
 
 def default_invalid_output_path(output_path: Path) -> Path:
@@ -636,6 +637,7 @@ def export(args: argparse.Namespace) -> None:
     invalid_rows = []
     parse_errors = 0
     validation_error_count = 0
+    validation_warning_count = 0
     for record in dataset.records(with_suggestions=True, with_responses=True):
         response = chosen_response(record, EVENT_DETAILS_JSON_QUESTION_NAME)
         json_value = response.value if response else None
@@ -677,11 +679,14 @@ def export(args: argparse.Namespace) -> None:
             validation_errors.append(
                 f"{EVENT_DETAILS_JSON_QUESTION_NAME} is invalid: {parse_error}"
             )
-        validation_errors.extend(
-            validate_events_annotation(events, f"{title}\n\n{text}", allowed_event_types)
+        event_errors, validation_warnings = validate_events_annotation(
+            events, f"{title}\n\n{text}", allowed_event_types
         )
+        validation_errors.extend(event_errors)
         if validation_errors:
             validation_error_count += 1
+        if validation_warnings:
+            validation_warning_count += 1
 
         row = {
             "id": record.id,
@@ -696,6 +701,7 @@ def export(args: argparse.Namespace) -> None:
             },
             "events_parse_error": parse_error,
             "events_validation_errors": validation_errors or None,
+            "events_validation_warnings": validation_warnings or None,
         }
         if validation_errors:
             invalid_rows.append(
@@ -732,6 +738,11 @@ def export(args: argparse.Namespace) -> None:
         print(
             f"Warning: {validation_error_count} record(s) had validation errors; "
             "see events_validation_errors in the output."
+        )
+    if validation_warning_count:
+        print(
+            f"Note: {validation_warning_count} record(s) had validation warnings "
+            "(e.g. missing keys); see events_validation_warnings in the output."
         )
 
 
