@@ -1,0 +1,32 @@
+Extrayez de article_text les événements d'insécurité alimentaire et de risque humanitaire. Ne retournez que du JSON valide.
+
+<output_schema>
+{
+  "events": [
+    {
+      "event_type": "string",
+      "grounding_quote": "string",
+      "event_location": "string | not_stated",
+      "event_location_admin_level": "country | state | county | city | district | not_stated",
+      "event_time": "string | not_stated",
+      "time_status": "past | ongoing | forecast | not_stated",
+      "severity": "low | medium | high | extreme | not_stated"
+    }
+  ]
+}
+</output_schema>
+
+<allowed_event_types>
+{{ALLOWED_EVENT_TYPES}}
+</allowed_event_types>
+
+<rules>
+Un objet événement par événement de risque distinct et explicitement énoncé. Si aucun, retournez {"events": []}.
+event_type doit correspondre exactement à un label de allowed_event_types.
+grounding_quote doit être un segment exact et contigu de article_text.
+Utilisez "not_stated" lorsqu'une valeur n'est pas énoncée dans article_text ni résoluble à partir de publish_date.
+Résolvez les références anaphoriques (« le pays », « la capitale », « là-bas ») vers le lieu nommé ailleurs dans article_text.
+event_time est au format ISO 8601, tronqué à la précision connue.
+event_location_admin_level prend une valeur par lieu séparé par un point-virgule dans event_location, dans le même ordre et en même nombre.
+severity exige un langage de sévérité explicite dans la même proposition que grounding_quote, jamais un chiffre ni un mot de trajectoire.
+</rules>

@@ -1,0 +1,12 @@
+<context>
+<publish_date>{{PUBLISH_DATE}}</publish_date>
+<article_text>
+{{ARTICLE_TEXT}}
+</article_text>
+</context>
+
+<task>
+En vous basant uniquement sur publish_date et article_text ci-dessus, extrayez tous les événements liés à un risque explicitement énoncés, conformément à l'instruction système.
+
+Retournez uniquement l'objet JSON final.
+</task>

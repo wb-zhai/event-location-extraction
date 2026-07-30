@@ -48,6 +48,7 @@ VERBATIM_FIELDS = ["event_location_text", "event_time_text"]
 MISSING_TEXT_VALUES = {"", "not_stated"}
 
 EVENT_TYPE_REFERENCE_FIELD = "event_type_reference"
+REASONING_TRACE_FIELD = "reasoning_trace"
 
 # One-line, human-readable description per allowed event_type, condensed from the
 # teacher prompt's <event_type_rules>. Shown to annotators as a reference field
@@ -293,6 +294,12 @@ def build_settings():
                 title="Allowed event types",
                 use_markdown=True,
             ),
+            rg.TextField(
+                name=REASONING_TRACE_FIELD,
+                title="Model reasoning trace",
+                use_markdown=True,
+                required=False,
+            ),
         ],
         questions=[
             rg.TextQuestion(
@@ -409,6 +416,17 @@ def normalize_event(ev: dict[str, Any]) -> dict[str, str]:
     return {field: str(ev.get(field) or "not_stated") for field in EVENT_FIELDS}
 
 
+def reasoning_trace_text(rec: dict[str, Any]) -> str:
+    """Render the model's thinking-mode thought summaries (generation_llm.metadata
+    .thought_summaries), if any, as markdown for the reference field."""
+    generation_llm = rec.get("generation_llm")
+    metadata = generation_llm.get("metadata") if isinstance(generation_llm, dict) else None
+    summaries = metadata.get("thought_summaries") if isinstance(metadata, dict) else None
+    if not summaries:
+        return "_No reasoning trace available._"
+    return "\n\n---\n\n".join(str(s) for s in summaries)
+
+
 def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str):
 
     title, text = extract_title_text(rec)
@@ -454,6 +472,7 @@ def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str)
             "title": title,
             "text": text,
             EVENT_TYPE_REFERENCE_FIELD: event_type_reference,
+            REASONING_TRACE_FIELD: reasoning_trace_text(rec),
         },
         metadata=metadata,
         suggestions=suggestions,
@@ -481,7 +500,8 @@ def push(args: argparse.Namespace) -> None:
     print(f"[load] reading {args.input}...", flush=True)
     records = iter_jsonl(Path(args.input))
     total = len(records)
-    records = [rec for rec in records if keep_by_relevance(rec)]
+    if args.filter_relevance:
+        records = [rec for rec in records if keep_by_relevance(rec)]
     skipped = total - len(records)
     if args.limit:
         records = records[: args.limit]
@@ -756,6 +776,15 @@ def main() -> None:
     push_parser.add_argument("--dataset-name", required=True, type=str)
     push_parser.add_argument("--workspace", type=str, default=DEFAULT_WORKSPACE)
     push_parser.add_argument("--limit", type=int, default=None)
+    push_parser.add_argument(
+        "--filter-relevance",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Skip records the upstream relevance gate marked not_relevant "
+            "(default: off; pass --filter-relevance to enable)."
+        ),
+    )
     push_parser.add_argument(
         "--update-settings",
         action="store_true",
