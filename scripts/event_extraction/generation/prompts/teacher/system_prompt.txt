@@ -132,6 +132,7 @@ Do not duplicate repeated mentions unless new event information is added. This i
 When the same event is stated more than once, keep the single mention whose own clause carries the most explicit grounding — prefer the mention containing severity language, a specific time expression, or a named location over an earlier or barer mention of the same event. Do not default to the first mention.
 Do not extract aid delivery, policy action, funding, treatment, or logistics unless that action itself exactly matches an allowed event_type.
 Historical or background events must be extracted if they are concrete ontology events and are explicitly stated. This includes a named past event referred to only in passing — as background, as a comparison, or as the anchor for another event's date: "the Nov. 13 Paris attacks", "the October 7 Hamas attack", "the invasion of Ukraine", "the Merrimack Valley gas explosions", "two separatist wars in neighboring Chechnya", "it reoccupied Crimea", "Western countries imposed sanctions on Zimbabwe in 2001" are all extractable events.
+A bare name with no stated event content is not an event. Extract a background event only when article_text says something happened about it — an action, an impact, a count, a date, or a place. Each example above carries such content; "Following World War II and the Chinese Cultural Revolution, Taiwan is once again a hotbed of international tension" names two events but describes neither, so extract nothing from those names. If an event would come out with event_location, event_time, time_status, and severity all "not_stated", the mention is almost certainly too bare to extract.
 For news aggregator / link-roundup articles made of bare headlines with no supporting sentence: only extract an event from a headline fragment if the headline itself is an unambiguous, declarative statement of a concrete event. Skip fragments that are vague, interrogative, or pure opinion/analysis framing (e.g. "X: an analysis", "Is X happening?").
 If no event_type from the allowed list is clearly supported, do not extract the event.
 If no allowed event is explicitly extractable anywhere in the article, return exactly:
@@ -164,7 +165,7 @@ Bombing, shelling, airstrikes, artillery fire -> aerial bombardment.
 Physical blockade of roads, corridors, or transport routes -> supply route blockade.
 Presence, operations, or attacks of insurgent, militant, or terrorist groups -> militant activity. If two organized forces are fighting each other, prefer armed violence.
 Robbery, banditry, plundering, organized theft of property -> looting.
-Repression, persecution, abuse of human or civil rights -> human rights violation. Requires an explicit stated act of repression, persecution, detention, abuse, or violence having occurred — searching for people, expressions of fear, or threats of future harm alone do not qualify. Tag the concrete stated action instead (e.g. militant activity for door-to-door searches by an armed group).
+Repression, persecution, abuse of human or civil rights -> human rights violation. Includes arrests, detention campaigns and arrest warrants against civilians or professionals; enforced disappearance and incommunicado detention; censorship, gagging or silencing of journalists and doctors; restrictions on protest, assembly, movement, education or work imposed by decree; forced eviction; degrading detention conditions; forced labour, trafficking or slavery; sexual violence; atrocities and ethnic cleansing. A repressive policy currently in force is an event (time_status: ongoing), not background. Requires an explicit stated act or policy — searching for people, expressions of fear, or threats of future harm alone do not qualify. Tag the concrete stated action instead (e.g. militant activity for door-to-door searches by an armed group).
 Civilian deaths or injuries, including mass casualty incidents -> civilian casualties. Tag the causing event separately (armed violence, aerial bombardment, flooding, etc.).
 Demonstrations, riots, strikes, food riots, civil unrest -> protests.
 Destruction or severe damage of critical infrastructure (roads, bridges, power plants, water systems, hospitals, buildings), from conflict or natural hazards -> infrastructure destruction. Distinct from agricultural infrastructure damage (farm-specific facilities) and power outage (supply failure without physical destruction). Tag the causing event separately (aerial bombardment, flooding, earthquake).
@@ -188,8 +189,8 @@ Cuts or reductions in humanitarian aid programs or delivery volumes -> aid reduc
 Obstruction, restriction, or impediment of humanitarian aid access and delivery -> aid obstruction.
 Theft or diversion of humanitarian aid, stolen food rations, misappropriated relief supplies -> aid diversion.
 Decline or shortfall in donor funding for humanitarian programs -> funding shortfall.
-Political instability, misgovernance, breakdown of state functions within a country -> governance breakdown.
-Tensions, disputes, or instability between countries or in international relations -> geopolitical tension.
+Political instability, misgovernance, breakdown of state functions within a country -> governance breakdown. Includes leaders forced from office, attempts to overthrow a government, lawlessness or absence of central authority, a state obstructing an internationally agreed process, and stated failure of an administration to perform a core function.
+Tensions, disputes, or instability between countries or in international relations -> geopolitical tension. Includes military posturing near another state's territory (overflights, incursions, massing forces), territorial claims, and threats to sovereignty.
 Epidemics, outbreaks, virus transmission, elevated disease risk in a population -> disease spread. Do not use unless a human disease or epidemic is explicitly named.
 Disruption of health services or care access -> health service disruption. If the article is about a spreading disease itself, use disease spread.
 Contamination of water sources: polluted drinking water, sewage overflow into water systems -> water contamination.
@@ -307,6 +308,7 @@ Do not carry a time across to an event that article_text presents as a separate 
 
 Format using ISO 8601, truncating to the known precision (YYYY, YYYY-MM, or YYYY-MM-DD).
 Drop vague qualifiers (early/mid/late/spring/summer/fall/winter) and keep just the year.
+A decade or century resolves to the range it spans, so it is never a reason to leave event_time "not_stated": "the 1940s" -> "1940/1949", "in the 1600s" -> "1600/1699", "the 1990s" -> "1990/1999". "the mid-1990s" -> "1990/1999" (the qualifier is dropped, the decade is kept).
 For ranges, use `/` as separator: "from X to Y" or "between X and Y" -> "X/Y".
 For open-ended bounds, use a trailing or leading `/`: "since X" -> "X/", "after X" -> "X/", "before/until/through X" -> "/X".
 
