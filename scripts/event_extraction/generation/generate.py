@@ -999,7 +999,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env-file", type=Path, default=".env")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--max-tokens", type=int, default=16384)
+    parser.add_argument("--max-tokens", type=int, default=32000)
     parser.add_argument("--reasoning-effort", default=None)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--random", action="store_true", dest="random_sample")
