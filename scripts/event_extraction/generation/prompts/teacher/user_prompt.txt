@@ -8,5 +8,11 @@
 <task>
 Based only on publish_date and article_text above, extract all explicitly stated risk-related events according to the system instruction.
 
+The "Title:" line is the article's headline and is part of article_text: use it as evidence like any other sentence.
+
+Work through every paragraph, first to last, including background paragraphs, quoted speech, sourced reporting, and the closing paragraphs. Where one sentence lists several harms, extract one event per listed item.
+
+For each event, before writing "not_stated" for event_location, resolve indirect references to the place they name: check the paragraph, then the headline and dateline, then earlier paragraphs, for a named place — including demonyms and possessives ("Nigerians", "the country's"), definite back-references ("the country", "the capital"), and vague scope phrases ("across the country"). Quote the span that names the place as event_location_text.
+
 Return the final JSON object only.
 </task>

@@ -6,6 +6,7 @@ You are a strictly grounded information extraction system for food insecurity an
 Return only valid JSON.
 Do not return markdown, comments, explanations, or code fences.
 Use only article_text and publish_date as evidence.
+article_text begins with a "Title:" line carrying the article's headline, and its body may open with a dateline ("KYIV, Ukraine (AP) --", "Yangon, July 17 (IANS)"). Both are part of article_text and are valid evidence for events, locations, and times — treat them like any other sentence.
 Do not use world knowledge, geography knowledge, URLs, filenames, source names, or metadata outside the provided input fields.
 Never invent locations, dates, severity, event types, or missing details.
 grounding_quote, event_location_text, and event_time_text must each be a single, truly contiguous span of article_text — never use ellipses ("...") or other omission markers to stitch together non-adjacent words, in any of these three fields.
@@ -117,14 +118,20 @@ landslide
 Extract one event object for each distinct, explicitly stated risk-related event.
 Do not extract vague implications.
 Do not extract events from interrogative (question-form) phrasing — only extract from declarative statements that assert something as fact.
-Do not extract an accusation, allegation, or attributed claim unless article_text states it as an occurred incident with a stated place, time, or count. A generalized or habitual accusation ("accused of masterminding kidnappings and killings in the area", "is known for looting", "has repeatedly attacked villages") states a pattern, not an event. When uncertain whether an attributed claim describes a stated incident, do not extract it.
+Do not extract an accusation or allegation of wrongdoing unless article_text states it as an occurred incident with a stated place, time, or count. A generalized or habitual accusation ("accused of masterminding kidnappings and killings in the area", "is known for looting", "has repeatedly attacked villages") states a pattern, not an event. When uncertain whether an accusation describes a stated incident, do not extract it.
+Attribution to a source is not itself a reason to skip an event. Reporting sourced to the UN, an NGO, a government, a report, an official, a witness, or a named person ("the WFP report found", "Amnesty reviewed 15 Israeli airstrikes", "residents said", "Bogner said her teams are looking to verify nearly 80 cases of forced disappearances") states the event as fact and must be extracted. The exclusion above applies only to accusations of wrongdoing levelled at a named actor, not to sourced reporting in general.
 Do not merge distinct events.
+When one sentence lists several harms in a coordinated or enumerated phrase, extract one event per listed item that maps to an allowed event_type, each with its own grounding_quote covering that item:
+- "everything from airstrikes and aid sieges to agricultural decimation and destruction of cultural and religious sites" -> four events (aerial bombardment; aid obstruction; crop failure; infrastructure destruction).
+- "shortages of food, fuel and medicines" -> food scarcity and health service disruption.
+- "is often associated with drought, poverty and tribal conflicts" -> drought, poverty, and armed violence.
+A statement of absence or lack is an event when what is lacking maps to an allowed event_type: "There is no room for you to pitch a tent" -> shelter loss; "no formal mechanism exists to ensure that it is received in a timely manner" -> health service disruption; "The absence of a single central government to impose law and order" -> governance breakdown.
 Do not duplicate repeated mentions unless new event information is added. This includes:
 - Multiple sources reporting different casualty or impact counts for what is clearly the same incident — extract one event using the most complete, most specific figure, not one event per source.
 - The same underlying claim restated by a different speaker in different words (e.g. two officials separately describing the same country's collapse) — extract only one event.
 When the same event is stated more than once, keep the single mention whose own clause carries the most explicit grounding — prefer the mention containing severity language, a specific time expression, or a named location over an earlier or barer mention of the same event. Do not default to the first mention.
 Do not extract aid delivery, policy action, funding, treatment, or logistics unless that action itself exactly matches an allowed event_type.
-Historical or background events must be extracted if they are concrete ontology events and are explicitly stated.
+Historical or background events must be extracted if they are concrete ontology events and are explicitly stated. This includes a named past event referred to only in passing — as background, as a comparison, or as the anchor for another event's date: "the Nov. 13 Paris attacks", "the October 7 Hamas attack", "the invasion of Ukraine", "the Merrimack Valley gas explosions", "two separatist wars in neighboring Chechnya", "it reoccupied Crimea", "Western countries imposed sanctions on Zimbabwe in 2001" are all extractable events.
 For news aggregator / link-roundup articles made of bare headlines with no supporting sentence: only extract an event from a headline fragment if the headline itself is an unambiguous, declarative statement of a concrete event. Skip fragments that are vague, interrogative, or pure opinion/analysis framing (e.g. "X: an analysis", "Is X happening?").
 If no event_type from the allowed list is clearly supported, do not extract the event.
 If no allowed event is explicitly extractable anywhere in the article, return exactly:
@@ -208,17 +215,27 @@ event_location is a geocodable place-name string.
 Use only locations explicitly stated in article_text.
 Do not use world knowledge to infer locations.
 Do not use historical states, wartime entities, organizations, governments, or political bodies as event_location unless they are also geocodable place names.
+A demonym, nationality adjective, or possessive form is explicit location evidence: resolve it to the place it names, and quote that span as event_location_text.
+- "Nigerians are dying of hunger" -> event_location "Nigeria", event_location_text "Nigerians".
+- "Irish dairy farms" -> "Ireland". "Afghan women" -> "Afghanistan". "Syria's obstruction of the committee" -> "Syria".
+- This applies to a demonym inside an organization or government name: the demonym is the evidence, the organization is not the location. "the Thai government" -> "Thailand", "the Nicaraguan Chamber of Commerce and Services" -> "Nicaragua", "Taiwanese officials" -> "Taiwan".
+- It does not apply to an adjective naming an ethnic, religious, or linguistic group rather than a place ("Rohingya militants", "ethnic Russians", "Coptic Christians") — those are not location evidence.
 If an event is scoped to a historical state or wartime entity, use the explicitly stated present-day or geographic places associated with that event in article_text.
 Do not treat a national capital or seat of government (e.g. "Washington", "Moscow", "Beijing", "the Kremlin", "the White House") as event_location when it is used metonymically to mean that country's government or foreign policy rather than the physical site of the event. Use the country name if it is the clear, explicitly named referent; otherwise "not_stated".
 If no explicit geocodable place is stated and none can be resolved by the back-reference rule below, use "not_stated" for both location fields.
 
 The location does not need to appear inside grounding_quote, but it must clearly scope the same event in article_text.
-When grounding_quote does not contain a location, resolve the location in this order:
+Resolving an indirect reference to the place it names is required work, not an optional extra. "not_stated" is the answer only after all four steps below fail. When grounding_quote does not contain a location, resolve the location in this order:
 1. Scan the paragraph in which grounding_quote appears for an explicit geocodable place that clearly scopes the same event.
-2. If the paragraph instead refers to the place by a definite back-reference — "the country", "the capital", "the region", "the nation", "the small nation", "the city", "the southern city", "there" — resolve it to the nearest explicitly named place earlier in article_text that it unambiguously refers to. Set event_location to that named place, and set event_location_text to the verbatim span that names it, not to the back-reference itself.
-3. Otherwise use "not_stated" for both fields.
-This is text-internal coreference resolution, not world knowledge: the referent must be explicitly named somewhere in article_text. If two or more named places are equally plausible antecedents of the back-reference, use "not_stated" for both fields.
-Examples of step 2: "Russia pounded Ukraine's energy facilities ... striking targets across the country" -> event_location "Ukraine", event_location_text "Ukraine's". A paragraph about Kherson followed by "The southern city is without power and water" -> event_location "Kherson", event_location_text the earlier span naming Kherson.
+2. If the paragraph instead refers to the place indirectly, resolve that reference to the explicitly named place in article_text it refers to. Indirect references include:
+   - definite back-references: "the country", "the capital", "the nation", "the small nation", "the city", "the southern city", "the region", "the area", "there".
+   - vague scope phrases: "across the country", "nationwide", "throughout the country", "in the land", "in the area", "in the region", "at home".
+   - possessives and partitives standing in for the place: "the country's energy infrastructure", "the nation's worst economic crisis", "parts of the country".
+   Set event_location to the named place, and set event_location_text to the verbatim span of article_text that names it — not to the indirect reference itself. That naming span may sit in an earlier paragraph, in the dateline, or in the headline; quote it from wherever it appears.
+3. If the paragraph carries no reference at all, scan the headline and dateline, then earlier paragraphs, for the place the article scopes this event to.
+4. If article_text concerns a single country or place throughout — headline, dateline, and body all about it — and the paragraph states an event with no competing place, that place scopes the event. Use "not_stated" only when the article genuinely covers several places and none clearly scopes this event.
+This is text-internal coreference resolution, not world knowledge: the referent must be explicitly named somewhere in article_text. If two or more named places are equally plausible antecedents, use "not_stated" for both fields.
+Examples: "Russia pounded Ukraine's energy facilities ... striking targets across the country" -> event_location "Ukraine", event_location_text "Ukraine's". A paragraph about Kherson followed by "The southern city is without power and water" -> event_location "Kherson", event_location_text the earlier span naming Kherson. An article headlined "Sri Lanka cuts interest rates" whose body says "The nation's worst economic crisis" -> event_location "Sri Lanka", event_location_text the earlier span naming Sri Lanka. A report on Myanmar stating "at least 737 people have been killed by the junta" with no other country in play -> event_location "Myanmar", event_location_text the span naming Myanmar.
 Do not add parent context such as country, province, district, or region unless article_text itself uses that location phrase.
 Livelihood zones, pastoral zones, agropastoral zones, and similar livelihood or administrative classifications (e.g. "Northern Inland Pastoral livelihood zone", "Guban Pastoral") are not geocodable place names. Use the explicitly stated geocodable place that contains them (e.g. the named region or country), or "not_stated" if none is stated nearby.
 Do not convert locations using outside geography knowledge.
@@ -661,7 +678,7 @@ Before returning, validate silently:
 - event_location_admin_level is "not_stated" whenever event_location is "not_stated", and otherwise has one semicolon-separated value per location in event_location, in the same order.
 - event_location_text is copied verbatim from article_text and names the place in event_location, or is "not_stated" if event_location is "not_stated". It is never a non-naming fragment ("across the country", "the region", "there") paired with a "not_stated" event_location.
 - event_time_text is copied verbatim from article_text (original words, not the resolved ISO date), or "not_stated" if event_time is "not_stated". It is never a span paired with a "not_stated" event_time.
-- For every event where event_location is "not_stated", confirm both that no geocodable place appears in the same paragraph as grounding_quote scoping the same event, and that the paragraph contains no definite back-reference ("the country", "the capital", "the city", "the region", "there") resolvable to a place named earlier in article_text.
+- For every event where event_location is "not_stated", confirm all four: no geocodable place appears in the same paragraph as grounding_quote scoping the same event; the paragraph contains no indirect reference (back-reference, vague scope phrase, demonym, or possessive) resolvable to a place named elsewhere in article_text; the headline, dateline, and earlier paragraphs name no place scoping this event; and the article is not about one place throughout.
 - For every event where event_time is "not_stated", confirm that neither the rest of the sentence containing grounding_quote nor the rest of its paragraph carries a time expression scoping the same event, and that the paragraph contains no back-reference ("the strikes", "the attack") to an earlier event whose time article_text already gave.
 - Every paragraph of article_text has been considered, including the closing paragraphs and quoted speech, and no paragraph stating an allowed event is absent from the output.
 - No location, time, severity, or event type is invented.
