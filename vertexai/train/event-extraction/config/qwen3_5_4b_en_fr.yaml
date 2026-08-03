@@ -8,13 +8,13 @@ stage: sft
 do_train: true
 do_eval: false
 finetuning_type: lora
-lora_rank: 16
-lora_alpha: 32
+lora_rank: 32
+lora_alpha: 64
 lora_dropout: 0.05
 lora_target: all
 
 ### Dataset
-dataset: train
+dataset: train_en_fr
 # eval_dataset: dev
 cutoff_len: 16784
 max_samples: 1000000
@@ -54,5 +54,5 @@ include_num_input_tokens_seen: true
 
 ### Tracking
 report_to: wandb
-run_name: qwen3_5-4b-risk-v5-train-vertex
+run_name: qwen3_5-4b-risk-v5-train-vertex-en-fr
 plot_loss: true
