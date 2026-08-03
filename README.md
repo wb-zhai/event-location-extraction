@@ -664,6 +664,12 @@ bash setup.sh           # build + push image (one-time)
 
 ```
 
+**6. DB Ingestion** (§6, `scripts/relevance/db_ingestion.py`) — ingest the ~130M-article relevance predictions into the DB.
+
+```bash
+python scripts/relevance/db_ingestion.py gs://zhai-risk-factor-extraction/relevance/output/run-001 --version mmbert-small-v1 --workers 4
+```
+
 #### Paths
 
 - Data: gs://zhai-risk-factor-extraction/relevance/data
@@ -750,6 +756,8 @@ bash submit_job.sh                   # submit the Vertex AI custom job (A100 40G
 
 **6. Geocoding** (§6)
 
+Full Photon documentation: [https://photon.komoot.io/](https://github.com/komoot/photon)
+
 **7. DB Ingestion** (§7)
 
 #### Paths
@@ -757,6 +765,3 @@ bash submit_job.sh                   # submit the Vertex AI custom job (A100 40G
 - Data: gs://zhai-risk-factor-extraction/extraction/data
 - Model: zhai-risk-factor-extraction/extraction/models/
 - Inference output: gs://zhai-risk-factor-extraction/extraction/output/run-001
-
-
-python scripts/relevance/inference.py   --checkpoint outputs/relevance/relevance-mmbert-small/20260721_195341/final   --input outputs/relevance/relevance-mmbert-small/20260721_195341/dev_french_sample_5M.20000.relevance.cascade.jsonl --output outputs/relevance/relevance-mmbert-small/20260721_195341/predictions/dev_french_sample_5M.20000.relevance.cascade.sents.jsonl --backend vllm --sentences 3

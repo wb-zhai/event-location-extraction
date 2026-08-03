@@ -784,8 +784,8 @@ def main():
     parser.add_argument(
         "--seed",
         type=int,
-        default=None,
-        help="Random seed for the train/dev split and --max-empty-ratio sampling (default: non-deterministic)",
+        default=32,
+        help="Random seed for the train/dev split and --max-empty-ratio sampling (default: 32)",
     )
     parser.add_argument(
         "--dataset-train-name",
@@ -827,7 +827,7 @@ def main():
                 '(expected {"events": {label: description}})'
             )
 
-    prompt_dir = pathlib.Path(args.prompt_dir) if args.prompt_dir else HERE / "prompts" / "student"
+    prompt_dir = pathlib.Path(args.prompt_dir) if args.prompt_dir else HERE / "prompts" / "student_sft"
     templates: dict[str, tuple[str, str]] = {
         "eng": (
             (prompt_dir / "system_prompt.txt").read_text(),
@@ -848,7 +848,13 @@ def main():
     output_dir = pathlib.Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for split_name, split_rows in (("train", train_rows), ("dev", dev_rows)):
+    dataset_info_path = output_dir / "dataset_info.json"
+    dataset_info = _load_dataset_info(dataset_info_path)
+
+    for split_name, split_rows, dataset_name in (
+        ("train", train_rows, args.dataset_train_name),
+        ("dev", dev_rows, args.dataset_dev_name),
+    ):
         records = _rows_to_records(
             split_rows, args, ignore, default_labels, descriptions, templates
         )
@@ -861,7 +867,8 @@ def main():
             {k: v for k, v in r.items() if not k.startswith("_")}
             for r in records
         ]
-        output_path = output_dir / f"{split_name}.json"
+        file_name = _resolve_split_filename(dataset_info, dataset_name)
+        output_path = output_dir / file_name
         with open(output_path, "w") as f:
             json.dump(output_records, f, ensure_ascii=False, indent=2)
 
@@ -871,24 +878,33 @@ def main():
         if args.tokenizer and records:
             _print_token_stats(output_records, args.tokenizer, label=split_name)
 
-    dataset_info_path = _write_dataset_info(
-        output_dir, args.dataset_train_name, args.dataset_dev_name
-    )
+        dataset_info[dataset_name] = {"file_name": file_name, "columns": LLAMAFACTORY_COLUMNS}
+
+    with open(dataset_info_path, "w") as f:
+        json.dump(dataset_info, f, ensure_ascii=False, indent=2)
     print(f"Wrote {dataset_info_path}")
 
 
-def _write_dataset_info(
-    output_dir: pathlib.Path, train_name: str, dev_name: str
-) -> pathlib.Path:
-    """Write a LlamaFactory dataset_info.json pointing at train.json/dev.json."""
-    info = {
-        train_name: {"file_name": "train.json", "columns": LLAMAFACTORY_COLUMNS},
-        dev_name: {"file_name": "dev.json", "columns": LLAMAFACTORY_COLUMNS},
-    }
-    path = output_dir / "dataset_info.json"
-    with open(path, "w") as f:
-        json.dump(info, f, ensure_ascii=False, indent=2)
-    return path
+def _load_dataset_info(path: pathlib.Path) -> dict:
+    """Load an existing dataset_info.json, or {} if none exists yet."""
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        return json.load(f)
+
+
+def _resolve_split_filename(dataset_info: dict, dataset_name: str) -> str:
+    """Pick the output file name for *dataset_name*.
+
+    Reuses the file name already registered for this key so re-running with
+    the same --dataset-*-name overwrites its own file in place. A new
+    (non-overlapping) name gets its own "{dataset_name}.json" file instead of
+    the fixed train.json/dev.json, so it can't clobber an unrelated split.
+    """
+    entry = dataset_info.get(dataset_name)
+    if entry and "file_name" in entry:
+        return entry["file_name"]
+    return f"{dataset_name}.json"
 
 
 def _drop_empty_windows(

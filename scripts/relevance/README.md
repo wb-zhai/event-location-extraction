@@ -17,6 +17,7 @@ pass on the survivors.
 | `encoder.py`          | Test the relevance gate against a local encoder text classifier (no LLM)           |
 | `view_relevance.py`   | Gradio UI to browse a `relevance_filter.py` output JSONL                           |
 | `agreement.py`        | Compare relevance decisions between two labeled JSONL files (accuracy, kappa)      |
+| `db_ingestion.py`     | Ingest relevance-labeled CSVs (local or GCS) into the `article_relevance` DB table |
 
 ---
 
@@ -340,6 +341,58 @@ Key flags:
 | `--labels`         | required | JSONL file with ground-truth relevance/label                     |
 | `--errors`         | none     | Optional path to write only misclassified records                |
 | `--metrics-output` | none     | Optional path to write the metrics JSON                          |
+
+---
+
+## `db_ingestion.py`
+
+Ingests relevance results (CSV, local or `gs://`) into
+`article_event_extraction.article_relevance` (`article_uri`, `relevance_version`,
+`is_relevant`), upserting on the `(relevance_version, article_uri)` primary key. A
+path can be a single CSV, a local folder, or a GCS prefix — folders/prefixes are
+expanded to the `.csv` files they contain.
+
+Each file may have 2 or 3 columns, with or without a header:
+
+- 2 columns, no header: `article_uri, is_relevant`
+- 3 columns, no header: `article_uri, is_relevant, relevance_version`
+- with header: column names are matched case-insensitively against known aliases
+  (`uri`/`article_uri`/`url`, `label`/`relevant`/`is_relevant`, `version`/`relevance_version`);
+  the version column is optional either way
+- relevance labels accept `true`/`false`, `yes`/`no`, `1`/`0`, `relevant`/`not relevant`
+  (case-insensitive)
+
+If no file provides a version, pass `--version` — required in that case, the script
+errors out otherwise.
+
+```bash
+# Single local CSV, version taken from a column in the file
+python scripts/relevance/db_ingestion.py data/relevance_results.csv
+
+# CSV without a version column: provide it manually
+python scripts/relevance/db_ingestion.py data/relevance_results.csv --version gemini-2.5-flash-v1
+
+# A GCS folder of sharded output, ingested concurrently (safe only if shards don't share keys)
+python scripts/relevance/db_ingestion.py gs://my-bucket/relevance/output/run-001 \
+  --version gemini-2.5-flash-v1 --workers 4
+
+# Validate files without touching the DB
+python scripts/relevance/db_ingestion.py data/a.csv --version v3 --dry-run
+```
+
+Key flags:
+
+| Flag             | Default    | Notes                                                                          |
+| ----------------- | ---------- | ------------------------------------------------------------------------------- |
+| `inputs`          | required   | One or more CSV files/folders, local or `gs://bucket/path`                      |
+| `--version`       | none       | Fallback `relevance_version` for files/rows without one                         |
+| `--batch-size`    | `1000`     | Rows per DB upsert batch                                                        |
+| `--on-conflict`   | `update`   | `update` overwrites `is_relevant` on key conflict; `skip` leaves existing rows  |
+| `--workers`       | `1`        | Files ingested concurrently, each on its own DB connection — only safe if input files don't share `(relevance_version, article_uri)` keys |
+| `--dry-run`       | off        | Parse/validate without connecting to the DB                                     |
+
+DB connection uses the same `SQL_HOST`/`SQL_PORT`/`SQL_DATABASE`/`SQL_USERNAME`/`SQL_PASSWORD`
+(or `PGHOST`/.../`PGPASSWORD`) env vars / `.env` file as the other DB scripts in this repo.
 
 ---
 
