@@ -276,6 +276,7 @@ INSERT INTO article_event_extraction.article_relevance
 VALUES %s
 ON CONFLICT (relevance_version, article_uri)
 DO UPDATE SET is_relevant = EXCLUDED.is_relevant
+RETURNING 1
 """
 
 _UPSERT_SQL_SKIP = """
@@ -283,18 +284,26 @@ INSERT INTO article_event_extraction.article_relevance
     (article_uri, relevance_version, is_relevant)
 VALUES %s
 ON CONFLICT (relevance_version, article_uri) DO NOTHING
+RETURNING 1
 """
 
 
 def flush_batch(cur, batch: dict[tuple[str, str], bool], on_conflict: str) -> tuple[int, int]:
     """Upsert `batch` (keyed by (article_uri, relevance_version)). Returns
-    (attempted, affected) row counts."""
+    (attempted, affected) row counts.
+
+    Uses fetch=True + RETURNING rather than cur.rowcount: execute_values splits
+    a batch into internal pages (default page_size=100) and issues one INSERT
+    per page, but cur.rowcount only reflects the *last* page's count, silently
+    undercounting any batch bigger than one page. fetch=True aggregates the
+    RETURNING rows across all pages correctly.
+    """
     if not batch:
         return 0, 0
     values = [(uri, version, is_relevant) for (uri, version), is_relevant in batch.items()]
     sql = _UPSERT_SQL_UPDATE if on_conflict == "update" else _UPSERT_SQL_SKIP
-    psycopg2.extras.execute_values(cur, sql, values)
-    return len(values), cur.rowcount
+    returned = psycopg2.extras.execute_values(cur, sql, values, fetch=True)
+    return len(values), len(returned)
 
 
 # ── Per-file processing ───────────────────────────────────────────────────────
