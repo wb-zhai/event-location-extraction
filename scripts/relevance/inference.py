@@ -95,11 +95,14 @@ def build_text(
     max_chars: int,
     sentences: int | None = None,
     lang: str = "en",
+    title_only: bool = False,
 ) -> str:
     source = record.get("source") or {}
     if not isinstance(source, dict):
         source = {}
     title = str(record.get("title") or source.get("title") or "")
+    if title_only:
+        return title
     text = str(record.get("text") or source.get("text") or "")
     text = build_preview_text(text, max_chars=max_chars, sentences=sentences, lang=lang)
     if title and text:
@@ -290,9 +293,10 @@ def process_records(
     backend: str,
     sentences: int | None = None,
     lang: str = "en",
+    title_only: bool = False,
 ) -> Iterator[dict[str, Any]]:
     for batch in chunked(list(records), batch_size):
-        texts = [build_text(record, max_chars, sentences, lang) for record in batch]
+        texts = [build_text(record, max_chars, sentences, lang, title_only) for record in batch]
         predictions = predictor.predict(texts)
         for record, prediction, text in zip(batch, predictions, texts):
             record["relevance"] = {
@@ -304,6 +308,7 @@ def process_records(
                 "backend": backend,
                 "max_chars": max_chars,
                 "sentences": sentences,
+                "title_only": title_only,
                 "text_chars_used": len(text),
             }
             yield record
@@ -322,6 +327,7 @@ def run_on_text(args: argparse.Namespace, predictor: Any) -> None:
             args.backend,
             args.sentences,
             args.lang,
+            args.title_only,
         )
     )
     if args.output:
@@ -365,6 +371,7 @@ def run_on_input(args: argparse.Namespace, predictor: Any) -> None:
                 args.backend,
                 args.sentences,
                 args.lang,
+                args.title_only,
             )
             for record in tqdm(predicted, total=len(records), desc=source_path.name):
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -418,6 +425,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="en",
         help="Language used for yasbd sentence segmentation when --sentences is set.",
     )
+    parser.add_argument(
+        "--title-only",
+        action="store_true",
+        help="Use only the title as model input, ignoring article text entirely "
+        "(overrides --max-chars/--sentences).",
+    )
     parser.add_argument("--max-length", type=int, default=DEFAULT_MAX_LENGTH, help="Tokenizer max sequence length")
     parser.add_argument(
         "--batch-size",
@@ -455,7 +468,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.input is not None and args.output is None:
         raise SystemExit("--output is required when using --input")
 
-    if args.sentences:
+    if args.title_only:
+        LOGGER.info("Preview truncation mode: title-only (article text is ignored)")
+    elif args.sentences:
         LOGGER.info(
             "Preview truncation mode: sentences (first %d sentences, lang=%s); "
             "--max-chars=%d is ignored.",
