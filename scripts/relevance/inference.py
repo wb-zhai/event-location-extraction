@@ -44,7 +44,7 @@ from tqdm import tqdm
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_MAX_LENGTH = 2048
+DEFAULT_MAX_LENGTH = 4096
 DEFAULT_MAX_CHARS = 4000
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_GPU_MEMORY_UTILIZATION = 0.9
@@ -102,7 +102,17 @@ def build_text(
         source = {}
     title = str(record.get("title") or source.get("title") or "")
     if title_only:
-        return title
+        if title:
+            return title
+        text = str(record.get("text") or source.get("text") or "")
+        fallback_title, _, _ = text.partition("\n\n")
+        LOGGER.warning(
+            "--title-only: record %r has no 'title' field; falling back to the text before "
+            "the first blank line as the title: %r",
+            record_key(record) or "<no id>",
+            fallback_title[:120],
+        )
+        return fallback_title
     text = str(record.get("text") or source.get("text") or "")
     text = build_preview_text(text, max_chars=max_chars, sentences=sentences, lang=lang)
     if title and text:
@@ -429,7 +439,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--title-only",
         action="store_true",
         help="Use only the title as model input, ignoring article text entirely "
-        "(overrides --max-chars/--sentences).",
+        "(overrides --max-chars/--sentences). If a record has no 'title' field "
+        "(e.g. a pre-built train/dev split), falls back to the text before the "
+        "first blank line, and logs a warning when it does.",
     )
     parser.add_argument("--max-length", type=int, default=DEFAULT_MAX_LENGTH, help="Tokenizer max sequence length")
     parser.add_argument(

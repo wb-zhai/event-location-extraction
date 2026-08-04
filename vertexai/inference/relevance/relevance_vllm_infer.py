@@ -20,6 +20,10 @@ Usage (single process, e.g. the timing test):
         --output /tmp/relevance.csv \
         --limit 10000
 
+Pass --title_only to classify on the title alone (article body is ignored entirely,
+overriding --max_chars); falls back to the text before the first blank line when an
+article has no title.
+
 Requires: fire, google-cloud-storage, vllm.
 """
 
@@ -44,13 +48,29 @@ FALLBACK_ID2LABEL = {0: "irrelevant", 1: "relevant"}
 # ---------------------------------------------------------------------------
 
 
-def build_text(article: dict, max_chars: int) -> str:
+def build_text(article: dict, max_chars: int, title_only: bool = False) -> str:
     """Title + body, mirroring how the classifier was trained. Handles both the raw
-    EventRegistry shape (top-level title/body) and the repo's source.title/source.text."""
+    EventRegistry shape (top-level title/body) and the repo's source.title/source.text.
+
+    With title_only, only the title is used as model input (article text is ignored
+    entirely). If the article has no title, falls back to the text before the first
+    blank line and prints a warning."""
     source = article.get("source") or {}
     if not isinstance(source, dict):
         source = {}
     title = str(article.get("title") or source.get("title") or "")
+    if title_only:
+        if title:
+            return title
+        text = str(article.get("body") or article.get("text") or source.get("text") or "")
+        fallback_title, _, _ = text.partition("\n\n")
+        print(
+            f"--title-only: article {article.get('id')!r} has no 'title' field; "
+            f"falling back to the text before the first blank line as the title: "
+            f"{fallback_title[:120]!r}",
+            file=sys.stderr,
+        )
+        return fallback_title
     text = str(article.get("body") or article.get("text") or source.get("text") or "")
     text = text[:max_chars]
     if title and text:
@@ -76,11 +96,21 @@ def _parse_gcs_uri(uri: str) -> tuple[str, str]:
 class ArticleFetcher:
     """Thread-safe article reader. One google.cloud.storage client, reused across threads."""
 
-    def __init__(self, max_chars: int):
+    def __init__(self, max_chars: int, title_only: bool = False, pool_size: int = 64):
         from google.cloud import storage
+        from requests.adapters import HTTPAdapter
 
         self._client = storage.Client()
+        # requests.adapters.HTTPAdapter defaults to a 10-connection pool, far below
+        # gcs_read_concurrency worker threads sharing this one client -- past 10
+        # concurrent requests, urllib3 can't reuse pooled connections and opens a
+        # fresh one (full TLS handshake) per request instead, which made higher
+        # concurrency *slower*. Size the pool to match so connections are reused.
+        adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size)
+        self._client._http.mount("https://", adapter)
+        self._client._http.mount("http://", adapter)
         self.max_chars = max_chars
+        self.title_only = title_only
 
     def fetch(self, row: dict) -> tuple[str, str] | None:
         """Return (id, text) or None if the object is missing / unreadable / empty."""
@@ -88,13 +118,20 @@ class ArticleFetcher:
         gcs_path = row.get("gcs_path")
         if not article_id or not gcs_path:
             return None
+        # build_manifest.py includes title directly in the manifest -- in --title_only
+        # mode that's the only field we need, so skip the GCS round trip entirely for
+        # rows that already have one. Rows without one (older manifests, or a null
+        # title in the DB) fall through to the normal per-article GCS fetch below.
+        if self.title_only and row.get("title"):
+            return article_id, str(row["title"])
         try:
             bucket_name, blob_name = _parse_gcs_uri(gcs_path)
             raw = self._client.bucket(bucket_name).blob(blob_name).download_as_text()
             article = json.loads(raw)
         except Exception:
             return None
-        text = build_text(article, self.max_chars)
+        article.setdefault("id", article_id)
+        text = build_text(article, self.max_chars, self.title_only)
         if not text.strip():
             return None
         return article_id, text
@@ -108,16 +145,9 @@ class ArticleFetcher:
 class RelevanceClassifier:
     def __init__(self, model_name_or_path: str, max_length: int,
                  gpu_memory_utilization: float, tensor_parallel_size: int):
-        from transformers import AutoTokenizer
         from vllm import LLM
 
         self.max_length = max_length
-        # char-based --max-chars truncation doesn't bound token count (unicode/dense
-        # text can exceed max_length well under --max-chars), so vLLM's classify()
-        # raises VLLMValidationError instead of silently truncating. Tokenize and
-        # truncate ourselves and hand vLLM token ids, guaranteeing no request ever
-        # exceeds max_model_len regardless of input content.
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.llm = LLM(
             model=model_name_or_path,
             runner="pooling",
@@ -138,9 +168,14 @@ class RelevanceClassifier:
         return dict(FALLBACK_ID2LABEL)
 
     def classify(self, texts: list[str]) -> list[str]:
-        token_ids = self.tokenizer(texts, truncation=True, max_length=self.max_length)["input_ids"]
-        prompts = [{"prompt_token_ids": ids} for ids in token_ids]
-        outputs = self.llm.classify(prompts)
+        # Let vLLM tokenize internally instead of pre-tokenizing the whole batch in
+        # Python (which serialized CPU tokenization ahead of every classify() call
+        # and left the GPU idle). tokenization_kwargs still guarantees truncation to
+        # max_length, so an oversized article can't make classify() raise
+        # VLLMValidationError (char-based --max-chars doesn't bound token count).
+        outputs = self.llm.classify(
+            texts, tokenization_kwargs={"truncation": True, "max_length": self.max_length}
+        )
         labels = []
         for output in outputs:
             probs = list(output.outputs.probs)
@@ -226,13 +261,19 @@ def relevance_infer(
     gcs_read_concurrency: int = 64,
     batch_size: int | None = 2000,
     limit: int | None = None,
+    title_only: bool = False,
 ):
     """Classify articles from a manifest and write id,label CSV rows.
 
-    batch_size=None disables batching (the whole input is classified in one batch)."""
+    batch_size=None disables batching (the whole input is classified in one batch).
+    title_only=True uses only the article title as model input, ignoring the body
+    entirely (overrides --max_chars)."""
     input_path = Path(input)
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if title_only:
+        print("Preview truncation mode: title-only (article text is ignored)", file=sys.stderr)
 
     done_ids = load_done_ids(output_path)
     if done_ids:
@@ -241,7 +282,7 @@ def relevance_infer(
     classifier = RelevanceClassifier(
         model_name_or_path, max_length, gpu_memory_utilization, tensor_parallel_size
     )
-    fetcher = ArticleFetcher(max_chars)
+    fetcher = ArticleFetcher(max_chars, title_only, pool_size=gcs_read_concurrency)
 
     rows = (r for r in read_manifest(input_path, shard_index, num_shards, limit)
             if str(r.get("id") or "") not in done_ids)

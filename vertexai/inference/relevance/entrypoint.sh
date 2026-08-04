@@ -11,6 +11,7 @@
 #   BATCH_SIZE           (default 2000)
 #   GCS_READ_CONCURRENCY (default 64)
 #   GPU_MEMORY_UTIL      (default 0.9)
+#   TITLE_ONLY            true/false — classify on the title alone, ignoring the body (default false)
 #
 # Cloud Batch injects:
 #   BATCH_TASK_INDEX   0-based task index
@@ -65,6 +66,11 @@ SYNC_PID=$!
 trap "kill ${SYNC_PID} 2>/dev/null || true" EXIT
 
 # --- 5. Run inference (num_shards=1: the manifest is already this task's shard) ---
+EXTRA_ARGS=()
+if [[ "${TITLE_ONLY:-false}" == "true" ]]; then
+    EXTRA_ARGS+=(--title_only)
+fi
+
 echo "[entrypoint] starting inference"
 python3 /app/relevance_vllm_infer.py \
     --model_name_or_path     "${LOCAL_MODEL}" \
@@ -76,7 +82,8 @@ python3 /app/relevance_vllm_infer.py \
     --max_length             "${MAX_LENGTH:-2048}" \
     --batch_size             "${BATCH_SIZE:-2000}" \
     --gcs_read_concurrency   "${GCS_READ_CONCURRENCY:-64}" \
-    --gpu_memory_utilization "${GPU_MEMORY_UTIL:-0.9}"
+    --gpu_memory_utilization "${GPU_MEMORY_UTIL:-0.9}" \
+    "${EXTRA_ARGS[@]}"
 
 # --- 6. Final upload ---
 kill "${SYNC_PID}" 2>/dev/null || true

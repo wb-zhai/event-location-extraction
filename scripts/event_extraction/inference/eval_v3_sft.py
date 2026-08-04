@@ -124,6 +124,20 @@ def _parse_iso_parts(s: str) -> list[str]:
     return years
 
 
+def _admin_level_match(gold: str, pred: str, tier: str) -> bool:
+    """Compare two ';'-separated event_location_admin_level strings."""
+    gn = _norm(gold)
+    pn = _norm(pred)
+    if gn == pn:
+        return True
+    if tier == "exact":
+        return False
+    # relaxed: same set of segments, order-insensitive
+    g_parts = {p.strip() for p in gn.split(";") if p.strip()}
+    p_parts = {p.strip() for p in pn.split(";") if p.strip()}
+    return g_parts == p_parts
+
+
 def _time_match(gold: str, pred: str, tier: str) -> bool:
     """Compare two event_time strings. tier='exact' or 'relaxed'."""
     gn = _norm(gold)
@@ -246,12 +260,17 @@ def evaluate(
     accuracy_acc: dict[tuple[str, str], dict[str, int]] = {}
     macro_accuracy_acc: dict[tuple[str, str], list[dict]] = {}
 
-    families = ["event", "event_type", "event_type_set", "location", "event_location", "event_time"]
+    families = [
+        "event", "event_type", "event_type_set",
+        "location", "event_location", "event_time", "event_location_admin_level",
+    ]
     accuracy_families = [
         "location_on_matched_events",
         "location_on_matched_events_gold_stated",
         "time_on_matched_events",
         "time_on_matched_events_gold_stated",
+        "admin_level_on_matched_events",
+        "admin_level_on_matched_events_gold_stated",
     ]
     if cluster_map is not None:
         families = [
@@ -259,6 +278,7 @@ def evaluate(
             "cluster_event", "cluster_type", "cluster_type_set",
             "location", "event_location", "cluster_event_location",
             "event_time", "cluster_event_time",
+            "event_location_admin_level", "cluster_event_location_admin_level",
         ]
         accuracy_families.extend(
             [
@@ -266,6 +286,8 @@ def evaluate(
                 "cluster_location_on_matched_events_gold_stated",
                 "cluster_time_on_matched_events",
                 "cluster_time_on_matched_events_gold_stated",
+                "cluster_admin_level_on_matched_events",
+                "cluster_admin_level_on_matched_events_gold_stated",
             ]
         )
     tiers = ["exact", "relaxed"]
@@ -277,6 +299,11 @@ def evaluate(
         for tier in tiers:
             accuracy_acc[(fam, tier)] = {"correct": 0, "total": 0}
             macro_accuracy_acc[(fam, tier)] = []
+
+    # per-event-type breakdown: keyed by (event_type, tier)
+    type_acc: dict[tuple[str, str], dict[str, int]] = {}
+    # per-event-type conditional accuracy: keyed by (event_type, tier, field)
+    type_cond_acc: dict[tuple[str, str, str], dict[str, int]] = {}
 
     error_rows: list[dict] = []
 
@@ -297,6 +324,22 @@ def evaluate(
             acc[("event", tier)]["fp"] += fp
             acc[("event", tier)]["fn"] += fn
             macro_acc[("event", tier)].append(_prf(tp, fp, fn))
+
+            # ---------------------------------------------------------------
+            # 1a. Per-event-type breakdown (event detection)
+            # ---------------------------------------------------------------
+            for g, p in pairs:
+                et = _norm(g.get("event_type", ""))
+                d = type_acc.setdefault((et, tier), {"tp": 0, "fp": 0, "fn": 0})
+                d["tp"] += 1
+            for g in unmatched_g:
+                et = _norm(g.get("event_type", ""))
+                d = type_acc.setdefault((et, tier), {"tp": 0, "fp": 0, "fn": 0})
+                d["fn"] += 1
+            for p in unmatched_p:
+                et = _norm(p.get("event_type", ""))
+                d = type_acc.setdefault((et, tier), {"tp": 0, "fp": 0, "fn": 0})
+                d["fp"] += 1
 
             # ---------------------------------------------------------------
             # 1b. Cluster-level event extraction & event-location pairing
@@ -391,6 +434,50 @@ def evaluate(
                         "cluster_time_on_matched_events_gold_stated",
                         c_time_stated_correct,
                         len(c_time_stated_pairs),
+                    ),
+                ]:
+                    accuracy_acc[(fam, tier)]["correct"] += correct
+                    accuracy_acc[(fam, tier)]["total"] += total
+                    macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
+
+                cal_tp = sum(
+                    1
+                    for g, p in c_pairs
+                    if _admin_level_match(
+                        g.get("event_location_admin_level", "not_stated"),
+                        p.get("event_location_admin_level", "not_stated"),
+                        tier,
+                    )
+                )
+                cal_fp = c_tp - cal_tp + c_fp
+                cal_fn = c_tp - cal_tp + c_fn
+                acc[("cluster_event_location_admin_level", tier)]["tp"] += cal_tp
+                acc[("cluster_event_location_admin_level", tier)]["fp"] += cal_fp
+                acc[("cluster_event_location_admin_level", tier)]["fn"] += cal_fn
+                macro_acc[("cluster_event_location_admin_level", tier)].append(
+                    _prf(cal_tp, cal_fp, cal_fn)
+                )
+
+                c_admin_level_stated_pairs = [
+                    (g, p)
+                    for g, p in c_pairs
+                    if _norm(g.get("event_location_admin_level", "not_stated")) != "not_stated"
+                ]
+                c_admin_level_stated_correct = sum(
+                    1
+                    for g, p in c_admin_level_stated_pairs
+                    if _admin_level_match(
+                        g.get("event_location_admin_level", "not_stated"),
+                        p.get("event_location_admin_level", "not_stated"),
+                        tier,
+                    )
+                )
+                for fam, correct, total in [
+                    ("cluster_admin_level_on_matched_events", cal_tp, len(c_pairs)),
+                    (
+                        "cluster_admin_level_on_matched_events_gold_stated",
+                        c_admin_level_stated_correct,
+                        len(c_admin_level_stated_pairs),
                     ),
                 ]:
                     accuracy_acc[(fam, tier)]["correct"] += correct
@@ -533,6 +620,13 @@ def evaluate(
                 accuracy_acc[(fam, tier)]["total"] += total
                 macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
 
+            for g, p in pairs:
+                et = _norm(g.get("event_type", ""))
+                d = type_cond_acc.setdefault((et, tier, "location"), {"correct": 0, "total": 0})
+                d["total"] += 1
+                if _loc_match(g.get("event_location", ""), p.get("event_location", ""), tier):
+                    d["correct"] += 1
+
             # ---------------------------------------------------------------
             # 5. Event-time pairing (conditioned on matched events)
             # ---------------------------------------------------------------
@@ -578,6 +672,71 @@ def evaluate(
                 accuracy_acc[(fam, tier)]["total"] += total
                 macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
 
+            for g, p in pairs:
+                et = _norm(g.get("event_type", ""))
+                d = type_cond_acc.setdefault((et, tier, "time"), {"correct": 0, "total": 0})
+                d["total"] += 1
+                if _time_match(
+                    g.get("event_time", "not_stated"), p.get("event_time", "not_stated"), tier
+                ):
+                    d["correct"] += 1
+
+            # ---------------------------------------------------------------
+            # 6. Event-location-admin-level pairing (conditioned on matched events)
+            # ---------------------------------------------------------------
+            al_tp = sum(
+                1
+                for g, p in pairs
+                if _admin_level_match(
+                    g.get("event_location_admin_level", "not_stated"),
+                    p.get("event_location_admin_level", "not_stated"),
+                    tier,
+                )
+            )
+            al_fp = tp - al_tp + fp
+            al_fn = tp - al_tp + fn
+            acc[("event_location_admin_level", tier)]["tp"] += al_tp
+            acc[("event_location_admin_level", tier)]["fp"] += al_fp
+            acc[("event_location_admin_level", tier)]["fn"] += al_fn
+            macro_acc[("event_location_admin_level", tier)].append(_prf(al_tp, al_fp, al_fn))
+
+            admin_level_stated_pairs = [
+                (g, p)
+                for g, p in pairs
+                if _norm(g.get("event_location_admin_level", "not_stated")) != "not_stated"
+            ]
+            admin_level_stated_correct = sum(
+                1
+                for g, p in admin_level_stated_pairs
+                if _admin_level_match(
+                    g.get("event_location_admin_level", "not_stated"),
+                    p.get("event_location_admin_level", "not_stated"),
+                    tier,
+                )
+            )
+            for fam, correct, total in [
+                ("admin_level_on_matched_events", al_tp, len(pairs)),
+                (
+                    "admin_level_on_matched_events_gold_stated",
+                    admin_level_stated_correct,
+                    len(admin_level_stated_pairs),
+                ),
+            ]:
+                accuracy_acc[(fam, tier)]["correct"] += correct
+                accuracy_acc[(fam, tier)]["total"] += total
+                macro_accuracy_acc[(fam, tier)].append(_accuracy(correct, total))
+
+            for g, p in pairs:
+                et = _norm(g.get("event_type", ""))
+                d = type_cond_acc.setdefault((et, tier, "admin_level"), {"correct": 0, "total": 0})
+                d["total"] += 1
+                if _admin_level_match(
+                    g.get("event_location_admin_level", "not_stated"),
+                    p.get("event_location_admin_level", "not_stated"),
+                    tier,
+                ):
+                    d["correct"] += 1
+
             # ---------------------------------------------------------------
             # Error logging (relaxed tier only, keep it once)
             # ---------------------------------------------------------------
@@ -608,6 +767,18 @@ def evaluate(
             macro = _macro_accuracy(macro_accuracy_acc[(fam, tier)])
             metrics[fam][tier] = {"micro": micro, "macro": macro}
 
+    all_types = sorted({et for (et, _tier) in type_acc.keys()})
+    by_type: dict[str, Any] = {}
+    for et in all_types:
+        by_type[et] = {}
+        for tier in tiers:
+            a = type_acc.get((et, tier), {"tp": 0, "fp": 0, "fn": 0})
+            by_type[et][tier] = {"event": _prf(a["tp"], a["fp"], a["fn"])}
+            for field in ("location", "time", "admin_level"):
+                d = type_cond_acc.get((et, tier, field), {"correct": 0, "total": 0})
+                by_type[et][tier][field] = _accuracy(d["correct"], d["total"])
+    metrics["by_event_type"] = by_type
+
     metrics["_errors"] = error_rows
     return metrics
 
@@ -628,6 +799,8 @@ _FAMILY_LABELS = {
     "cluster_event_location": "Cluster end-to-end event-location",
     "event_time": "End-to-end event-time",
     "cluster_event_time": "Cluster end-to-end event-time",
+    "event_location_admin_level": "End-to-end event-admin-level",
+    "cluster_event_location_admin_level": "Cluster end-to-end event-admin-level",
 }
 
 _ACCURACY_LABELS = {
@@ -642,6 +815,14 @@ _ACCURACY_LABELS = {
     "cluster_time_on_matched_events": "Cluster time on matched events",
     "cluster_time_on_matched_events_gold_stated": (
         "Cluster time on matched events (gold stated)"
+    ),
+    "admin_level_on_matched_events": "Admin level on matched events",
+    "admin_level_on_matched_events_gold_stated": (
+        "Admin level on matched events (gold stated)"
+    ),
+    "cluster_admin_level_on_matched_events": "Cluster admin level on matched events",
+    "cluster_admin_level_on_matched_events_gold_stated": (
+        "Cluster admin level on matched events (gold stated)"
     ),
 }
 
@@ -688,6 +869,61 @@ def _accuracy_header() -> str:
     h1 = f"  {'Metric':<{_COL_W}}  {'RELAXED':>5}    {'EXACT':>5}"
     sep = "  " + "-" * (_COL_W + 21)
     return "\n".join([h1, sep])
+
+
+_TYPE_COL_W = 32
+
+
+def _type_header() -> str:
+    h1 = (
+        f"  {'Event type':<{_TYPE_COL_W}}  {'N':>5}   "
+        f"{'── RELAXED ──':15}    {'── EXACT ────':15}   "
+        f"{'── RELAXED ACC ─':17}"
+    )
+    h2 = (
+        f"  {'':<{_TYPE_COL_W}}  {'':>5}   "
+        f"{'Prec':>5} {'Rec':>5} {'F1':>5}    {'Prec':>5} {'Rec':>5} {'F1':>5}   "
+        f"{'Loc':>5} {'Time':>5} {'AdmLvl':>7}"
+    )
+    sep = "  " + "-" * (_TYPE_COL_W + 78)
+    return "\n".join([h1, h2, sep])
+
+
+def _type_row(
+    et: str, n: int, r: dict[str, float], e: dict[str, float],
+    loc_acc: float, time_acc: float, adm_acc: float,
+) -> str:
+    def pct(v: float, w: int = 5) -> str:
+        return f"{v * 100:{w}.1f}"
+    return (
+        f"  {et:<{_TYPE_COL_W}}  {n:>5}   "
+        f"{pct(r['precision'])} {pct(r['recall'])} {pct(r['f1'])}    "
+        f"{pct(e['precision'])} {pct(e['recall'])} {pct(e['f1'])}   "
+        f"{pct(loc_acc)} {pct(time_acc)} {pct(adm_acc, 7)}"
+    )
+
+
+def _format_by_type_report(metrics: dict[str, Any]) -> list[str]:
+    by_type = metrics.get("by_event_type")
+    if not by_type:
+        return []
+    lines: list[str] = []
+    lines.append("\n\n  PER EVENT TYPE  (micro, sorted by gold support, relaxed matching)\n")
+    lines.append(_type_header())
+
+    def support(et: str) -> int:
+        r = by_type[et]["relaxed"]["event"]
+        return r["tp"] + r["fn"]
+
+    for et in sorted(by_type.keys(), key=support, reverse=True):
+        r = by_type[et]["relaxed"]["event"]
+        e = by_type[et]["exact"]["event"]
+        n = r["tp"] + r["fn"]
+        loc_acc = by_type[et]["relaxed"]["location"]["accuracy"]
+        time_acc = by_type[et]["relaxed"]["time"]["accuracy"]
+        adm_acc = by_type[et]["relaxed"]["admin_level"]["accuracy"]
+        lines.append(_type_row(et, n, r, e, loc_acc, time_acc, adm_acc))
+    return lines
 
 
 def _format_report(metrics: dict[str, Any], n_records: int) -> str:
@@ -749,6 +985,8 @@ def _format_report(metrics: dict[str, Any], n_records: int) -> str:
             ma_r = metrics[fam]["relaxed"]["macro"]
             ma_e = metrics[fam]["exact"]["macro"]
             lines.append(_accuracy_row(label, ma_r["accuracy"], ma_e["accuracy"]))
+
+    lines.extend(_format_by_type_report(metrics))
 
     n_err = len(metrics["_errors"])
     lines.append(f"\n{'=' * 72}")

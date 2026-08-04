@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 import torch
+import yasbd
 from datasets import Dataset
 from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
@@ -64,6 +65,21 @@ def record_key(record: dict[str, Any]) -> str:
     return str(record.get("id") or record.get("url") or "")
 
 
+_SENTENCE_DETECTORS: dict[str, yasbd.BoundaryDetector] = {}
+
+
+def _get_sentence_detector(lang: str) -> yasbd.BoundaryDetector:
+    detector = _SENTENCE_DETECTORS.get(lang)
+    if detector is None:
+        detector = yasbd.BoundaryDetector(lang=lang)
+        _SENTENCE_DETECTORS[lang] = detector
+    return detector
+
+
+def first_sentence(text: str, lang: str) -> str:
+    return next(iter(_get_sentence_detector(lang).segment(text)), "")
+
+
 def get_label(record: dict[str, Any]) -> int | None:
     rel = record.get("relevance") or {}
     is_relevant = rel.get("is_relevant")
@@ -72,19 +88,26 @@ def get_label(record: dict[str, Any]) -> int | None:
     return 1 if is_relevant else 0
 
 
-def build_text(record: dict[str, Any], max_chars: int) -> str:
+def extract_title_and_text(record: dict[str, Any], max_chars: int) -> tuple[str, str]:
     source = record.get("source") or {}
     if not isinstance(source, dict):
         source = {}
     title = str(record.get("title") or source.get("title") or "")
     text = str(record.get("text") or source.get("text") or "")
-    text = text[:max_chars]
+    return title, text[:max_chars]
+
+
+def build_text(title: str, text: str, title_only: bool = False) -> str:
+    if title_only:
+        return title
     if title and text:
         return f"{title}\n\n{text}"
     return title or text
 
 
-def load_examples(paths: Path | list[Path], max_chars: int) -> list[dict[str, Any]]:
+def load_examples(
+    paths: Path | list[Path], max_chars: int, title_only: bool = False, lang: str = "en"
+) -> list[dict[str, Any]]:
     if isinstance(paths, Path):
         paths = [paths]
 
@@ -92,6 +115,7 @@ def load_examples(paths: Path | list[Path], max_chars: int) -> list[dict[str, An
     seen: set[str] = set()
     skipped_no_label = 0
     skipped_dupe = 0
+    no_title_fallback = 0
 
     for path in paths:
         with path.open(encoding="utf-8") as f:
@@ -113,14 +137,33 @@ def load_examples(paths: Path | list[Path], max_chars: int) -> list[dict[str, An
                     skipped_no_label += 1
                     continue
 
+                title, text = extract_title_and_text(record, max_chars)
+                if title_only and not title:
+                    title = first_sentence(text, lang)
+                    if not title:
+                        raise ValueError(
+                            f"--title-only is set but record {key!r} in {path} has no 'title' "
+                            "(or 'source.title') field, and no first sentence could be "
+                            "extracted from 'text' either."
+                        )
+                    no_title_fallback += 1
                 examples.append(
                     {
                         "id": key,
-                        "text": build_text(record, max_chars),
+                        "title": title,
+                        "text": text,
                         "label": label,
                         "source": str(path),
                     }
                 )
+
+    if title_only and no_title_fallback:
+        LOGGER.warning(
+            "--title-only: %d/%d loaded examples had no 'title' field; used the first "
+            "sentence of 'text' as a fallback title for those.",
+            no_title_fallback,
+            len(examples),
+        )
 
     n = len(examples)
     n_relevant = sum(e["label"] for e in examples)
@@ -282,13 +325,17 @@ def build_dataset(
     examples: list[dict[str, Any]],
     tokenizer: PreTrainedTokenizerBase,
     max_length: int,
+    title_only: bool = False,
 ) -> Dataset:
     dataset = Dataset.from_list(examples)
 
     def tokenize(batch: dict[str, list[Any]]) -> dict[str, Any]:
-        return tokenizer(batch["text"], truncation=True, max_length=max_length)
+        texts = [
+            build_text(title, text, title_only) for title, text in zip(batch["title"], batch["text"])
+        ]
+        return tokenizer(texts, truncation=True, max_length=max_length)
 
-    dataset = dataset.map(tokenize, batched=True, remove_columns=["text", "id", "source"])
+    dataset = dataset.map(tokenize, batched=True, remove_columns=["title", "text", "id", "source"])
     return dataset
 
 
@@ -357,6 +404,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tokenizer-name", type=str, default=None)
     parser.add_argument("--max-length", type=int, default=DEFAULT_MAX_LENGTH)
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
+    parser.add_argument(
+        "--title-only",
+        action="store_true",
+        help="Train and evaluate on the article title only, ignoring body text. The saved "
+        "train/dev split files still store title and text as separate fields, so the same "
+        "splits can be reused for a title+text run later. Records with no title fall back "
+        "to the first sentence of 'text' (via yasbd) -- see --lang; the fallback count is "
+        "logged.",
+    )
+    parser.add_argument(
+        "--lang",
+        type=str,
+        default="auto",
+        help="Language used for yasbd sentence segmentation when --title-only falls back to "
+        "the first sentence of 'text' for records with no title. 'auto' detects the language "
+        "per record via py3langid.",
+    )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument(
         "--learning-rate", type=float, default=DEFAULT_LEARNING_RATE, help="Learning rate for the classification head (and the whole model, if --backbone-lr is not set)."
@@ -413,6 +477,9 @@ def main(argv: list[str] | None = None) -> None:
         device_label,
     )
 
+    if args.title_only:
+        LOGGER.info("Training mode: title-only (article text is ignored as model input)")
+
     tokenizer_name = args.tokenizer_name or args.model_name
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
@@ -432,12 +499,12 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     if args.eval_file is not None:
-        train_examples = load_examples(args.input, args.max_chars)
-        eval_examples = load_examples(args.eval_file, args.max_chars)
+        train_examples = load_examples(args.input, args.max_chars, args.title_only, args.lang)
+        eval_examples = load_examples(args.eval_file, args.max_chars, args.title_only, args.lang)
         log_split_stats("train", train_examples)
         log_split_stats("eval", eval_examples)
     else:
-        all_examples = load_examples(args.input, args.max_chars)
+        all_examples = load_examples(args.input, args.max_chars, args.title_only, args.lang)
         labels = [e["label"] for e in all_examples]
         train_examples, eval_examples = train_test_split(
             all_examples,
@@ -469,8 +536,8 @@ def main(argv: list[str] | None = None) -> None:
     save_split_by_source(run_dir, "train", train_examples)
     save_split_by_source(run_dir, "dev", eval_examples)
 
-    train_dataset = build_dataset(train_examples, tokenizer, args.max_length)
-    eval_dataset = build_dataset(eval_examples, tokenizer, args.max_length)
+    train_dataset = build_dataset(train_examples, tokenizer, args.max_length, args.title_only)
+    eval_dataset = build_dataset(eval_examples, tokenizer, args.max_length, args.title_only)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     model = AutoModelForSequenceClassification.from_pretrained(

@@ -880,6 +880,19 @@ def main():
 
         dataset_info[dataset_name] = {"file_name": file_name, "columns": LLAMAFACTORY_COLUMNS}
 
+        by_source: dict[str, list[dict]] = {}
+        for source_name, row in split_rows:
+            by_source.setdefault(source_name, []).append(row)
+
+        if len(by_source) > 1:
+            for source_name, source_rows in by_source.items():
+                stem = pathlib.Path(source_name).stem
+                sub_output_path = output_dir / f"{dataset_name}_{stem}.jsonl"
+                with open(sub_output_path, "w") as f:
+                    for row in source_rows:
+                        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                print(f"Wrote {len(source_rows)} original rows to {sub_output_path}")
+
     with open(dataset_info_path, "w") as f:
         json.dump(dataset_info, f, ensure_ascii=False, indent=2)
     print(f"Wrote {dataset_info_path}")
