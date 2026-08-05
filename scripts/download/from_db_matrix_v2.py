@@ -10,8 +10,8 @@ This is a merge of two approaches developed in this repo:
     month/country windows directly against the 2.3B-row / 470 GB association table
     (which forces a seq scan — measured >10 min per month before this rework).
 
-Discovery is three stages, all chunked, indexed lookups — no table is ever scanned
-in full:
+Discovery is three stages (four with --relevance-version), all chunked, indexed
+lookups — no table is ever scanned in full:
   1a. Fetch the URIs of every article in --language, one cheap query per month from
       --start-month (default: earliest article, i.e. full history) to --end-month —
       each hits a single article_downloads partition via its language index.
@@ -24,18 +24,39 @@ in full:
       absent = negative candidate. This replaces from_db_matrix.py's per-risk-factor
       LATERAL oversampling — with real per-article RF data in hand there's no need
       to guess a sample-pool size, so --oversample is gone.
-All three stages run in parallel across --workers connections. Ctrl+C cancels
-queued work and in-flight queries server-side, then exits.
+  3.  Optional, only with --relevance-version: relevance-tag the same URIs in
+      chunks, probed against article_relevance's (relevance_version, article_uri)
+      primary key. Present in the result = known relevant/not-relevant; absent =
+      not yet classified for that version, and excluded from relevance-ratio
+      stratification (see below) so unclassified articles never silently count
+      as either label. Pass --relevance-version any to skip the version filter
+      and take each article's most recent verdict regardless of which version
+      produced it (that query can't use the PK the same way -- see the SQL
+      comment on _RELEVANCE_PROBE_ANY_VERSION_SQL).
+All stages run in parallel across --workers connections. Ctrl+C cancels queued
+work and in-flight queries server-side, then exits.
 
 Stratification (phase 3) is round-robin per label: positive and negative candidates
 are each grouped by country and drawn rarest-country-first, one article per country
 per round, until the pos/neg quota is hit or the pool is exhausted — so rare
 countries contribute everything they have and surplus countries absorb the rest.
-Within a country, positives are ordered by risk-factor-count descending (most
-diverse first, as in from_db_matrix.py's balance_positives) then by
-md5(uri + seed) for determinism; negatives are ordered by md5(uri + seed) alone.
-An article geo-tagged to several countries is claimed by whichever country's round
-reaches it first; all of its tagged countries are still recorded in the output.
+Within a country, articles are further grouped by publication year and drawn
+rarest-year-first with the same round-robin, so a country's quota isn't dominated
+by whichever years happen to have the most raw volume (news archives typically
+skew recent). Within a (country, year) bucket, positives are ordered by
+risk-factor-count descending (most diverse first, as in from_db_matrix.py's
+balance_positives) then by md5(uri + seed) for determinism; negatives are ordered
+by md5(uri + seed) alone. Publication year is known for free from phase 1a (one
+query per month) — no extra DB round-trip. An article geo-tagged to several
+countries is claimed by whichever country's round reaches it first; all of its
+tagged countries are still recorded in the output.
+
+With --relevance-version, each of the positive/negative pools is itself split
+first by is_relevant using --relevant-ratio (same round()-based quota math as
+--pos-ratio), *then* stratified by country/year as above within each of the four
+(label, is_relevant) cells. Articles with no relevance row for that version are
+dropped from consideration entirely once --relevance-version is set — they don't
+count toward either side of --relevant-ratio.
 
 Usage:
     # 50k English articles, 70% positive, full history -> today
@@ -50,6 +71,18 @@ Usage:
     # Small test run to inspect output format before a large download
     python scripts/download/from_db_matrix_v2.py \
         --n 200 --start-month 2025-05 --output /tmp/test_sample.jsonl
+
+    # Also stratify by the relevance classifier's verdict: 80% relevant, 20% not,
+    # within each of the positive/negative pools, pinned to one classifier version
+    python scripts/download/from_db_matrix_v2.py \
+        --n 50000 --relevance-version gemini-2.5-flash-v1 --relevant-ratio 0.8 \
+        --output dataset/matrix_sample.jsonl
+
+    # Same, but take each article's latest relevance verdict regardless of
+    # which classifier version produced it
+    python scripts/download/from_db_matrix_v2.py \
+        --n 50000 --relevance-version any --relevant-ratio 0.8 \
+        --output dataset/matrix_sample.jsonl
 
 Requires psycopg2:
     pip install psycopg2-binary
@@ -81,7 +114,9 @@ except ImportError:
 
 try:
     from dotenv import dotenv_values
-    _env = dotenv_values(Path(__file__).resolve().parents[3] / ".env")
+    # This file lives at <repo_root>/scripts/download/from_db_matrix_v2.py, i.e.
+    # two directories below the repo root -> parents[2].
+    _env = dotenv_values(Path(__file__).resolve().parents[2] / ".env")
 except ImportError:
     _env = {}
 
@@ -126,6 +161,15 @@ def parse_args() -> argparse.Namespace:
         help="Fraction of articles with risk factor tags (default 0.7).")
     parser.add_argument("--tag-method-id", type=int, default=1,
         help="tag_method_id filter for the risk-factor tagger (default 1).")
+    parser.add_argument("--relevance-version", type=str, default=None,
+        help="article_relevance.relevance_version to stratify by (e.g. gemini-2.5-flash-v1), "
+             "or the literal 'any' to use each article's most recent relevance verdict "
+             "regardless of which version produced it. Omit to skip relevance "
+             "stratification entirely (default).")
+    parser.add_argument("--relevant-ratio", type=float, default=0.7,
+        help="Fraction of each positive/negative pool that must be is_relevant=true "
+             "(default 0.7). Only used when --relevance-version is set; articles with "
+             "no relevance row for that version are excluded from consideration.")
     parser.add_argument("--seed", type=int, default=42,
         help="Seed for deterministic sampling (default 42).")
     parser.add_argument("--start-month", type=parse_month, default=None,
@@ -141,6 +185,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if not 0.0 < args.pos_ratio < 1.0:
         parser.error("--pos-ratio must be strictly between 0 and 1")
+    if not 0.0 < args.relevant_ratio < 1.0:
+        parser.error("--relevant-ratio must be strictly between 0 and 1")
     if args.n < 1:
         parser.error("--n must be at least 1")
     if args.workers < 1:
@@ -238,6 +284,41 @@ WITH rf_rows AS MATERIALIZED (
 SELECT article_uri, array_agg(DISTINCT risk_factor ORDER BY risk_factor) AS risk_factor_ids
 FROM rf_rows
 GROUP BY article_uri
+"""
+
+# Phase 3 (optional, --relevance-version): relevance tags for a chunk of article URIs.
+#
+# article_relevance's primary key is (relevance_version, article_uri), so an
+# equality filter on relevance_version plus a chunked ANY(...) on article_uri hits
+# that PK directly — same chunked-probe shape as the RF query above, and for the
+# same reason (avoid a full-table scan of every version's rows).
+_RELEVANCE_PROBE_SQL = """
+WITH rel_rows AS MATERIALIZED (
+    SELECT article_uri, is_relevant, relevance_version
+    FROM article_relevance
+    WHERE relevance_version = %(relevance_version)s
+      AND article_uri = ANY(%(uris)s)
+)
+SELECT article_uri, is_relevant, relevance_version
+FROM rel_rows
+"""
+
+# Phase 3 variant for --relevance-version any: ignore relevance_version and take
+# each article's most recently created verdict, whichever version produced it.
+# NOTE: unlike the query above, this filters on article_uri alone, which is only
+# the *second* column of article_relevance's (relevance_version, article_uri) PK
+# -- so it can't reuse that index the same way and may cost a wider scan per
+# chunk. Add an index on article_uri (or (article_uri, created_at)) if this is
+# slow in practice.
+_RELEVANCE_PROBE_ANY_VERSION_SQL = """
+WITH rel_rows AS MATERIALIZED (
+    SELECT article_uri, is_relevant, relevance_version, created_at
+    FROM article_relevance
+    WHERE article_uri = ANY(%(uris)s)
+)
+SELECT DISTINCT ON (article_uri) article_uri, is_relevant, relevance_version
+FROM rel_rows
+ORDER BY article_uri, created_at DESC
 """
 
 # Used by resolve_start_month's binary search instead of MIN(published_at).
@@ -389,6 +470,20 @@ def probe_rf_chunk(params: dict, uris: list[str], tag_method_id: int) -> list[tu
     return [(str(uri), [int(x) for x in rf_ids]) for uri, rf_ids in rows]
 
 
+def probe_relevance_chunk(
+    params: dict, uris: list[str], relevance_version: str,
+) -> list[tuple[str, bool, str]]:
+    """relevance_version="any" ignores version and takes each article's most
+    recent verdict; any other value filters to that exact version."""
+    if relevance_version == "any":
+        rows = _run_query(params, _RELEVANCE_PROBE_ANY_VERSION_SQL, {"uris": uris},
+                          f"relevance probe (any version) of {len(uris)} uris")
+    else:
+        rows = _run_query(params, _RELEVANCE_PROBE_SQL, {"uris": uris, "relevance_version": relevance_version},
+                          f"relevance probe of {len(uris)} uris")
+    return [(str(uri), bool(is_relevant), str(version)) for uri, is_relevant, version in rows]
+
+
 def discover(
     params: dict,
     language: str,
@@ -396,17 +491,28 @@ def discover(
     workers: int,
     probe_chunk_size: int,
     tag_method_id: int,
-) -> tuple[dict[str, set[str]], dict[str, list[int]]]:
-    """Three-stage discovery: month URIs -> geo probe -> risk-factor probe.
+    relevance_version: str | None = None,
+) -> tuple[dict[str, set[str]], dict[str, list[int]], dict[str, int], dict[str, tuple[bool, str]]]:
+    """Discovery: month URIs -> geo probe -> risk-factor probe -> (optional) relevance probe.
 
-    Returns (candidates, rf_map):
+    Returns (candidates, rf_map, uri_year, relevance_map):
       candidates: adm0_code -> set of geo-tagged article URIs in `language`.
       rf_map: article_uri -> risk_factor_ids, present only for RF-tagged articles
               (i.e. positives). Absence from rf_map means negative candidate.
+      uri_year: article_uri -> publication year, read off the month range each
+                URI was fetched from in phase 1a (free — no extra query).
+      relevance_map: article_uri -> (is_relevant, relevance_version), present only
+                      when relevance_version is set and the URI has a row for it.
+                      With relevance_version="any" the version in the tuple is
+                      whichever version actually produced that article's most
+                      recent verdict, not the literal "any". Empty dict if
+                      relevance_version is None.
     """
     pool = ThreadPoolExecutor(max_workers=workers)
     candidates: dict[str, set[str]] = {}
     rf_map: dict[str, list[int]] = {}
+    uri_year: dict[str, int] = {}
+    relevance_map: dict[str, tuple[bool, str]] = {}
     try:
         # 1a: article URIs, one cheap partition-pruned query per month
         uris: list[str] = []
@@ -415,7 +521,11 @@ def discover(
             for start, end in months
         }
         for done, future in enumerate(as_completed(futures), 1):
-            uris.extend(future.result())  # propagate failures — a silent gap skews the sample
+            month_start = futures[future]
+            month_uris = future.result()  # propagate failures — a silent gap skews the sample
+            uris.extend(month_uris)
+            for uri in month_uris:
+                uri_year[uri] = month_start.year
             print(f"  1a: {done}/{len(months)} months, {len(uris):,} article uris\033[K",
                   end="\r", file=sys.stderr, flush=True)
         print(file=sys.stderr)
@@ -458,6 +568,25 @@ def discover(
                   end="\r", file=sys.stderr, flush=True)
         print(file=sys.stderr)
 
+        # 3 (optional): relevance-tag the same distinct geo-tagged URIs
+        if relevance_version is not None:
+            rel_futures = {
+                pool.submit(probe_relevance_chunk, params, rf_uris[i:i + probe_chunk_size], relevance_version):
+                    len(rf_uris[i:i + probe_chunk_size])
+                for i in range(0, len(rf_uris), probe_chunk_size)
+            }
+            t0, processed = time.time(), 0
+            for future in as_completed(rel_futures):
+                for uri, is_relevant, version_used in future.result():
+                    relevance_map[uri] = (is_relevant, version_used)
+                processed += rel_futures[future]
+                rate = processed / max(time.time() - t0, 1e-9)
+                eta_min = (len(rf_uris) - processed) / max(rate, 1e-9) / 60
+                print(f"  3: {processed:,}/{len(rf_uris):,} articles relevance-probed "
+                      f"({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
+                      end="\r", file=sys.stderr, flush=True)
+            print(file=sys.stderr)
+
         pool.shutdown(wait=True)
     except BaseException:
         # Ctrl+C or a worker failure: drop queued chunks AND cancel the queries
@@ -468,30 +597,69 @@ def discover(
         raise
     finally:
         close_all_conns()
-    return candidates, rf_map
+    return candidates, rf_map, uri_year, relevance_map
 
 
 # ── Phase 3: stratified selection ─────────────────────────────────────────────
+
+def _round_robin_order(groups: dict[object, list[str]]) -> list[str]:
+    """Interleave each group's (already-sorted) items, rarest group first.
+
+    Generic across grouping level: used both for country pools (groups = years
+    within one country) and can be reused wherever else "rarest bucket first"
+    interleaving is needed.
+    """
+    order = sorted(groups, key=lambda g: (len(groups[g]), g))
+    iters = {g: iter(groups[g]) for g in order}
+    active = deque(order)
+    result: list[str] = []
+    while active:
+        g = active.popleft()
+        item = next(iters[g], None)
+        if item is None:
+            continue  # group exhausted -> drops out of the rotation
+        result.append(item)
+        active.append(g)
+    return result
+
 
 def stratified_sample(
     candidates: dict[str, set[str]],
     n: int,
     seed: int,
     priority: Callable[[str], object] | None = None,
+    uri_year: dict[str, int] | None = None,
 ) -> list[dict]:
     """Round-robin over countries, rarest first, until n articles or exhaustion.
 
-    Each country's pool is ordered by (priority(uri), md5(uri + seed)) — priority
-    lets callers favour e.g. risk-factor-diverse articles; ties (or no priority)
-    fall back to a deterministic, query-order-independent hash.
+    Within each country, articles are further round-robinned by publication
+    year (rarest year first) before the country-level draw sees them, so a
+    country's quota isn't dominated by whichever years have the most raw
+    volume (news archives typically skew recent). Articles with an unknown
+    year (uri_year omitted, or missing an entry) fall into one shared
+    "unknown" bucket per country.
+
+    Within a (country, year) bucket, articles are ordered by
+    (priority(uri), md5(uri + seed)) — priority lets callers favour e.g.
+    risk-factor-diverse articles; ties (or no priority) fall back to a
+    deterministic, query-order-independent hash.
     """
     priority_fn = priority or (lambda uri: 0)
 
     def sort_key(uri: str):
         return (priority_fn(uri), hashlib.md5(f"{uri}:{seed}".encode()).hexdigest())
 
+    def country_pool(uris: set[str]) -> list[str]:
+        by_year: dict[object, list[str]] = {}
+        for uri in uris:
+            year = (uri_year or {}).get(uri, "unknown")
+            by_year.setdefault(year, []).append(uri)
+        for year_uris in by_year.values():
+            year_uris.sort(key=sort_key)
+        return _round_robin_order(by_year)
+
     order = sorted(candidates, key=lambda c: (len(candidates[c]), c))
-    pools = {c: iter(sorted(candidates[c], key=sort_key)) for c in order}
+    pools = {c: iter(country_pool(candidates[c])) for c in order}
 
     seen: set[str] = set()
     selected: list[dict] = []
@@ -509,15 +677,61 @@ def stratified_sample(
     return selected
 
 
+def _sample_label_pool(
+    candidates: dict[str, set[str]],
+    n: int,
+    seed: int,
+    uri_year: dict[str, int] | None,
+    relevance_map: dict[str, tuple[bool, str]] | None,
+    relevant_ratio: float | None,
+    priority: Callable[[str], object] | None = None,
+) -> list[dict]:
+    """Draw n articles from one positive/negative pool.
+
+    Without relevance_map this is just stratified_sample(). With it, the pool
+    is first split into relevant/not-relevant sub-pools (same round()-based
+    quota math as pos_ratio uses at the top level), each independently
+    stratified by country/year. Articles with no entry in relevance_map (not
+    yet classified for the requested version) are dropped entirely rather than
+    landing in either sub-pool, so they can't silently skew --relevant-ratio.
+    """
+    if not relevance_map:
+        return stratified_sample(candidates, n, seed, priority=priority, uri_year=uri_year)
+
+    relevant_candidates: dict[str, set[str]] = {}
+    not_relevant_candidates: dict[str, set[str]] = {}
+    for adm0, uris in candidates.items():
+        relevant = {u for u in uris if (relevance_map.get(u) or (None,))[0] is True}
+        not_relevant = {u for u in uris if (relevance_map.get(u) or (None,))[0] is False}
+        if relevant:
+            relevant_candidates[adm0] = relevant
+        if not_relevant:
+            not_relevant_candidates[adm0] = not_relevant
+
+    n_relevant = round(n * relevant_ratio)
+    n_not_relevant = n - n_relevant
+    selected = stratified_sample(
+        relevant_candidates, n_relevant, seed, priority=priority, uri_year=uri_year,
+    )
+    selected += stratified_sample(
+        not_relevant_candidates, n_not_relevant, seed, priority=priority, uri_year=uri_year,
+    )
+    return selected
+
+
 def split_and_sample(
     candidates: dict[str, set[str]],
     rf_map: dict[str, list[int]],
     n: int,
     pos_ratio: float,
     seed: int,
+    uri_year: dict[str, int] | None = None,
+    relevance_map: dict[str, tuple[bool, str]] | None = None,
+    relevant_ratio: float | None = None,
 ) -> list[dict]:
     """Split candidates into positive/negative pools by rf_map membership, then
-    stratify each independently. Positives favour risk-factor diversity."""
+    stratify each independently (each further split by is_relevant first when
+    relevance_map is given). Positives favour risk-factor diversity."""
     positive_candidates: dict[str, set[str]] = {}
     negative_candidates: dict[str, set[str]] = {}
     for adm0, uris in candidates.items():
@@ -531,20 +745,28 @@ def split_and_sample(
     n_pos = round(n * pos_ratio)
     n_neg = n - n_pos
 
-    selected_pos = stratified_sample(
-        positive_candidates, n_pos, seed,
+    selected_pos = _sample_label_pool(
+        positive_candidates, n_pos, seed, uri_year, relevance_map, relevant_ratio,
         priority=lambda uri: -len(rf_map[uri]),
     )
     for meta in selected_pos:
         meta["label"] = "positive"
         meta["risk_factor_ids"] = rf_map[meta["article_uri"]]
 
-    selected_neg = stratified_sample(negative_candidates, n_neg, seed)
+    selected_neg = _sample_label_pool(
+        negative_candidates, n_neg, seed, uri_year, relevance_map, relevant_ratio,
+    )
     for meta in selected_neg:
         meta["label"] = "negative"
         meta["risk_factor_ids"] = []
 
-    return selected_pos + selected_neg
+    selected = selected_pos + selected_neg
+    if relevance_map:
+        for meta in selected:
+            entry = relevance_map.get(meta["article_uri"])
+            if entry is not None:
+                meta["is_relevant"], meta["relevance_version_used"] = entry
+    return selected
 
 
 # ── Phase 4: content fetch ─────────────────────────────────────────────────────
@@ -577,9 +799,10 @@ def build_record(
     all_countries: list[str],
     country_names: dict[str, str],
     rf_names: dict[int, str],
+    relevance_version: str | None,
 ) -> dict:
     risk_factors = [rf_names.get(rf_id, str(rf_id)) for rf_id in meta["risk_factor_ids"]]
-    return {
+    record = {
         "id": meta["article_uri"],
         "label": meta["label"],
         "adm0_code": meta["adm0_code"],
@@ -596,6 +819,15 @@ def build_record(
             "cloud_uri":    content.get("cloud_uri"),
         },
     }
+    if relevance_version is not None:
+        record["relevance"] = {
+            # Per-article actual version (relevant with --relevance-version any,
+            # where it varies per article); falls back to the requested version
+            # for the ordinary single-version case.
+            "version": meta.get("relevance_version_used", relevance_version),
+            "is_relevant": meta.get("is_relevant"),
+        }
+    return record
 
 
 def write_output(
@@ -606,6 +838,7 @@ def write_output(
     country_names: dict[str, str],
     rf_names: dict[int, str],
     language: str,
+    relevance_version: str | None,
 ) -> tuple[int, int]:
     written = missing = 0
     with open_output(path_or_uri) as f:
@@ -617,7 +850,9 @@ def write_output(
             all_countries = sorted(
                 adm0 for adm0, uris in candidates.items() if meta["article_uri"] in uris
             )
-            record = build_record(meta, content, language, all_countries, country_names, rf_names)
+            record = build_record(
+                meta, content, language, all_countries, country_names, rf_names, relevance_version,
+            )
             f.write(json.dumps(record, ensure_ascii=False, default=str,
                                separators=(",", ":")) + "\n")
             written += 1
@@ -632,6 +867,7 @@ def print_summary(
     missing: int,
     n_rf: int,
     output: str,
+    relevance_version: str | None,
 ) -> None:
     present = [m for m in selected if m["article_uri"] in content_map]
     n_pos = sum(1 for m in present if m["label"] == "positive")
@@ -640,13 +876,25 @@ def print_summary(
     covered_rf_ids: set[int] = set()
     for m in present:
         covered_rf_ids.update(m["risk_factor_ids"])
+    covered_years = {
+        content_map[m["article_uri"]]["published_at"].year
+        for m in present
+        if content_map[m["article_uri"]].get("published_at") is not None
+    }
 
     print("\n=== Matrix sample complete ===")
     print(f"Total articles written : {written:,}")
     print(f"  Positives            : {n_pos:,}")
     print(f"  Negatives            : {n_neg:,}")
+    if relevance_version is not None:
+        n_relevant = sum(1 for m in present if m.get("is_relevant") is True)
+        n_not_relevant = sum(1 for m in present if m.get("is_relevant") is False)
+        print(f"  Relevant             : {n_relevant:,} (version={relevance_version})")
+        print(f"  Not relevant         : {n_not_relevant:,}")
     print(f"Countries covered      : {covered_countries:,} / {len(candidates):,}")
     print(f"Risk factors covered   : {len(covered_rf_ids):,} / {n_rf:,}")
+    if covered_years:
+        print(f"Years covered          : {len(covered_years):,} ({min(covered_years)}-{max(covered_years)})")
     if missing:
         print(f"Missing from DB        : {missing:,}")
     print(f"Output                 : {output}")
@@ -710,22 +958,29 @@ def main() -> None:
 
     months = month_ranges(args.start_month, args.end_month)
 
-    print(f"\nPhase 1-2: scanning {len(months)} months "
+    phase_label = "Phase 1-3" if args.relevance_version else "Phase 1-2"
+    print(f"\n{phase_label}: scanning {len(months)} months "
           f"({args.start_month:%Y-%m} .. {args.end_month:%Y-%m}) "
           f"for language={args.language!r} with {args.workers} workers...")
-    candidates, rf_map = discover(
+    candidates, rf_map, uri_year, relevance_map = discover(
         params, args.language, months, args.workers, args.probe_chunk_size, args.tag_method_id,
+        relevance_version=args.relevance_version,
     )
     total_candidates = len(set().union(*candidates.values())) if candidates else 0
     print(f"  {total_candidates:,} distinct articles across {len(candidates):,} countries, "
-          f"{len(rf_map):,} risk-factor-tagged")
+          f"{len(rf_map):,} risk-factor-tagged"
+          + (f", {len(relevance_map):,} relevance-tagged" if args.relevance_version else ""))
     if not candidates:
         print("No geo-tagged articles found for this language/window. Nothing to sample.")
         return
 
+    ratio_note = f", relevant-ratio={args.relevant_ratio}" if args.relevance_version else ""
     print(f"\nPhase 3: stratified pos/neg sampling of {args.n:,} articles "
-          f"(pos-ratio={args.pos_ratio})...")
-    selected = split_and_sample(candidates, rf_map, args.n, args.pos_ratio, args.seed)
+          f"(pos-ratio={args.pos_ratio}{ratio_note})...")
+    selected = split_and_sample(
+        candidates, rf_map, args.n, args.pos_ratio, args.seed,
+        uri_year=uri_year, relevance_map=relevance_map, relevant_ratio=args.relevant_ratio,
+    )
     n_pos = sum(1 for m in selected if m["label"] == "positive")
     n_neg = len(selected) - n_pos
     print(f"  selected {len(selected):,} articles ({n_pos:,} positive, {n_neg:,} negative) "
@@ -753,8 +1008,12 @@ def main() -> None:
     print(f"\nPhase 5: writing JSONL to {args.output} ...")
     written, missing = write_output(
         args.output, selected, candidates, content_map, country_names, rf_names, args.language,
+        args.relevance_version,
     )
-    print_summary(selected, candidates, content_map, written, missing, n_rf, args.output)
+    print_summary(
+        selected, candidates, content_map, written, missing, n_rf, args.output,
+        args.relevance_version,
+    )
 
 
 if __name__ == "__main__":

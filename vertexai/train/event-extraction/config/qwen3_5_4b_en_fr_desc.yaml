@@ -13,6 +13,7 @@ lora_alpha: 64
 lora_dropout: 0.05
 lora_target: all
 
+
 ### Dataset
 dataset: train_en_fr_desc
 eval_dataset: dev_en_fr_desc
@@ -51,6 +52,7 @@ packing: false
 enable_thinking: false
 ddp_timeout: 180000000
 include_num_input_tokens_seen: true
+enable_liger_kernel: true
 
 ### Tracking
 report_to: wandb
