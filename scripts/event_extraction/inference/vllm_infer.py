@@ -13,6 +13,7 @@ import copy
 import gc
 import hashlib
 import json
+import logging
 import pathlib
 import re
 import sys
@@ -24,13 +25,15 @@ from json_repair import repair_json
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
-from vllm.sampling_params import GuidedDecodingParams
+from vllm.sampling_params import StructuredOutputsParams
+
+logger = logging.getLogger(__name__)
 
 HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
+DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 DEFAULT_PROMPT_DIR = (
-    REPO_ROOT / "scripts" / "event_extraction" / "generation" / "prompts" / "student"
+    REPO_ROOT / "scripts" / "event_extraction" / "generation" / "prompts" / "student_sft"
 )
 
 if str(REPO_ROOT) not in sys.path:
@@ -40,9 +43,11 @@ from scripts.event_extraction.generation.to_sft import (  # noqa: E402
     build_paragraph_windows,
     build_user_message,
     coalesce_short_windows,
+    load_ontology_descriptions,
     load_ontology_labels,
     render_system_prompt,
     row_labels,
+    row_language,
     split_oversized_paragraphs,
     split_paragraphs,
 )
@@ -54,7 +59,6 @@ from scripts.event_extraction.generation.to_sft import (  # noqa: E402
 _BASE_ANNOTATION_SCHEMA: dict = {
     "type": "object",
     "properties": {
-        "document_relevance": {"type": "string", "enum": ["relevant", "not_relevant"]},
         "events": {
             "type": "array",
             "items": {
@@ -62,39 +66,34 @@ _BASE_ANNOTATION_SCHEMA: dict = {
                 "properties": {
                     "event_type": {"type": "string"},
                     "grounding_quote": {"type": "string"},
-                    "event_location_text": {"type": "string"},
                     "event_location": {"type": "string"},
-                    "event_time_text": {"type": "string"},
+                    "event_location_admin_level": {
+                        "type": "string",
+                        "enum": ["country", "state", "county", "city", "district", "not_stated"],
+                    },
                     "event_time": {"type": "string"},
                     "time_status": {
                         "type": "string",
                         "enum": ["past", "ongoing", "forecast", "not_stated"],
                     },
-                    "affected_entity": {"type": "string"},
-                    "affected_group": {"type": "string"},
                     "severity": {
                         "type": "string",
                         "enum": ["low", "medium", "high", "extreme", "not_stated"],
                     },
-                    "modality": {"type": "string", "enum": ["asserted", "projected"]},
                 },
                 "required": [
                     "event_type",
                     "grounding_quote",
-                    "event_location_text",
                     "event_location",
-                    "event_time_text",
+                    "event_location_admin_level",
                     "event_time",
                     "time_status",
-                    "affected_entity",
-                    "affected_group",
                     "severity",
-                    "modality",
                 ],
             },
         },
     },
-    "required": ["document_relevance", "events"],
+    "required": ["events"],
 }
 
 _schema_cache: dict = {}
@@ -169,6 +168,8 @@ def _resolve_events(window_preds: list[dict]) -> list[dict]:
     for wp in window_preds:
         prediction = wp.get("prediction") or {}
         for event in prediction.get("events") or []:
+            if not isinstance(event, dict):
+                continue
             gq = (event.get("grounding_quote") or "").strip()
             if gq and gq in seen_quotes:
                 continue
@@ -202,9 +203,9 @@ def _apply_chat_template(tokenizer, messages: list[dict]) -> list[int]:
 
 def _build_windows(
     row: dict,
-    system_template: str,
-    user_template: str,
+    templates: dict[str, tuple[str, str]],
     default_labels: list[str],
+    descriptions: dict[str, str],
     tokenizer,
     *,
     max_chars: int,
@@ -224,9 +225,12 @@ def _build_windows(
     # In per-window retrieval mode the caller re-renders the prompt per window
     # after retrieval, so skip the (throwaway) prompt build here.
     system_prompt = None
+    user_template = None
     if render_prompt:
+        lang = row_language(row)
+        system_template, user_template = templates.get(lang, templates["eng"])
         labels = row_labels(row, default_labels, top_k_candidates)
-        system_prompt = render_system_prompt(system_template, labels)
+        system_prompt = render_system_prompt(system_template, labels, descriptions)
 
     paras = split_paragraphs(text) or [(0, len(text))]
     paras = split_oversized_paragraphs(text, paras, max_chars=max_chars)
@@ -278,6 +282,7 @@ def vllm_infer(
     adapter_name_or_path: str | None = None,
     prompt_dir: str | None = None,
     ontology: str | None = None,
+    ontology_descriptions: str = "none",
     top_k_candidates: int | None = None,
     shard_index: int = 0,
     num_shards: int = 1,
@@ -309,10 +314,13 @@ def vllm_infer(
     retriever_max_model_len: int | None = None,
     retriever_query_mode: str = "full_doc",
     # Structured output
-    use_guided_decoding: bool = True,
-    guided_decoding_backend: str = "outlines",
+    use_guided_decoding: bool = False,
+    guided_decoding_backend: str = "xgrammar",
 ):
     """Batch event extraction inference using vLLM."""
+    if ontology_descriptions not in ("none", "all"):
+        raise ValueError("ontology_descriptions must be 'none' or 'all'")
+
     # Validate retriever config up front so misconfiguration fails fast, before
     # the (slow) main model load below.
     if retriever_model_name is not None:
@@ -330,11 +338,30 @@ def vllm_infer(
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
     prompt_dir_path = pathlib.Path(prompt_dir) if prompt_dir else DEFAULT_PROMPT_DIR
 
-    system_template = (prompt_dir_path / "system_prompt.txt").read_text(
-        encoding="utf-8"
-    )
-    user_template = (prompt_dir_path / "user_prompt.txt").read_text(encoding="utf-8")
+    templates: dict[str, tuple[str, str]] = {
+        "eng": (
+            (prompt_dir_path / "system_prompt.txt").read_text(encoding="utf-8"),
+            (prompt_dir_path / "user_prompt.txt").read_text(encoding="utf-8"),
+        ),
+    }
+    system_prompt_fr = prompt_dir_path / "system_prompt.fr.txt"
+    user_prompt_fr = prompt_dir_path / "user_prompt.fr.txt"
+    if system_prompt_fr.exists() and user_prompt_fr.exists():
+        templates["fra"] = (
+            system_prompt_fr.read_text(encoding="utf-8"),
+            user_prompt_fr.read_text(encoding="utf-8"),
+        )
+
     default_labels = load_ontology_labels(ontology_path)
+
+    descriptions: dict[str, str] = {}
+    if ontology_descriptions == "all":
+        descriptions = load_ontology_descriptions(ontology_path)
+        if not descriptions:
+            raise ValueError(
+                f"ontology_descriptions='all': {ontology_path} carries no descriptions "
+                '(expected {"events": {label: description}})'
+            )
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_name_or_path, trust_remote_code=True
@@ -357,6 +384,14 @@ def vllm_infer(
         engine_kwargs["max_num_seqs"] = max_num_seqs
     if quantization is not None:
         engine_kwargs["quantization"] = quantization
+    if use_guided_decoding:
+        logger.info(
+            f"Using guided decoding with backend '{guided_decoding_backend}' "
+            f"and structured output schema: {_annotation_schema(default_labels)}"
+        )
+        engine_kwargs["structured_outputs_config"] = {
+            "backend": guided_decoding_backend
+        }
 
     llm = LLM(**engine_kwargs)
 
@@ -480,9 +515,9 @@ def vllm_infer(
                 try:
                     windows = _build_windows(
                         row,
-                        system_template,
-                        user_template,
+                        templates,
                         default_labels,
+                        descriptions,
                         tokenizer,
                         max_chars=max_chars,
                         max_paras=max_paras,
@@ -533,10 +568,12 @@ def vllm_infer(
                         labels = row_labels(
                             row_with_cands, default_labels, top_k_candidates
                         )
-                        system_prompt = render_system_prompt(system_template, labels)
+                        lang = row_language(row)
+                        sys_tmpl, usr_tmpl = templates.get(lang, templates["eng"])
+                        system_prompt = render_system_prompt(sys_tmpl, labels, descriptions)
                         w["labels"] = labels
                         user_msg = build_user_message(
-                            user_template, publish_date, w["window_text"]
+                            usr_tmpl, publish_date, w["window_text"]
                         )
                         messages = [
                             {"role": "system", "content": system_prompt},
@@ -557,9 +594,8 @@ def vllm_infer(
                     vllm_inputs.append({"prompt_token_ids": w["prompt_token_ids"]})
                     prompt_map.append((a_idx, w_idx))
                     if use_guided_decoding:
-                        guided = GuidedDecodingParams(
+                        guided = StructuredOutputsParams(
                             json=_annotation_schema(w.get("labels")),
-                            backend=guided_decoding_backend,
                         )
                         per_window_params.append(
                             SamplingParams(
@@ -570,7 +606,7 @@ def vllm_infer(
                                 repetition_penalty=repetition_penalty,
                                 skip_special_tokens=skip_special_tokens,
                                 seed=seed,
-                                guided_decoding=guided,
+                                structured_outputs=guided,
                             )
                         )
 
@@ -656,4 +692,8 @@ def vllm_infer(
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        level=logging.INFO,
+    )
     fire.Fire(vllm_infer)

@@ -203,7 +203,18 @@ imports from other repo scripts.
 **Input format** — each JSONL record must have:
 - `relevance.is_relevant` — `true` / `false` label (records missing this field are skipped)
 - `title` or `source.title` and `text` or `source.text` — concatenated to form the input text
+  (or title-only with `--title-only`)
 - `id` or `url` — used for deduplication (optional but recommended)
+
+Saved train/dev split files (`train_*.jsonl` / `dev_*.jsonl` in the run dir) keep `title` and
+`text` as separate fields regardless of `--title-only`, so the same splits can be reused for a
+title-only or title+text run later, and so `inference.py --title-only` can read the `title` field
+straight off them.
+
+With `--title-only`, records with no `title`/`source.title` fall back to the first sentence of
+`text` (segmented with `yasbd`, language set by `--lang`); the number of records that needed the
+fallback is logged. A record with neither a title nor any extractable text raises an error rather
+than training on an empty example.
 
 **Outputs** saved to `--output-dir`:
 - `final/` — best checkpoint (model + tokenizer), loadable with `AutoModelForSequenceClassification.from_pretrained`
@@ -239,6 +250,8 @@ Key flags:
 | `--model-name`             | `answerdotai/ModernBERT-base` | Any HF sequence-classification model                                                        |
 | `--max-length`             | `512`                         | Max token length; longer inputs are truncated                                               |
 | `--max-chars`              | `2000`                        | Max characters taken from raw text before tokenization                                      |
+| `--title-only`             | off                            | Train/eval on the article title only, ignoring body text (split files still save both fields); records with no title fall back to the first sentence of `text`, logged as a count |
+| `--lang`                   | `auto`                        | Language for `yasbd` sentence segmentation when `--title-only` falls back to the first sentence (`auto` detects per record) |
 | `--batch-size`             | `16`                          | Per-device train and eval batch size                                                        |
 | `--learning-rate`          | `2e-5`                        | AdamW learning rate                                                                         |
 | `--num-epochs`             | `3`                           | Number of training epochs                                                                   |

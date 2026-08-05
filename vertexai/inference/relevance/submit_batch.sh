@@ -13,7 +13,7 @@
 #     [--region     us-central1]     # default: us-central1
 #     [--job-id     relevance-run-001]
 #     [--max-chars 4000] [--max-length 2048] [--batch-size 2000]
-#     [--gcs-read-concurrency 64] [--gpu-memory-util 0.9]
+#     [--gcs-read-concurrency 64] [--gpu-memory-util 0.9] [--title-only]
 
 set -euo pipefail
 
@@ -40,6 +40,7 @@ MAX_LENGTH="${MAX_LENGTH:-2048}"
 BATCH_SIZE="${BATCH_SIZE:-2000}"
 GCS_READ_CONCURRENCY="${GCS_READ_CONCURRENCY:-64}"
 GPU_MEMORY_UTIL="${GPU_MEMORY_UTIL:-0.9}"
+TITLE_ONLY="${TITLE_ONLY:-false}"
 # Wall-clock cap per task. REQUIRED for FLEX_START tiers (GCE rejects a flex-start VM
 # that has a maxRunDuration but no instance-termination action, and Batch's implicit
 # 7-day default has none). Max for flex-start is 604800 (7 days).
@@ -62,6 +63,7 @@ while [[ $# -gt 0 ]]; do
         --batch-size)           BATCH_SIZE="$2";           shift 2 ;;
         --gcs-read-concurrency) GCS_READ_CONCURRENCY="$2"; shift 2 ;;
         --gpu-memory-util)      GPU_MEMORY_UTIL="$2";      shift 2 ;;
+        --title-only)           TITLE_ONLY="true";         shift ;;
         --max-run-duration)     MAX_RUN_DURATION="$2";     shift 2 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
@@ -104,6 +106,7 @@ sed \
     -e "s|VAL_BATCH_SIZE|${BATCH_SIZE}|g" \
     -e "s|VAL_GCS_READ_CONCURRENCY|${GCS_READ_CONCURRENCY}|g" \
     -e "s|VAL_GPU_MEMORY_UTIL|${GPU_MEMORY_UTIL}|g" \
+    -e "s|VAL_TITLE_ONLY|${TITLE_ONLY}|g" \
     "${TEMPLATE}" > "${TMP_CONFIG}"
 
 echo "=== Job config (${TIER}, ${SHARDS} shards) ==="

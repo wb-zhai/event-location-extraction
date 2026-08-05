@@ -119,6 +119,7 @@ Pass a flag only to **override** a single `.env` value for this run, e.g. a 1-sh
 | `--batch-size` | `2000` | Texts per `classify()` call |
 | `--gcs-read-concurrency` | `64` | Concurrent GCS GETs per worker |
 | `--gpu-memory-util` | `0.9` | Fraction of GPU VRAM for vLLM |
+| `--title-only` | off | Classify on the title alone, ignoring article body entirely (overrides `--max-chars`) |
 | `--max-run-duration` | `86400s` | Per-task wall-clock cap (required for flex tiers) |
 
 ### Choosing `--shards` (at measured ~110.5 art/s on L4, 130,490,360 articles)
@@ -205,6 +206,7 @@ python vertexai/inference/relevance/relevance_vllm_infer.py \
     --num_shards 1 --shard_index 0 \
     --limit 10000
 # rate = 10000 / elapsed_seconds;  full run ≈ 328 GPU-h / shards
+# add --title_only to classify on the title alone (ignores body / --max_chars)
 ```
 
 Re-running resumes: already-labeled ids in the output CSV are skipped.

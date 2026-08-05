@@ -184,7 +184,7 @@ python scripts/event_extraction/inference/eval_v3_sft.py \
   --pred-jsonl dataset/risk-factor/run-15062025/predictions/quick_dev.jsonl \
   [--report-json /tmp/report.json] \
   [--errors-jsonl /tmp/errors.jsonl] \
-  [--cluster ontologies/risk-factors/clusters.json]
+  [--cluster ontologies/zhai/bona.v4.clusters.json]
 ```
 
 | Flag             | Description                                                                                                                                             |

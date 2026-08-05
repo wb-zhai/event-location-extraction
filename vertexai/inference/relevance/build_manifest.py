@@ -1,6 +1,6 @@
 """Build the pre-sharded manifest for the relevance-filter batch job.
 
-Streams `SELECT uri, cloud_uri FROM article_downloads` (no body payload — a fast,
+Streams `SELECT uri, cloud_uri, title FROM article_downloads` (no body payload — a fast,
 index-only-ish scan that barely touches the DB) and writes the rows round-robin into
 `--num-shards` JSONL files under `--output-prefix`:
 
@@ -8,10 +8,12 @@ index-only-ish scan that barely touches the DB) and writes the rows round-robin 
     {output_prefix}/manifest-001.jsonl
     ...
 
-Each line is `{"id": <uri>, "gcs_path": <cloud_uri>}`. At ~140M rows the whole manifest is
-~8 GB; pre-sharding means each Cloud Batch task later downloads only its own ~1/N slice and
-never has to hold the full corpus in memory. Row `k` goes to file `k % num_shards`, so the
-shards are evenly sized and load is balanced.
+Each line is `{"id": <uri>, "gcs_path": <cloud_uri>, "title": <title>}` (title omitted if
+null). title is included so `--title_only` relevance runs can skip the GCS fetch entirely
+for rows that already have one. At ~140M rows the whole manifest is ~8 GB; pre-sharding
+means each Cloud Batch task later downloads only its own ~1/N slice and never has to hold
+the full corpus in memory. Row `k` goes to file `k % num_shards`, so the shards are evenly
+sized and load is balanced.
 
 This script is deliberately self-contained — it defines its own DB connection, server-side
 cursor, and GCS writers and imports nothing from the rest of the repo.
@@ -125,13 +127,16 @@ def open_shard_writers(stack: ExitStack, output_prefix: str, num_shards: int):
 
 
 def stream_rows(conn, languages: list[str] | None, limit: int | None):
-    """Yield (uri, cloud_uri) via a server-side cursor so nothing is buffered."""
+    """Yield (uri, cloud_uri, title) via a server-side cursor so nothing is buffered.
+
+    title is included so --title_only relevance runs never have to fetch the full
+    article JSON from GCS just to read its title field."""
     where = "WHERE cloud_uri IS NOT NULL"
     params: list = []
     if languages:
         where += " AND language = ANY(%s)"
         params.append(languages)
-    sql = f"SELECT uri, cloud_uri FROM article_downloads {where}"
+    sql = f"SELECT uri, cloud_uri, title FROM article_downloads {where}"
     if limit:
         sql += " LIMIT %s"
         params.append(limit)
@@ -140,7 +145,7 @@ def stream_rows(conn, languages: list[str] | None, limit: int | None):
         cur.itersize = 5000
         cur.execute(sql, params)
         for row in cur:
-            yield row["uri"], row["cloud_uri"]
+            yield row["uri"], row["cloud_uri"], row["title"]
 
 
 # ---------------------------------------------------------------------------
@@ -176,14 +181,16 @@ def main() -> None:
     try:
         with conn, ExitStack() as stack:
             writers = open_shard_writers(stack, args.output_prefix, args.num_shards)
-            for i, (uri, cloud_uri) in enumerate(stream_rows(conn, languages, args.limit)):
+            for i, (uri, cloud_uri, title) in enumerate(stream_rows(conn, languages, args.limit)):
                 if not uri or not cloud_uri:
                     skipped += 1
                     continue
                 shard = i % args.num_shards
+                row = {"id": str(uri), "gcs_path": str(cloud_uri)}
+                if title:
+                    row["title"] = str(title)
                 writers[shard].write(
-                    json.dumps({"id": str(uri), "gcs_path": str(cloud_uri)},
-                               ensure_ascii=False, separators=(",", ":")) + "\n"
+                    json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
                 )
                 written[shard] += 1
                 total = sum(written)
