@@ -752,7 +752,17 @@ bash submit_job.sh                   # submit the Vertex AI custom job (A100 40G
 
 **4. Inference and eval on the held-out dev split** (§4)
 
+```bash
+python scripts/event_extraction/inference/vllm_infer.py   --model_name_or_path outputs/extraction/qwen3_5-4b-lora-en-fr-a100-40gb-20260803-120523/merged --input dataset/extraction/llamafactory/dev_en_5k.relevance.annotated.jsonl --output dataset/predictions/qwen3_5-4b-lora-en-fr-a100-40gb-20260803-120523/dev_en_5k.relevance.annotated.structured.t0.3.jsonl --max_model_len 12688 --max_new_tokens 4096 --max_chars 3000 --use_guided_decoding --temperature 0.3
+```bash
+
+```bash
+python scripts/event_extraction/inference/eval_v3_sft.py --pred-jsonl dataset/predictions/qwen3_5-4b-lora-en-fr-a100-40gb-20260803-120523/dev_en_5k.relevance.annotated.structured.jsonl --cluster ontologies/zhai/bona.v4.clusters.json 
+```
+
 **5. Inference at scale** (§5)
+
+
 
 **6. Geocoding** (§6)
 

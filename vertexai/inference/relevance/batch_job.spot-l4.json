@@ -4,7 +4,7 @@
       "taskCount": "TASK_COUNT",
       "parallelism": "TASK_COUNT",
       "taskSpec": {
-        "maxRetryCount": 6,
+        "maxRetryCount": 50,
         "runnables": [
           {
             "script": {
