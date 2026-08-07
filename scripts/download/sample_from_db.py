@@ -3,10 +3,15 @@ relevant (is_relevant=true) and not-relevant according to the relevance
 classifier in article_relevance.
 
 Works for any --language article_relevance has verdicts for (default eng).
-For --language eng specifically, the relevant pool also gets an optional
-risk-factor-diversity signal from the older article_risk_factor_tags table
-(see --tag-method-id below) — no other language currently has coverage in
-that table, which is what makes this eng-only.
+For --language eng specifically, the relevant pool is built and stratified
+differently from every other language: instead of a uniform random slice of
+the classified-relevant pool, it's assembled from a risk-factor-BALANCED draw
+against the older article_risk_factor_tags table (see --tag-method-id and
+--risk-factor-k below), and phase 3 round-robins across risk-factor
+categories on top of the usual country/year round-robin — no other language
+currently has coverage in that table, which is what makes this eng-only, and
+it means an eng relevant article with zero risk-factor tags is never
+selected (see phase 1a').
 
 Built on sample_french_by_country.py's fast candidate discovery: Event Registry's
 own concept tagging (article_concept_association -> geo_taxonomy_concept_uris_direct_match
@@ -17,8 +22,9 @@ month/country windows directly against the 2.3B-row / 470 GB association table
 Discovery starts from article_relevance, not article_downloads — the classified
 pool is a fraction of the full per-language article table, so pulling it
 directly is cheaper than enumerating every article in --language first and
-probing relevance per chunk. Four stages, all chunked, indexed lookups — no
-table is ever scanned in full:
+probing relevance per chunk. Several stages, all chunked or single-pass
+indexed lookups — no table is ever scanned in full except article_risk_factor_tags
+in 1a' (see below), which has no usable index for what that stage needs:
   1a. Fetch every (article_uri, is_relevant, relevance_version, created_at) row
       for the resolved relevance version(s) directly from article_relevance —
       an indexed range scan on the (relevance_version, article_uri) primary
@@ -29,56 +35,86 @@ table is ever scanned in full:
       keeping each article's most recently created verdict across versions.
       Pass an explicit version to fetch just that one instead. No --language or
       date filtering happens at this stage — see 1b.
+  1a'. --language eng only, run concurrently with 1a (fetch_risk_factor_balanced_pool):
+      one single-pass query against article_risk_factor_tags
+      (_RISK_FACTOR_BALANCED_POOL_SQL) that ranks every tag_method_id-matching
+      row within its risk_factor group by md5(article_uri + seed) and keeps
+      the top --risk-factor-k per group — i.e. up to K candidates PER
+      risk-factor category, not a slice of the whole table. There's no index
+      on risk_factor (only article_uri), so answering "K random articles for
+      category X" 167 times over would mean 167 separate full scans; ranking
+      all categories in one pass instead means the ~85-103M-row table (no
+      usable index for this filter either — see _RISK_FACTOR_PROBE_SQL's
+      comment) is scanned exactly once, however big --risk-factor-k is. This
+      pool is not yet filtered by is_relevant, --language, or date — those
+      still happen in 1b, against just this (much smaller than the full
+      relevant pool) candidate set intersected with 1a's is_relevant=true
+      results. An eng relevant article that never surfaces in any category's
+      top-K here is simply never a candidate (see module docstring intro) —
+      this is what replaces --relevant-oversample's uniform random slice for
+      eng specifically; other languages still use that (see 1b).
   1b. Confirm --language and (if --start-month/--end-month were given) the
       date window, via a chunked uri=ANY() lookup against article_downloads.
       This doubles as the source of publication year for stratification.
-      Neither pool is selectable downstream without surviving this. Every
-      is_relevant=true URI from 1a is confirmed (it feeds phase 3's
-      country/year stratification, so the full pool matters), but the
-      is_relevant=false side is downsampled BEFORE this query, not after:
-      since that pool is never stratified (see below), there's no reason to
-      pay language/date confirmation on all of it just to throw most of it
-      away in phase 3's truncation. Instead we take a deterministic random
-      subset sized at (needed not-relevant quota) x --not-relevant-oversample
-      (see _deterministic_sample) and only confirm that. On a table where
-      classified-but-not-relevant dwarfs classified-and-relevant (commonly
-      100x+), this is what keeps 1b's cost proportional to what phase 3 will
-      actually use instead of the full classified pool. NOTE: article_downloads
+      Neither pool is selectable downstream without surviving this, and
+      BOTH pools are downsampled BEFORE this query, not after — for eng, the
+      relevant side is 1a''s risk-factor-balanced pool intersected with
+      is_relevant=true; for every other language, it's a deterministic random
+      subset sized at (relevant quota) x --relevant-oversample (see
+      _deterministic_sample), for the same reason 1a' exists for eng: the
+      classified pool from 1a is typically orders of magnitude bigger than
+      what --n needs, and confirming (and geo-tagging, in 1c) all of it would
+      dominate the run's cost for no benefit. The not-relevant side is always
+      a deterministic random subset sized at (not-relevant quota) x
+      --not-relevant-oversample, since that pool is never stratified (see
+      below) and any random subset works equally well. NOTE: article_downloads
       is range-partitioned on published_at; without a date bound this lookup
       may not prune partitions as neatly as a per-month query would.
   1c. Geo-tag the confirmed is_relevant=true URIs from 1b, in chunks of
       --probe-chunk-size, probed against article_concept_association's
       (article_uri, concept_uri) primary key. Measured ~1.25 ms/article.
-  1d. --language eng only: probe article_risk_factor_tags for the same
-      confirmed is_relevant=true URIs (chunked uri=ANY(), filtered by
-      --tag-method-id) to get each article's risk-factor tag count. Used as a
-      priority signal in phase 3, not a hard filter or a fresh grouping —
-      articles with more distinct risk factors are picked first within each
-      (country, year) bucket, mirroring the old from_db_matrix.py's
-      "maximise risk-factor diversity per country" positive-selection.
-All stages run in parallel across --workers connections. Ctrl+C cancels queued
-work and in-flight queries server-side, then exits.
+All discovery stages (1a/1a'/1b/1c) run in parallel across --workers
+connections and happen inside discover(). Ctrl+C cancels queued work and
+in-flight queries server-side, then exits.
 
-Stratification (phase 3) only applies to the is_relevant=true pool: candidates
-are grouped by country and drawn rarest-country-first, one article per country
-per round, until its quota is hit or the pool is exhausted — so rare countries
+Between phase 3 (selection, below) and phase 4 (content fetch), eng runs one
+more small step outside discover(): fetch_selected_risk_factors() re-probes
+article_risk_factor_tags for the final --n-sized selection only, using the
+same chunked, indexed-by-article_uri query the old design ran during
+discovery (_RISK_FACTOR_PROBE_SQL / probe_risk_factor_chunk) — cheap at this
+size. This is needed because 1a''s per-category top-K only captures the
+categories an article happened to rank into, not necessarily its complete tag
+list; this step is what makes the output's risk_factors field accurate.
+
+Stratification (phase 3) only applies to the is_relevant=true pool. For eng,
+phase 3 round-robins over risk-factor categories rarest-first (by candidate
+count), and within each category's turn draws from that category's own
+country/year round-robin — the same country-rarest-first,
+then-year-rarest-first logic every language gets (see below), just with an
+extra outer level. An article carrying several risk-factor tags and/or
+geo-tagged to several countries is claimed by whichever (category, country)
+combination's round reaches it first; every category and country it's
+actually tagged with is still recorded in the output (risk_factors from 1e,
+adm0_codes_all from candidates). For every other language (no risk-factor
+coverage), phase 3 is just the country/year round-robin on its own: candidates
+(the --relevant-oversample-sized random subset that survived 1b/1c) are
+grouped by country and drawn rarest-country-first, one article per country per
+round, until its quota is hit or the pool is exhausted — so rare countries
 contribute everything they have and surplus countries absorb the rest. Within
 a country, articles are further grouped by publication year and drawn
 rarest-year-first with the same round-robin, so a country's quota isn't
 dominated by whichever years happen to have the most raw volume (news
-archives typically skew recent). Within a (country, year) bucket, articles are
-ordered by (risk-factor-diversity priority [eng only], md5(uri + seed)) for a
-deterministic, query-order-independent pick. Publication year comes from phase
-1b's language/date confirmation — the same lookup that verifies --language, so
-no extra DB round-trip beyond that. An article geo-tagged to several countries
-is claimed by whichever country's round reaches it first; all of its tagged
-countries are still recorded in the output.
+archives typically skew recent). Within a (country, year) [and, for eng,
+(risk-factor, country, year)] bucket, articles are ordered by md5(uri + seed)
+for a deterministic, query-order-independent pick. Publication year comes from
+phase 1b's language/date confirmation — the same lookup that verifies
+--language, so no extra DB round-trip beyond that.
 
-The is_relevant=false pool isn't stratified at all — it's just every confirmed
-not-relevant candidate from 1b ordered by md5(uri + seed) and truncated to its
-quota, since nothing downstream needs it balanced by country, year, or risk
-factor (though it is, like the relevant pool, guaranteed to be --language and
-in-window — see 1b).
+The is_relevant=false pool isn't stratified at all, for any language — it's
+just every confirmed not-relevant candidate from 1b ordered by md5(uri + seed)
+and truncated to its quota, since nothing downstream needs it balanced by
+country, year, or risk factor (though it is, like the relevant pool,
+guaranteed to be --language and in-window — see 1b).
 
 --pos-ratio controls the split: round(n * pos_ratio) articles come from the
 relevant (stratified) pool, the rest from the not-relevant (random) pool.
@@ -91,36 +127,38 @@ candidates/selection (deterministic for a given --seed), skips articles
 already in --output, and appends the rest.
 
 Usage:
-    # 50k English articles, 70% relevant (country/year-stratified, with
-    # risk-factor-diversity priority within each bucket) and 30% not (uniform
-    # random), trusting each article's latest is_relevant verdict regardless
-    # of classifier version, full history -> today
-    python scripts/download/sample_articles.py \
+    # 50k English articles, 70% relevant (risk-factor-category round-robin
+    # nested inside country/year round-robin — every selected relevant
+    # article carries >=1 risk-factor tag) and 30% not (uniform random),
+    # trusting each article's latest is_relevant verdict regardless of
+    # classifier version, full history -> today
+    python scripts/download/sample_from_db.py \
         --n 50000 --output dataset/matrix_sample.jsonl
 
     # French: same relevant/not-relevant split and country/year stratification,
-    # just without the risk-factor-diversity signal (article_risk_factor_tags
-    # has no French coverage)
-    python scripts/download/sample_articles.py \
+    # just without risk-factor balancing (article_risk_factor_tags has no
+    # French coverage) — relevant pool is a uniform random slice instead
+    # (see --relevant-oversample)
+    python scripts/download/sample_from_db.py \
         --n 20000 --language fra --output dataset/fr_sample.jsonl
 
     # Custom split, bounded window, more workers, GCS output
-    python scripts/download/sample_articles.py \
+    python scripts/download/sample_from_db.py \
         --n 100000 --pos-ratio 0.6 --start-month 2020-01 --end-month 2025-06 \
         --workers 16 --output gs://my-bucket/data/matrix_sample.jsonl
 
     # Small test run to inspect output format before a large download
-    python scripts/download/sample_articles.py \
+    python scripts/download/sample_from_db.py \
         --n 200 --start-month 2025-05 --output /tmp/test_sample.jsonl
 
     # Pin relevance to one classifier version instead of trusting the latest
     # verdict regardless of version
-    python scripts/download/sample_articles.py \
+    python scripts/download/sample_from_db.py \
         --n 50000 --relevance-version gemini-2.5-flash-v1 \
         --output dataset/matrix_sample.jsonl
 
     # Resume a content-fetch run that died partway through
-    python scripts/download/sample_articles.py \
+    python scripts/download/sample_from_db.py \
         --n 5000000 --output dataset/matrix_sample_5M.jsonl --start-month 2000-01 \
         --resume
 
@@ -155,7 +193,7 @@ except ImportError:
 
 try:
     from dotenv import dotenv_values
-    # This file lives at <repo_root>/scripts/download/sample_articles.py, i.e.
+    # This file lives at <repo_root>/scripts/download/sample_from_db.py, i.e.
     # two directories below the repo root -> parents[2].
     _env = dotenv_values(Path(__file__).resolve().parents[2] / ".env")
 except ImportError:
@@ -199,10 +237,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--language", type=str, default="eng",
         help="article_downloads language filter (default eng). Confirmed during "
              "discovery (phase 1b) for both the is_relevant=true and =false pools "
-             "before either is selectable. Only --language eng gets the "
-             "risk-factor-diversity signal (see --tag-method-id) — other "
-             "languages get the same relevant/not-relevant, country/year- "
-             "stratified sample otherwise.")
+             "before either is selectable. Only --language eng builds the relevant "
+             "pool from a risk-factor-category-balanced draw and round-robins over "
+             "those categories in phase 3 (see --tag-method-id, --risk-factor-k) — "
+             "other languages get a uniform-random relevant pool (see "
+             "--relevant-oversample) with plain country/year stratification.")
     parser.add_argument("--pos-ratio", type=float, default=0.7,
         help="Fraction of articles that are is_relevant=true (default 0.7). "
              "Those are geo-tagged and stratified by country/year; the rest "
@@ -217,11 +256,26 @@ def parse_args() -> argparse.Namespace:
              "small from the start (see module docstring).")
     parser.add_argument("--tag-method-id", type=int, default=1,
         help="tag_method_id filter for article_risk_factor_tags (default 1). Only "
-             "used when --language eng: articles in the relevant pool with more "
-             "distinct risk-factor tags are prioritized within each (country, year) "
-             "bucket (phase 1d), and a 'risk_factors' field is added to output "
-             "records. Ignored for other languages, which have no coverage in that "
-             "table yet.")
+             "used when --language eng: selects which tagging pipeline's rows phase "
+             "1a' draws the risk-factor-balanced candidate pool from, and which "
+             "fetch_selected_risk_factors() re-probes post-selection for the "
+             "output's 'risk_factors' field. Ignored for other languages, which "
+             "have no coverage in that table yet.")
+    parser.add_argument("--risk-factor-k", type=int, default=10_000,
+        help="Raw per-risk-factor-category draw size for phase 1a' (default 10000): "
+             "up to this many article_uris are pulled per category directly from "
+             "article_risk_factor_tags, BEFORE any is_relevant/--language/date/geo "
+             "filtering narrows it down (see module docstring's phase 1a'). Only "
+             "used for --language eng — it's what replaces --relevant-oversample's "
+             "uniform random slice for eng specifically, so that a category with "
+             "even a handful of relevant articles overall still gets a chance at "
+             "representation instead of depending on a lucky random draw. Raising "
+             "it doesn't meaningfully add to 1a''s DB cost (that query scans the "
+             "whole table once regardless of K), but does add to 1b/1c's cost "
+             "downstream, since more candidates survive to be confirmed/geo-tagged. "
+             "If a category's candidate pool still ends up small in the output, "
+             "that generally means the category is just genuinely rare in the DB, "
+             "not that K needs raising.")
     parser.add_argument("--seed", type=int, default=42,
         help="Seed for deterministic sampling (default 42).")
     parser.add_argument("--not-relevant-oversample", type=float, default=5.0,
@@ -232,6 +286,20 @@ def parse_args() -> argparse.Namespace:
              "most of it in phase 3. Raise this if the run ends short of its not-relevant "
              "quota (printed as a warning after phase 1b) — a narrow --language or "
              "--start-month/--end-month window can fail confirmation for most candidates.")
+    parser.add_argument("--relevant-oversample", type=float, default=10.0,
+        help="Only used for languages OTHER than eng (eng builds its relevant pool "
+             "from --risk-factor-k's balanced draw instead — see --language). Same "
+             "idea as --not-relevant-oversample but for the is_relevant=true pool "
+             "(multiplier on the relevant quota, n * pos_ratio). The classified relevant "
+             "pool is often orders of magnitude bigger than what --n actually needs, and "
+             "confirming/geo-tagging (phases 1b/1c) all of it is the single most expensive "
+             "part of a run when that's the case. Downsampling it randomly BEFORE geo-tagging "
+             "means phase 3's country/year rarity is computed from a sample, not the true "
+             "population — a country with only a handful of relevant articles overall has a "
+             "real, if usually small, chance of losing all representation. Default 10.0 is a "
+             "reasonable balance; raise it (at the cost of speed) if the output's country "
+             "coverage looks thinner than expected, or lower it if the relevant pool is "
+             "already close in size to what you need and speed matters more.")
     parser.add_argument("--start-month", type=parse_month, default=None,
         help="Earliest publication month to allow, YYYY-MM (default: unbounded). "
              "Applied to both pools during discovery (phase 1b) — see --language.")
@@ -257,6 +325,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--workers must be at least 1")
     if args.not_relevant_oversample <= 0:
         parser.error("--not-relevant-oversample must be positive")
+    if args.relevant_oversample <= 0:
+        parser.error("--relevant-oversample must be positive")
+    if args.risk_factor_k < 1:
+        parser.error("--risk-factor-k must be at least 1")
     if args.end_month is None:
         today = date.today()
         args.end_month = date(today.year, today.month, 1)
@@ -432,18 +504,52 @@ JOIN geo_taxonomy geo
     ON geo.adm_code = geo_concepts.code
 """
 
-# Phase 1d (--language eng only): risk-factor tags for a chunk of article
-# URIs, from the older tag_method_id-based tagging pipeline (see
-# from_db_matrix.py, which this reprises just the diversity signal from).
-# Used as a priority in phase 3, not a filter.
-#
-# article_risk_factor_tags is 103M rows / 17 GB, indexed on article_uri. A
-# single query filtering the whole table by tag_method_id (as from_db_matrix.py's
-# original per-risk-factor sampling effectively required) costs 10M+ and scans
-# ~85M rows — almost the whole table matches tag_method_id=1. The MATERIALIZED
-# CTE chunks by article_uri instead, turning it into an indexed ANY(...) lookup
-# per chunk (measured ~0.8 ms/article), using the article_uri index directly
-# rather than a full filtered scan — same rationale as the geo probe above.
+# Phase 1a' (--language eng only, fetch_risk_factor_balanced_pool): a
+# risk-factor-CATEGORY-BALANCED draw against article_risk_factor_tags, run
+# once, up front, concurrently with 1a — see module docstring's phase 1a'
+# section for the full rationale. article_risk_factor_tags is 103M rows /
+# 17 GB with no index on risk_factor (only article_uri), so answering
+# "K random articles per category" for each of ~167 categories separately
+# would mean 167 full scans; row_number() OVER (PARTITION BY risk_factor...)
+# instead ranks every row within its category in ONE pass over the
+# tag_method_id-filtered rows (~85M of the 103M — same "no usable index for
+# this filter either" situation _RISK_FACTOR_PROBE_SQL's comment below
+# describes), and the outer SELECT keeps just the top --risk-factor-k per
+# category. Ranking is by md5(article_uri + seed), NOT Postgres's random() —
+# random() isn't seeded by --seed, which would silently break --resume's
+# "deterministic for a given --seed" guarantee (see module docstring); the
+# md5 scheme matches _deterministic_sample and every other sampling call in
+# this module. Not filtered by is_relevant/--language/date here — those are
+# still 1b's job, against this (much smaller) pool intersected with 1a's
+# is_relevant=true results.
+_RISK_FACTOR_BALANCED_POOL_SQL = """
+WITH ranked AS (
+    SELECT article_uri, risk_factor,
+           row_number() OVER (
+               PARTITION BY risk_factor
+               ORDER BY md5(article_uri || ':' || %(seed)s)
+           ) AS rn
+    FROM article_risk_factor_tags
+    WHERE tag_method_id = %(tag_method_id)s
+)
+SELECT article_uri, risk_factor
+FROM ranked
+WHERE rn <= %(per_factor_k)s
+"""
+
+# Post-selection, --language eng only (fetch_selected_risk_factors, called
+# from main() after phase 3 — NOT part of discover()): the true, complete
+# risk-factor tag list for a chunk of article URIs, from the older
+# tag_method_id-based tagging pipeline (see from_db_matrix.py, which the
+# risk-factor-balancing idea here reprises and extends into a real
+# round-robin — see module docstring). Run only against the final
+# --n-sized selection, not the whole discovery pool, which is what keeps it
+# cheap despite the lack of a (tag_method_id, risk_factor) index (see
+# _RISK_FACTOR_NAMES_SQL's comment below for the same issue at a different
+# angle). article_risk_factor_tags is 103M rows / 17 GB, indexed on
+# article_uri; the MATERIALIZED CTE chunks by article_uri, turning this into
+# an indexed ANY(...) lookup per chunk (measured ~0.8 ms/article) instead of
+# a full filtered scan — same rationale as the geo probe above.
 _RISK_FACTOR_PROBE_SQL = """
 WITH rf_rows AS MATERIALIZED (
     SELECT article_uri, risk_factor
@@ -591,6 +697,23 @@ def fetch_relevance_for_version(
             for uri, is_relevant, row_version, created_at in rows]
 
 
+def fetch_risk_factor_balanced_pool(
+    params: dict, tag_method_id: int, per_factor_k: int, seed: int,
+) -> list[tuple[str, int]]:
+    """Phase 1a' (--language eng only): up to per_factor_k article_uris per
+    risk_factor category, in one single-pass query — see
+    _RISK_FACTOR_BALANCED_POOL_SQL and the module docstring's phase 1a'
+    section. Unlike the other probe_*_chunk functions, this has nothing to
+    chunk against yet (it doesn't take a `uris` list) — it IS the discovery
+    step for the eng relevant pool, not a follow-up probe against an
+    already-known set. Not filtered by is_relevant/--language/date; that
+    happens in Python once discover()'s 1a relevance_map is available."""
+    rows = _run_query(params, _RISK_FACTOR_BALANCED_POOL_SQL,
+                      {"tag_method_id": tag_method_id, "per_factor_k": per_factor_k, "seed": str(seed)},
+                      "risk-factor-balanced pool draw")
+    return [(str(uri), int(risk_factor)) for uri, risk_factor in rows]
+
+
 def probe_language_date_chunk(
     params: dict, uris: list[str], language: str, sql: str, extra_params: dict,
 ) -> list[tuple[str, object]]:
@@ -624,48 +747,62 @@ def discover(
     end_month: date | None,
     tag_method_id: int | None,
     seed: int,
+    relevant_quota: int,
+    relevant_oversample: float,
     not_relevant_quota: int,
     not_relevant_oversample: float,
-) -> tuple[dict[str, set[str]], dict[str, int], dict[str, tuple[bool, str]], dict[str, list[int]]]:
-    """Discovery: relevance fetch -> language/date confirm (relevant pool in
-    full, not-relevant pool pre-sampled) -> geo probe (relevant-only) ->
-    risk-factor probe (relevant-only, --language eng only).
+    risk_factor_k: int,
+) -> tuple[dict[str, set[str]], dict[str, int], dict[str, tuple[bool, str]], dict[int, dict[str, set[str]]]]:
+    """Discovery: relevance fetch (+ risk-factor-balanced draw, eng only, run
+    concurrently) -> language/date confirm (both pools pre-sampled) -> geo
+    probe (relevant-only).
 
     relevance_versions is the already-resolved list from
     fetch_relevance_versions() — a single version to pin to, or every version
     in the table for --relevance-version any. tag_method_id is None to skip
-    stage 1d entirely (any language other than eng). not_relevant_quota is
-    the final number of not-relevant articles the run needs (n - n_relevant);
-    not_relevant_oversample sizes the random pre-filter applied to the
-    is_relevant=false pool before phase 1b spends a query on it (see module
-    docstring's phase 1b section and _deterministic_sample) — the seed makes
-    that pre-filter reproducible.
+    the risk-factor-balanced draw entirely (any language other than eng), in
+    which case relevant_quota/relevant_oversample build the relevant pool the
+    old way (uniform random slice, see _deterministic_sample); when
+    tag_method_id is set, risk_factor_k builds it instead (relevant_oversample
+    is ignored) — see module docstring's phase 1a'. not_relevant_quota/
+    not_relevant_oversample always size the not-relevant pool's random
+    pre-filter the same way, regardless of language. seed makes every
+    pre-filter reproducible.
 
-    Returns (candidates, uri_year, relevance_map, risk_factor_map):
+    Returns (candidates, uri_year, relevance_map, rf_candidates):
       candidates: adm0_code -> set of geo-tagged, is_relevant=true article URIs
                   confirmed to be in `language` and (if bounded) the date window.
       uri_year: article_uri -> publication year, read off phase 1b's language/
                 date confirmation. Only meaningful for candidates (the only
-                ones stratified_sample needs it for), though it may also hold
-                entries for confirmed not-relevant URIs.
+                ones stratified_sample/stratified_sample_rf need it for),
+                though it may also hold entries for confirmed not-relevant URIs.
       relevance_map: article_uri -> (is_relevant, relevance_version), restricted
-                      to confirmed (--language, in-window) URIs — every
-                      is_relevant=true one, and a random, quota-sized subset of
-                      is_relevant=false ones (see above) — nothing outside that
-                      is selectable by sample_articles(). With
+                      to confirmed (--language, in-window) URIs — nothing
+                      outside that is selectable by sample_articles(). With
                       relevance_version="any" the version in the tuple is
                       whichever version actually produced that article's most
                       recent verdict, not the literal "any".
-      risk_factor_map: article_uri -> list of distinct risk_factor ids, for
-                        the candidates subset only. Empty when tag_method_id
-                        is None.
+      rf_candidates: risk_factor_id -> adm0_code -> set of confirmed,
+                      geo-tagged article URIs carrying that tag — the input
+                      stratified_sample_rf round-robins over. Empty dict when
+                      tag_method_id is None (every other language); candidates
+                      itself is still populated in that case; phase 3 just
+                      uses stratified_sample instead (no risk-factor level).
     """
     pool = ThreadPoolExecutor(max_workers=workers)
     candidates: dict[str, set[str]] = {}
-    risk_factor_map: dict[str, list[int]] = {}
+    rf_candidates: dict[int, dict[str, set[str]]] = {}
     try:
         # 1a: every classified article for the resolved version(s), no
-        # language/date filter yet (see 1b).
+        # language/date filter yet (see 1b). 1a' (eng only) runs concurrently
+        # on another worker: a risk-factor-category-balanced draw against
+        # article_risk_factor_tags, independent of relevance — see module
+        # docstring's phase 1a' section and _RISK_FACTOR_BALANCED_POOL_SQL.
+        rf_balanced_future = None
+        if tag_method_id is not None:
+            rf_balanced_future = pool.submit(
+                fetch_risk_factor_balanced_pool, params, tag_method_id, risk_factor_k, seed)
+
         rel_futures = {
             pool.submit(fetch_relevance_for_version, params, version): version
             for version in relevance_versions
@@ -685,21 +822,46 @@ def discover(
         }
         del raw
 
-        # 1b: confirm language/date for every is_relevant=true URI (it feeds
-        # phase 3's stratification, so the full pool matters) plus a random,
-        # quota-sized subset of is_relevant=false URIs (never stratified, so
-        # there's no point confirming more of it than phase 3 will use — see
-        # module docstring). Reads off publication year while at it (used for
-        # stratification of the true pool only).
-        relevant_uris = [uri for uri, (is_relevant, _v) in relevance_map.items() if is_relevant]
         not_relevant_uris = [uri for uri, (is_relevant, _v) in relevance_map.items() if not is_relevant]
         not_relevant_target = math.ceil(not_relevant_quota * not_relevant_oversample)
         sampled_not_relevant = _deterministic_sample(not_relevant_uris, not_relevant_target, seed)
-        print(f"  1a: {len(relevant_uris):,} relevant / {len(not_relevant_uris):,} not-relevant "
-              f"classified; sampling {len(sampled_not_relevant):,} not-relevant candidates "
-              f"(quota {not_relevant_quota:,} x {not_relevant_oversample} oversample) before "
-              f"confirming language/date", file=sys.stderr)
-        all_uris = relevant_uris + sampled_not_relevant
+
+        # rf_candidates_relevant: risk_factor_id -> confirmed-eligible relevant
+        # article_uris carrying that tag (eng only) — built from 1a' intersected
+        # with is_relevant=true, BEFORE language/date confirmation. Populated
+        # here so 1b (below) has something to confirm; turned into the final
+        # nested rf_candidates (crossed with country, from 1c) further down.
+        rf_candidates_relevant: dict[int, list[str]] = {}
+        if tag_method_id is not None:
+            print(f"  1a: waiting for the risk-factor-balanced pool draw "
+                  f"(single whole-table pass, no usable index — see module "
+                  f"docstring's phase 1a')...\033[K", end="\r", file=sys.stderr, flush=True)
+            for uri, risk_factor in rf_balanced_future.result():
+                if relevance_map.get(uri, (False,))[0] is True:
+                    rf_candidates_relevant.setdefault(risk_factor, []).append(sys.intern(uri))
+            relevant_uris = sorted(set().union(*rf_candidates_relevant.values())) \
+                if rf_candidates_relevant else []
+            print(f"  1a: risk-factor-balanced draw: {len(rf_candidates_relevant):,} categories, "
+                  f"{len(relevant_uris):,} distinct relevant articles (>=1 tag, up to "
+                  f"--risk-factor-k={risk_factor_k:,} raw draw per category); "
+                  f"sampling {len(sampled_not_relevant):,} not-relevant candidates "
+                  f"(quota {not_relevant_quota:,} x {not_relevant_oversample} oversample) before "
+                  f"confirming language/date", file=sys.stderr)
+            sampled_relevant = relevant_uris  # already bounded; no further downsampling needed
+        else:
+            relevant_uris = [uri for uri, (is_relevant, _v) in relevance_map.items() if is_relevant]
+            relevant_target = math.ceil(relevant_quota * relevant_oversample)
+            sampled_relevant = _deterministic_sample(relevant_uris, relevant_target, seed)
+            print(f"  1a: {len(relevant_uris):,} relevant / {len(not_relevant_uris):,} not-relevant "
+                  f"classified; sampling {len(sampled_relevant):,} relevant "
+                  f"(quota {relevant_quota:,} x {relevant_oversample} oversample) and "
+                  f"{len(sampled_not_relevant):,} not-relevant candidates "
+                  f"(quota {not_relevant_quota:,} x {not_relevant_oversample} oversample) before "
+                  f"confirming language/date", file=sys.stderr)
+
+        # 1b: confirm language/date for the (already downsampled, one way or
+        # another — see above) relevant and not-relevant pools together.
+        all_uris = sampled_relevant + sampled_not_relevant
         sql = _build_language_date_probe_sql(start_month is not None, end_month is not None)
         extra_params: dict = {}
         if start_month is not None:
@@ -733,7 +895,15 @@ def discover(
         # Only confirmed (--language, and if bounded, in-window) articles are
         # selectable downstream, for either pool.
         relevance_map = {uri: relevance_map[uri] for uri in confirmed}
+        n_confirmed_relevant = sum(1 for is_relevant, _v in relevance_map.values() if is_relevant)
         n_confirmed_not_relevant = sum(1 for is_relevant, _v in relevance_map.values() if not is_relevant)
+        if n_confirmed_relevant < relevant_quota:
+            hint = (f"raise --risk-factor-k (currently {risk_factor_k:,})" if tag_method_id is not None
+                    else f"raise --relevant-oversample (currently {relevant_oversample})")
+            print(f"  warning: only {n_confirmed_relevant:,} relevant candidates confirmed "
+                  f"(--language={language!r}/date-window match) before geo-tagging, short of "
+                  f"the {relevant_quota:,} needed (some will also fail to geo-tag in 1c); "
+                  f"{hint} or rerun.", file=sys.stderr)
         if n_confirmed_not_relevant < not_relevant_quota:
             print(f"  warning: only {n_confirmed_not_relevant:,} not-relevant candidates confirmed "
                   f"(--language={language!r}/date-window match), short of the {not_relevant_quota:,} "
@@ -760,25 +930,23 @@ def discover(
                   end="\r", file=sys.stderr, flush=True)
         print(file=sys.stderr)
 
-        # 1d: risk-factor tags for the same confirmed relevant URIs, eng only
+        # Cross 1a''s per-category grouping (narrowed to `confirmed` by 1b)
+        # with 1c's per-country geo-tagging to build the nested pool
+        # stratified_sample_rf round-robins over: risk_factor_id -> adm0_code
+        # -> uris. The true, complete risk_factor_ids list per article (which
+        # this only partially captures — see module docstring) is filled in
+        # later, post-selection, by fetch_selected_risk_factors().
         if tag_method_id is not None:
-            rf_futures = {
-                pool.submit(probe_risk_factor_chunk, params, tag_method_id,
-                            confirmed_list[i:i + probe_chunk_size]):
-                    len(confirmed_list[i:i + probe_chunk_size])
-                for i in range(0, len(confirmed_list), probe_chunk_size)
-            }
-            t0, processed = time.time(), 0
-            for future in as_completed(rf_futures):
-                for uri, risk_factor_ids in future.result():
-                    risk_factor_map[sys.intern(uri)] = risk_factor_ids
-                processed += rf_futures[future]
-                rate = processed / max(time.time() - t0, 1e-9)
-                eta_min = (len(confirmed_list) - processed) / max(rate, 1e-9) / 60
-                print(f"  1d: {processed:,}/{len(confirmed_list):,} relevant articles risk-factor-probed, "
-                      f"{len(risk_factor_map):,} tagged ({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
-                      end="\r", file=sys.stderr, flush=True)
-            print(file=sys.stderr)
+            uri_to_adm0: dict[str, list[str]] = {}
+            for adm0, member_uris in candidates.items():
+                for uri in member_uris:
+                    uri_to_adm0.setdefault(uri, []).append(adm0)
+            for risk_factor, uris in rf_candidates_relevant.items():
+                for uri in uris:
+                    if uri not in confirmed:
+                        continue
+                    for adm0 in uri_to_adm0.get(uri, ()):
+                        rf_candidates.setdefault(risk_factor, {}).setdefault(adm0, set()).add(uri)
 
         pool.shutdown(wait=True)
     except BaseException:
@@ -790,7 +958,7 @@ def discover(
         raise
     finally:
         close_all_conns()
-    return candidates, uri_year, relevance_map, risk_factor_map
+    return candidates, uri_year, relevance_map, rf_candidates
 
 
 # ── Phase 3: stratified selection ─────────────────────────────────────────────
@@ -816,27 +984,23 @@ def _round_robin_order(groups: dict[object, list[str]]) -> list[str]:
     return result
 
 
-def stratified_sample(
+def _country_year_stream(
     candidates: dict[str, set[str]],
-    n: int,
     seed: int,
-    priority: Callable[[str], object] | None = None,
-    uri_year: dict[str, int] | None = None,
-) -> list[dict]:
-    """Round-robin over countries, rarest first, until n articles or exhaustion.
-
-    Within each country, articles are further round-robinned by publication
-    year (rarest year first) before the country-level draw sees them, so a
-    country's quota isn't dominated by whichever years have the most raw
-    volume (news archives typically skew recent). Articles with an unknown
-    year (uri_year omitted, or missing an entry) fall into one shared
-    "unknown" bucket per country.
-
-    Within a (country, year) bucket, articles are ordered by
-    (priority(uri), md5(uri + seed)) — priority lets callers favour some
-    dimension of interest (e.g. risk-factor-tag diversity — see
-    discover()'s tag_method_id); ties (or no priority) fall back to a
-    deterministic, query-order-independent hash.
+    priority: Callable[[str], object] | None,
+    uri_year: dict[str, int] | None,
+    seen: set[str],
+) -> Generator[tuple[str, str], None, None]:
+    """Yield (uri, adm0_code) one at a time, round-robinning rarest-country-first,
+    then rarest-year-first within each country, until every country's pool is
+    exhausted — see stratified_sample's docstring for the full country/year
+    rationale (this is its inner machinery, factored out so
+    stratified_sample_rf can reuse it once per risk-factor category, see
+    below). `seen` is mutated in place as items are yielded: pass a set
+    private to one call to reproduce plain single-level stratified_sample
+    behaviour, or one SHARED across several calls (as stratified_sample_rf
+    does, one call per category) so "claimed by whoever's round reaches it
+    first" extends across those calls too, not just within one.
     """
     priority_fn = priority or (lambda uri: 0)
 
@@ -855,19 +1019,89 @@ def stratified_sample(
     order = sorted(candidates, key=lambda c: (len(candidates[c]), c))
     pools = {c: iter(country_pool(candidates[c])) for c in order}
 
-    seen: set[str] = set()
-    selected: list[dict] = []
     active = deque(order)
-    while active and len(selected) < n:
+    while active:
         adm0 = active.popleft()
         for uri in pools[adm0]:
             if uri in seen:
                 continue
             seen.add(uri)
-            selected.append({"article_uri": uri, "adm0_code": adm0})
+            yield uri, adm0
             active.append(adm0)
             break
         # pool exhausted -> country drops out of the rotation
+
+
+def stratified_sample(
+    candidates: dict[str, set[str]],
+    n: int,
+    seed: int,
+    priority: Callable[[str], object] | None = None,
+    uri_year: dict[str, int] | None = None,
+) -> list[dict]:
+    """Round-robin over countries, rarest first, until n articles or exhaustion.
+
+    Within each country, articles are further round-robinned by publication
+    year (rarest year first) before the country-level draw sees them, so a
+    country's quota isn't dominated by whichever years have the most raw
+    volume (news archives typically skew recent). Articles with an unknown
+    year (uri_year omitted, or missing an entry) fall into one shared
+    "unknown" bucket per country.
+
+    Within a (country, year) bucket, articles are ordered by
+    (priority(uri), md5(uri + seed)) — priority lets callers favour some
+    dimension of interest; ties (or no priority) fall back to a
+    deterministic, query-order-independent hash. (--language eng no longer
+    uses priority here — see stratified_sample_rf, which round-robins over
+    risk-factor categories directly instead of just prioritizing by tag
+    count within country/year buckets.)
+    """
+    seen: set[str] = set()
+    selected: list[dict] = []
+    for uri, adm0 in _country_year_stream(candidates, seed, priority, uri_year, seen):
+        selected.append({"article_uri": uri, "adm0_code": adm0})
+        if len(selected) >= n:
+            break
+    return selected
+
+
+def stratified_sample_rf(
+    rf_candidates: dict[int, dict[str, set[str]]],
+    n: int,
+    seed: int,
+    uri_year: dict[str, int] | None,
+) -> list[dict]:
+    """Round-robin over risk-factor categories, rarest first (by total
+    candidate count); within each category's turn, draw the next article from
+    that category's own country/year round-robin (_country_year_stream) — the
+    same "rare group contributes everything it has" logic stratified_sample
+    already applies to countries, just with an extra outer level for
+    categories. A `seen` set is shared across every category's stream (not
+    just within one), so an article carrying several risk-factor tags is
+    claimed by whichever category's round reaches it first — the same
+    multi-country claim rule stratified_sample uses, extended one level up.
+    Priority within each (category, country, year) bucket is left at the
+    default (md5(uri + seed) only, no risk-factor-count priority): the
+    category-level round-robin is what balances risk-factor representation
+    now, so that signal is no longer needed as an in-bucket tie-break.
+    """
+    seen: set[str] = set()
+    streams = {
+        rf: _country_year_stream(country_map, seed, None, uri_year, seen)
+        for rf, country_map in rf_candidates.items()
+    }
+    order = sorted(rf_candidates,
+                    key=lambda rf: (sum(len(u) for u in rf_candidates[rf].values()), rf))
+    selected: list[dict] = []
+    active = deque(order)
+    while active and len(selected) < n:
+        rf = active.popleft()
+        item = next(streams[rf], None)
+        if item is None:
+            continue  # category exhausted -> drops out of the rotation
+        uri, adm0 = item
+        selected.append({"article_uri": uri, "adm0_code": adm0, "risk_factor_id": rf})
+        active.append(rf)
     return selected
 
 
@@ -878,32 +1112,33 @@ def sample_articles(
     pos_ratio: float,
     seed: int,
     uri_year: dict[str, int] | None,
-    risk_factor_map: dict[str, list[int]] | None = None,
+    rf_candidates: dict[int, dict[str, set[str]]] | None = None,
 ) -> list[dict]:
-    """Split n articles into a relevant pool (stratified by country/year,
-    with risk-factor-tag-count as an in-bucket priority when risk_factor_map
-    is given) and a not-relevant pool (uniform random — nothing downstream
-    needs it balanced).
+    """Split n articles into a relevant pool and a not-relevant pool (uniform
+    random — nothing downstream needs it balanced).
 
-    round(n * pos_ratio) come from `candidates` (is_relevant=true, geo-tagged);
-    the rest are drawn from every is_relevant=false URI in relevance_map
-    (already confirmed --language/date-window by discover(), just never
-    geo-tagged), ordered by md5(uri + seed) and truncated to quota — their
-    adm0_code is None since they skip geo-tagging.
+    round(n * pos_ratio) relevant articles come from rf_candidates when given
+    (--language eng: stratified_sample_rf, risk-factor-category round-robin
+    nested around country/year round-robin) or from `candidates` otherwise
+    (stratified_sample, plain country/year round-robin, every other
+    language). The rest are drawn from every is_relevant=false URI in
+    relevance_map (already confirmed --language/date-window by discover(),
+    just never geo-tagged), ordered by md5(uri + seed) and truncated to
+    quota — their adm0_code is None since they skip geo-tagging.
 
-    When risk_factor_map is given (--language eng), every selected article
-    (relevant and not-relevant alike) gets a "risk_factor_ids" key — the
-    article's tags, or [] if it has none — so downstream output can carry a
-    risk_factors field consistently. Left unset entirely for other languages.
+    risk_factor_ids is NOT set here — main() fills it in after this call, via
+    a small post-selection fetch_selected_risk_factors() probe against just
+    the returned relevant selection (see module docstring), since
+    rf_candidates only reflects the categories an article happened to rank
+    into during discovery, not necessarily its complete tag list.
     """
     n_relevant = round(n * pos_ratio)
     n_not_relevant = n - n_relevant
 
-    priority = None
-    if risk_factor_map:
-        priority = lambda uri: -len(risk_factor_map.get(uri, ()))  # noqa: E731
-
-    selected = stratified_sample(candidates, n_relevant, seed, priority=priority, uri_year=uri_year)
+    if rf_candidates:
+        selected = stratified_sample_rf(rf_candidates, n_relevant, seed, uri_year)
+    else:
+        selected = stratified_sample(candidates, n_relevant, seed, uri_year=uri_year)
 
     not_relevant_uris = sorted(
         (uri for uri, (is_relevant, _) in relevance_map.items() if is_relevant is False),
@@ -916,8 +1151,6 @@ def sample_articles(
 
     for meta in selected:
         meta["is_relevant"], meta["relevance_version_used"] = relevance_map[meta["article_uri"]]
-        if risk_factor_map is not None:
-            meta["risk_factor_ids"] = risk_factor_map.get(meta["article_uri"], [])
     return selected
 
 
@@ -941,6 +1174,50 @@ def fetch_risk_factor_names(params: dict) -> dict[int, str]:
             return {int(r["id"]): str(r["name"]) for r in cur.fetchall()}
     finally:
         conn.close()
+
+
+def fetch_selected_risk_factors(
+    params: dict, tag_method_id: int, uris: list[str], workers: int, probe_chunk_size: int,
+) -> dict[str, list[int]]:
+    """Accurate, complete risk-factor tag lookup for a SMALL, already-selected
+    set of article URIs — called from main() after phase 3, not part of
+    discover(). Needed because discover()'s risk-factor-balanced draw (phase
+    1a') only captures the categories an article happened to rank into its
+    top-K for, not necessarily its full tag list — see module docstring. Cheap
+    to run here specifically because `uris` is the final --n-sized relevant
+    selection, not the millions-large discovery pool; same chunked,
+    indexed-by-article_uri probe as before (_RISK_FACTOR_PROBE_SQL /
+    probe_risk_factor_chunk), just moved to run after selection instead of
+    before it.
+    """
+    if not uris:
+        return {}
+    pool = ThreadPoolExecutor(max_workers=workers)
+    risk_factor_map: dict[str, list[int]] = {}
+    try:
+        futures = {
+            pool.submit(probe_risk_factor_chunk, params, tag_method_id, uris[i:i + probe_chunk_size]):
+                len(uris[i:i + probe_chunk_size])
+            for i in range(0, len(uris), probe_chunk_size)
+        }
+        t0, processed = time.time(), 0
+        for future in as_completed(futures):
+            for uri, risk_factor_ids in future.result():
+                risk_factor_map[uri] = risk_factor_ids
+            processed += futures[future]
+            rate = processed / max(time.time() - t0, 1e-9)
+            print(f"  risk-factor tags: {processed:,}/{len(uris):,} selected articles probed "
+                  f"({rate:,.0f}/s)\033[K", end="\r", file=sys.stderr, flush=True)
+        print(file=sys.stderr)
+        pool.shutdown(wait=True)
+    except BaseException:
+        _stop.set()
+        cancel_inflight_queries()
+        pool.shutdown(wait=True, cancel_futures=True)
+        raise
+    finally:
+        close_all_conns()
+    return risk_factor_map
 
 
 def _fetch_content_chunk(conn, uris: list[str], language: str) -> list[dict]:
@@ -978,8 +1255,8 @@ def build_record(
             "is_relevant": meta.get("is_relevant"),
         },
     }
-    # Only present when discover() ran phase 1d (--language eng) — see
-    # sample_articles()'s risk_factor_map handling.
+    # Only present when main() ran fetch_selected_risk_factors() post-selection
+    # (--language eng) — see module docstring.
     if "risk_factor_ids" in meta:
         record["risk_factors"] = sorted(
             rf_names.get(rf_id, str(rf_id)) for rf_id in meta["risk_factor_ids"]
@@ -1090,6 +1367,8 @@ def print_summary(
     output: str,
     relevance_version: str,
     n_risk_factors: int,
+    rf_candidates: dict[int, dict[str, set[str]]] | None = None,
+    rf_names: dict[int, str] | None = None,
 ) -> None:
     present = [m for m in selected if m["article_uri"] in written_uris]
     n_relevant = sum(1 for m in present if m["is_relevant"] is True)
@@ -1103,14 +1382,18 @@ def print_summary(
     print(f"Total articles written : {len(written_uris):,}")
     if skipped:
         print(f"  ({written:,} written this run, {skipped:,} already present from --resume)")
-    print(f"  Relevant              : {n_relevant:,} (version={relevance_version}, country/year-stratified)")
+    stratification = "risk-factor-category + country/year round-robin" if rf_candidates else "country/year-stratified"
+    print(f"  Relevant              : {n_relevant:,} (version={relevance_version}, {stratification})")
     print(f"  Not relevant          : {n_not_relevant:,} (uniform random)")
     print(f"Countries covered       : {len(per_country):,} / {len(candidates):,}")
+    per_rf: dict[int, int] = {}
     if n_risk_factors:
         covered_rf_ids: set[int] = set()
         for m in present:
             if m["is_relevant"]:
-                covered_rf_ids.update(m.get("risk_factor_ids") or [])
+                for rf_id in m.get("risk_factor_ids") or []:
+                    covered_rf_ids.add(rf_id)
+                    per_rf[rf_id] = per_rf.get(rf_id, 0) + 1
         print(f"Risk factors covered    : {len(covered_rf_ids):,} / {n_risk_factors:,}")
     if missing:
         print(f"Missing from DB         : {missing:,}")
@@ -1119,6 +1402,12 @@ def print_summary(
     for adm0 in sorted(per_country, key=lambda c: (-per_country[c], c)):
         name = country_names.get(adm0, adm0)
         print(f"  {name:<40} {per_country[adm0]:>6,} / {len(candidates[adm0]):,}")
+    if rf_candidates and rf_names is not None:
+        print("\nPer-risk-factor breakdown (selected / candidates):")
+        for rf_id in sorted(per_rf, key=lambda r: (-per_rf[r], r)):
+            name = rf_names.get(rf_id, str(rf_id))
+            candidate_count = sum(len(u) for u in rf_candidates.get(rf_id, {}).values())
+            print(f"  {name:<40} {per_rf[rf_id]:>6,} / {candidate_count:,}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -1159,21 +1448,25 @@ def main() -> None:
           f"relevant-pool window={start_label}..{args.end_month:%Y-%m}, "
           f"with {args.workers} workers"
           f"{f', tag-method-id={tag_method_id}' if tag_method_id is not None else ''}...")
-    candidates, uri_year, relevance_map, risk_factor_map = discover(
+    candidates, uri_year, relevance_map, rf_candidates = discover(
         params, args.language, args.workers, args.probe_chunk_size,
         relevance_versions=relevance_versions,
         start_month=args.start_month, end_month=args.end_month,
         tag_method_id=tag_method_id,
-        seed=args.seed, not_relevant_quota=n_want_not_relevant,
-        not_relevant_oversample=args.not_relevant_oversample,
+        seed=args.seed,
+        relevant_quota=n_want_relevant, relevant_oversample=args.relevant_oversample,
+        not_relevant_quota=n_want_not_relevant, not_relevant_oversample=args.not_relevant_oversample,
+        risk_factor_k=args.risk_factor_k,
     )
     n_relevant_geo = len(set().union(*candidates.values())) if candidates else 0
     n_not_relevant_avail = sum(1 for is_relevant, _ in relevance_map.values() if is_relevant is False)
     print(f"  {n_relevant_geo:,} relevant articles geo-tagged across {len(candidates):,} countries; "
           f"{n_not_relevant_avail:,} not-relevant articles available")
     if tag_method_id is not None:
-        print(f"  {len(risk_factor_map):,} relevant articles have >=1 risk-factor tag "
-              f"(tag_method_id={tag_method_id})")
+        n_rf_tagged = len(set().union(*(u for m in rf_candidates.values() for u in m.values()))) \
+            if rf_candidates else 0
+        print(f"  {n_rf_tagged:,} relevant articles risk-factor-balanced across "
+              f"{len(rf_candidates):,} categories (tag_method_id={tag_method_id})")
     if not relevance_map:
         print("No relevance-classified articles found for this language/window/version. "
               "Nothing to sample.")
@@ -1181,22 +1474,32 @@ def main() -> None:
 
     n_risk_factors = 0
     rf_names: dict[int, str] = {}
-    if tag_method_id is not None and risk_factor_map:
+    if tag_method_id is not None:
         rf_names = fetch_risk_factor_names(params)
         n_risk_factors = len(rf_names)
 
     print(f"\nPhase 3: sampling {args.n:,} articles (pos-ratio={args.pos_ratio} -> "
-          f"{n_want_relevant:,} relevant [country/year-stratified"
-          f"{', risk-factor-diversity priority' if risk_factor_map else ''}], "
+          f"{n_want_relevant:,} relevant ["
+          f"{'risk-factor-category + country/year round-robin' if rf_candidates else 'country/year-stratified'}], "
           f"{args.n - n_want_relevant:,} not relevant [uniform random])...")
     selected = sample_articles(
         candidates, relevance_map, args.n, args.pos_ratio, args.seed, uri_year,
-        risk_factor_map=risk_factor_map if tag_method_id is not None else None,
+        rf_candidates=rf_candidates if tag_method_id is not None else None,
     )
     n_sel_relevant = sum(1 for m in selected if m["is_relevant"])
     n_sel_not_relevant = len(selected) - n_sel_relevant
     print(f"  selected {len(selected):,} articles ({n_sel_relevant:,} relevant, {n_sel_not_relevant:,} not relevant) "
           f"across {len({m['adm0_code'] for m in selected if m['adm0_code'] is not None}):,} countries")
+
+    if tag_method_id is not None:
+        selected_relevant_uris = [m["article_uri"] for m in selected if m["is_relevant"]]
+        print(f"\nFetching complete risk-factor tags for the {len(selected_relevant_uris):,} "
+              f"selected relevant articles (accurate, not just the categories they were "
+              f"drawn under during phase 1a' — see module docstring)...")
+        final_rf_map = fetch_selected_risk_factors(
+            params, tag_method_id, selected_relevant_uris, args.workers, args.probe_chunk_size)
+        for m in selected:
+            m["risk_factor_ids"] = final_rf_map.get(m["article_uri"], []) if m["is_relevant"] else []
 
     try:
         country_names = fetch_country_names(params)
@@ -1220,6 +1523,7 @@ def main() -> None:
     print_summary(
         selected, candidates, written_uris, country_names, written, missing, skipped, args.output,
         args.relevance_version, n_risk_factors,
+        rf_candidates=rf_candidates if tag_method_id is not None else None, rf_names=rf_names,
     )
 
 

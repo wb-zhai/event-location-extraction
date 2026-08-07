@@ -102,7 +102,7 @@ Sample from DB (download/)
 
 ## 1. Sampling from the DB
 
-One stratified sampler, `scripts/download/sample_articles.py`, reading connection
+One stratified sampler, `scripts/download/sample_from_db.py`, reading connection
 params from the repo-root `.env` (`SQL_HOST`/`SQL_PORT`/`SQL_DATABASE`/`SQL_USERNAME`/
 `SQL_PASSWORD`) and requiring `psycopg2`. It never scans `article_concept_association`
 (2.3B rows / 470 GB) or `article_risk_factor_tags` (103M rows / 17 GB) directly —
@@ -110,7 +110,7 @@ candidate discovery goes through chunked, indexed probes instead, run in paralle
 across `--workers` connections, with clean Ctrl+C cancellation of in-flight
 server-side queries.
 
-### `sample_articles.py` — relevant / not-relevant sample, any language
+### `sample_from_db.py` — relevant / not-relevant sample, any language
 
 Downloads a country-stratified sample split by the relevance filter's own verdict —
 **relevant** (`is_relevant=true` in `article_relevance`, geo-tagged and stratified by
@@ -131,12 +131,12 @@ output records. Other languages have no coverage in that table yet, so they get 
 same relevant/not-relevant, country/year-stratified sample without that extra signal.
 
 ```bash
-PYTHONPATH=. python scripts/download/sample_articles.py \
+PYTHONPATH=. python scripts/download/sample_from_db.py \
     --n 50000 --pos-ratio 0.7 --output dataset/matrix_sample.jsonl
 
 # French: same relevant/not-relevant split and country/year stratification,
 # just without the risk-factor-diversity signal
-PYTHONPATH=. python scripts/download/sample_articles.py \
+PYTHONPATH=. python scripts/download/sample_from_db.py \
     --n 20000 --language fra --output dataset/fr_sample.jsonl
 ```
 
@@ -260,7 +260,7 @@ Context/prompt-distillation pipeline: a Gemini teacher (elaborate prompt, few-sh
 labels articles with events, producing an SFT dataset that a small student model
 (Qwen3.5-4B) is later trained on to reproduce those labels from a simpler prompt (the
 training step itself lives in `scripts/train/llamafactory/` or `vertexai/train/event-extraction/`,
-not here). Runs on the `sample_articles.py` relevant/not-relevant sample from §1 —
+not here). Runs on the `sample_from_db.py` relevant/not-relevant sample from §1 —
 split by the relevance filter's own `is_relevant` verdict, not a fresh Gemini
 relevance pass — so the teacher (and thus the resulting training set) also covers the
 not-relevant case, teaching the student to emit no events on them, rather than only
@@ -601,23 +601,23 @@ here rather than adding a new one.
 **1. Sample from the DB** (§1) — one run per language:
 
 ```bash
-PYTHONPATH=. python scripts/download/sample_articles.py --n 20000 --output dataset/en_20k.jsonl
-PYTHONPATH=. python scripts/download/sample_articles.py --n 20000 --language fra --output dataset/fr_20k.jsonl
+PYTHONPATH=. python scripts/download/sample_from_db.py --n 20000 --output dataset/en_20k.jsonl
+PYTHONPATH=. python scripts/download/sample_from_db.py --n 20000 --language fra --output dataset/fr_20k.jsonl
 ```
 
-> **Note:** the commands above reflect the version of `sample_articles.py` (formerly
-> `from_db_matrix_v2.py`) current when this model was last trained, which split by
-> risk-factor tags (English) or sampled plain country-stratified (French, via the
-> now-retired `sample_french_by_country.py`) rather than the relevance filter's own
-> verdict. The merged script now samples by `article_relevance`'s existing
-> `is_relevant` verdict for *every* language, which is what feeds the
-> *event-extraction* pipeline (§3) — but makes it circular for bootstrapping a
-> relevance model from scratch, since it needs verdicts to already exist for the
-> language/window you're sampling. Retraining this model will need either a
-> relevance-agnostic sampler (none currently in the repo — `sample_french_by_country.py`
-> was retired when it was folded into `sample_articles.py`) or an explicit decision to
-> sample from the existing classifier's verdicts on purpose. Update this entry once
-> that's settled.
+> **Note:** the commands above reflect the version of `sample_from_db.py` (formerly
+> `from_db_matrix_v2.py`, briefly `sample_articles.py` before this rename) current
+> when this model was last trained, which split by risk-factor tags (English) or
+> sampled plain country-stratified (French, via the now-retired
+> `sample_french_by_country.py`) rather than the relevance filter's own verdict. The
+> merged script now samples by `article_relevance`'s existing `is_relevant` verdict
+> for *every* language, which is what feeds the *event-extraction* pipeline (§3) —
+> but makes it circular for bootstrapping a relevance model from scratch, since it
+> needs verdicts to already exist for the language/window you're sampling. Retraining
+> this model will need either a relevance-agnostic sampler (none currently in the
+> repo — `sample_french_by_country.py` was retired when it was folded into
+> `sample_from_db.py`) or an explicit decision to sample from the existing
+> classifier's verdicts on purpose. Update this entry once that's settled.
 
 **2. Gemini data annotation** (§2, `relevance_filter.py`) — label each sample
 `relevant`/`irrelevant` with Gemini 3.1 Pro via the Batch API, one run per language
