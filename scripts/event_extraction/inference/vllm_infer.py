@@ -4,7 +4,16 @@ Input JSONL:  {"source": {"text": ..., "publish_date": ...}, ...}
 Output JSONL: same fields + "predictions" (merged/deduplicated events)
                            + "window_predictions" (per-window raw output)
 
-Recovery: re-running on an existing output file skips already-processed articles.
+With --gcs_input the input is instead a *manifest* (see
+vertexai/inference/event-extraction/build_manifest.py): one
+{"id", "gcs_path", "publish_date", "language"} per line, with the article text streamed
+from GCS one object at a time. With --lean_output each result line is just
+{"id", "predictions"} -- all the geocoding/ingest steps downstream need.
+
+Both input modes are streamed, so memory is O(batch_size), not O(corpus).
+
+Recovery: re-running on an existing output file skips already-processed articles (by "id"
+when present, else by a hash of the article text).
 """
 
 from __future__ import annotations
@@ -12,12 +21,13 @@ from __future__ import annotations
 import copy
 import gc
 import hashlib
+import itertools
 import json
 import logging
 import pathlib
 import re
 import sys
-from typing import Iterator
+from typing import Iterable, Iterator
 
 import torch
 import fire
@@ -117,6 +127,15 @@ def _annotation_schema(labels: list[str] | None) -> dict:
 
 
 def _article_key(row: dict) -> str:
+    """Recovery key for a row: its id when it has one, else a hash of the article text.
+
+    Preferring "id" is what lets --lean_output resume (its rows carry no text), and it
+    also spares a restart from rehashing every article body in the output. Older
+    full-echo outputs carry "id" too, so they keep resuming correctly.
+    """
+    article_id = row.get("id")
+    if article_id:
+        return str(article_id)
     text = (row.get("source") or {}).get("text") or json.dumps(row, sort_keys=True)
     return hashlib.sha256(text.encode()).hexdigest()
 
@@ -131,10 +150,7 @@ def _load_processed_keys(output_path: pathlib.Path) -> set[str]:
             if not line:
                 continue
             try:
-                row = json.loads(line)
-                source = row.get("source") or {}
-                text = source.get("text") or json.dumps(row, sort_keys=True)
-                keys.add(hashlib.sha256(text.encode()).hexdigest())
+                keys.add(_article_key(json.loads(line)))
             except json.JSONDecodeError:
                 pass
     return keys
@@ -179,9 +195,44 @@ def _resolve_events(window_preds: list[dict]) -> list[dict]:
     return merged
 
 
-def _batched(items: list, size: int) -> Iterator[list]:
-    for i in range(0, len(items), size):
-        yield items[i : i + size]
+def _batched(items: Iterable, size: int) -> Iterator[list]:
+    """Group an iterable into lists of at most `size`, without materializing it."""
+    batch: list = []
+    for item in items:
+        batch.append(item)
+        if len(batch) >= size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+def _read_jsonl(path: pathlib.Path, shard_index: int, num_shards: int) -> Iterator[dict]:
+    """Stream a local JSONL, keeping line k when k % num_shards == shard_index.
+
+    Streaming (rather than json.loads-ing the whole file into a list up front) keeps
+    memory O(batch) so the same code path works on a 33M-article corpus.
+    """
+    with open(path, encoding="utf-8") as f:
+        for lineno, line in enumerate(f):
+            line = line.strip()
+            if not line:
+                continue
+            if num_shards > 1 and lineno % num_shards != shard_index:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError as e:
+                print(f"Skipping line {lineno + 1}: {e}", file=sys.stderr)
+
+
+def _output_row(row: dict, win_preds: list, predictions: list, lean: bool) -> dict:
+    """Build the output record. Lean mode keeps only what the geocoding + ingest steps
+    read (scripts/geocoding/add_geotaxonomy.py, to_csv_ingest.py): the article id and the
+    merged predictions. At corpus scale that is ~1 KB/article instead of ~20 KB."""
+    if lean:
+        return {"id": row.get("id"), "predictions": predictions}
+    return {**row, "window_predictions": win_preds, "predictions": predictions}
 
 
 def _apply_chat_template(tokenizer, messages: list[dict]) -> list[int]:
@@ -199,6 +250,26 @@ def _apply_chat_template(tokenizer, messages: list[dict]) -> list[int]:
     if hasattr(token_ids, "tolist"):
         return token_ids.tolist()
     return [int(t) for t in token_ids]
+
+
+_system_prompt_cache: dict = {}
+
+
+def _render_system_prompt_cached(
+    system_template: str, labels: list[str], descriptions: dict[str, str]
+) -> str:
+    """Memoized render_system_prompt.
+
+    Without a `candidates` field every row gets the same default label list, so this
+    otherwise re-renders an identical ~1.5k-token system prompt once per article.
+    Keyed on the template text plus the labels; descriptions are fixed per run.
+    """
+    key = (system_template, tuple(labels))
+    if key not in _system_prompt_cache:
+        _system_prompt_cache[key] = render_system_prompt(
+            system_template, labels, descriptions
+        )
+    return _system_prompt_cache[key]
 
 
 def _build_windows(
@@ -230,7 +301,7 @@ def _build_windows(
         lang = row_language(row)
         system_template, user_template = templates.get(lang, templates["eng"])
         labels = row_labels(row, default_labels, top_k_candidates)
-        system_prompt = render_system_prompt(system_template, labels, descriptions)
+        system_prompt = _render_system_prompt_cached(system_template, labels, descriptions)
 
     paras = split_paragraphs(text) or [(0, len(text))]
     paras = split_oversized_paragraphs(text, paras, max_chars=max_chars)
@@ -286,6 +357,11 @@ def vllm_infer(
     top_k_candidates: int | None = None,
     shard_index: int = 0,
     num_shards: int = 1,
+    # Input / output form
+    gcs_input: bool = False,
+    gcs_read_concurrency: int = 64,
+    lean_output: bool = False,
+    limit: int | None = None,
     # Windowing
     max_chars: int = 3000,
     min_chars: int = 200,
@@ -429,24 +505,6 @@ def vllm_infer(
         seed=seed,
     )
 
-    # Load input
-    input_path = pathlib.Path(input)
-    articles: list[dict] = []
-    with open(input_path, encoding="utf-8") as f:
-        for lineno, line in enumerate(f, 1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                articles.append(json.loads(line))
-            except json.JSONDecodeError as e:
-                print(f"Skipping line {lineno}: {e}", file=sys.stderr)
-
-    # Sharding (stride so load is balanced across shards)
-    if num_shards > 1:
-        articles = articles[shard_index::num_shards]
-        print(f"Shard {shard_index}/{num_shards}: {len(articles)} articles")
-
     # Recovery
     output_path = pathlib.Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -456,11 +514,41 @@ def vllm_infer(
             f"Skipping {len(processed_keys)} already-processed articles (found in {output_path})"
         )
 
-    pending = [row for row in articles if _article_key(row) not in processed_keys]
-    print(f"Processing {len(pending)} / {len(articles)} articles")
+    # Input. Both modes are lazy generators, so memory stays O(batch_size) and the corpus
+    # is never held in RAM. Sharding strides over lines so load is balanced; in Cloud
+    # Batch num_shards is 1 because each task is handed its own manifest file.
+    input_path = pathlib.Path(input)
+    if num_shards > 1:
+        print(f"Shard {shard_index}/{num_shards} (striding input lines)")
 
-    n_batches = (len(pending) + batch_size - 1) // batch_size
-    pbar = tqdm(total=len(pending) * 2, unit="article")
+    if gcs_input:
+        from scripts.event_extraction.inference.gcs_stream import (
+            ArticleFetcher,
+            read_manifest,
+            stream_fetched,
+        )
+
+        fetcher = ArticleFetcher(pool_size=gcs_read_concurrency)
+        manifest_rows = read_manifest(input_path, shard_index, num_shards, limit)
+        # Skip already-done ids before fetching, so a resumed run doesn't re-download
+        # every article it is about to discard.
+        manifest_rows = (
+            r for r in manifest_rows if str(r.get("id") or "") not in processed_keys
+        )
+        articles: Iterable[dict] = stream_fetched(
+            manifest_rows,
+            fetcher,
+            gcs_read_concurrency,
+            max_inflight=max(batch_size * 2, gcs_read_concurrency * 2),
+        )
+        pending = articles
+    else:
+        articles = _read_jsonl(input_path, shard_index, num_shards)
+        if limit is not None:
+            articles = itertools.islice(articles, limit)
+        pending = (row for row in articles if _article_key(row) not in processed_keys)
+
+    pbar = tqdm(unit="article")
     _first_prompt_printed = False
     _first_generation_printed = False
 
@@ -479,7 +567,7 @@ def vllm_infer(
 
             # --- Full-doc retrieval (before windowing) ---
             if retriever_llm is not None and retriever_query_mode == "full_doc":
-                pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Retrieving")
+                pbar.set_description(f"Batch {b_idx + 1} | Retrieving")
                 texts = [(row.get("source") or {}).get("text") or "" for row in batch]
                 pooling_outputs = retriever_llm.encode(texts, pooling_task="embed")
                 query_embeddings = torch.stack(
@@ -500,7 +588,7 @@ def vllm_infer(
             _render_prompt = not (
                 retriever_llm is not None and retriever_query_mode == "per_window"
             )
-            pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Building")
+            pbar.set_description(f"Batch {b_idx + 1} | Building")
             article_windows: list[list[dict]] = []
 
             for a_idx, row in enumerate(batch):
@@ -530,12 +618,11 @@ def vllm_infer(
                     pbar.write(f"Window error for {aid}: {e}")
                     windows = []
                 article_windows.append(windows)
-                pbar.update(1)
 
             # --- Per-window retrieval (after windowing) ---
             if retriever_llm is not None and retriever_query_mode == "per_window":
                 pbar.set_description(
-                    f"Batch {b_idx + 1}/{n_batches} | Retrieving per window"
+                    f"Batch {b_idx + 1} | Retrieving per window"
                 )
                 _win_texts: list[str] = []
                 _win_index: list[tuple[int, int]] = []
@@ -611,7 +698,7 @@ def vllm_infer(
                         )
 
             pbar.write(
-                f"Batch {b_idx + 1}/{n_batches}: {len(batch)} articles, "
+                f"Batch {b_idx + 1}: {len(batch)} articles, "
                 f"{len(vllm_inputs)} prompts (max_new_tokens={max_new_tokens})"
             )
 
@@ -625,7 +712,7 @@ def vllm_infer(
                 _first_prompt_printed = True
 
             # --- Inference ---
-            pbar.set_description(f"Batch {b_idx + 1}/{n_batches} | Inference")
+            pbar.set_description(f"Batch {b_idx + 1} | Inference")
             article_preds: list[list[dict | None]] = [
                 [None] * len(w) for w in article_windows
             ]
@@ -634,7 +721,7 @@ def vllm_infer(
                 if not article_windows[a_idx]:
                     out_f.write(
                         json.dumps(
-                            {**row, "window_predictions": [], "predictions": []},
+                            _output_row(row, [], [], lean_output),
                             ensure_ascii=False,
                         )
                         + "\n"
@@ -673,19 +760,22 @@ def vllm_infer(
                         win_preds = article_preds[a_idx]
                         out_f.write(
                             json.dumps(
-                                {
-                                    **row,
-                                    "window_predictions": win_preds,
-                                    "predictions": _resolve_events(win_preds),
-                                },
+                                _output_row(
+                                    row,
+                                    win_preds,
+                                    _resolve_events(win_preds),
+                                    lean_output,
+                                ),
                                 ensure_ascii=False,
                             )
                             + "\n"
                         )
                         pbar.update(1)
 
-                out_f.flush()
-                gc.collect()
+            # Flush per batch, not per generate(), so a batch that produced no windows
+            # still lands on disk for the entrypoint's 90 s sync loop to pick up.
+            out_f.flush()
+            gc.collect()
 
     pbar.close()
     print(f"Done. Results saved to {output_path}")

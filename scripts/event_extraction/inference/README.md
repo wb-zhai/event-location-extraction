@@ -12,6 +12,36 @@ Each line of the input JSONL must contain a `source` object with at least a `tex
 {"source": {"text": "...", "publish_date": "2024-01-15"}, ...}
 ```
 
+Input is read as a stream, so memory stays proportional to `batch_size` rather than to the
+size of the corpus.
+
+#### Manifest mode (`--gcs_input`)
+
+At corpus scale, materializing every article body into a JSONL is the bottleneck. With
+`--gcs_input` the input file is instead a **manifest** of DB metadata, and article text is
+streamed from GCS one object per article:
+
+```json
+{"id":"578612029","gcs_path":"gs://newsapi-news-data/578612029.json",
+ "publish_date":"2017-01-07 19:57:00","language":"eng"}
+```
+
+Build one with [vertexai/inference/event-extraction/build_manifest.py](../../../vertexai/inference/event-extraction/build_manifest.py).
+`publish_date` and `language` are taken from the manifest (i.e. from the DB) rather than from
+the GCS object, so they keep the format the model was trained on. Articles whose object is
+missing, unreadable, or empty are dropped.
+
+```bash
+python scripts/event_extraction/inference/vllm_infer.py \
+  --model_name_or_path <path> \
+  --input  /tmp/manifests/manifest-000.jsonl \
+  --output /tmp/preds.jsonl \
+  --gcs_input --lean_output \
+  --gcs_read_concurrency 64
+```
+
+Requires `google-cloud-storage`. See [gcs_stream.py](gcs_stream.py).
+
 ### Basic usage
 
 ```bash
@@ -76,6 +106,11 @@ python scripts/event_extraction/inference/vllm_infer.py ... --num_shards 4 --sha
 | `top_k_candidates`                 | `None`     | Limit candidate event labels shown in the prompt                                         |
 | `shard_index`                      | `0`        | Index of this shard (0-based)                                                            |
 | `num_shards`                       | `1`        | Total number of shards                                                                   |
+| **Input / output**                 |            |                                                                                          |
+| `gcs_input`                        | `False`    | Treat `input` as a manifest and stream article text from GCS (see Manifest mode above)   |
+| `gcs_read_concurrency`             | `64`       | Concurrent GCS GETs when `gcs_input` is set                                              |
+| `lean_output`                      | `False`    | Write only `{"id", "predictions"}` per line instead of echoing the input row             |
+| `limit`                            | `None`     | Stop after N input rows (post-sharding)                                                  |
 | **Windowing**                      |            |                                                                                          |
 | `max_chars`                        | `3000`     | Maximum characters per window                                                            |
 | `min_chars`                        | `200`      | Minimum characters to keep a window                                                      |
@@ -96,8 +131,8 @@ python scripts/event_extraction/inference/vllm_infer.py ... --num_shards 4 --sha
 | `max_num_seqs`                     | `None`     | vLLM max concurrent sequences                                                            |
 | `quantization`                     | `None`     | vLLM quantization method (e.g. `awq`, `gptq`), if the model needs one                    |
 | **Structured output**              |            |                                                                                          |
-| `use_guided_decoding`              | `True`     | Constrain generation to the JSON event schema via vLLM guided decoding                   |
-| `guided_decoding_backend`          | `outlines` | Guided-decoding backend passed to vLLM                                                   |
+| `use_guided_decoding`              | `False`    | Constrain generation to the JSON event schema via vLLM guided decoding                   |
+| `guided_decoding_backend`          | `xgrammar` | Guided-decoding backend passed to vLLM                                                   |
 | **Retriever (optional)**           |            |                                                                                          |
 | `retriever_model_name`             | `None`     | Enables candidate retrieval; embedding model used to query the index                     |
 | `retriever_index`                  | `None`     | Path to a prebuilt index (required when `retriever_model_name` is set)                   |
@@ -127,6 +162,18 @@ Each output line is the original input row with two fields added:
 ```
 
 `predictions` is the deduplicated merge across all windows (keyed on `grounding_quote`). `window_predictions` contains each window's raw model output.
+
+With `--lean_output`, each line is instead just:
+
+```json
+{"id": "578612029", "predictions": [{"event_type": "...", "grounding_quote": "...", ...}]}
+```
+
+That is everything the geocoding and ingest steps read (`scripts/geocoding/add_geotaxonomy.py` mutates `predictions` in place; `to_csv_ingest.py` reads `id` and `predictions`). At corpus scale it is ~1 KB/article against ~20 KB for the full echo — the difference between ~35 GB and ~700 GB over 33M articles. Keep the full form when you need `window_predictions` for eval or debugging.
+
+### Recovery
+
+Re-running against an existing output file skips articles already in it. The key is the row's `id` when it has one — true for both output forms — and a SHA-256 of the article text otherwise. In `--gcs_input` mode the skip is applied to manifest rows *before* the GCS fetch, so a resumed run doesn't re-download articles it would immediately discard.
 
 ---
 

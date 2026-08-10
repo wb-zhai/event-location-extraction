@@ -357,8 +357,14 @@ sets (vLLM pooling-mode encoding instead of in-process Sentence Transformers).
 The production run: takes the model already trained on the data-generation dataset
 (above) and runs it over the **whole** article DB, on input that has already been
 through the relevance filter (§2) — the inverse of data generation's unfiltered
-pos/neg sample. Runs the fine-tuned model (`scripts/train/inference/vllm_infer.py`) as an N-shard GCP
-Cloud Batch array job, one GPU VM per shard, merged after completion. Full detail —
+pos/neg sample. Runs the fine-tuned model (`scripts/event_extraction/inference/vllm_infer.py`)
+as an N-shard GCP Cloud Batch array job, one GPU VM per shard.
+
+Same manifest architecture as the relevance job: `build_manifest.py` does one metadata-only
+DB scan (`uri`, `cloud_uri`, `published_at`, `language` — never `body`) of the articles marked
+relevant, and writes one pre-sharded `manifest-NNN.jsonl` per task to GCS. Each task then
+downloads only its own manifest and streams article bodies from GCS, one object per article.
+Nothing ever materializes the corpus as a JSONL, and memory stays O(batch). Full detail —
 GPU tier costs, shard-count sizing, spot recovery — in
 [`vertexai/inference/event-extraction/README.md`](vertexai/inference/event-extraction/README.md).
 
@@ -366,15 +372,20 @@ GPU tier costs, shard-count sizing, spot recovery — in
 bash vertexai/inference/event-extraction/setup.sh    # build + push image (one-time)
 
 cd vertexai/inference/event-extraction
-./submit_batch.sh \
-    --tier spot-a100 --shards 20 \
-    --input  gs://BUCKET/data/input.jsonl \
-    --output gs://BUCKET/output/run-001 \
-    --model  gs://BUCKET/models/qwen3.5-4b-merged \
-    --top-k-candidates 90 --quantization fp8
+python build_manifest.py \
+    --output-prefix gs://BUCKET/extraction/manifests --num-shards 200
 
-./merge_shards.sh --output gs://BUCKET/output/run-001 --dest combined.jsonl
+./submit_batch.sh \
+    --tier spot-a100 --shards 200 \
+    --manifest gs://BUCKET/extraction/manifests \
+    --output   gs://BUCKET/extraction/output/run-001 \
+    --model    gs://BUCKET/models/qwen3.5-4b-merged \
+    --quantization fp8
 ```
+
+Outputs are `shard-*.jsonl`, each line `{"id", "predictions"}` (`--lean-output`, the default).
+Read them by wildcard — at 200 shards `merge_shards.sh` is past the 32-object `gsutil compose`
+limit and falls back to downloading everything locally.
 
 Supports an optional retriever (e.g. `microsoft/harrier-oss-v1-0.6b`, see
 [Candidate retrieval](#candidate-retrieval--scriptsevent_extractionretrieve) above) to restrict
@@ -424,6 +435,17 @@ tables (hard error on any unmapped value).
 ```bash
 PYTHONPATH=. python scripts/geocoding/to_csv_ingest.py predictions_dir/   # merges all *.geo.jsonl shards
 ```
+
+---
+
+## 5. Annotation — `scripts/annotations/`
+
+Human review/correction on [Argilla](https://argilla.io/), for both the relevance
+gate and event-extraction outputs — building gold sets to score the Gemini
+relevance gate, and human-corrected events for eval/regen comparisons. Push
+records to a local Argilla server, annotate in the browser, export the
+validated results. Full detail in
+[`scripts/annotations/README.md`](scripts/annotations/README.md).
 
 ---
 

@@ -4,19 +4,39 @@
       "taskCount": "TASK_COUNT",
       "parallelism": "TASK_COUNT",
       "taskSpec": {
-        "maxRetryCount": 3,
+        "maxRetryCount": 10,
         "runnables": [
           {
             "script": {
-              "text": "#!/bin/bash\nset -euo pipefail\nif ! command -v docker >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq docker.io; command -v nvidia-ctk >/dev/null 2>&1 && nvidia-ctk runtime configure --runtime=docker; systemctl restart docker || service docker restart || true; fi\nTOKEN=$(curl -sf -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | python3 -c 'import sys,json;print(json.load(sys.stdin)[\"access_token\"])')\necho \"$TOKEN\" | docker login -u oauth2accesstoken --password-stdin us-central1-docker.pkg.dev\ndocker pull IMAGE_URI\ndocker run --rm --gpus all --shm-size=4g -e INPUT_GCS=\"${INPUT_GCS}\" -e OUTPUT_GCS_PREFIX=\"${OUTPUT_GCS_PREFIX}\" -e MODEL_GCS=\"${MODEL_GCS}\" -e MAX_NEW_TOKENS=\"${MAX_NEW_TOKENS}\" -e BATCH_SIZE=\"${BATCH_SIZE}\" -e BATCH_TASK_INDEX=\"${BATCH_TASK_INDEX:-0}\" -e BATCH_TASK_COUNT=\"${BATCH_TASK_COUNT:-1}\" IMAGE_URI"
+              "text": "#!/bin/bash\nset -euo pipefail\nif ! command -v docker >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq docker.io; command -v nvidia-ctk >/dev/null 2>&1 && nvidia-ctk runtime configure --runtime=docker; systemctl restart docker || service docker restart || true; fi\nTOKEN=$(curl -sf -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | python3 -c 'import sys,json;print(json.load(sys.stdin)[\"access_token\"])')\necho \"$TOKEN\" | docker login -u oauth2accesstoken --password-stdin us-central1-docker.pkg.dev\ndocker pull IMAGE_URI\ndocker run --rm --gpus all --shm-size=4g -e MANIFEST_GCS_PREFIX=\"${MANIFEST_GCS_PREFIX}\" -e OUTPUT_GCS_PREFIX=\"${OUTPUT_GCS_PREFIX}\" -e MODEL_GCS=\"${MODEL_GCS}\" -e MAX_NEW_TOKENS=\"${MAX_NEW_TOKENS}\" -e BATCH_SIZE=\"${BATCH_SIZE}\" -e MAX_CHARS=\"${MAX_CHARS}\" -e MAX_MODEL_LEN=\"${MAX_MODEL_LEN}\" -e MIN_CHARS=\"${MIN_CHARS}\" -e MAX_PARAS=\"${MAX_PARAS}\" -e OVERLAP_PARAS=\"${OVERLAP_PARAS}\" -e TEMPERATURE=\"${TEMPERATURE}\" -e TOP_K_CANDIDATES=\"${TOP_K_CANDIDATES}\" -e QUANTIZATION=\"${QUANTIZATION}\" -e GPU_MEMORY_UTIL=\"${GPU_MEMORY_UTIL}\" -e GCS_READ_CONCURRENCY=\"${GCS_READ_CONCURRENCY}\" -e LEAN_OUTPUT=\"${LEAN_OUTPUT}\" -e USE_GUIDED_DECODING=\"${USE_GUIDED_DECODING}\" -e GUIDED_DECODING_BACKEND=\"${GUIDED_DECODING_BACKEND}\" -e ONTOLOGY=\"${ONTOLOGY}\" -e ONTOLOGY_DESCRIPTIONS=\"${ONTOLOGY_DESCRIPTIONS}\" -e RETRIEVER_MODEL_NAME=\"${RETRIEVER_MODEL_NAME}\" -e RETRIEVER_INDEX=\"${RETRIEVER_INDEX}\" -e RETRIEVER_GPU_MEM_UTIL=\"${RETRIEVER_GPU_MEM_UTIL}\" -e RETRIEVER_QUERY_MODE=\"${RETRIEVER_QUERY_MODE}\" -e RETRIEVER_MAX_MODEL_LEN=\"${RETRIEVER_MAX_MODEL_LEN}\" -e BATCH_TASK_INDEX=\"${BATCH_TASK_INDEX:-0}\" -e BATCH_TASK_COUNT=\"${BATCH_TASK_COUNT:-1}\" IMAGE_URI"
             },
             "environment": {
               "variables": {
-                "INPUT_GCS": "VAL_INPUT_GCS",
+                "MANIFEST_GCS_PREFIX": "VAL_MANIFEST_GCS_PREFIX",
                 "OUTPUT_GCS_PREFIX": "VAL_OUTPUT_GCS_PREFIX",
                 "MODEL_GCS": "VAL_MODEL_GCS",
                 "MAX_NEW_TOKENS": "VAL_MAX_NEW_TOKENS",
-                "BATCH_SIZE": "VAL_BATCH_SIZE"
+                "BATCH_SIZE": "VAL_BATCH_SIZE",
+                "MAX_CHARS": "VAL_MAX_CHARS",
+                "MAX_MODEL_LEN": "VAL_MAX_MODEL_LEN",
+                "MIN_CHARS": "VAL_MIN_CHARS",
+                "MAX_PARAS": "VAL_MAX_PARAS",
+                "OVERLAP_PARAS": "VAL_OVERLAP_PARAS",
+                "TEMPERATURE": "VAL_TEMPERATURE",
+                "TOP_K_CANDIDATES": "VAL_TOP_K_CANDIDATES",
+                "QUANTIZATION": "VAL_QUANTIZATION",
+                "GPU_MEMORY_UTIL": "VAL_GPU_MEMORY_UTIL",
+                "GCS_READ_CONCURRENCY": "VAL_GCS_READ_CONCURRENCY",
+                "LEAN_OUTPUT": "VAL_LEAN_OUTPUT",
+                "USE_GUIDED_DECODING": "VAL_USE_GUIDED_DECODING",
+                "GUIDED_DECODING_BACKEND": "VAL_GUIDED_DECODING_BACKEND",
+                "ONTOLOGY": "VAL_ONTOLOGY",
+                "ONTOLOGY_DESCRIPTIONS": "VAL_ONTOLOGY_DESCRIPTIONS",
+                "RETRIEVER_MODEL_NAME": "VAL_RETRIEVER_MODEL_NAME",
+                "RETRIEVER_INDEX": "VAL_RETRIEVER_INDEX",
+                "RETRIEVER_GPU_MEM_UTIL": "VAL_RETRIEVER_GPU_MEM_UTIL",
+                "RETRIEVER_QUERY_MODE": "VAL_RETRIEVER_QUERY_MODE",
+                "RETRIEVER_MAX_MODEL_LEN": "VAL_RETRIEVER_MAX_MODEL_LEN"
               }
             }
           }
