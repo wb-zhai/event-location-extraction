@@ -813,16 +813,52 @@ python scripts/event_extraction/inference/eval_v3_sft.py --pred-jsonl dataset/pr
 
 **5. Inference at scale** (§5)
 
+```bash
+export NUM_SHARDS=100
 
+# 1. Manifest (local + upload)
+python vertexai/inference/event-extraction/build_manifest.py \
+    --output-prefix manifests --num-shards $NUM_SHARDS
+gsutil -m cp manifests/manifest-*.jsonl \
+    gs://zhai-risk-factor-extraction/extraction/manifests/
+
+# 2. Image
+bash vertexai/inference/event-extraction/setup.sh
+
+# 3. Job
+cd vertexai/inference/event-extraction
+./submit_batch.sh \
+    --tier spot-a100 --shards $NUM_SHARDS \
+    --job-id "extraction-$(date -u +%Y%m%d-%H%M%S)" \
+    --manifest gs://zhai-risk-factor-extraction/extraction/manifests \
+    --output   gs://zhai-risk-factor-extraction/extraction/output/run-001 \
+    --use-guided-decoding
+
+# 4. Resume test — identical command, same --output; verified no rows appended
+```
 
 **6. Geocoding** (§6)
 
 Full Photon documentation: [https://photon.komoot.io/](https://github.com/komoot/photon)
 
+Assuming you have a running instance:
+
+```bash
+PYTHONPATH=. python scripts/geocoding/add_geotaxonomy.py predictions.jsonl -o predictions.geo.jsonl
+
+# Batch a whole directory
+./scripts/geocoding/run_geotaxonomy.sh --workers 10 --parallel 10 predictions/ predictions-geo/
+```
+
 **7. DB Ingestion** (§7)
+
+TODO
 
 #### Paths
 
-- Data: gs://zhai-risk-factor-extraction/extraction/data
-- Model: zhai-risk-factor-extraction/extraction/models/
-- Inference output: gs://zhai-risk-factor-extraction/extraction/output/run-001
+- Data: `gs://zhai-risk-factor-extraction/extraction/data`
+  - Actual training data used in llamafactory format is in `gs://zhai-risk-factor-extraction/extraction/data/llamafactory`
+- Training configs: `gs://zhai-risk-factor-extraction/extraction/configs`
+  - This one was used for the model I was planning to use: `gs://zhai-risk-factor-extraction/extraction/configs/qwen3_5_4b_en_fr.yaml`
+- Model: `gs://zhai-risk-factor-extraction/extraction/models/qwen3_5-4b-lora-en-fr-a100-40gb-20260803-120523/merged`
+- Inference output: `gs://zhai-risk-factor-extraction/extraction/output/run-001`
