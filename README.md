@@ -27,11 +27,14 @@ in sync.
 
 ## Pipeline
 
-This repo builds and runs **two separately-trained models** that share the same DB
-sample and Gemini-teacher pattern but are otherwise independent pipelines.
-Each needs its own data-generation and training step before it's usable;
-they only meet at the very end, where the relevance filter gates what the
-event-extraction model sees:
+This repo builds and runs **two separately-trained models** that share the same
+Gemini-teacher pattern but are otherwise independent pipelines. Each needs its own
+data-generation and training step before it's usable. Unlike the relevance filter,
+event extraction's DB sample is itself built *from* the relevance filter's own
+verdicts (`article_relevance`, see §1) — so a relevance classifier needs to already
+have labels in the DB for the target window before you can sample for event
+extraction; the two pipelines meet again at the very end, where the relevance
+filter gates what the event-extraction model sees in production:
 
 - **Relevance filter** — a small ModernBERT classifier (`scripts/relevance/`) that
   cheaply flags whether an article can contain a food-insecurity event at all.
@@ -43,9 +46,9 @@ event-extraction model sees:
   risk-factor events and their locations.
   - *Data generation* (`scripts/event_extraction/generation/`) — a one-time, offline
     step that runs a Gemini teacher over a small stratified DB sample to *produce the
-    SFT training dataset*. That sample is **not relevance-filtered** and deliberately
-    includes negatives (articles with no risk-factor tag) alongside positives, so the
-    teacher (and thus the training set) also covers the *no events* case, not just
+    SFT training dataset*. That sample is split by the relevance filter's existing
+    `is_relevant` verdict (mostly relevant, plus a share of not-relevant articles), so
+    the teacher (and thus the training set) also covers the *no events* case, not just
     articles known to contain an event.
   - *Training* (`scripts/train/llamafactory/train.sh`, or as a Vertex AI custom job via
     `vertexai/train/event-extraction/`) — fine-tunes Qwen3.5-4B on that generated
@@ -57,30 +60,33 @@ Sample from DB (download/)
    ├─→ RELEVANCE FILTER
    │     Data gen (relevance/relevance_filter.py)      [Gemini relevant/irrelevant labels]
    │       └─→ Training (relevance/train.py)           [→ ModernBERT classifier]
-   │             └─→ Inference at scale                [gates the full ~130M-article DB]
+   │             └─→ Inference at scale ───────┐        [gates the full ~130M-article DB]
    │                 (vertexai/inference/relevance/)                  │
-   │                                                                  │
-   └─→ EVENT EXTRACTION                                               │
-         Data gen (event_extraction/generation/)       [Gemini teacher, pos/neg sample]
-           └─→ Training (train/llamafactory/, or       [→ Qwen3.5-4B student]
-                 vertexai/train/event-extraction/)
-                 └─→ Inference at scale  ◄──────────────────────────────┘
-                     (vertexai/inference/event-extraction/)
-                     [runs the trained model on every article that passes the filter]
-                             │
-                             ▼
-                        Geocoding (geocoding/)
+   │                     writes article_relevance ──┐                │
+   │                                                 │                │
+   └─→ EVENT EXTRACTION                              │                │
+         Sample from DB, split by article_relevance ◄┘                │
+           └─→ Data gen (event_extraction/generation/) [Gemini teacher, relevant/not-relevant sample]
+                 └─→ Training (train/llamafactory/, or [→ Qwen3.5-4B student]
+                       vertexai/train/event-extraction/)
+                       └─→ Inference at scale  ◄──────────────────────┘
+                           (vertexai/inference/event-extraction/)
+                           [runs the trained model on every article that passes the filter]
+                                   │
+                                   ▼
+                              Geocoding (geocoding/)
 ```
 
-1. **Sample from the DB** — pull a stratified article sample, incl. a positive/negative
-   split for training data (`scripts/download/`).
+1. **Sample from the DB** — pull a stratified article sample; the event-extraction
+   sample additionally splits by the relevance filter's existing `is_relevant`
+   verdict for training data (`scripts/download/`).
 2. **Relevance filter — data generation** — label the sampled articles
    `relevant`/`irrelevant` with Gemini (`scripts/relevance/relevance_filter.py`).
 3. **Relevance filter — training** — fine-tune the ModernBERT classifier on those
    labels (`scripts/relevance/train.py`).
 4. **Event extraction — data generation** *(offline — produces the training dataset,
-   not the model)* — distill Gemini teacher labels over the sampled positives **and**
-   negatives into an SFT dataset (`scripts/event_extraction/generation/`).
+   not the model)* — distill Gemini teacher labels over the sampled relevant **and**
+   not-relevant articles into an SFT dataset (`scripts/event_extraction/generation/`).
 5. **Event extraction — training** — fine-tune the small extraction model on that SFT
    dataset, either locally (`scripts/train/llamafactory/`) or as a Vertex AI custom job
    (`vertexai/train/event-extraction/`).
@@ -96,48 +102,53 @@ Sample from DB (download/)
 
 ## 1. Sampling from the DB
 
-Two stratified samplers in `scripts/download/`, both reading connection params
-from the repo-root `.env` (`SQL_HOST`/`SQL_PORT`/`SQL_DATABASE`/`SQL_USERNAME`/`SQL_PASSWORD`)
-and requiring `psycopg2`. Both avoid ever scanning `article_concept_association`
-(2.3B rows / 470 GB) directly — candidate discovery goes through chunked, indexed
-probes instead, run in parallel across `--workers` connections, with clean Ctrl+C
-cancellation of in-flight server-side queries.
+One stratified sampler, `scripts/download/sample_from_db.py`, reading connection
+params from the repo-root `.env` (`SQL_HOST`/`SQL_PORT`/`SQL_DATABASE`/`SQL_USERNAME`/
+`SQL_PASSWORD`) and requiring `psycopg2`. It never scans `article_concept_association`
+(2.3B rows / 470 GB) or `article_risk_factor_tags` (103M rows / 17 GB) directly —
+candidate discovery goes through chunked, indexed probes instead, run in parallel
+across `--workers` connections, with clean Ctrl+C cancellation of in-flight
+server-side queries.
 
-There are two separate scripts because French articles have no risk-factor tags in the
-DB (`article_risk_factor_tags` is English-only), so the positive/negative balancing that
-`from_db_matrix_v2.py` does isn't possible for French — `sample_french_by_country.py`
-drops that split and just samples/stratifies by country.
+### `sample_from_db.py` — relevant / not-relevant sample, any language
 
-### `from_db_matrix_v2.py` — positive/negative risk-factor sample
+Downloads a country-stratified sample split by the relevance filter's own verdict —
+**relevant** (`is_relevant=true` in `article_relevance`, geo-tagged and stratified by
+country/year) and **not-relevant** (`is_relevant=false`, sampled uniformly at random —
+no geo-tagging, no stratification, since nothing downstream needs it balanced). Feeds
+the event-extraction teacher (§3) both cases so it also learns the *no events* one.
+Articles with no relevance verdict at all for the requested version are dropped before
+the (expensive) geo probe, which is what keeps this fast. Discovery depends on
+`article_relevance` already having verdicts for the requested `--language`/window —
+it's not a relevance-agnostic sampler (see the note in §6's Reproducibility section
+for what to use instead).
 
-Downloads a country-stratified sample split into **positives** (risk-factor-tagged,
-`article_risk_factor_tags`) and **negatives** (geo-tagged but untagged), for training
-data. Country stratification is round-robin, rarest-country-first; positives are
-additionally prioritized by risk-factor diversity.
+For `--language eng` (the default) specifically, the relevant pool also gets a
+risk-factor-diversity signal from the older `article_risk_factor_tags` table
+(`--tag-method-id`, default 1): articles with more distinct risk-factor tags are
+prioritized within each (country, year) bucket, and a `risk_factors` field is added to
+output records. Other languages have no coverage in that table yet, so they get the
+same relevant/not-relevant, country/year-stratified sample without that extra signal.
 
 ```bash
-PYTHONPATH=. python scripts/download/from_db_matrix_v2.py \
+PYTHONPATH=. python scripts/download/sample_from_db.py \
     --n 50000 --pos-ratio 0.7 --output dataset/matrix_sample.jsonl
+
+# French: same relevant/not-relevant split and country/year stratification,
+# just without the risk-factor-diversity signal
+PYTHONPATH=. python scripts/download/sample_from_db.py \
+    --n 20000 --language fra --output dataset/fr_sample.jsonl
 ```
 
-Key flags: `--pos-ratio` (default 0.7), `--language` (default `eng`), `--start-month`/
-`--end-month` (default: full history to today), `--tag-method-id`, `--workers`, `--seed`.
+Key flags: `--pos-ratio` (fraction `is_relevant=true`, default 0.7), `--language`
+(default `eng`), `--relevance-version` (default `any` — trusts each article's latest
+verdict regardless of classifier version; pass a specific version to pin to it),
+`--tag-method-id` (eng only, default 1), `--start-month`/`--end-month` (default: full
+history to today), `--workers`, `--seed`, `--resume` (skip articles already present in
+`--output`, matched by `id`, and append the rest — content-fetch chunks are flushed to
+disk as they land, and retried on a fresh connection before giving up).
 
-### `sample_french_by_country.py` — single-language country sample
-
-Same discovery/stratification approach without the positive/negative split — samples
-N articles in one language (default `fra`), stratified by country. Supports `--resume`
-for interrupted runs (content-fetch chunks are flushed to disk as they land
-and matched by article id on restart).
-
-```bash
-PYTHONPATH=. python scripts/download/sample_french_by_country.py \
-    --n 500 --output dataset/french_sample.jsonl
-```
-
-Key flags: `--language` (default `fra`), `--start-month`/`--end-month`, `--workers`, `--seed`, `--resume`.
-
-Both write JSONL locally or to `gs://bucket/path`, and support a small `--start-month`-bounded
+Writes JSONL locally or to `gs://bucket/path`, and supports a small `--start-month`-bounded
 run for smoke-testing output shape before a large download.
 
 ---
@@ -215,10 +226,11 @@ shard-count tuning, spot-preemption recovery) in
 
 Two separate pipelines below, sharing the same ontology and model but **not** the
 same data source — see the note at the top of this README's Pipeline section: data
-generation produces the SFT training dataset offline from a pos/neg DB sample (not
-relevance-filtered), which a separate training step then fine-tunes the small model
-on; inference at scale runs that already-trained model on the whole DB downstream of
-the relevance filter.
+generation produces the SFT training dataset offline from a DB sample split by the
+relevance filter's existing verdict (mostly relevant, plus some not-relevant so the
+teacher also learns the *no events* case), which a separate training step then
+fine-tunes the small model on; inference at scale runs that already-trained model on
+the whole DB downstream of the relevance filter.
 
 ### Ontology — `ontologies/zhai/`
 
@@ -248,16 +260,16 @@ Context/prompt-distillation pipeline: a Gemini teacher (elaborate prompt, few-sh
 labels articles with events, producing an SFT dataset that a small student model
 (Qwen3.5-4B) is later trained on to reproduce those labels from a simpler prompt (the
 training step itself lives in `scripts/train/llamafactory/` or `vertexai/train/event-extraction/`,
-not here). Runs on the
-`from_db_matrix_v2.py` positive/negative sample from §1 — **not** on relevance-filtered
-input — so the teacher (and thus the resulting training set) also covers negatives,
-teaching the student to emit no events on them, rather than only ever seeing articles
-known to contain an event. Full detail in
+not here). Runs on the `sample_from_db.py` relevant/not-relevant sample from §1 —
+split by the relevance filter's own `is_relevant` verdict, not a fresh Gemini
+relevance pass — so the teacher (and thus the resulting training set) also covers the
+not-relevant case, teaching the student to emit no events on them, rather than only
+ever seeing articles known to contain an event. Full detail in
 [`scripts/event_extraction/generation/README.md`](scripts/event_extraction/generation/README.md).
 
 | Step | Script                    | Purpose                                                                    |
 | ---- | ------------------------- | -------------------------------------------------------------------------- |
-| 0    | (DB sample, above)        | pos/neg sample, incl. negatives on purpose — no relevance filtering        |
+| 0    | (DB sample, above)        | relevant/not-relevant sample, split by the relevance filter's own verdict  |
 | 1    | `generate.py`             | run the Gemini teacher, emit silver JSONL                                  |
 | 2    | `validate.py`             | check ontology/grounding/enums, split clean vs. invalid                    |
 | 2b   | `fix_events.py`           | send invalid events to a stronger model for re-grounding or drop           |
@@ -356,6 +368,10 @@ sets (vLLM pooling-mode encoding instead of in-process Sentence Transformers).
 
 The production run: takes the model already trained on the data-generation dataset
 (above) and runs it over the **whole** article DB, on input that has already been
+*dropped* by the relevance filter (§2) — unlike data generation's sample (§3), which
+deliberately keeps a share of not-relevant articles rather than filtering them out.
+Runs the fine-tuned model (`scripts/train/inference/vllm_infer.py`) as an N-shard GCP
+Cloud Batch array job, one GPU VM per shard, merged after completion. Full detail —
 through the relevance filter (§2) — the inverse of data generation's unfiltered
 pos/neg sample. Runs the fine-tuned model (`scripts/event_extraction/inference/vllm_infer.py`)
 as an N-shard GCP Cloud Batch array job, one GPU VM per shard.
@@ -607,13 +623,26 @@ here rather than adding a new one.
 
 ### Relevance filter model
 
-**1. Sample from the DB** (§1) — one run per language, English via the pos/neg matrix
-sampler, French via the country sampler (no risk-factor tags exist for French):
+**1. Sample from the DB** (§1) — one run per language:
 
 ```bash
-PYTHONPATH=. python scripts/download/from_db_matrix_v2.py --n 20000 --output dataset/en_20k.jsonl
-PYTHONPATH=. python scripts/download/sample_french_by_country.py --n 20000 --output dataset/fr_20k.jsonl
+PYTHONPATH=. python scripts/download/sample_from_db.py --n 20000 --output dataset/en_20k.jsonl
+PYTHONPATH=. python scripts/download/sample_from_db.py --n 20000 --language fra --output dataset/fr_20k.jsonl
 ```
+
+> **Note:** the commands above reflect the version of `sample_from_db.py` (formerly
+> `from_db_matrix_v2.py`, briefly `sample_articles.py` before this rename) current
+> when this model was last trained, which split by risk-factor tags (English) or
+> sampled plain country-stratified (French, via the now-retired
+> `sample_french_by_country.py`) rather than the relevance filter's own verdict. The
+> merged script now samples by `article_relevance`'s existing `is_relevant` verdict
+> for *every* language, which is what feeds the *event-extraction* pipeline (§3) —
+> but makes it circular for bootstrapping a relevance model from scratch, since it
+> needs verdicts to already exist for the language/window you're sampling. Retraining
+> this model will need either a relevance-agnostic sampler (none currently in the
+> repo — `sample_french_by_country.py` was retired when it was folded into
+> `sample_from_db.py`) or an explicit decision to sample from the existing
+> classifier's verdicts on purpose. Update this entry once that's settled.
 
 **2. Gemini data annotation** (§2, `relevance_filter.py`) — label each sample
 `relevant`/`irrelevant` with Gemini 3.1 Pro via the Batch API, one run per language

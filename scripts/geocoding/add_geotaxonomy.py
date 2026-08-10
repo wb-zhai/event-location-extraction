@@ -136,6 +136,67 @@ def _feature_score(feat: dict, query: str) -> float:
     return factor * imp
 
 
+# Generic administrative-unit words that are often appended/prepended to a place
+# name in noisy input ("Gaza City", "City of Gaza") but usually aren't part of
+# the name Photon actually indexed ("Gaza"). Stripping them is only attempted as
+# a *fallback* — i.e. only once the original query has already failed to find a
+# real name match — so genuine multi-word names ("New York City", "Mexico City")
+# are left alone, since those score well on the first attempt.
+_GENERIC_ADMIN_WORDS = {
+    "city", "town", "village", "municipality", "province", "state", "region",
+    "district", "county", "governorate", "prefecture", "department", "territory",
+    "area", "zone", "capital",
+}
+
+# A reranker factor at or below this counts as "no real name match" — the winner
+# was picked on importance alone, which is a strong signal the query window
+# didn't contain the intended place at all.
+_WEAK_MATCH_THRESHOLD = 0.5
+
+
+def _strip_variants(query: str) -> list[str]:
+    """Generate simplified fallback queries by stripping a leading/trailing generic
+    admin word (and "<word> of" prefixes like "City of Gaza")."""
+    words = query.split()
+    variants: list[str] = []
+    if len(words) > 1:
+        if words[-1].lower().strip(",.") in _GENERIC_ADMIN_WORDS:
+            variants.append(" ".join(words[:-1]))
+        if words[0].lower().strip(",.") in _GENERIC_ADMIN_WORDS:
+            if len(words) > 2 and words[1].lower() == "of":
+                variants.append(" ".join(words[2:]))
+            else:
+                variants.append(" ".join(words[1:]))
+    seen: set[str] = set()
+    out = []
+    for v in variants:
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _singularize_words(s: str) -> str:
+    """Naive per-word singularization (strip a trailing "s" on words > 3 chars)
+    so plural/singular mismatches ("Island" vs "Islands") aren't mistaken for a
+    real name mismatch when deciding whether a match is weak."""
+    return " ".join(w[:-1] if w.endswith("s") and len(w) > 3 else w for w in s.split())
+
+
+def _is_weak_match(query: str, feat: dict) -> bool:
+    """True if `feat` (the top-scored candidate) has no real name match — i.e.
+    it was picked on importance alone rather than matching the query text.
+    Plural/singular differences ("Island" vs "Islands") are not treated as a
+    mismatch."""
+    name = feat["properties"].get("name", "")
+    if _reranker_factor(query, name) > _WEAK_MATCH_THRESHOLD:
+        return False
+    return (
+        _reranker_factor(_singularize_words(query), _singularize_words(name))
+        <= _WEAK_MATCH_THRESHOLD
+    )
+
+
 _thread_local = threading.local()
 
 
@@ -151,8 +212,8 @@ def _get_session() -> requests.Session:
     return _thread_local.session
 
 
-def resolve_location(query: str, layer: str | None = None) -> dict | None:
-    """Query Photon for a single location string, return a geotaxonomy dict."""
+def _fetch_features(query: str, layer: str | None) -> list[dict] | None:
+    """Query Photon for a location string, returning its raw feature list (None on request failure)."""
     session = _get_session()
     params: list[tuple[str, str]] = [("q", query), ("limit", "10"), ("lang", "en")]
     if layer:
@@ -163,15 +224,23 @@ def resolve_location(query: str, layer: str | None = None) -> dict | None:
     except requests.RequestException as e:
         print(f"  WARNING: request failed for '{query}': {e}", file=sys.stderr)
         return None
+    return resp.json().get("features", [])
 
-    data = resp.json()
-    features = data.get("features", [])
+
+def _best_candidate(query: str, layer: str | None) -> dict | None:
+    """Fetch candidates for (query, layer) and return the top-scored feature, or None."""
+    features = _fetch_features(query, layer)
     if not features:
         return None
+    return max(features, key=lambda f: _feature_score(f, query))
 
-    best = max(features, key=lambda f: _feature_score(f, query))
-    props = best["properties"]
-    coords = best["geometry"]["coordinates"]
+
+def _to_geotaxonomy(query: str, feat: dict) -> dict:
+    """Build the geotaxonomy dict for a chosen feature. `query` is always the
+    original caller-supplied string, even if `feat` was found via a fallback
+    (layer-dropped or word-stripped) retry."""
+    props = feat["properties"]
+    coords = feat["geometry"]["coordinates"]
     photon_type = props.get("type", "")
     admin_level = props.get("admin_level")
     if admin_level is not None:
@@ -205,6 +274,52 @@ def resolve_location(query: str, layer: str | None = None) -> dict | None:
         result["city"] = props["city"]
 
     return result
+
+
+def resolve_location(query: str, layer: str | None = None) -> dict | None:
+    """Query Photon for a single location string, return a geotaxonomy dict.
+
+    Photon's own text search — not just our re-ranking — can fail to surface the
+    right candidate at all: either the query carries a noisy admin word Photon
+    didn't index ("Gaza City" vs. the indexed name "Gaza"), or the caller-supplied
+    `layer` doesn't match how Photon actually classifies the entity (e.g. a
+    country mislabeled as "city" excludes the real country outright, since layer
+    is a hard filter applied before any ranking happens).
+
+    When the first attempt has no real name match, retry in this order and keep
+    the first attempt that finds one — always trying a given query text with the
+    layer constraint dropped before retrying it with the (already-suspect)
+    original layer, since a mismatched `layer` is the more common failure mode
+    here and re-applying it can let a same-substring decoy win over the real
+    place a layer-free search would have found (e.g. "state of Qatar" + layer
+    "city" matching a village literally named "...Qatar..." before the actual
+    country is ever considered):
+      1. same query, no layer constraint
+      2. each generic-admin-word-stripped variant (see _strip_variants), no
+         layer constraint
+      3. each stripped variant, with the original layer (last resort)
+    If nothing improves on the original, its result is kept even if weak, so a
+    fallback attempt can only ever replace a bad answer with a better one, never
+    turn a bad answer into no answer.
+    """
+    best = _best_candidate(query, layer)
+    if best is not None and not _is_weak_match(query, best):
+        return _to_geotaxonomy(query, best)
+
+    attempts: list[tuple[str, str | None]] = []
+    if layer is not None:
+        attempts.append((query, None))
+    variants = _strip_variants(query)
+    attempts += [(v, None) for v in variants]
+    if layer is not None:
+        attempts += [(v, layer) for v in variants]
+
+    for q, lyr in attempts:
+        candidate = _best_candidate(q, lyr)
+        if candidate is not None and not _is_weak_match(q, candidate):
+            return _to_geotaxonomy(query, candidate)
+
+    return _to_geotaxonomy(query, best) if best is not None else None
 
 
 def resolve_event_location(
