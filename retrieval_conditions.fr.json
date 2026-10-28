@@ -1,0 +1,426 @@
+{
+  "conflict_exclusion_terms": [
+    "frappe aérienne",
+    "frappes aériennes",
+    "affrontement armé",
+    "affrontements armés",
+    "conflit armé",
+    "violence armée",
+    "bataille",
+    "bombardement",
+    "bombardements",
+    "attentat à la bombe",
+    "combats",
+    "affrontements",
+    "offensive",
+    "combats de milices",
+    "combats rebelles"
+  ],
+  "conditions": [
+    {
+      "event_type": "drought",
+      "positive_terms": [
+        "sécheresse",
+        "sécheresse prolongée",
+        "période de sécheresse prolongée",
+        "échec des pluies",
+        "pluies insuffisantes",
+        "manque de pluie",
+        "manque de pluies",
+        "précipitations insuffisantes",
+        "précipitations anormalement faibles"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "flooding",
+      "positive_terms": [
+        "inondation",
+        "inondations",
+        "zone inondée",
+        "zones inondées",
+        "submersion",
+        "crue",
+        "crues"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "abnormal rainfall",
+      "positive_terms": [
+        "fortes pluies",
+        "pluies intenses",
+        "pluies anormales",
+        "précipitations anormales",
+        "précipitations extrêmes",
+        "pluies torrentielles",
+        "fortes précipitations"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "water shortage",
+      "positive_terms": [
+        "pénurie d'eau",
+        "pénuries d'eau",
+        "rareté de l'eau",
+        "manque d'eau",
+        "accès limité à l'eau",
+        "disponibilité de l'eau"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "pest infestation",
+      "positive_terms": [
+        "criquet",
+        "criquets",
+        "invasion de criquets",
+        "infestation de ravageurs",
+        "ravageurs des cultures",
+        "insectes ravageurs"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "cyclone",
+      "positive_terms": [
+        "cyclone",
+        "cyclone tropical",
+        "cyclones tropicaux"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "food scarcity",
+      "positive_terms": [
+        "insécurité alimentaire",
+        "crise alimentaire",
+        "pénurie alimentaire",
+        "pénuries alimentaires",
+        "faim aiguë",
+        "faim sévère",
+        "malnutrition",
+        "mal nourris"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "famine",
+      "positive_terms": [
+        "famine",
+        "famine généralisée",
+        "famine de masse",
+        "inanition",
+        "mourir de faim"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "crop failure",
+      "positive_terms": [
+        "mauvaises récoltes",
+        "mauvaise récolte",
+        "récolte insuffisante",
+        "récoltes insuffisantes",
+        "échec des récoltes",
+        "perte de récolte",
+        "pertes de récoltes",
+        "baisse des récoltes"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "disease spread",
+      "positive_terms": [
+        "épidémie",
+        "épidémies",
+        "flambée épidémique",
+        "épidémie de choléra",
+        "flambée de choléra",
+        "propagation de la maladie",
+        "propagation d'une maladie"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "economic decline",
+      "positive_terms": [
+        "crise économique",
+        "déclin économique",
+        "recul économique",
+        "effondrement de l'économie",
+        "économie en effondrement",
+        "baisse de la production nationale"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "poverty",
+      "positive_terms": [
+        "pauvreté",
+        "appauvrissement",
+        "appauvrissement économique",
+        "extrême pauvreté"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "food price inflation",
+      "positive_terms": [
+        "inflation des prix alimentaires",
+        "hausse des prix alimentaires",
+        "hausse des prix des denrées alimentaires",
+        "les prix alimentaires ont augmenté",
+        "augmentation des prix alimentaires"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "trade disruption",
+      "positive_terms": [
+        "perturbation du commerce",
+        "perturbations commerciales",
+        "embargo",
+        "importations perturbées",
+        "exportations perturbées",
+        "commerce perturbé"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "environmental degradation",
+      "positive_terms": [
+        "dégradation de l'environnement",
+        "dégradation environnementale",
+        "dégradation écologique"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "land degradation",
+      "positive_terms": [
+        "dégradation des terres",
+        "dégradation du sol",
+        "dégradation des sols",
+        "érosion des sols"
+      ],
+      "apply_conflict_exclusion": true,
+      "notes": ""
+    },
+    {
+      "event_type": "internal displacement",
+      "positive_terms": [
+        "déplacé",
+        "déplacés",
+        "déplacée",
+        "déplacées",
+        "déplacement interne",
+        "déplacements internes",
+        "déplacés internes",
+        "ont fui leur domicile",
+        "ont fui leurs foyers",
+        "chassés de chez eux"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "refugee movement",
+      "positive_terms": [
+        "réfugié",
+        "réfugiés",
+        "mouvement de réfugiés",
+        "flux de réfugiés",
+        "demandeurs d'asile",
+        "demandeur d'asile",
+        "ont franchi la frontière"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "migrant influx",
+      "positive_terms": [
+        "afflux de migrants",
+        "flux de migrants",
+        "migration",
+        "migrants arrivant",
+        "arrivée de migrants",
+        "arrivées de migrants"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "shelter loss",
+      "positive_terms": [
+        "perte d'abri",
+        "sans-abri",
+        "sans abri",
+        "camp de fortune",
+        "camps de fortune",
+        "abris de fortune"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "aid obstruction",
+      "positive_terms": [
+        "accès humanitaire restreint",
+        "accès humanitaire limité",
+        "obstruction de l'aide",
+        "aide bloquée",
+        "accès à l'aide refusé",
+        "accès humanitaire refusé",
+        "entrave à l'aide humanitaire"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "funding shortfall",
+      "positive_terms": [
+        "déficit de financement",
+        "manque de financement",
+        "insuffisance de financement",
+        "besoin de financement",
+        "appel de fonds",
+        "appel aux dons",
+        "appel au financement"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "governance breakdown",
+      "positive_terms": [
+        "coup d'état",
+        "renversement du gouvernement",
+        "renversement du régime",
+        "lutte pour le pouvoir",
+        "dictature militaire",
+        "effondrement de la gouvernance",
+        "crise de gouvernance"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "armed violence",
+      "positive_terms": [
+        "violence armée",
+        "conflit armé",
+        "combats",
+        "affrontements",
+        "bataille",
+        "batailles",
+        "offensive",
+        "hostilités"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "militant activity",
+      "positive_terms": [
+        "insurrection rebelle",
+        "activité militante",
+        "activités militantes",
+        "terrorisme",
+        "militants",
+        "insurgés",
+        "insurrection"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "aerial bombardment",
+      "positive_terms": [
+        "attaque aérienne",
+        "attaques aériennes",
+        "frappe aérienne",
+        "frappes aériennes",
+        "bombardement",
+        "bombardements",
+        "avion de guerre",
+        "avions de guerre"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "looting",
+      "positive_terms": [
+        "pillage",
+        "pillages",
+        "pillé",
+        "pillés",
+        "saccage",
+        "saccages",
+        "mise à sac"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "human rights violation",
+      "positive_terms": [
+        "violations des droits de l'homme",
+        "violation des droits de l'homme",
+        "violations des droits humains",
+        "violation des droits humains",
+        "répression",
+        "torture",
+        "répression violente"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "supply route blockade",
+      "positive_terms": [
+        "blocus",
+        "siège",
+        "route d'approvisionnement bloquée",
+        "routes d'approvisionnement bloquées",
+        "barrage routier",
+        "barrages routiers",
+        "route bloquée"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    },
+    {
+      "event_type": "infrastructure destruction",
+      "positive_terms": [
+        "destruction d'infrastructures",
+        "destruction des infrastructures",
+        "infrastructures détruites",
+        "dommages aux infrastructures",
+        "infrastructures endommagées",
+        "pont détruit",
+        "route détruite"
+      ],
+      "apply_conflict_exclusion": false,
+      "notes": ""
+    }
+  ]
+}

@@ -862,3 +862,37 @@ TODO
   - This one was used for the model I was planning to use: `gs://zhai-risk-factor-extraction/extraction/configs/qwen3_5_4b_en_fr.yaml`
 - Model: `gs://zhai-risk-factor-extraction/extraction/models/qwen3_5-4b-lora-en-fr-a100-40gb-20260803-120523/merged`
 - Inference output: `gs://zhai-risk-factor-extraction/extraction/output/run-001`
+## Global V4 structural postprocessing
+
+Run from the repository root with authenticated GCS access and the frozen audit
+inputs under `global_v4_audit/`. Process one full shard with:
+
+```bash
+python global_v4_postprocess.py --shard 0 --out global_v4_audit/postprocessing_rebuilt
+```
+
+Use `--all` instead of `--shard 0` for all 200 shards. There is no article-limit
+option. This writes local candidates, metadata, quarantine and article-status
+files without changing raw GCS predictions. Geocoding/materialization is separate.
+An existing result with missing files fails checksum verification; use a new
+output directory when regenerating incomplete results.
+
+The location/layer queue builder supports `--input-root`, `--database` and
+`--output`. It rebuilds counts from all 200 candidate shards on each run and
+preserves existing outputs if input validation or processing fails.
+Additional research source includes teacher-manifest selection and evaluation
+scripts at the repository root, plus geotaxonomy materialization, audit, and
+PostgreSQL-ingestion utilities under `global_v4_audit/`. Their generated data and
+local diagnostic records are excluded from Git. Restore approved frozen inputs
+before rerunning postprocessing, geocoding, or ingestion; this source handoff does
+not include the local geocoded shards.
+
+`v1_production_21055/` preserves a historical V1 inference snapshot, including its
+prompts. Its Docker paths refer to the older repository layout. The maintained
+production entry points are under `vertexai/inference/event-extraction/`.
+
+Offline queue-builder regression checks use temporary synthetic inputs:
+
+```bash
+python -m unittest discover -s tests -p test_build_location_layer_queue.py -v
+```

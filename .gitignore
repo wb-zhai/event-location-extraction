@@ -222,3 +222,37 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Local research artifacts and credential backups
+/data/
+/.v1-repro-20260617/
+.env.*
+!.env.example
+/*.jsonl
+/*.tsv
+/*.csv
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+/global_v4_audit/**
+!/global_v4_audit/**/
+!/global_v4_audit/**/*.py
+!/global_v4_audit/**/*.sh
+!/global_v4_audit/**/*.sql
+!/global_v4_audit/**/*.md
+
+# Generated article-selection manifests; keep local, out of code handoffs.
+/south_sudan_manifests_20/
+/v4_french_candidate_uris/
+
+# Local diagnostic/provenance exports, not pipeline source.
+/*.txt
+!/requirements*.txt
+!/code.txt
+/previous_qwen_training_job.json
+/v1_*audit*.json
+/v1_batch_job.json
+/v1_production_21055/inspection.txt
+/vertexai/train/event-extraction/v3_failed_job.json
+/vertexai/train/event-extraction/v3_training_artifacts.txt
+/global_v4_audit/annotation_pilot/
