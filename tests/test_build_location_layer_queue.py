@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('queue_builder', ROOT / 'build_location_layer_queue.py')
+spec = importlib.util.spec_from_file_location('queue_builder', ROOT / 'scripts/geocoding/queues/build_location_layer_queue.py')
 queue = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(queue)
 

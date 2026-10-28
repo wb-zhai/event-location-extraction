@@ -234,12 +234,6 @@ __marimo__/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
-/global_v4_audit/**
-!/global_v4_audit/**/
-!/global_v4_audit/**/*.py
-!/global_v4_audit/**/*.sh
-!/global_v4_audit/**/*.sql
-!/global_v4_audit/**/*.md
 
 # Generated article-selection manifests; keep local, out of code handoffs.
 /south_sudan_manifests_20/

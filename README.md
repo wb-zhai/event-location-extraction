@@ -6,6 +6,31 @@ an LLM-distilled extraction model, and geocoded into administrative regions —
 producing `article_uri` ↔ `risk_factor` and `article_uri` ↔ `adm_code` tables ready
 for DB ingestion.
 
+## Project structure
+
+```text
+scripts/
+  sampling/teacher/                   # teacher-data selection and export
+  event_extraction/
+    generation/preparation/           # dataset splits and label conversion
+    evaluation/                       # comparisons, plots and evaluation jobs
+    postprocessing/global_v4/         # structural and temporal processing
+    inference/historical/             # earlier V1 inference scripts and prompts
+  geocoding/
+    queues/                           # location/layer inventories and Photon queues
+    dataproc/                         # candidate geography joins
+    global_v4_audit/                   # taxonomy, validation and ingestion utilities
+configs/                              # retrieval settings and old-path mappings
+outputs/                              # local audit results, reports and exports
+```
+
+Run commands from the repository root. To use an old script path:
+
+```bash
+python scripts/run.py global_v4_postprocess.py --help
+python scripts/run.py --list
+```
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
@@ -865,10 +890,10 @@ TODO
 ## Global V4 structural postprocessing
 
 Run from the repository root with authenticated GCS access and the frozen audit
-inputs under `global_v4_audit/`. Process one full shard with:
+inputs under `outputs/geography/global_v4_audit/`. Process one full shard with:
 
 ```bash
-python global_v4_postprocess.py --shard 0 --out global_v4_audit/postprocessing_rebuilt
+python scripts/event_extraction/postprocessing/global_v4/global_v4_postprocess.py --shard 0 --out outputs/geography/global_v4_audit/postprocessing_rebuilt
 ```
 
 Use `--all` instead of `--shard 0` for all 200 shards. There is no article-limit
@@ -880,19 +905,17 @@ output directory when regenerating incomplete results.
 The location/layer queue builder supports `--input-root`, `--database` and
 `--output`. It rebuilds counts from all 200 candidate shards on each run and
 preserves existing outputs if input validation or processing fails.
-Additional research source includes teacher-manifest selection and evaluation
-scripts at the repository root, plus geotaxonomy materialization, audit, and
-PostgreSQL-ingestion utilities under `global_v4_audit/`. Their generated data and
-local diagnostic records are excluded from Git. Restore approved frozen inputs
-before rerunning postprocessing, geocoding, or ingestion; this source handoff does
-not include the local geocoded shards.
+Teacher sampling scripts are under `scripts/sampling/teacher/`, and evaluation
+jobs are under `scripts/event_extraction/evaluation/`. Geography and ingestion
+utilities are under `scripts/geocoding/global_v4_audit/`. Their local inputs and
+results are under `outputs/geography/global_v4_audit/`.
 
-`v1_production_21055/` preserves a historical V1 inference snapshot, including its
-prompts. Its Docker paths refer to the older repository layout. The maintained
-production entry points are under `vertexai/inference/event-extraction/`.
+Historical V1 inference code and prompts are under
+`scripts/event_extraction/inference/historical/`. Build the V1 Dockerfile with the
+repository root as its build context.
 
 Offline queue-builder regression checks use temporary synthetic inputs:
 
 ```bash
-python -m unittest discover -s tests -p test_build_location_layer_queue.py -v
+python -m unittest discover -s tests -v
 ```
