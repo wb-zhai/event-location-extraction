@@ -45,7 +45,7 @@ cp .env.example .env   # fill in SQL_* (DB), GEMINI_API_KEY/PROJECT_ID, ARGILLA_
 ```
 
 `requirements.txt` pins `vllm` with a `sys_platform != "darwin"` marker, so `uv pip install`
-installs it everywhere except macOS (no CUDA there) automatically — nothing to toggle by hand.
+installs it everywhere except macOS (no CUDA there) automatically.
 
 Re-run `uv pip install -r requirements.txt` any time `requirements.txt` changes to keep the venv
 in sync.
@@ -770,7 +770,7 @@ PYTHONPATH=. python scripts/event_extraction/generation/sample_articles.py \
     -n 5000
 ```
 
-**2. Gemini data annotation** (§2) - We are using the latest zhai ontology (`ontologies/zhai/bona.v4.json`) for event extraction. The ontology has 48 event types, which is below the 100-candidate cap for Gemini structured generation, so we do not need to use the candidate retrieval step here. We will run the Gemini teacher on the sampled articles to produce silver labels for training.
+**2. Gemini data annotation** (§2) - Use the zhai ontology (`ontologies/zhai/bona.v4.json`) for event extraction. Its 48 event types fit within the 100-candidate cap for Gemini structured generation. Run the Gemini teacher on the sampled articles to produce silver labels for training.
 
 ```bash
 PYTHONPATH=. python scripts/event_extraction/generation/generate.py \
@@ -790,7 +790,7 @@ PYTHONPATH=. python scripts/event_extraction/generation/generate.py \
 
 **3. Train the event extraction model** (§3)
 
-First, we need to convert the annotated JSONL files into the LlamaFactory SFT format. We will use the `to_sft.py` script for this purpose.
+Convert the annotated JSONL files to LlamaFactory SFT format with `to_sft.py`.
 
 ```bash
 python scripts/event_extraction/generation/to_sft.py \
@@ -884,7 +884,7 @@ TODO
 - Data: `gs://zhai-risk-factor-extraction/extraction/data`
   - Actual training data used in llamafactory format is in `gs://zhai-risk-factor-extraction/extraction/data/llamafactory`
 - Training configs: `gs://zhai-risk-factor-extraction/extraction/configs`
-  - This one was used for the model I was planning to use: `gs://zhai-risk-factor-extraction/extraction/configs/qwen3_5_4b_en_fr.yaml`
+  - Model training configuration: `gs://zhai-risk-factor-extraction/extraction/configs/qwen3_5_4b_en_fr.yaml`
 - Model: `gs://zhai-risk-factor-extraction/extraction/models/qwen3_5-4b-lora-en-fr-a100-40gb-20260803-120523/merged`
 - Inference output: `gs://zhai-risk-factor-extraction/extraction/output/run-001`
 ## Global V4 structural postprocessing
@@ -896,15 +896,10 @@ inputs under `outputs/geography/global_v4_audit/`. Process one full shard with:
 python scripts/event_extraction/postprocessing/global_v4/global_v4_postprocess.py --shard 0 --out outputs/geography/global_v4_audit/postprocessing_rebuilt
 ```
 
-Use `--all` instead of `--shard 0` for all 200 shards. There is no article-limit
-option. This writes local candidates, metadata, quarantine and article-status
-files without changing raw GCS predictions. Geocoding/materialization is separate.
-An existing result with missing files fails checksum verification; use a new
-output directory when regenerating incomplete results.
+Use `--all` instead of `--shard 0` for all 200 shards. Each shard produces local candidates, metadata, quarantine and article-status files. Use a new output directory to regenerate incomplete results. Run geocoding separately.
 
-The location/layer queue builder supports `--input-root`, `--database` and
-`--output`. It rebuilds counts from all 200 candidate shards on each run and
-preserves existing outputs if input validation or processing fails.
+The location/layer queue builder reads all 200 candidate shards. Set its paths with `--input-root`, `--database` and `--output`.
+
 Teacher sampling scripts are under `scripts/sampling/teacher/`, and evaluation
 jobs are under `scripts/event_extraction/evaluation/`. Geography and ingestion
 utilities are under `scripts/geocoding/global_v4_audit/`. Their local inputs and
@@ -914,7 +909,7 @@ Historical V1 inference code and prompts are under
 `scripts/event_extraction/inference/historical/`. Build the V1 Dockerfile with the
 repository root as its build context.
 
-Offline queue-builder regression checks use temporary synthetic inputs:
+## Tests
 
 ```bash
 python -m unittest discover -s tests -v
