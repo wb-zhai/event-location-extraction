@@ -11,6 +11,7 @@ outputs
 predictions
 models
 secrets
+exp/data/*
 
 # VS Code
 .vscode/
