@@ -66,3 +66,8 @@ python event-location-extraction/exp/giuliano-clustering-scripts/evaluate_cluste
 
 The input glob must be quoted only when the shell would otherwise expand it
 incorrectly; DuckDB accepts the glob directly.
+
+/Users/giulianomartinelli/Downloads/zhai_annotation/event-location-extraction/exp/giuliano-clustering-scripts/emdat_eval.py
+python emdat_eval.py \
+  --predictions data/handoff/clusters_3days_6min_mentions.parquet\
+  --emdat data/africa_emdat.xlsx

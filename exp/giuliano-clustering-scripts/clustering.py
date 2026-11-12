@@ -3,16 +3,13 @@ import json
 import duckdb
 from pathlib import Path
 
-
-
 #TIME:  
 #       (1)miss year to days
 #       (2)miss end date being article date when ongoing (extraction postprocess)
 
 #LOCATION:
-#       (3)miss adm to city linking
-
-
+#       (3)miss adm to city linking (blocker, dictionary)
+#       (4)miss adm to neighbouring city linking (blocker, dictionary) 
 
 def sql_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
@@ -64,6 +61,7 @@ def build(
                 CAST(adm_level AS INTEGER) AS adm_level,
                 adm_code,
                 adm_name,
+                country,
                 
                 TRY_CAST(start_time AS DATE) start_date,
                 start_precision,
@@ -77,7 +75,6 @@ def build(
                                 union_by_name=true)
             """
         )
-    
     
     source_rows = con.execute("SELECT COUNT(*) FROM source").fetchone()[0]
     
@@ -166,7 +163,7 @@ def build(
                 CREATE TABLE clusters AS
                 WITH grouped AS (
                     SELECT
-                        adm_code, adm_level, event_type, temporal_cluster_number,
+                        adm_code, adm_level, country, event_type, temporal_cluster_number,
                         
                         MIN(start_date) AS cluster_start_date,
                         MAX(interval_end_date) AS cluster_end_date,
@@ -196,7 +193,7 @@ def build(
                             ) AS mention_ids
                             
                     FROM assigned
-                    GROUP BY adm_code, adm_level, event_type, temporal_cluster_number
+                    GROUP BY adm_code, adm_level, country, event_type, temporal_cluster_number
                 )
                 SELECT
                     md5(adm_code || '|' || CAST(adm_level AS VARCHAR) || '|' ||
@@ -224,7 +221,7 @@ def build(
             f"""
             COPY (
                 SELECT * FROM clustersss
-                ORDER BY adm_code, adm_level, event_type, cluster_start_date
+                ORDER BY adm_code, adm_level, country, event_type, cluster_start_date
             )
             TO {sql_quote(clusters_path)}
             (FORMAT PARQUET, COMPRESSION ZSTD)
