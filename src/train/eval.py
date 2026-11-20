@@ -106,8 +106,10 @@ class EventArgumentExtractionEvaluatorGliNER2:
         )
 
         texts = [sample[0] for sample in data]
-        
-        logging.info(f"Running model inference on {len(texts)} samples for evaluation...")
+
+        logging.info(
+            f"Running model inference on {len(texts)} samples for evaluation..."
+        )
         results = model.batch_extract(
             texts,
             schema,
@@ -165,11 +167,10 @@ class EventArgumentExtractionEvaluatorGliNER2:
         score_col_width = len("F1 Score")
 
         separator = f"+{'-' * (metric_col_width + 2)}+{'-' * (score_col_width + 2)}+"
-        header = (
-            f"| {'Metric'.ljust(metric_col_width)} | {'F1 Score'.ljust(score_col_width)} |"
-        )
+        header = f"| {'Metric'.ljust(metric_col_width)} | {'F1 Score'.ljust(score_col_width)} |"
         body = "\n".join(
-            f"| {name.ljust(metric_col_width)} | {score:.4f} |" for name, score in f1_rows
+            f"| {name.ljust(metric_col_width)} | {score:.4f} |"
+            for name, score in f1_rows
         )
 
         logger.info(

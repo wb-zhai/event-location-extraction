@@ -10,6 +10,7 @@ Two backends share the LocationExtractor interface:
 Use build_extractor(backend, **kwargs) to instantiate.
 Pass coarse=True (or call coarsen()) to collapse all labels to "location".
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -21,14 +22,15 @@ from typing import Any
 # Output dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class LocationMention:
     text: str
-    label: str       # fine-grained: GPE/LOC/FAC (spaCy) or city/country/… (gliner2)
+    label: str  # fine-grained: GPE/LOC/FAC (spaCy) or city/country/… (gliner2)
     start: int
     end: int
     confidence: float
-    source: str      # "gliner2" | "spacy"
+    source: str  # "gliner2" | "spacy"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -42,6 +44,7 @@ def coarsen(mentions: list[LocationMention]) -> list[LocationMention]:
 # ---------------------------------------------------------------------------
 # Abstract interface
 # ---------------------------------------------------------------------------
+
 
 class LocationExtractor(ABC):
     name: str
@@ -66,8 +69,8 @@ LOCATION_TYPES: dict[str, str] = {
 }
 
 _GLINER2_DEFAULT_MODEL = "fastino/gliner2-large-v1"
-_GLINER2_WINDOW_CHARS = 1500   # ~400 tokens; conservative to stay under model limit
-_GLINER2_OVERLAP_CHARS = 150   # overlap to avoid missing spans at window boundaries
+_GLINER2_WINDOW_CHARS = 1500  # ~400 tokens; conservative to stay under model limit
+_GLINER2_OVERLAP_CHARS = 150  # overlap to avoid missing spans at window boundaries
 
 
 class Gliner2Extractor(LocationExtractor):
@@ -83,7 +86,9 @@ class Gliner2Extractor(LocationExtractor):
         from semantic_text_splitter import TextSplitter
 
         self._model = GLiNER2.from_pretrained(model)
-        self._schema = self._model.create_schema().entities(location_types or LOCATION_TYPES)
+        self._schema = self._model.create_schema().entities(
+            location_types or LOCATION_TYPES
+        )
         self._threshold = threshold
         self._splitter = TextSplitter(_GLINER2_WINDOW_CHARS)
 
@@ -112,14 +117,16 @@ class Gliner2Extractor(LocationExtractor):
                     if key in seen:
                         continue
                     seen.add(key)
-                    mentions.append(LocationMention(
-                        text=span["text"],
-                        label=label,
-                        start=abs_start,
-                        end=abs_end,
-                        confidence=span["confidence"],
-                        source="gliner2",
-                    ))
+                    mentions.append(
+                        LocationMention(
+                            text=span["text"],
+                            label=label,
+                            start=abs_start,
+                            end=abs_end,
+                            confidence=span["confidence"],
+                            source="gliner2",
+                        )
+                    )
             # Advance offset by window length minus overlap so next window's
             # spans are correctly re-based. Use actual char position in original.
             offset = text.find(window, offset) + len(window) - _GLINER2_OVERLAP_CHARS
@@ -148,7 +155,9 @@ class SpacyExtractor(LocationExtractor):
         import spacy
 
         # Disable components we don't need — keeps only tok2vec + ner.
-        self._nlp = spacy.load(model, disable=["parser", "lemmatizer", "attribute_ruler"])
+        self._nlp = spacy.load(
+            model, disable=["parser", "lemmatizer", "attribute_ruler"]
+        )
         self._nlp.max_length = 2_000_000
         self._location_labels = location_labels or _SPACY_LOCATION_LABELS
         self._batch_size = batch_size
@@ -166,20 +175,23 @@ class SpacyExtractor(LocationExtractor):
         for ent in doc.ents:
             if ent.label_ not in self._location_labels:
                 continue
-            mentions.append(LocationMention(
-                text=ent.text,
-                label=ent.label_,
-                start=ent.start_char,
-                end=ent.end_char,
-                confidence=1.0,  # spaCy CNN does not expose per-entity scores
-                source="spacy",
-            ))
+            mentions.append(
+                LocationMention(
+                    text=ent.text,
+                    label=ent.label_,
+                    start=ent.start_char,
+                    end=ent.end_char,
+                    confidence=1.0,  # spaCy CNN does not expose per-entity scores
+                    source="spacy",
+                )
+            )
         return mentions
 
 
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
+
 
 def build_extractor(backend: str, **kwargs: Any) -> LocationExtractor:
     """Instantiate a LocationExtractor by name ('gliner2' or 'spacy')."""

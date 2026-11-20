@@ -125,7 +125,9 @@ def main() -> None:
         all_risk_matches |= risk_matches
         all_locations |= locations
 
-    write_csv(out_dir / "risk_matches.csv", ["article_uri", "risk_id"], all_risk_matches)
+    write_csv(
+        out_dir / "risk_matches.csv", ["article_uri", "risk_id"], all_risk_matches
+    )
     write_csv(out_dir / "locations.csv", ["article_uri", "adm_code"], all_locations)
 
     print(f"risk_matches.csv: {len(all_risk_matches)} rows")

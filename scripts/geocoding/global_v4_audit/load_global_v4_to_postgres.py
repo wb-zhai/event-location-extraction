@@ -19,7 +19,16 @@ from psycopg2.extras import Json
 
 REPO = Path(__file__).resolve().parents[3]
 FINAL_DIR = REPO / "outputs/geography/global_v4_audit" / "final_geocoded"
-META_ROOT = Path("/home/bonadossou/global_v4_work/compact_event_metadata_v1")
+META_ROOT = (
+    Path(
+        os.environ.get(
+            "GLOBAL_V4_WORK_DIR",
+            Path(__file__).resolve().parents[2]
+            / "outputs/geography/global_v4_audit/work",
+        )
+    ).expanduser()
+    / "compact_event_metadata_v1"
+)
 AUDIT_DIR = REPO / "outputs/geography/global_v4_audit" / "db_ingest_v4"
 
 RUN_ID = "global_v4_qwen3_5_4b_20260903"
@@ -228,9 +237,7 @@ class Connector:
         except psycopg2.OperationalError as exc:
             msg = str(exc).lower()
 
-            if self.password is None and (
-                "password" in msg or "authentication" in msg
-            ):
+            if self.password is None and ("password" in msg or "authentication" in msg):
                 self.password = getpass.getpass(
                     f"PostgreSQL password for {self.user}: "
                 )
@@ -257,11 +264,7 @@ def paths_for_shard(shard):
 def publish_month_from_timestamp(value):
     s = str(value).strip()
 
-    if (
-        len(s) < 7
-        or s[4] != "-"
-        or s[7:8] not in ("", "-", " ", "T")
-    ):
+    if len(s) < 7 or s[4] != "-" or s[7:8] not in ("", "-", " ", "T"):
         raise ValueError(f"Unexpected publish_date: {value!r}")
 
     year = int(s[0:4])
@@ -294,9 +297,7 @@ def load_article_metadata(shard):
             )
 
         if not published_at:
-            raise RuntimeError(
-                f"missing publish_date in shard {shard}: {article_id}"
-            )
+            raise RuntimeError(f"missing publish_date in shard {shard}: {article_id}")
 
         out[article_id] = (
             language,
@@ -417,14 +418,10 @@ def iter_final_articles(geo_path):
             try:
                 obj = json.loads(line)
             except Exception as exc:
-                raise RuntimeError(
-                    f"JSON error {geo_path}:{lineno}: {exc}"
-                ) from exc
+                raise RuntimeError(f"JSON error {geo_path}:{lineno}: {exc}") from exc
 
             if "id" not in obj:
-                raise RuntimeError(
-                    f"missing article id {geo_path}:{lineno}"
-                )
+                raise RuntimeError(f"missing article id {geo_path}:{lineno}")
 
             yield obj
 
@@ -496,8 +493,7 @@ def validate_alignment(shard, article_meta, event_meta, expected_event_count):
 
                 if ci is None:
                     raise RuntimeError(
-                        f"missing component_index: "
-                        f"shard={shard} article={article_id}"
+                        f"missing component_index: shard={shard} article={article_id}"
                     )
 
                 ci = int(ci)
@@ -624,9 +620,7 @@ def event_rows(shard, article_meta, event_meta, expected_event_count, stats):
         )
 
     if seen != set(event_meta):
-        raise RuntimeError(
-            f"event COPY article coverage mismatch for shard {shard}"
-        )
+        raise RuntimeError(f"event COPY article coverage mismatch for shard {shard}")
 
     stats["event_articles"] = len(seen)
 
@@ -850,13 +844,10 @@ def load_shard(shard, connector, dry_run=False):
     article_meta = load_article_metadata(shard)
 
     print("loading compact event metadata...", flush=True)
-    event_meta, expected_events = load_event_metadata(
-        shard, article_meta
-    )
+    event_meta, expected_events = load_event_metadata(shard, article_meta)
 
     print(
-        f"metadata: {len(article_meta):,} event articles, "
-        f"{expected_events:,} events",
+        f"metadata: {len(article_meta):,} event articles, {expected_events:,} events",
         flush=True,
     )
 
@@ -978,8 +969,7 @@ def load_shard(shard, connector, dry_run=False):
                 )
 
                 print(
-                    f"COPY event_locations complete: "
-                    f"{stats['locations']:,}",
+                    f"COPY event_locations complete: {stats['locations']:,}",
                     flush=True,
                 )
 
@@ -1019,8 +1009,7 @@ def load_shard(shard, connector, dry_run=False):
         write_audit(shard, payload)
 
         print(
-            f"COMMITTED shard {shard:03d} in "
-            f"{elapsed / 60:.2f} minutes",
+            f"COMMITTED shard {shard:03d} in {elapsed / 60:.2f} minutes",
             flush=True,
         )
 
@@ -1089,8 +1078,7 @@ def main():
 
     for n, shard in enumerate(shards, 1):
         print(
-            f"\nGLOBAL PROGRESS {n}/{len(shards)} "
-            f"(shard {shard:03d})",
+            f"\nGLOBAL PROGRESS {n}/{len(shards)} (shard {shard:03d})",
             flush=True,
         )
 
@@ -1103,8 +1091,7 @@ def main():
     elapsed = time.time() - global_started
 
     print(
-        f"\nALL REQUESTED SHARDS FINISHED "
-        f"in {elapsed / 3600:.2f} hours",
+        f"\nALL REQUESTED SHARDS FINISHED in {elapsed / 3600:.2f} hours",
         flush=True,
     )
 

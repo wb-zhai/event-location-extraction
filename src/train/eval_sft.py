@@ -102,9 +102,7 @@ def _document_group_keys(rows: list[dict[str, Any]]) -> list[str]:
 
         metadata = row.get("metadata")
         start = (
-            metadata.get("document_char_start")
-            if isinstance(metadata, dict)
-            else None
+            metadata.get("document_char_start") if isinstance(metadata, dict) else None
         )
         if isinstance(start, int):
             if previous_start is None or start <= previous_start:
@@ -177,7 +175,9 @@ def _anchor_payload(
     return obj
 
 
-def _collect_annotations(doc_text: str, events: list[dict[str, Any]]) -> tuple[
+def _collect_annotations(
+    doc_text: str, events: list[dict[str, Any]]
+) -> tuple[
     set[EventAnnotation],
     set[ArgumentAnnotation],
     int,
@@ -412,9 +412,7 @@ def _merge_status_counts(
     return totals
 
 
-def _score_annotation_sets(
-    gold: set[Any], pred: set[Any]
-) -> tuple[int, int, int]:
+def _score_annotation_sets(gold: set[Any], pred: set[Any]) -> tuple[int, int, int]:
     return len(gold & pred), len(pred - gold), len(gold - pred)
 
 
@@ -511,10 +509,7 @@ def _match_weak_events(
             overlap_ratio = _span_overlap_ratio(
                 (pred_start, pred_end), (gold_start, gold_end)
             )
-            if (
-                overlap_ratio >= _WEAK_MATCH_THRESHOLD
-                and overlap_ratio > best_overlap
-            ):
+            if overlap_ratio >= _WEAK_MATCH_THRESHOLD and overlap_ratio > best_overlap:
                 best_overlap = overlap_ratio
                 best_gold = gold_event
 
@@ -541,10 +536,7 @@ def _match_weak_event_spans(
             overlap_ratio = _span_overlap_ratio(
                 (pred_start, pred_end), (gold_start, gold_end)
             )
-            if (
-                overlap_ratio >= _WEAK_MATCH_THRESHOLD
-                and overlap_ratio > best_overlap
-            ):
+            if overlap_ratio >= _WEAK_MATCH_THRESHOLD and overlap_ratio > best_overlap:
                 best_overlap = overlap_ratio
                 best_gold = (gold_start, gold_end)
 
@@ -592,10 +584,7 @@ def _match_weak_event_texts(
             if pred_event_type != gold_event_type:
                 continue
             similarity = _span_text_similarity(pred_text, gold_text)
-            if (
-                similarity >= _WEAK_MATCH_THRESHOLD
-                and similarity > best_similarity
-            ):
+            if similarity >= _WEAK_MATCH_THRESHOLD and similarity > best_similarity:
                 best_similarity = similarity
                 best_gold = (gold_event_type, gold_text)
 
@@ -644,10 +633,7 @@ def _match_weak_arguments(
             overlap_ratio = _span_overlap_ratio(
                 (pred_arg_start, pred_arg_end), (gold_arg_start, gold_arg_end)
             )
-            if (
-                overlap_ratio >= _WEAK_MATCH_THRESHOLD
-                and overlap_ratio > best_overlap
-            ):
+            if overlap_ratio >= _WEAK_MATCH_THRESHOLD and overlap_ratio > best_overlap:
                 best_overlap = overlap_ratio
                 best_gold = gold_arg
 
@@ -670,16 +656,18 @@ def _match_weak_argument_spans(
         best_gold = None
         best_overlap = 0.0
 
-        for gold_event_start, gold_event_end, gold_arg_start, gold_arg_end in available_gold:
+        for (
+            gold_event_start,
+            gold_event_end,
+            gold_arg_start,
+            gold_arg_end,
+        ) in available_gold:
             if pred_event_start != gold_event_start or pred_event_end != gold_event_end:
                 continue
             overlap_ratio = _span_overlap_ratio(
                 (pred_arg_start, pred_arg_end), (gold_arg_start, gold_arg_end)
             )
-            if (
-                overlap_ratio >= _WEAK_MATCH_THRESHOLD
-                and overlap_ratio > best_overlap
-            ):
+            if overlap_ratio >= _WEAK_MATCH_THRESHOLD and overlap_ratio > best_overlap:
                 best_overlap = overlap_ratio
                 best_gold = (
                     gold_event_start,
@@ -713,10 +701,7 @@ def _match_weak_detached_argument_spans(
             overlap_ratio = _span_overlap_ratio(
                 (pred_arg_start, pred_arg_end), (gold_arg_start, gold_arg_end)
             )
-            if (
-                overlap_ratio >= _WEAK_MATCH_THRESHOLD
-                and overlap_ratio > best_overlap
-            ):
+            if overlap_ratio >= _WEAK_MATCH_THRESHOLD and overlap_ratio > best_overlap:
                 best_overlap = overlap_ratio
                 best_gold = (
                     gold_event_type,
@@ -748,10 +733,7 @@ def _match_weak_argument_texts(
             if pred_event_type != gold_event_type or pred_role != gold_role:
                 continue
             similarity = _span_text_similarity(pred_text, gold_text)
-            if (
-                similarity >= _WEAK_MATCH_THRESHOLD
-                and similarity > best_similarity
-            ):
+            if similarity >= _WEAK_MATCH_THRESHOLD and similarity > best_similarity:
                 best_similarity = similarity
                 best_gold = (gold_event_type, gold_role, gold_text)
 
@@ -773,9 +755,7 @@ def _metric_dict(tp: int, fp: int, fn: int) -> dict[str, float]:
     }
 
 
-def _pair_metric_dict(
-    tp: int, fp: int, fn: int, conditional_fp: int
-) -> dict[str, Any]:
+def _pair_metric_dict(tp: int, fp: int, fn: int, conditional_fp: int) -> dict[str, Any]:
     precision, recall, f1, f2 = _prf_f2(tp, fp, fn)
     cond_precision, _, cond_f1, cond_f2 = _prf_f2(tp, conditional_fp, fn)
     return {
@@ -812,7 +792,9 @@ def evaluate(
     doc_weak_ev_text_tp = doc_weak_ev_text_fp = doc_weak_ev_text_fn = 0
     weak_arg_tp = weak_arg_fp = weak_arg_fn = 0
     weak_arg_span_tp = weak_arg_span_fp = weak_arg_span_fn = 0
-    weak_arg_detached_span_tp = weak_arg_detached_span_fp = weak_arg_detached_span_fn = 0
+    weak_arg_detached_span_tp = weak_arg_detached_span_fp = (
+        weak_arg_detached_span_fn
+    ) = 0
     doc_arg_text_tp = doc_arg_text_fp = doc_arg_text_fn = 0
     doc_weak_arg_text_tp = doc_weak_arg_text_fp = doc_weak_arg_text_fn = 0
     event_level_tp = event_level_fp = event_level_fn = 0
@@ -844,7 +826,9 @@ def evaluate(
         g_event_types = _event_types(g_events)
         p_event_types = _event_types(p_events)
         g_ev, g_arg, _, _, _ = _collect_annotations(text, g_events)
-        p_ev, p_arg, grounded, total, status_counts = _collect_annotations(text, p_events)
+        p_ev, p_arg, grounded, total, status_counts = _collect_annotations(
+            text, p_events
+        )
         g_ev_spans = _event_spans(g_ev)
         p_ev_spans = _event_spans(p_ev)
         g_arg_spans = _argument_spans(g_arg)
@@ -995,8 +979,8 @@ def evaluate(
         doc_ev_text_fp += doc_text_fp
         doc_ev_text_fn += doc_text_fn
 
-        doc_weak_text_tp, doc_weak_text_fp, doc_weak_text_fn = (
-            _match_weak_event_texts(g_event_texts, p_event_texts)
+        doc_weak_text_tp, doc_weak_text_fp, doc_weak_text_fn = _match_weak_event_texts(
+            g_event_texts, p_event_texts
         )
         doc_weak_ev_text_tp += doc_weak_text_tp
         doc_weak_ev_text_fp += doc_weak_text_fp
@@ -1069,16 +1053,16 @@ def evaluate(
             "span_only_weak": _metric_dict(
                 weak_ev_span_tp, weak_ev_span_fp, weak_ev_span_fn
             ),
-            "document_text": _metric_dict(doc_ev_text_tp, doc_ev_text_fp, doc_ev_text_fn),
+            "document_text": _metric_dict(
+                doc_ev_text_tp, doc_ev_text_fp, doc_ev_text_fn
+            ),
             "document_text_weak": _metric_dict(
                 doc_weak_ev_text_tp, doc_weak_ev_text_fp, doc_weak_ev_text_fn
             ),
         },
         "argument": {
             "strict": _metric_dict(arg_tp, arg_fp, arg_fn),
-            "trigger_span_only": _metric_dict(
-                arg_span_tp, arg_span_fp, arg_span_fn
-            ),
+            "trigger_span_only": _metric_dict(arg_span_tp, arg_span_fp, arg_span_fn),
             "event_role_span": _metric_dict(
                 arg_detached_span_tp,
                 arg_detached_span_fp,

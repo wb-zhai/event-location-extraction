@@ -92,13 +92,13 @@ def parse_args():
         "--reference-per-country",
         type=int,
         default=63,
-        help="Data-derived reference count used to derive each broader-group target."
+        help="Data-derived reference count used to derive each broader-group target.",
     )
     ap.add_argument(
         "--oversample",
         type=int,
         default=20,
-        help="Candidate reserve multiplier retained before exact global dedup."
+        help="Candidate reserve multiplier retained before exact global dedup.",
     )
     ap.add_argument("--seed", type=int, default=42)
     return ap.parse_args()
@@ -120,17 +120,14 @@ def main():
     manifest_path = f"{root}/teacher_group_balanced_manifest_{run_id}/"
     diagnostics_path = f"{root}/teacher_group_balanced_diagnostics_{run_id}/"
 
-    pairs = (
-        spark.read.parquet(args.candidate_pairs_path)
-        .select(
-            "sampling_group",
-            "event_type",
-            "country",
-            "pub_year",
-            "pool",
-            "uri",
-            "matched_keyword",
-        )
+    pairs = spark.read.parquet(args.candidate_pairs_path).select(
+        "sampling_group",
+        "event_type",
+        "country",
+        "pub_year",
+        "pool",
+        "uri",
+        "matched_keyword",
     )
 
     # Preserve strict when duplicate evidence puts the same article in the same stratum.
@@ -143,9 +140,9 @@ def main():
 
     pairs = (
         pairs.withColumn("_d", row_number().over(dedup_w))
-             .filter(col("_d") == 1)
-             .drop("_d")
-             .cache()
+        .filter(col("_d") == 1)
+        .drop("_d")
+        .cache()
     )
 
     # -------------------------------
@@ -164,9 +161,7 @@ def main():
     print(f"[allocation] total target:      {requested_total:,}")
 
     group_caps_rows = (
-        pairs.groupBy("sampling_group")
-             .agg(countDistinct("uri").alias("n"))
-             .collect()
+        pairs.groupBy("sampling_group").agg(countDistinct("uri").alias("n")).collect()
     )
     group_caps = {r["sampling_group"]: int(r["n"]) for r in group_caps_rows}
 
@@ -182,10 +177,7 @@ def main():
 
     group_quotas = dict(initial_group_quotas)
     if remainder > 0:
-        spare_caps = {
-            g: max(0, group_caps[g] - group_quotas[g])
-            for g in group_caps
-        }
+        spare_caps = {g: max(0, group_caps[g] - group_quotas[g]) for g in group_caps}
         extra = allocate_even_with_caps(remainder, spare_caps)
         for g, q in extra.items():
             group_quotas[g] += q
@@ -197,8 +189,8 @@ def main():
     # -------------------------------
     type_caps_rows = (
         pairs.groupBy("sampling_group", "event_type")
-             .agg(countDistinct("uri").alias("n"))
-             .collect()
+        .agg(countDistinct("uri").alias("n"))
+        .collect()
     )
     type_caps = defaultdict(dict)
     for r in type_caps_rows:
@@ -215,8 +207,8 @@ def main():
     # -------------------------------
     geo_caps_rows = (
         pairs.groupBy("sampling_group", "event_type", "country")
-             .agg(countDistinct("uri").alias("n"))
-             .collect()
+        .agg(countDistinct("uri").alias("n"))
+        .collect()
     )
     geo_caps = defaultdict(dict)
     for r in geo_caps_rows:
@@ -231,7 +223,9 @@ def main():
 
     quota_rows = [
         (
-            g, et, c,
+            g,
+            et,
+            c,
             int(q),
             int(geo_caps[(g, et)][c]),
         )
@@ -239,45 +233,48 @@ def main():
         if q > 0
     ]
 
-    quota_schema = StructType([
-        StructField("sampling_group", StringType(), False),
-        StructField("event_type", StringType(), False),
-        StructField("country", StringType(), False),
-        StructField("quota", IntegerType(), False),
-        StructField("candidate_count", LongType(), False),
-    ])
+    quota_schema = StructType(
+        [
+            StructField("sampling_group", StringType(), False),
+            StructField("event_type", StringType(), False),
+            StructField("country", StringType(), False),
+            StructField("quota", IntegerType(), False),
+            StructField("candidate_count", LongType(), False),
+        ]
+    )
 
     quota_df = spark.createDataFrame(quota_rows, schema=quota_schema)
 
     # -------------------------------
     # 4. Oversized strict-first pools
     # -------------------------------
-    ranked_w = Window.partitionBy(
-        "sampling_group", "event_type", "country"
-    ).orderBy(
+    ranked_w = Window.partitionBy("sampling_group", "event_type", "country").orderBy(
         when(col("pool") == "strict", lit(0)).otherwise(lit(1)),
         xxhash64(col("uri"), lit(args.seed)),
         col("matched_keyword"),
     )
 
     oversized = (
-        pairs.join(
-            quota_df,
-            ["sampling_group", "event_type", "country"],
-            "inner"
-        )
+        pairs.join(quota_df, ["sampling_group", "event_type", "country"], "inner")
         .withColumn("_rank", row_number().over(ranked_w))
         .filter(
             col("_rank")
             <= when(
                 col("candidate_count") < col("quota") * lit(args.oversample),
-                col("candidate_count")
+                col("candidate_count"),
             ).otherwise(col("quota") * lit(args.oversample))
         )
         .select(
-            "sampling_group", "event_type", "country",
-            "pub_year", "pool", "uri", "matched_keyword",
-            "quota", "candidate_count", "_rank"
+            "sampling_group",
+            "event_type",
+            "country",
+            "pub_year",
+            "pool",
+            "uri",
+            "matched_keyword",
+            "quota",
+            "candidate_count",
+            "_rank",
         )
     )
 
@@ -331,8 +328,10 @@ def main():
         geo_quotas,
         key=lambda k: (
             geo_caps[k[:2]].get(k[2], 0),
-            k[0], k[1], k[2],
-        )
+            k[0],
+            k[1],
+            k[2],
+        ),
     )
 
     for key3 in strata_order:
@@ -411,17 +410,21 @@ def main():
         for r in selected
     ]
 
-    selected_schema = StructType([
-        StructField("sampling_group", StringType(), False),
-        StructField("sampling_event_type", StringType(), False),
-        StructField("geography_field", StringType(), False),
-        StructField("pub_year", IntegerType(), True),
-        StructField("pool", StringType(), False),
-        StructField("article_id", StringType(), False),
-        StructField("matched_keyword", StringType(), False),
-    ])
+    selected_schema = StructType(
+        [
+            StructField("sampling_group", StringType(), False),
+            StructField("sampling_event_type", StringType(), False),
+            StructField("geography_field", StringType(), False),
+            StructField("pub_year", IntegerType(), True),
+            StructField("pool", StringType(), False),
+            StructField("article_id", StringType(), False),
+            StructField("matched_keyword", StringType(), False),
+        ]
+    )
 
-    selected_df = spark.createDataFrame(selected_records, schema=selected_schema).cache()
+    selected_df = spark.createDataFrame(
+        selected_records, schema=selected_schema
+    ).cache()
 
     print("[assignments] writing:", assignments_path)
     selected_df.write.mode("overwrite").parquet(assignments_path)
@@ -431,21 +434,24 @@ def main():
     # -------------------------------
     articles = spark.read.parquet(args.articles_glob)
     wanted = [
-        "uri", "title", "body", "published_at",
-        "source_uri", "cloud_uri", "article_type", "language",
+        "uri",
+        "title",
+        "body",
+        "published_at",
+        "source_uri",
+        "cloud_uri",
+        "article_type",
+        "language",
     ]
     wanted = [c for c in wanted if c in articles.columns]
 
     bodies = articles.select(*wanted).dropDuplicates(["uri"])
 
-    manifest = (
-        bodies.join(
-            broadcast(selected_df),
-            bodies.uri == selected_df.article_id,
-            "inner",
-        )
-        .drop(bodies.uri)
-    )
+    manifest = bodies.join(
+        broadcast(selected_df),
+        bodies.uri == selected_df.article_id,
+        "inner",
+    ).drop(bodies.uri)
 
     print("[manifest] writing:", manifest_path)
     manifest.write.mode("overwrite").parquet(manifest_path)
@@ -463,19 +469,21 @@ def main():
             candidate_articles long,
             target_articles long,
             selected_articles long
-        """
+        """,
     )
     (
         group_targets_df.orderBy("sampling_group")
-                        .coalesce(1)
-                        .write.mode("overwrite").option("header", "true")
-                        .csv(diagnostics_path + "by_group/")
+        .coalesce(1)
+        .write.mode("overwrite")
+        .option("header", "true")
+        .csv(diagnostics_path + "by_group/")
     )
 
     type_targets_df = spark.createDataFrame(
         [
             (
-                g, et,
+                g,
+                et,
                 int(type_caps[g][et]),
                 int(type_quotas[(g, et)]),
                 int(selected_by_type[(g, et)]),
@@ -488,18 +496,21 @@ def main():
             candidate_articles long,
             target_articles long,
             selected_articles long
-        """
+        """,
     )
     (
         type_targets_df.orderBy("sampling_group", "sampling_event_type")
-                       .coalesce(1)
-                       .write.mode("overwrite").option("header", "true")
-                       .csv(diagnostics_path + "by_event_type/")
+        .coalesce(1)
+        .write.mode("overwrite")
+        .option("header", "true")
+        .csv(diagnostics_path + "by_event_type/")
     )
 
     geo_diag_rows = [
         (
-            g, et, c,
+            g,
+            et,
+            c,
             int(geo_caps[(g, et)][c]),
             int(geo_quotas[(g, et, c)]),
             int(selected_by_stratum[(g, et, c)]),
@@ -517,24 +528,24 @@ def main():
             target_articles long,
             selected_articles long,
             initial_geo_shortfall long
-        """
+        """,
     )
     (
-        geo_diag_df.orderBy(
-            "sampling_group", "sampling_event_type", "geography_field"
-        )
+        geo_diag_df.orderBy("sampling_group", "sampling_event_type", "geography_field")
         .coalesce(1)
-        .write.mode("overwrite").option("header", "true")
+        .write.mode("overwrite")
+        .option("header", "true")
         .csv(diagnostics_path + "by_event_type_geography/")
     )
 
     (
         selected_df.groupBy("sampling_group", "sampling_event_type", "pool")
-                   .agg(countDistinct("article_id").alias("selected_articles"))
-                   .orderBy("sampling_group", "sampling_event_type", "pool")
-                   .coalesce(1)
-                   .write.mode("overwrite").option("header", "true")
-                   .csv(diagnostics_path + "strict_fallback/")
+        .agg(countDistinct("article_id").alias("selected_articles"))
+        .orderBy("sampling_group", "sampling_event_type", "pool")
+        .coalesce(1)
+        .write.mode("overwrite")
+        .option("header", "true")
+        .csv(diagnostics_path + "strict_fallback/")
     )
 
     print()
@@ -545,7 +556,9 @@ def main():
     print(f"derived target per group:       {per_group_target:,}")
     print(f"derived total target:           {final_total_target:,}")
     print(f"selected unique articles:       {len(selected):,}")
-    print(f"remaining global shortfall:     {max(0, final_total_target - len(selected)):,}")
+    print(
+        f"remaining global shortfall:     {max(0, final_total_target - len(selected)):,}"
+    )
     print(f"assignments:                    {assignments_path}")
     print(f"manifest:                       {manifest_path}")
     print(f"diagnostics:                    {diagnostics_path}")

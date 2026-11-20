@@ -38,7 +38,9 @@ def get_decision(rec: dict[str, Any]) -> str | None:
 
 def get_model_name(records: dict[str, dict[str, Any]]) -> str | None:
     for rec in records.values():
-        model = (rec.get("relevance") or {}).get("model") or (rec.get("llm") or {}).get("model")
+        model = (rec.get("relevance") or {}).get("model") or (rec.get("llm") or {}).get(
+            "model"
+        )
         if model:
             return model
     return None
@@ -68,10 +70,21 @@ def main() -> None:
     )
     parser.add_argument("--a", required=True, type=Path, help="First JSONL file")
     parser.add_argument("--b", required=True, type=Path, help="Second JSONL file")
-    parser.add_argument("--a-name", default=None, help="Label for --a in the report (default: model name)")
-    parser.add_argument("--b-name", default=None, help="Label for --b in the report (default: model name)")
     parser.add_argument(
-        "--disagreements", type=Path, default=None, help="Optional path to write disagreeing records as JSONL"
+        "--a-name",
+        default=None,
+        help="Label for --a in the report (default: model name)",
+    )
+    parser.add_argument(
+        "--b-name",
+        default=None,
+        help="Label for --b in the report (default: model name)",
+    )
+    parser.add_argument(
+        "--disagreements",
+        type=Path,
+        default=None,
+        help="Optional path to write disagreeing records as JSONL",
     )
     args = parser.parse_args()
 
@@ -117,7 +130,9 @@ def main() -> None:
 
     print(f"{a_name}: {len(records_a)} records ({args.a})")
     print(f"{b_name}: {len(records_b)} records ({args.b})")
-    print(f"Common ids: {len(common_ids)} | comparable: {n} | skipped (missing decision): {skipped}")
+    print(
+        f"Common ids: {len(common_ids)} | comparable: {n} | skipped (missing decision): {skipped}"
+    )
     print()
     print(f"Accuracy (agreement rate): {accuracy:.3f} ({agree}/{n})")
     print(f"Cohen's kappa: {kappa:.3f}")
@@ -140,7 +155,9 @@ def main() -> None:
         print("Disagreements:")
         for count, a_label, b_label in disagreement_pairs:
             pct = count / n * 100 if n else 0.0
-            print(f"  {a_name} said '{a_label}', {b_name} said '{b_label}': {count} ({pct:.1f}%)")
+            print(
+                f"  {a_name} said '{a_label}', {b_name} said '{b_label}': {count} ({pct:.1f}%)"
+            )
 
     print()
     print(f"Label transitions ({a_name} -> {b_name}, within-row %):")
@@ -149,9 +166,15 @@ def main() -> None:
         total = a_totals[a_label]
         if total == 0:
             continue
-        print(f"  {a_name} '{a_label}' ({total}, {total / n * 100:.1f}% of comparable):")
+        print(
+            f"  {a_name} '{a_label}' ({total}, {total / n * 100:.1f}% of comparable):"
+        )
         row = sorted(
-            ((confusion[(a_label, b_label)], b_label) for b_label in labels if confusion[(a_label, b_label)] > 0),
+            (
+                (confusion[(a_label, b_label)], b_label)
+                for b_label in labels
+                if confusion[(a_label, b_label)] > 0
+            ),
             reverse=True,
         )
         for count, b_label in row:

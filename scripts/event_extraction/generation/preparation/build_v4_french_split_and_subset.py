@@ -210,9 +210,7 @@ def main() -> None:
     observed_freqs = [freq[label] for label in canonical_labels if freq[label] > 0]
     rare_cutoff = quantile_nearest(observed_freqs, args.rare_quantile)
     protected_labels = {
-        label
-        for label in canonical_labels
-        if 0 < freq[label] <= rare_cutoff
+        label for label in canonical_labels if 0 < freq[label] <= rare_cutoff
     }
 
     protected = []
@@ -234,9 +232,7 @@ def main() -> None:
     weights = []
     for row in sampleable:
         labels = labels_in_row(row)
-        weights.append(
-            max(math.sqrt(max_freq / freq[label]) for label in labels)
-        )
+        weights.append(max(math.sqrt(max_freq / freq[label]) for label in labels))
 
     rng_sample = random.Random(args.sample_seed)
     sampled = weighted_sample_without_replacement(
@@ -266,7 +262,9 @@ def main() -> None:
     eval_path = args.output_dir / "v4_french_teacher_eval_articles.jsonl"
     eval_ids_path = args.output_dir / "v4_french_teacher_eval_ids.txt"
     train_path = args.output_dir / f"v4_french_sft_source_{args.target_total}.jsonl"
-    train_ids_path = args.output_dir / f"v4_french_sft_source_{args.target_total}_ids.txt"
+    train_ids_path = (
+        args.output_dir / f"v4_french_sft_source_{args.target_total}_ids.txt"
+    )
     pool_path = args.output_dir / "v4_french_train_pool_before_downsample.jsonl"
     summary_path = args.output_dir / "v4_french_split_sampling_summary.json"
 
@@ -345,7 +343,9 @@ def main() -> None:
     print(f"final French SFT source:          {len(final_french):,}")
     print(f"  positives:                      {final_pos:,}")
     print(f"  no-event:                       {final_neg:,}")
-    print(f"  no-event share:                 {100*final_neg/len(final_french):.2f}%")
+    print(
+        f"  no-event share:                 {100 * final_neg / len(final_french):.2f}%"
+    )
     print(f"rare cutoff:                      <= {rare_cutoff:,} train-pool articles")
     print(f"protected labels:                 {len(protected_labels):,}")
     print()

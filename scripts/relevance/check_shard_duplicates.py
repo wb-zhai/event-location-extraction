@@ -73,9 +73,13 @@ def read_keys(path_or_uri: str, cli_version: str | None):
                 continue
             try:
                 uri = row[uri_idx].strip()
-                row_version = row[version_idx].strip() if version_idx is not None else ""
+                row_version = (
+                    row[version_idx].strip() if version_idx is not None else ""
+                )
             except IndexError:
-                raise IngestionError(f"{path_or_uri} line {lineno}: malformed row {row!r}")
+                raise IngestionError(
+                    f"{path_or_uri} line {lineno}: malformed row {row!r}"
+                )
             yield uri, row_version or cli_version
 
 
@@ -101,12 +105,32 @@ def process_shard(path_or_uri: str, version: str | None) -> ShardResult:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("inputs", nargs="+", help="CSV file(s)/folder(s), local or gs://bucket/path")
-    parser.add_argument("--version", default=None, help="Fallback relevance_version for files without one.")
-    parser.add_argument("--workers", type=int, default=8, help="Concurrent file reads (default 8).")
-    parser.add_argument("--top", type=int, default=20, help="Show the N most-repeated keys (default 20).")
-    parser.add_argument("--limit-shards", type=int, default=None, help="Only check the first N expanded files.")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "inputs", nargs="+", help="CSV file(s)/folder(s), local or gs://bucket/path"
+    )
+    parser.add_argument(
+        "--version",
+        default=None,
+        help="Fallback relevance_version for files without one.",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=8, help="Concurrent file reads (default 8)."
+    )
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=20,
+        help="Show the N most-repeated keys (default 20).",
+    )
+    parser.add_argument(
+        "--limit-shards",
+        type=int,
+        default=None,
+        help="Only check the first N expanded files.",
+    )
     args = parser.parse_args()
     if args.workers < 1:
         parser.error("--workers must be at least 1")
@@ -134,7 +158,9 @@ def main() -> None:
                 result = future.result()
                 if result.error:
                     errors.append(result)
-                    tqdm.write(f"  [{i}/{len(inputs)}] {result.path}: ERROR - {result.error}")
+                    tqdm.write(
+                        f"  [{i}/{len(inputs)}] {result.path}: ERROR - {result.error}"
+                    )
                     pbar.update(1)
                     continue
 
@@ -149,7 +175,9 @@ def main() -> None:
                     f"  [{i}/{len(inputs)}] {result.path}: {result.rows:,} rows, "
                     f"{len(result.counts):,} unique keys, {shard_dupe_rows:,} within-shard dupe rows"
                 )
-                pbar.set_postfix(rows=f"{total_rows:,}", dupes=f"{total_rows - len(global_counts):,}")
+                pbar.set_postfix(
+                    rows=f"{total_rows:,}", dupes=f"{total_rows - len(global_counts):,}"
+                )
                 pbar.update(1)
 
     total_unique = len(global_counts)
@@ -162,7 +190,9 @@ def main() -> None:
     print(f"Distinct (uri, version) keys  : {total_unique:,}")
     print(f"Duplicate rows (total - distinct): {total_dupe_rows:,}")
     print(f"  of which within a single shard: {within_shard_dupe_rows:,}")
-    print(f"  of which only across shards    : {total_dupe_rows - within_shard_dupe_rows:,}")
+    print(
+        f"  of which only across shards    : {total_dupe_rows - within_shard_dupe_rows:,}"
+    )
     print(f"Keys appearing in >1 shard     : {keys_in_multiple_shards:,}")
 
     if args.top and global_counts:

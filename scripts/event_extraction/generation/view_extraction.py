@@ -4,7 +4,17 @@ from pathlib import Path
 
 import gradio as gr
 
-COLUMNS = ["#", "id", "title", "label", "adm0", "risk_factors", "status", "decision", "events"]
+COLUMNS = [
+    "#",
+    "id",
+    "title",
+    "label",
+    "adm0",
+    "risk_factors",
+    "status",
+    "decision",
+    "events",
+]
 
 
 def load_records(path: Path) -> list[dict]:
@@ -62,7 +72,9 @@ def get_label_choices(records: list[dict]) -> list[str]:
 
 
 def get_adm0_choices(records: list[dict]) -> list[str]:
-    return sorted({str(r.get("adm0_code") or "") for r in records if r.get("adm0_code")})
+    return sorted(
+        {str(r.get("adm0_code") or "") for r in records if r.get("adm0_code")}
+    )
 
 
 def get_risk_factor_choices(records: list[dict]) -> list[str]:
@@ -95,7 +107,15 @@ def record_row(i: int, r: dict) -> list:
 
 
 def build_app(records: list[dict]):
-    def matching_indices(label_filter, adm0_filter, risk_filter, status_filter, decision_filter, min_events, search):
+    def matching_indices(
+        label_filter,
+        adm0_filter,
+        risk_filter,
+        status_filter,
+        decision_filter,
+        min_events,
+        search,
+    ):
         idxs = []
         needle = search.strip().lower()
         for i, r in enumerate(records):
@@ -111,13 +131,33 @@ def build_app(records: list[dict]):
                 continue
             if len(get_events(r)) < min_events:
                 continue
-            if needle and needle not in record_title(r).lower() and needle not in record_text(r).lower():
+            if (
+                needle
+                and needle not in record_title(r).lower()
+                and needle not in record_text(r).lower()
+            ):
                 continue
             idxs.append(i)
         return idxs
 
-    def refresh_table(label_filter, adm0_filter, risk_filter, status_filter, decision_filter, min_events, search):
-        idxs = matching_indices(label_filter, adm0_filter, risk_filter, status_filter, decision_filter, min_events, search)
+    def refresh_table(
+        label_filter,
+        adm0_filter,
+        risk_filter,
+        status_filter,
+        decision_filter,
+        min_events,
+        search,
+    ):
+        idxs = matching_indices(
+            label_filter,
+            adm0_filter,
+            risk_filter,
+            status_filter,
+            decision_filter,
+            min_events,
+            search,
+        )
         rows = [record_row(i, records[i]) for i in idxs]
         count = f"**{len(idxs)} / {len(records)} records**"
         return rows, idxs, count, "", ""
@@ -148,11 +188,25 @@ def build_app(records: list[dict]):
     with gr.Blocks(title="Extraction annotation viewer") as demo:
         gr.Markdown("## Event extraction annotation viewer")
         with gr.Row():
-            label_filter = gr.Dropdown(["All"] + get_label_choices(records), value="All", label="Label")
-            adm0_filter = gr.Dropdown(["All"] + get_adm0_choices(records), value="All", label="Adm0")
-            risk_filter = gr.Dropdown(["All"] + get_risk_factor_choices(records), value="All", label="Risk factor")
-            status_filter = gr.Dropdown(["All"] + get_status_choices(records), value="All", label="Status")
-            decision_filter = gr.Dropdown(["All"] + get_decision_choices(records), value="All", label="Relevance decision")
+            label_filter = gr.Dropdown(
+                ["All"] + get_label_choices(records), value="All", label="Label"
+            )
+            adm0_filter = gr.Dropdown(
+                ["All"] + get_adm0_choices(records), value="All", label="Adm0"
+            )
+            risk_filter = gr.Dropdown(
+                ["All"] + get_risk_factor_choices(records),
+                value="All",
+                label="Risk factor",
+            )
+            status_filter = gr.Dropdown(
+                ["All"] + get_status_choices(records), value="All", label="Status"
+            )
+            decision_filter = gr.Dropdown(
+                ["All"] + get_decision_choices(records),
+                value="All",
+                label="Relevance decision",
+            )
         with gr.Row():
             min_events = gr.Slider(0, 10, value=0, step=1, label="Min # events")
             search = gr.Textbox(label="Search title/text")
@@ -161,7 +215,17 @@ def build_app(records: list[dict]):
         idxs_state = gr.State(list(range(len(records))))
         table = gr.Dataframe(
             headers=COLUMNS,
-            datatype=["number", "str", "str", "str", "str", "str", "str", "str", "number"],
+            datatype=[
+                "number",
+                "str",
+                "str",
+                "str",
+                "str",
+                "str",
+                "str",
+                "str",
+                "number",
+            ],
             interactive=False,
             wrap=True,
             row_count=(0, "dynamic"),
@@ -171,21 +235,38 @@ def build_app(records: list[dict]):
         detail_meta = gr.Markdown()
         detail_text = gr.Textbox(label="Full text", lines=20, max_lines=40)
 
-        inputs = [label_filter, adm0_filter, risk_filter, status_filter, decision_filter, min_events, search]
+        inputs = [
+            label_filter,
+            adm0_filter,
+            risk_filter,
+            status_filter,
+            decision_filter,
+            min_events,
+            search,
+        ]
         outputs = [table, idxs_state, count_label, detail_meta, detail_text]
 
         for comp in inputs:
             comp.change(refresh_table, inputs=inputs, outputs=outputs)
 
         demo.load(refresh_table, inputs=inputs, outputs=outputs)
-        table.select(show_detail, inputs=[idxs_state], outputs=[detail_meta, detail_text])
+        table.select(
+            show_detail, inputs=[idxs_state], outputs=[detail_meta, detail_text]
+        )
 
     return demo
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Browse event-extraction annotated JSONL output.")
-    parser.add_argument("--input", type=str, required=True, help="Path to an annotated extraction JSONL file")
+    parser = argparse.ArgumentParser(
+        description="Browse event-extraction annotated JSONL output."
+    )
+    parser.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Path to an annotated extraction JSONL file",
+    )
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--share", action="store_true")
     args = parser.parse_args()

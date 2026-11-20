@@ -57,12 +57,12 @@ echo "[entrypoint] model ready"
 # a few GB here, never the whole corpus.
 echo "[entrypoint] downloading manifest ${REMOTE_INPUT}"
 gsutil cp "${REMOTE_INPUT}" "${LOCAL_INPUT}"
-echo "[entrypoint] manifest ready ($(wc -l < ${LOCAL_INPUT}) rows)"
+echo "[entrypoint] manifest ready ($(wc -l <${LOCAL_INPUT}) rows)"
 
 # --- 3. Resume: pull any partial output from a previous Spot retry ---
 echo "[entrypoint] checking for partial output at ${REMOTE_OUTPUT}"
-gsutil cp "${REMOTE_OUTPUT}" "${LOCAL_OUTPUT}" 2>/dev/null && \
-    echo "[entrypoint] resuming from $(wc -l < ${LOCAL_OUTPUT}) already-processed articles" || \
+gsutil cp "${REMOTE_OUTPUT}" "${LOCAL_OUTPUT}" 2>/dev/null &&
+    echo "[entrypoint] resuming from $(wc -l <${LOCAL_OUTPUT}) already-processed articles" ||
     echo "[entrypoint] no partial output found, starting fresh"
 
 # --- 4. Background sync: upload output every 90 s so Spot preemptions lose < 90 s ---
@@ -70,8 +70,8 @@ _sync_loop() {
     while true; do
         sleep 90
         if [[ -f "${LOCAL_OUTPUT}" ]]; then
-            gsutil -q cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}" && \
-                echo "[sync] uploaded $(wc -l < ${LOCAL_OUTPUT}) lines at $(date -u +%H:%M:%S)"
+            gsutil -q cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}" &&
+                echo "[sync] uploaded $(wc -l <${LOCAL_OUTPUT}) lines at $(date -u +%H:%M:%S)"
         fi
     done
 }
@@ -81,18 +81,18 @@ trap "kill ${SYNC_PID} 2>/dev/null || true" EXIT
 
 # --- 5. Build extra args ---
 EXTRA_ARGS=""
-[[ -n "${MAX_MODEL_LEN:-}" ]]           && EXTRA_ARGS+=" --max_model_len ${MAX_MODEL_LEN}"
-[[ -n "${TOP_K_CANDIDATES:-}" ]]        && EXTRA_ARGS+=" --top_k_candidates ${TOP_K_CANDIDATES}"
-[[ -n "${QUANTIZATION:-}" ]]            && EXTRA_ARGS+=" --quantization ${QUANTIZATION}"
-[[ -n "${RETRIEVER_MODEL_NAME:-}" ]]    && EXTRA_ARGS+=" --retriever_model_name ${RETRIEVER_MODEL_NAME}"
-[[ -n "${RETRIEVER_INDEX:-}" ]]         && EXTRA_ARGS+=" --retriever_index ${RETRIEVER_INDEX}"
-[[ -n "${RETRIEVER_GPU_MEM_UTIL:-}" ]]  && EXTRA_ARGS+=" --retriever_gpu_memory_utilization ${RETRIEVER_GPU_MEM_UTIL}"
-[[ -n "${RETRIEVER_QUERY_MODE:-}" ]]    && EXTRA_ARGS+=" --retriever_query_mode ${RETRIEVER_QUERY_MODE}"
+[[ -n "${MAX_MODEL_LEN:-}" ]] && EXTRA_ARGS+=" --max_model_len ${MAX_MODEL_LEN}"
+[[ -n "${TOP_K_CANDIDATES:-}" ]] && EXTRA_ARGS+=" --top_k_candidates ${TOP_K_CANDIDATES}"
+[[ -n "${QUANTIZATION:-}" ]] && EXTRA_ARGS+=" --quantization ${QUANTIZATION}"
+[[ -n "${RETRIEVER_MODEL_NAME:-}" ]] && EXTRA_ARGS+=" --retriever_model_name ${RETRIEVER_MODEL_NAME}"
+[[ -n "${RETRIEVER_INDEX:-}" ]] && EXTRA_ARGS+=" --retriever_index ${RETRIEVER_INDEX}"
+[[ -n "${RETRIEVER_GPU_MEM_UTIL:-}" ]] && EXTRA_ARGS+=" --retriever_gpu_memory_utilization ${RETRIEVER_GPU_MEM_UTIL}"
+[[ -n "${RETRIEVER_QUERY_MODE:-}" ]] && EXTRA_ARGS+=" --retriever_query_mode ${RETRIEVER_QUERY_MODE}"
 [[ -n "${RETRIEVER_MAX_MODEL_LEN:-}" ]] && EXTRA_ARGS+=" --retriever_max_model_len ${RETRIEVER_MAX_MODEL_LEN}"
-[[ -n "${ONTOLOGY:-}" ]]                && EXTRA_ARGS+=" --ontology ${ONTOLOGY}"
-[[ -n "${ONTOLOGY_DESCRIPTIONS:-}" ]]   && EXTRA_ARGS+=" --ontology_descriptions ${ONTOLOGY_DESCRIPTIONS}"
+[[ -n "${ONTOLOGY:-}" ]] && EXTRA_ARGS+=" --ontology ${ONTOLOGY}"
+[[ -n "${ONTOLOGY_DESCRIPTIONS:-}" ]] && EXTRA_ARGS+=" --ontology_descriptions ${ONTOLOGY_DESCRIPTIONS}"
 [[ -n "${GUIDED_DECODING_BACKEND:-}" ]] && EXTRA_ARGS+=" --guided_decoding_backend ${GUIDED_DECODING_BACKEND}"
-[[ "${LEAN_OUTPUT:-true}" == "true" ]]  && EXTRA_ARGS+=" --lean_output"
+[[ "${LEAN_OUTPUT:-true}" == "true" ]] && EXTRA_ARGS+=" --lean_output"
 # Constrains event_type to the ontology enum. Off by default: it costs throughput, but it is
 # the only thing that stops the model inventing labels outside bona.v4.
 [[ "${USE_GUIDED_DECODING:-false}" == "true" ]] && EXTRA_ARGS+=" --use_guided_decoding"
@@ -101,24 +101,24 @@ EXTRA_ARGS=""
 echo "[entrypoint] starting inference"
 python3 /app/scripts/event_extraction/inference/vllm_infer.py \
     --model_name_or_path "${LOCAL_MODEL}" \
-    --input               "${LOCAL_INPUT}" \
-    --output              "${LOCAL_OUTPUT}" \
+    --input "${LOCAL_INPUT}" \
+    --output "${LOCAL_OUTPUT}" \
     --gcs_input \
-    --shard_index         0 \
-    --num_shards          1 \
+    --shard_index 0 \
+    --num_shards 1 \
     --gcs_read_concurrency "${GCS_READ_CONCURRENCY:-64}" \
-    --max_new_tokens      "${MAX_NEW_TOKENS:-4096}" \
-    --max_chars           "${MAX_CHARS:-3000}" \
-    --min_chars           "${MIN_CHARS:-200}" \
-    --max_paras           "${MAX_PARAS:-15}" \
-    --overlap_paras       "${OVERLAP_PARAS:-1}" \
-    --batch_size          "${BATCH_SIZE:-500}" \
+    --max_new_tokens "${MAX_NEW_TOKENS:-4096}" \
+    --max_chars "${MAX_CHARS:-3000}" \
+    --min_chars "${MIN_CHARS:-200}" \
+    --max_paras "${MAX_PARAS:-15}" \
+    --overlap_paras "${OVERLAP_PARAS:-1}" \
+    --batch_size "${BATCH_SIZE:-500}" \
     --gpu_memory_utilization "${GPU_MEMORY_UTIL:-0.95}" \
-    --temperature         "${TEMPERATURE:-0.0}" \
+    --temperature "${TEMPERATURE:-0.0}" \
     ${EXTRA_ARGS}
 
 # --- 7. Final upload ---
 kill "${SYNC_PID}" 2>/dev/null || true
 echo "[entrypoint] uploading final output to ${REMOTE_OUTPUT}"
 gsutil cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}"
-echo "[entrypoint] task ${TASK_INDEX} done — $(wc -l < ${LOCAL_OUTPUT}) articles written"
+echo "[entrypoint] task ${TASK_INDEX} done — $(wc -l <${LOCAL_OUTPUT}) articles written"

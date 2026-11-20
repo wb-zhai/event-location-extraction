@@ -6,6 +6,7 @@ Pipeline:
                   .clean.jsonl          .fixed.jsonl       .final.jsonl
                   .invalid.jsonl  ← inspect              ← inspect
 """
+
 import argparse
 import json
 import sys
@@ -56,9 +57,13 @@ def load_fixed_events(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--clean", type=Path, required=True, help="clean.jsonl from validate.py")
     parser.add_argument(
-        "--fixed", type=Path, default=None,
+        "--clean", type=Path, required=True, help="clean.jsonl from validate.py"
+    )
+    parser.add_argument(
+        "--fixed",
+        type=Path,
+        default=None,
         help="fixed.jsonl from fix_events.py (optional; omit if no invalid events to merge)",
     )
     parser.add_argument("--output", type=Path, required=True)

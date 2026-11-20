@@ -16,7 +16,6 @@ from google.genai import types as genai_types
 from pydantic import BaseModel, Field
 
 
-
 from src.llms.llm_client import GeminiContentBlockedError, GeminiLLMClient, LLMClient
 
 load_dotenv()
@@ -420,7 +419,9 @@ def _default_system_prompt(args: argparse.Namespace) -> str:
             else DEFAULT_RELEVANCE_SYSTEM_PROMPT_TITLE_ONLY
         )
     return (
-        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR if args.french else DEFAULT_RELEVANCE_SYSTEM_PROMPT
+        DEFAULT_RELEVANCE_SYSTEM_PROMPT_FR
+        if args.french
+        else DEFAULT_RELEVANCE_SYSTEM_PROMPT
     )
 
 
@@ -432,7 +433,9 @@ def _default_user_prompt_template(args: argparse.Namespace) -> str:
             else DEFAULT_RELEVANCE_USER_PROMPT_TITLE_ONLY
         )
     return (
-        DEFAULT_RELEVANCE_USER_PROMPT_FR if args.french else DEFAULT_RELEVANCE_USER_PROMPT
+        DEFAULT_RELEVANCE_USER_PROMPT_FR
+        if args.french
+        else DEFAULT_RELEVANCE_USER_PROMPT
     )
 
 
@@ -1114,8 +1117,7 @@ async def run_batch_relevance_cascade(
                         if args.title_only
                         else build_preview_text(
                             str(
-                                r.get("text")
-                                or (r.get("source") or {}).get("text", "")
+                                r.get("text") or (r.get("source") or {}).get("text", "")
                             ),
                             max_chars=args.max_chars,
                             sentences=args.sentences,
@@ -1260,7 +1262,9 @@ async def process_file(args):
             f"--max-chars={args.max_chars} is ignored."
         )
     else:
-        print(f"[relevance_filter] Preview truncation mode: chars (max_chars={args.max_chars})")
+        print(
+            f"[relevance_filter] Preview truncation mode: chars (max_chars={args.max_chars})"
+        )
 
     if output_path.exists() and not args.resume and not args.overwrite:
         raise SystemExit(
@@ -1370,7 +1374,7 @@ async def process_file(args):
     errors = [r for r in results if r.get("relevance", {}).get("error")]
     print(f"Total records: {total}")
     if total:
-        print(f"Filtered out: {filtered} ({filtered/total:.2%})")
+        print(f"Filtered out: {filtered} ({filtered / total:.2%})")
 
     if errors:
         error_counts: dict[str, int] = {}
@@ -1378,7 +1382,7 @@ async def process_file(args):
             msg = str(r["relevance"]["error"])
             error_counts[msg] = error_counts.get(msg, 0) + 1
         print(
-            f"Errors: {len(errors)} ({len(errors)/total:.2%})"
+            f"Errors: {len(errors)} ({len(errors) / total:.2%})"
             if total
             else f"Errors: {len(errors)}"
         )

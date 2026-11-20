@@ -34,7 +34,6 @@ OLD_TO_V4 = {
     "repression": "human rights violation",
     "violent suppression": "human rights violation",
     "infrastructure damage": "infrastructure destruction",
-
     # displacement and migration
     "displaced": "internal displacement",
     "flee": "internal displacement",
@@ -43,7 +42,6 @@ OLD_TO_V4 = {
     "asylum seekers": "refugee movement",
     "migration": "migrant influx",
     "makeshift camps": "shelter loss",
-
     # food insecurity
     "food insecurity": "food scarcity",
     "food crisis": "food scarcity",
@@ -54,7 +52,6 @@ OLD_TO_V4 = {
     "malnourished": "food scarcity",
     "harvest decline": "crop failure",
     "failed crops": "crop failure",
-
     # economic stress
     "economic crisis": "economic decline",
     "collapsing economy": "economic decline",
@@ -64,7 +61,6 @@ OLD_TO_V4 = {
     "price rise": "food price inflation",
     "rising food prices": "food price inflation",
     "international embargo": "trade disruption",
-
     # weather and natural hazards
     "floods": "flooding",
     "severe rains": "abnormal rainfall",
@@ -73,14 +69,11 @@ OLD_TO_V4 = {
     "water availability": "water shortage",
     "cyclone": "cyclone",
     "locusts": "pest infestation",
-
     # environment
     "environmental degradation": "environmental degradation",
-
     # public health
     "epidemics": "disease spread",
     "cholera outbreak": "disease spread",
-
     # political instability
     "coup": "governance breakdown",
     "overthrow": "governance breakdown",
@@ -89,19 +82,16 @@ OLD_TO_V4 = {
     "military dictatorship": "governance breakdown",
     "corruption": "governance breakdown",
     "secession": "geopolitical tension",
-
     # humanitarian disruption
     "restricted humanitarian access": "aid obstruction",
     "aid appeal": "funding shortfall",
     "food assistance": "aid reduction",
     "aid workers died": "civilian casualties",
-
     # deliberately unmapped in the established crosswalk
     "humanitarian situation": None,
     "humanitarian disaster": None,
     "natural disaster": None,
     "climate change": None,
-
     "burning houses": "fire",
 }
 
@@ -189,7 +179,10 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with in_path.open(encoding="utf-8") as fin, out_path.open("w", encoding="utf-8") as fout:
+    with (
+        in_path.open(encoding="utf-8") as fin,
+        out_path.open("w", encoding="utf-8") as fout,
+    ):
         for line_no, line in enumerate(fin, 1):
             if not line.strip():
                 continue
@@ -290,12 +283,20 @@ def main() -> None:
     print("=" * 72)
     print(f"Rows:                     {rows:,}")
     print(f"Raw prediction events:    {raw_events:,}")
-    print(f"Mapped prediction events: {mapped_events:,} "
-          f"({mapped_events/raw_events:.2%})" if raw_events else "Mapped prediction events: 0")
+    print(
+        f"Mapped prediction events: {mapped_events:,} "
+        f"({mapped_events / raw_events:.2%})"
+        if raw_events
+        else "Mapped prediction events: 0"
+    )
     print(f"  crosswalked:            {crosswalked_events:,}")
     print(f"  already/native v4:      {native_v4_events:,}")
-    print(f"Unmapped events:          {unmapped_events:,} "
-          f"({unmapped_events/raw_events:.2%})" if raw_events else "Unmapped events: 0")
+    print(
+        f"Unmapped events:          {unmapped_events:,} "
+        f"({unmapped_events / raw_events:.2%})"
+        if raw_events
+        else "Unmapped events: 0"
+    )
     print(f"  intentionally unmapped: {intentional_unmapped_events:,}")
     print(f"  unknown unmapped:       {unknown_unmapped_events:,}")
     print(f"Rows with >=1 unmapped:   {rows_with_unmapped:,}")

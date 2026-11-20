@@ -21,6 +21,7 @@ except ImportError:
 
 try:
     from dotenv import dotenv_values
+
     _env = dotenv_values(Path(__file__).resolve().parents[3] / ".env")
 except ImportError:
     _env = {}
@@ -32,18 +33,22 @@ def _e(key: str, fallback: str | None = None) -> str | None:
 
 def get_connection_params() -> dict:
     return {
-        "host":     _e("SQL_HOST",     _e("PGHOST", "localhost")),
-        "port":     _e("SQL_PORT",     _e("PGPORT", "5432")),
-        "dbname":   _e("SQL_DATABASE", _e("PGDATABASE")),
-        "user":     _e("SQL_USERNAME", _e("PGUSER")),
+        "host": _e("SQL_HOST", _e("PGHOST", "localhost")),
+        "port": _e("SQL_PORT", _e("PGPORT", "5432")),
+        "dbname": _e("SQL_DATABASE", _e("PGDATABASE")),
+        "user": _e("SQL_USERNAME", _e("PGUSER")),
         "password": _e("SQL_PASSWORD", _e("PGPASSWORD")),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="List countries by article count.")
-    parser.add_argument("--limit", type=int, default=0, help="Show only top N rows (0 = all).")
-    parser.add_argument("--asc", action="store_true", help="Sort ascending (fewest first).")
+    parser.add_argument(
+        "--limit", type=int, default=0, help="Show only top N rows (0 = all)."
+    )
+    parser.add_argument(
+        "--asc", action="store_true", help="Sort ascending (fewest first)."
+    )
     args = parser.parse_args()
 
     params = get_connection_params()
@@ -89,7 +94,9 @@ def main() -> None:
     print(f"{'Country':<{col_w}}  {'Code':<8}  {'Articles':>10}")
     print("-" * (col_w + 22))
     for r in rows:
-        print(f"{r['country']:<{col_w}}  {r['adm0_code']:<8}  {r['article_count']:>10,}")
+        print(
+            f"{r['country']:<{col_w}}  {r['adm0_code']:<8}  {r['article_count']:>10,}"
+        )
 
     conn.close()
 

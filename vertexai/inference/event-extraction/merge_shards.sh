@@ -15,14 +15,29 @@ EXPECTED_SHARDS=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --output)  OUTPUT_GCS="$2";      shift 2 ;;
-        --dest)    DEST="$2";            shift 2 ;;
-        --shards)  EXPECTED_SHARDS="$2"; shift 2 ;;
-        *) echo "Unknown arg: $1" >&2; exit 1 ;;
+        --output)
+            OUTPUT_GCS="$2"
+            shift 2
+            ;;
+        --dest)
+            DEST="$2"
+            shift 2
+            ;;
+        --shards)
+            EXPECTED_SHARDS="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown arg: $1" >&2
+            exit 1
+            ;;
     esac
 done
 
-[[ -z "${OUTPUT_GCS}" ]] && { echo "ERROR: --output is required" >&2; exit 1; }
+[[ -z "${OUTPUT_GCS}" ]] && {
+    echo "ERROR: --output is required" >&2
+    exit 1
+}
 
 echo "Listing shards at ${OUTPUT_GCS}/shard-*.jsonl ..."
 SHARD_LIST="$(gsutil ls "${OUTPUT_GCS}/shard-*.jsonl" 2>/dev/null | sort -t'-' -k2 -n)"
@@ -54,8 +69,8 @@ else
     trap "rm -rf ${TMP_DIR}" EXIT
     gsutil -m cp "${OUTPUT_GCS}/shard-*.jsonl" "${TMP_DIR}/"
     # Sort numerically by shard index before concatenating
-    ls "${TMP_DIR}"/shard-*.jsonl | sort -t'-' -k2 -n | xargs cat > "${DEST}"
+    ls "${TMP_DIR}"/shard-*.jsonl | sort -t'-' -k2 -n | xargs cat >"${DEST}"
 fi
 
-LINES="$(wc -l < "${DEST}")"
+LINES="$(wc -l <"${DEST}")"
 echo "Done. ${DEST}: ${LINES} articles"

@@ -20,15 +20,33 @@ LOCAL=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --project) PROJECT="$2"; shift 2 ;;
-        --region)  REGION="$2";  shift 2 ;;
-        --tag)     TAG="$2";     shift 2 ;;
-        --local)   LOCAL=true;   shift   ;;
-        *) echo "Unknown arg: $1" >&2; exit 1 ;;
+        --project)
+            PROJECT="$2"
+            shift 2
+            ;;
+        --region)
+            REGION="$2"
+            shift 2
+            ;;
+        --tag)
+            TAG="$2"
+            shift 2
+            ;;
+        --local)
+            LOCAL=true
+            shift
+            ;;
+        *)
+            echo "Unknown arg: $1" >&2
+            exit 1
+            ;;
     esac
 done
 
-[[ -z "${PROJECT}" ]] && { echo "ERROR: set GCP_PROJECT in .env or pass --project" >&2; exit 1; }
+[[ -z "${PROJECT}" ]] && {
+    echo "ERROR: set GCP_PROJECT in .env or pass --project" >&2
+    exit 1
+}
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/event-extraction/event-infer:${TAG}"
 REPO="event-extraction"
@@ -42,7 +60,7 @@ echo ""
 # 1 — Create Artifact Registry repo (idempotent)
 echo "--- Step 1: Artifact Registry repo ---"
 if gcloud artifacts repositories describe "${REPO}" \
-        --location="${REGION}" --project="${PROJECT}" &>/dev/null; then
+    --location="${REGION}" --project="${PROJECT}" &>/dev/null; then
     echo "Repo '${REPO}' already exists, skipping."
 else
     gcloud artifacts repositories create "${REPO}" \

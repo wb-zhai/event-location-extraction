@@ -53,6 +53,7 @@ except ImportError:
 
 try:
     from dotenv import dotenv_values
+
     _env = dotenv_values(Path(__file__).resolve().parents[2] / ".env")
 except ImportError:
     _env = {}
@@ -69,10 +70,10 @@ def _e(key: str, fallback: str | None = None) -> str | None:
 
 def get_connection_params() -> dict:
     params = {
-        "host":     _e("SQL_HOST",     _e("PGHOST", "localhost")),
-        "port":     _e("SQL_PORT",     _e("PGPORT", "5432")),
-        "dbname":   _e("SQL_DATABASE", _e("PGDATABASE")),
-        "user":     _e("SQL_USERNAME", _e("PGUSER")),
+        "host": _e("SQL_HOST", _e("PGHOST", "localhost")),
+        "port": _e("SQL_PORT", _e("PGPORT", "5432")),
+        "dbname": _e("SQL_DATABASE", _e("PGDATABASE")),
+        "user": _e("SQL_USERNAME", _e("PGUSER")),
         "password": _e("SQL_PASSWORD", _e("PGPASSWORD")),
     }
     missing = [k for k in ("dbname", "user", "password") if not params[k]]
@@ -104,7 +105,9 @@ def open_shard_writers(stack: ExitStack, output_prefix: str, num_shards: int):
         try:
             from google.cloud import storage
         except ImportError:
-            print("google-cloud-storage is not installed. Run: pip install google-cloud-storage")
+            print(
+                "google-cloud-storage is not installed. Run: pip install google-cloud-storage"
+            )
             sys.exit(1)
         bucket_name, prefix = parse_gcs_uri(output_prefix)
         client = storage.Client()
@@ -118,7 +121,10 @@ def open_shard_writers(stack: ExitStack, output_prefix: str, num_shards: int):
 
     out_dir = Path(output_prefix)
     out_dir.mkdir(parents=True, exist_ok=True)
-    return [stack.enter_context((out_dir / name).open("w", encoding="utf-8")) for name in names]
+    return [
+        stack.enter_context((out_dir / name).open("w", encoding="utf-8"))
+        for name in names
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +147,9 @@ def stream_rows(conn, languages: list[str] | None, limit: int | None):
         sql += " LIMIT %s"
         params.append(limit)
 
-    with conn.cursor(name="relevance_manifest", cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+    with conn.cursor(
+        name="relevance_manifest", cursor_factory=psycopg2.extras.RealDictCursor
+    ) as cur:
         cur.itersize = 5000
         cur.execute(sql, params)
         for row in cur:
@@ -155,12 +163,23 @@ def stream_rows(conn, languages: list[str] | None, limit: int | None):
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Build the pre-sharded relevance manifest.")
-    p.add_argument("--output-prefix", required=True,
-                   help="gs://bucket/path or local dir; writes {prefix}/manifest-NNN.jsonl")
-    p.add_argument("--num-shards", type=int, required=True,
-                   help="Number of manifest files (must equal the Cloud Batch --shards)")
-    p.add_argument("--language", choices=["eng", "fra", "both"], default=None,
-                   help="Optional article language filter: eng, fra, or both (default: no filter, all languages)")
+    p.add_argument(
+        "--output-prefix",
+        required=True,
+        help="gs://bucket/path or local dir; writes {prefix}/manifest-NNN.jsonl",
+    )
+    p.add_argument(
+        "--num-shards",
+        type=int,
+        required=True,
+        help="Number of manifest files (must equal the Cloud Batch --shards)",
+    )
+    p.add_argument(
+        "--language",
+        choices=["eng", "fra", "both"],
+        default=None,
+        help="Optional article language filter: eng, fra, or both (default: no filter, all languages)",
+    )
     p.add_argument("--limit", type=int, default=None, help="Max rows (for testing)")
     return p.parse_args()
 
@@ -170,10 +189,15 @@ def main() -> None:
     if args.num_shards < 1:
         raise SystemExit("--num-shards must be >= 1")
 
-    languages = {"eng": ["eng"], "fra": ["fra"], "both": ["eng", "fra"]}.get(args.language)
+    languages = {"eng": ["eng"], "fra": ["fra"], "both": ["eng", "fra"]}.get(
+        args.language
+    )
 
     params = get_connection_params()
-    print(f"Connecting to {params['host']}:{params['port']}/{params['dbname']} ...", file=sys.stderr)
+    print(
+        f"Connecting to {params['host']}:{params['port']}/{params['dbname']} ...",
+        file=sys.stderr,
+    )
     conn = psycopg2.connect(**params)
 
     written = [0] * args.num_shards
@@ -181,7 +205,9 @@ def main() -> None:
     try:
         with conn, ExitStack() as stack:
             writers = open_shard_writers(stack, args.output_prefix, args.num_shards)
-            for i, (uri, cloud_uri, title) in enumerate(stream_rows(conn, languages, args.limit)):
+            for i, (uri, cloud_uri, title) in enumerate(
+                stream_rows(conn, languages, args.limit)
+            ):
                 if not uri or not cloud_uri:
                     skipped += 1
                     continue
@@ -195,15 +221,24 @@ def main() -> None:
                 written[shard] += 1
                 total = sum(written)
                 if total % 100000 == 0:
-                    print(f"  {total} rows written\033[K", end="\r", file=sys.stderr, flush=True)
+                    print(
+                        f"  {total} rows written\033[K",
+                        end="\r",
+                        file=sys.stderr,
+                        flush=True,
+                    )
     finally:
         conn.close()
 
     total = sum(written)
-    print(f"\nWrote {total} rows across {args.num_shards} shard(s) to {args.output_prefix}",
-          file=sys.stderr)
-    print(f"  per-shard min/max: {min(written)}/{max(written)}, skipped (null uri/cloud_uri): {skipped}",
-          file=sys.stderr)
+    print(
+        f"\nWrote {total} rows across {args.num_shards} shard(s) to {args.output_prefix}",
+        file=sys.stderr,
+    )
+    print(
+        f"  per-shard min/max: {min(written)}/{max(written)}, skipped (null uri/cloud_uri): {skipped}",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

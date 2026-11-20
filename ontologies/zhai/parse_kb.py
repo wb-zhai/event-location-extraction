@@ -1,7 +1,8 @@
 import json
+from pathlib import Path
 
 
-def parse_kb(kb_path: str):
+def parse_kb(kb_path: Path):
     event_names = []
     with open(kb_path, "r") as f:
         kb = json.load(f)
@@ -12,11 +13,9 @@ def parse_kb(kb_path: str):
     return event_names
 
 
-events = parse_kb(
-    "/Users/ric/Projects/Job/event-location-extraction/ontologies/zhai/raw_papers.json"
-)
+events = parse_kb(Path(__file__).with_name("raw_papers.json"))
 with open(
-    "/Users/ric/Projects/Job/event-location-extraction/ontologies/zhai/ontology.papers.json",
+    Path(__file__).with_name("ontology.papers.json"),
     "w",
 ) as f:
     json.dump({"events": events}, f, indent=2)

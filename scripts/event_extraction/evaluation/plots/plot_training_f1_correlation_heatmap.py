@@ -52,10 +52,7 @@ def correlation(x: pd.Series, y: pd.Series, method: str) -> float:
 
 
 def prepare(df: pd.DataFrame, language: str, min_support: int) -> pd.DataFrame:
-    out = df[
-        (df["language"] == language)
-        & (df["eval_support"] >= min_support)
-    ].copy()
+    out = df[(df["language"] == language) & (df["eval_support"] >= min_support)].copy()
 
     for col, _ in MATRIX_COLUMNS:
         out[col] = pd.to_numeric(out[col], errors="coerce")
@@ -149,9 +146,7 @@ def plot_summary(
     ax.set_xticks(range(len(columns)))
     ax.set_xticklabels(columns)
     ax.set_yticks(range(len(languages)))
-    ax.set_yticklabels(
-        [f"{lang} (n={n})" for lang, n in zip(languages, ns)]
-    )
+    ax.set_yticklabels([f"{lang} (n={n})" for lang, n in zip(languages, ns)])
     ax.tick_params(axis="x", rotation=20)
 
     ax.set_title(
@@ -245,9 +240,7 @@ def main():
     print(f"Filter: evaluation support >= {args.min_support}")
     print()
     for method in ("pearson", "spearman"):
-        matrix, languages, columns, ns = build_summary(
-            df, args.min_support, method
-        )
+        matrix, languages, columns, ns = build_summary(df, args.min_support, method)
         print(f"===== {method.upper()} =====")
         for i, language in enumerate(languages):
             print(f"{language} (n={ns[i]})")

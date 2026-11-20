@@ -73,7 +73,9 @@ def split_locations(event: dict[str, Any]) -> list[str]:
     return [p for p in places if p and p.lower() != NOT_STATED]
 
 
-def print_counter(counter: Counter, total: int, top_n: int | None = None, indent: str = "  ") -> None:
+def print_counter(
+    counter: Counter, total: int, top_n: int | None = None, indent: str = "  "
+) -> None:
     items = counter.most_common(top_n)
     for key, count in items:
         pct = count / total * 100 if total else 0.0
@@ -81,11 +83,21 @@ def print_counter(counter: Counter, total: int, top_n: int | None = None, indent
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Print stats for relevance+event-annotated JSONL data.")
+    parser = argparse.ArgumentParser(
+        description="Print stats for relevance+event-annotated JSONL data."
+    )
     parser.add_argument("--input", required=True, help="Path to a JSONL file.")
-    parser.add_argument("--complete", action="store_true",
-        help="Also print status, events-per-article, time_status/severity/admin_level, and country breakdowns.")
-    parser.add_argument("--top-n", type=int, default=20, help="Number of top locations/countries to show (default 20).")
+    parser.add_argument(
+        "--complete",
+        action="store_true",
+        help="Also print status, events-per-article, time_status/severity/admin_level, and country breakdowns.",
+    )
+    parser.add_argument(
+        "--top-n",
+        type=int,
+        default=20,
+        help="Number of top locations/countries to show (default 20).",
+    )
     args = parser.parse_args()
 
     path = resolve_path(args.input)
@@ -109,7 +121,11 @@ def main() -> None:
         statuses[rec.get("status") or "unknown"] += 1
 
         is_relevant = get_is_relevant(rec)
-        bucket = "unknown" if is_relevant is None else ("relevant" if is_relevant else "not_relevant")
+        bucket = (
+            "unknown"
+            if is_relevant is None
+            else ("relevant" if is_relevant else "not_relevant")
+        )
         relevant_counts[bucket] += 1
 
         events = get_events(rec)
@@ -148,8 +164,12 @@ def main() -> None:
     n_not_relevant = relevant_counts["not_relevant"]
     pct_a = relevant_no_events / n_relevant * 100 if n_relevant else 0.0
     pct_b = not_relevant_with_events / n_not_relevant * 100 if n_not_relevant else 0.0
-    print(f"  relevant with zero events: {relevant_no_events} ({pct_a:.1f}% of relevant)")
-    print(f"  not-relevant with events:  {not_relevant_with_events} ({pct_b:.1f}% of not-relevant)")
+    print(
+        f"  relevant with zero events: {relevant_no_events} ({pct_a:.1f}% of relevant)"
+    )
+    print(
+        f"  not-relevant with events:  {not_relevant_with_events} ({pct_b:.1f}% of not-relevant)"
+    )
     print()
 
     n_events_total = sum(event_types.values())
@@ -158,7 +178,9 @@ def main() -> None:
     print()
 
     n_locations_total = sum(locations.values())
-    print(f"Top {args.top_n} event locations ({n_locations_total} location mentions total):")
+    print(
+        f"Top {args.top_n} event locations ({n_locations_total} location mentions total):"
+    )
     print_counter(locations, n_locations_total, args.top_n)
 
     if not args.complete:
@@ -185,7 +207,9 @@ def main() -> None:
     print()
 
     n_admin_total = sum(admin_level.values())
-    print(f"event_location_admin_level distribution ({n_admin_total} location mentions total):")
+    print(
+        f"event_location_admin_level distribution ({n_admin_total} location mentions total):"
+    )
     print_counter(admin_level, n_admin_total)
     print()
 

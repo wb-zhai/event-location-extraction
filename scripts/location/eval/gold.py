@@ -5,6 +5,7 @@ a list of GoldDoc — a document's text plus the set of location surface
 strings it contains. This is the single shape that scoring (metrics.py)
 and every loader (datasets.py) agree on.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

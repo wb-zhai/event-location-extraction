@@ -62,7 +62,9 @@ def build_text(article: dict, max_chars: int, title_only: bool = False) -> str:
     if title_only:
         if title:
             return title
-        text = str(article.get("body") or article.get("text") or source.get("text") or "")
+        text = str(
+            article.get("body") or article.get("text") or source.get("text") or ""
+        )
         fallback_title, _, _ = text.partition("\n\n")
         print(
             f"--title-only: article {article.get('id')!r} has no 'title' field; "
@@ -143,8 +145,13 @@ class ArticleFetcher:
 
 
 class RelevanceClassifier:
-    def __init__(self, model_name_or_path: str, max_length: int,
-                 gpu_memory_utilization: float, tensor_parallel_size: int):
+    def __init__(
+        self,
+        model_name_or_path: str,
+        max_length: int,
+        gpu_memory_utilization: float,
+        tensor_parallel_size: int,
+    ):
         from vllm import LLM
 
         self.max_length = max_length
@@ -174,7 +181,8 @@ class RelevanceClassifier:
         # max_length, so an oversized article can't make classify() raise
         # VLLMValidationError (char-based --max-chars doesn't bound token count).
         outputs = self.llm.classify(
-            texts, tokenization_kwargs={"truncation": True, "max_length": self.max_length}
+            texts,
+            tokenization_kwargs={"truncation": True, "max_length": self.max_length},
         )
         labels = []
         for output in outputs:
@@ -189,7 +197,9 @@ class RelevanceClassifier:
 # ---------------------------------------------------------------------------
 
 
-def read_manifest(path: Path, shard_index: int, num_shards: int, limit: int | None) -> Iterator[dict]:
+def read_manifest(
+    path: Path, shard_index: int, num_shards: int, limit: int | None
+) -> Iterator[dict]:
     """Stream manifest rows for this shard (line k kept when k % num_shards == shard_index).
     With num_shards == 1 every row is kept (the entrypoint hands each task its own manifest)."""
     yielded = 0
@@ -220,8 +230,9 @@ def load_done_ids(output_path: Path) -> set[str]:
     return done
 
 
-def stream_fetched(rows: Iterator[dict], fetcher: ArticleFetcher, concurrency: int
-                   ) -> Iterator[tuple[str, str]]:
+def stream_fetched(
+    rows: Iterator[dict], fetcher: ArticleFetcher, concurrency: int
+) -> Iterator[tuple[str, str]]:
     """Fetch articles concurrently with a bounded number of in-flight requests, so we
     never enqueue the whole shard at once. Yields (id, text) as each GET completes."""
     max_inflight = max(concurrency * 2, concurrency + 1)
@@ -273,19 +284,28 @@ def relevance_infer(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if title_only:
-        print("Preview truncation mode: title-only (article text is ignored)", file=sys.stderr)
+        print(
+            "Preview truncation mode: title-only (article text is ignored)",
+            file=sys.stderr,
+        )
 
     done_ids = load_done_ids(output_path)
     if done_ids:
-        print(f"Resuming: {len(done_ids)} ids already labeled in {output_path}", file=sys.stderr)
+        print(
+            f"Resuming: {len(done_ids)} ids already labeled in {output_path}",
+            file=sys.stderr,
+        )
 
     classifier = RelevanceClassifier(
         model_name_or_path, max_length, gpu_memory_utilization, tensor_parallel_size
     )
     fetcher = ArticleFetcher(max_chars, title_only, pool_size=gcs_read_concurrency)
 
-    rows = (r for r in read_manifest(input_path, shard_index, num_shards, limit)
-            if str(r.get("id") or "") not in done_ids)
+    rows = (
+        r
+        for r in read_manifest(input_path, shard_index, num_shards, limit)
+        if str(r.get("id") or "") not in done_ids
+    )
 
     processed = 0
     pbar = tqdm(unit="article", desc=f"shard {shard_index}")

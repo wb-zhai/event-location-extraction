@@ -20,12 +20,27 @@ PATTERN="*.jsonl"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --workers)  WORKERS="$2";  shift 2 ;;
-        --parallel) PARALLEL="$2"; shift 2 ;;
-        --delay)    DELAY="$2";    shift 2 ;;
-        --pattern)  PATTERN="$2";  shift 2 ;;
-        -h|--help) usage ;;
-        -*) echo "Unknown option: $1"; usage ;;
+        --workers)
+            WORKERS="$2"
+            shift 2
+            ;;
+        --parallel)
+            PARALLEL="$2"
+            shift 2
+            ;;
+        --delay)
+            DELAY="$2"
+            shift 2
+            ;;
+        --pattern)
+            PATTERN="$2"
+            shift 2
+            ;;
+        -h | --help) usage ;;
+        -*)
+            echo "Unknown option: $1"
+            usage
+            ;;
         *) break ;;
     esac
 done

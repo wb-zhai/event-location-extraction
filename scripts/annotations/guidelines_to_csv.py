@@ -51,7 +51,10 @@ def main() -> None:
     args = parser.parse_args()
 
     write_sheet(args.output, DELIMITERS[args.delimiter])
-    print(f"[write] guidelines + {len(load_allowed_event_types())} labels -> {args.output}", flush=True)
+    print(
+        f"[write] guidelines + {len(load_allowed_event_types())} labels -> {args.output}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

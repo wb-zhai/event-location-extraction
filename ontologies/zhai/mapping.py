@@ -176,9 +176,10 @@ if __name__ == "__main__":
     )
     args = argparser.parse_args()
 
-    with open(args.input_file, "r", encoding="utf-8") as infile, open(
-        args.output_file, "w", encoding="utf-8"
-    ) as outfile:
+    with (
+        open(args.input_file, "r", encoding="utf-8") as infile,
+        open(args.output_file, "w", encoding="utf-8") as outfile,
+    ):
         for line in infile:
             data = json.loads(line)
             if "events" in data:

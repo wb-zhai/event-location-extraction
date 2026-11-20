@@ -4,6 +4,7 @@
 Each run builds fresh temporary outputs, so reruns never add to prior counts.
 Existing outputs remain intact if validation or processing fails.
 """
+
 import argparse
 import json
 import os
@@ -25,20 +26,32 @@ def build_queue(root=ROOT, db=DB, out=OUT, expected_shards=200):
         raise ValueError("Database and JSONL output paths must differ")
     # Validate all shard names before creating any output.
     expected = {f"shard-{i:03d}" for i in range(expected_shards)}
-    actual = {p.parent.name for p in root.glob("shard-*/candidate_geocoding_input.jsonl")}
+    actual = {
+        p.parent.name for p in root.glob("shard-*/candidate_geocoding_input.jsonl")
+    }
     if actual != expected:
-        raise ValueError(f"Expected {expected_shards} candidate shards; missing={sorted(expected-actual)}, unexpected={sorted(actual-expected)}")
+        raise ValueError(
+            f"Expected {expected_shards} candidate shards; missing={sorted(expected - actual)}, unexpected={sorted(actual - expected)}"
+        )
     db.parent.mkdir(parents=True, exist_ok=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     # Both temporary outputs live on the destination filesystem for atomic replace.
-    with tempfile.TemporaryDirectory(prefix=".location-db-", dir=db.parent) as db_tmp,\
-         tempfile.TemporaryDirectory(prefix=".location-jsonl-", dir=out.parent) as out_tmp:
+    with (
+        tempfile.TemporaryDirectory(prefix=".location-db-", dir=db.parent) as db_tmp,
+        tempfile.TemporaryDirectory(
+            prefix=".location-jsonl-", dir=out.parent
+        ) as out_tmp,
+    ):
         work_db = Path(db_tmp) / "pairs.sqlite"
         work_out = Path(out_tmp) / "pairs.jsonl"
         _populate(root, work_db, work_out, out, expected_shards)
         # Replacing an active SQLite file with sidecars could mix database versions.
-        if any(Path(str(db) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
-            raise RuntimeError("Destination SQLite has sidecar files; close its users before rebuilding")
+        if any(
+            Path(str(db) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")
+        ):
+            raise RuntimeError(
+                "Destination SQLite has sidecar files; close its users before rebuilding"
+            )
         os.replace(work_db, db)
         os.replace(work_out, out)
 
@@ -47,11 +60,12 @@ def _populate(root, work_db, work_out, out, expected_shards):
     files = sorted(root.glob("shard-*/candidate_geocoding_input.jsonl"))
 
     if len(files) != expected_shards:
-        raise SystemExit(f"Expected {expected_shards} candidate files, found {len(files)}")
+        raise SystemExit(
+            f"Expected {expected_shards} candidate files, found {len(files)}"
+        )
 
     con = sqlite3.connect(work_db)
     try:
-
         con.execute("PRAGMA journal_mode=WAL")
         con.execute("PRAGMA synchronous=NORMAL")
         con.execute("""
@@ -73,12 +87,10 @@ def _populate(root, work_db, work_out, out, expected_shards):
         conflict_examples = []
 
         for file_no, path in enumerate(files, 1):
-
             shard_counts = Counter()
 
             with path.open(encoding="utf-8") as f:
                 for line_no, line in enumerate(f, 1):
-
                     obj = json.loads(line)
 
                     for event in obj.get("predictions", []):
@@ -111,7 +123,6 @@ def _populate(root, work_db, work_out, out, expected_shards):
                         seen = {}
 
                         for part, lvl in zip(parts, lvls):
-
                             if not part or part.casefold() == "not_stated":
                                 continue
 
@@ -129,13 +140,15 @@ def _populate(root, work_db, work_out, out, expected_shards):
                                     level_conflicts += 1
 
                                     if len(conflict_examples) < 30:
-                                        conflict_examples.append({
-                                            "location": part,
-                                            "first_layer": previous_layer or None,
-                                            "duplicate_layer": layer or None,
-                                            "raw_location": loc,
-                                            "raw_admin_levels": levels,
-                                        })
+                                        conflict_examples.append(
+                                            {
+                                                "location": part,
+                                                "first_layer": previous_layer or None,
+                                                "duplicate_layer": layer or None,
+                                                "raw_location": loc,
+                                                "raw_admin_levels": levels,
+                                            }
+                                        )
 
                                 continue
 
@@ -144,16 +157,19 @@ def _populate(root, work_db, work_out, out, expected_shards):
                             shard_counts[(part, layer)] += 1
                             clean_component_mentions += 1
 
-            con.executemany("""
+            con.executemany(
+                """
                 INSERT INTO pairs(location, layer, mention_count)
                 VALUES (?, ?, ?)
                 ON CONFLICT(location, layer)
                 DO UPDATE SET mention_count =
                     mention_count + excluded.mention_count
-            """, [
-                (location, layer, count)
-                for (location, layer), count in shard_counts.items()
-            ])
+            """,
+                [
+                    (location, layer, count)
+                    for (location, layer), count in shard_counts.items()
+                ],
+            )
 
             con.commit()
 
@@ -163,10 +179,7 @@ def _populate(root, work_db, work_out, out, expected_shards):
                 flush=True,
             )
 
-
-        unique_pairs = con.execute(
-            "SELECT COUNT(*) FROM pairs"
-        ).fetchone()[0]
+        unique_pairs = con.execute("SELECT COUNT(*) FROM pairs").fetchone()[0]
 
         unique_locations = con.execute(
             "SELECT COUNT(DISTINCT location) FROM pairs"
@@ -193,16 +206,12 @@ def _populate(root, work_db, work_out, out, expected_shards):
             ORDER BY SUM(mention_count) DESC
         """):
             label = layer if layer else "NO_LAYER"
-            print(
-                f"{label:12} unique={n:>10,} "
-                f"mentions={mentions:>12,}"
-            )
+            print(f"{label:12} unique={n:>10,} mentions={mentions:>12,}")
 
         print("\nDuplicate-level conflict examples:")
 
         for x in conflict_examples:
             print(json.dumps(x, ensure_ascii=False))
-
 
         with work_out.open("w", encoding="utf-8") as out:
             for location, layer, count in con.execute("""
@@ -210,16 +219,21 @@ def _populate(root, work_db, work_out, out, expected_shards):
                 FROM pairs
                 ORDER BY mention_count DESC, location, layer
             """):
-                out.write(json.dumps({
-                    "location": location,
-                    "layer": layer or None,
-                    "count": count,
-                }, ensure_ascii=False) + "\n")
+                out.write(
+                    json.dumps(
+                        {
+                            "location": location,
+                            "layer": layer or None,
+                            "count": count,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
 
         print()
         print(f"queue written: {out}")
         print(f"rows         : {unique_pairs:,}")
-
 
     finally:
         con.close()

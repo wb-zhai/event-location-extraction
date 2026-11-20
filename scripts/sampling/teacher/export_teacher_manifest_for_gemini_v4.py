@@ -21,12 +21,18 @@ from pyspark.sql.functions import col, date_format, from_unixtime, lit, struct
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True, help="Final teacher manifest Parquet path")
-    ap.add_argument("--output", required=True, help="Output GCS/local directory for JSONL parts")
+    ap.add_argument(
+        "--input", required=True, help="Final teacher manifest Parquet path"
+    )
+    ap.add_argument(
+        "--output", required=True, help="Output GCS/local directory for JSONL parts"
+    )
     ap.add_argument("--num-parts", type=int, default=8)
     args = ap.parse_args()
 
-    spark = SparkSession.builder.appName("export-teacher-manifest-for-gemini").getOrCreate()
+    spark = SparkSession.builder.appName(
+        "export-teacher-manifest-for-gemini"
+    ).getOrCreate()
     spark.conf.set("spark.sql.legacy.parquet.nanosAsLong", "true")
 
     df = spark.read.parquet(args.input)
@@ -54,40 +60,35 @@ def main():
         "yyyy-MM-dd",
     )
 
-    out = (
-        df.select(
-            col("article_id").cast("string").alias("id"),
-            col("article_id").cast("string").alias("article_id"),
-            col("sampling_group"),
-            col("sampling_event_type"),
-            col("geography_field"),
-            col("pool"),
-            col("matched_keyword"),
-            col("pub_year"),
-            col("language").cast("string").alias("language"),
-            struct(
-                col("title").cast("string").alias("title"),
-                col("body").cast("string").alias("text"),
-                lit("").alias("source_url"),
-                publish_date.alias("publish_date"),
-            ).alias("source"),
-        )
-        .dropDuplicates(["id"])
-    )
+    out = df.select(
+        col("article_id").cast("string").alias("id"),
+        col("article_id").cast("string").alias("article_id"),
+        col("sampling_group"),
+        col("sampling_event_type"),
+        col("geography_field"),
+        col("pool"),
+        col("matched_keyword"),
+        col("pub_year"),
+        col("language").cast("string").alias("language"),
+        struct(
+            col("title").cast("string").alias("title"),
+            col("body").cast("string").alias("text"),
+            lit("").alias("source_url"),
+            publish_date.alias("publish_date"),
+        ).alias("source"),
+    ).dropDuplicates(["id"])
 
     n = out.count()
     print(f"records to export: {n:,}")
 
-    (
-        out.repartition(args.num_parts)
-        .write.mode("overwrite")
-        .json(args.output)
-    )
+    (out.repartition(args.num_parts).write.mode("overwrite").json(args.output))
 
     print("DONE: Gemini input export")
     print(f"records: {n:,}")
     print(f"output:  {args.output}")
-    print("NOTE: no 'candidates' field was written; Gemini will see the full teacher ontology.")
+    print(
+        "NOTE: no 'candidates' field was written; Gemini will see the full teacher ontology."
+    )
 
 
 if __name__ == "__main__":

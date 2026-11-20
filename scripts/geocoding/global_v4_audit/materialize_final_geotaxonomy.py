@@ -65,12 +65,14 @@ def event_components(event):
 
         layer = raw_level if raw_level in PHOTON_LAYERS else ""
 
-        out.append({
-            "component_index": component_index,
-            "query": query,
-            "raw_admin_level": raw_level,
-            "layer": layer,
-        })
+        out.append(
+            {
+                "component_index": component_index,
+                "query": query,
+                "raw_admin_level": raw_level,
+                "layer": layer,
+            }
+        )
 
     return out
 
@@ -112,9 +114,7 @@ def load_lookup_rows(con, keys):
         key = (row["location"], row["layer"])
 
         if key in result:
-            raise RuntimeError(
-                f"Duplicate geotaxonomy lookup key: {key!r}"
-            )
+            raise RuntimeError(f"Duplicate geotaxonomy lookup key: {key!r}")
 
         result[key] = row
 
@@ -137,9 +137,7 @@ def materialize_component(component, row):
     # no layer restriction was used.
     geo["photon_layer"] = component["layer"] or None
 
-    geo["photon_resolution_status"] = row.get(
-        "resolution_status"
-    )
+    geo["photon_resolution_status"] = row.get("resolution_status")
 
     selected_query = row.get("selected_query")
     selected_layer = row.get("selected_layer")
@@ -184,7 +182,6 @@ def materialize_component(component, row):
 
     # Candidate exists.
     if row.get("lat") is not None and row.get("lon") is not None:
-
         add_if_not_none(
             geo,
             "wb_level",
@@ -222,9 +219,7 @@ def materialize_component(component, row):
 
     else:
         # Photon itself produced no candidate.
-        geo["wb_match_status"] = (
-            "not_applicable_no_photon_candidate"
-        )
+        geo["wb_match_status"] = "not_applicable_no_photon_candidate"
 
     return geo
 
@@ -260,15 +255,10 @@ def main():
         raise SystemExit(f"Missing input: {inp}")
 
     if not lookup_db.is_file():
-        raise SystemExit(
-            f"Missing lookup DB: {lookup_db}"
-        )
+        raise SystemExit(f"Missing lookup DB: {lookup_db}")
 
     if out.exists() and not args.overwrite:
-        raise SystemExit(
-            f"Output exists: {out}. "
-            "Use --overwrite if intentional."
-        )
+        raise SystemExit(f"Output exists: {out}. Use --overwrite if intentional.")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     audit_path.parent.mkdir(
@@ -291,11 +281,7 @@ def main():
 
     with inp.open("r", encoding="utf-8") as f:
         for line in f:
-
-            if (
-                args.limit_articles
-                and articles >= args.limit_articles
-            ):
+            if args.limit_articles and articles >= args.limit_articles:
                 break
 
             obj = json.loads(line)
@@ -315,9 +301,7 @@ def main():
                     events_with_stated_location += 1
 
                 loc = event.get("event_location")
-                level = event.get(
-                    "event_location_admin_level"
-                )
+                level = event.get("event_location_admin_level")
 
                 # Diagnostic only. Do not change raw data.
                 if isinstance(loc, str) and ";" in loc:
@@ -333,39 +317,23 @@ def main():
 
                 for comp in comps:
                     component_mentions += 1
-                    unique_keys.add((
-                        comp["query"],
-                        comp["layer"],
-                    ))
+                    unique_keys.add(
+                        (
+                            comp["query"],
+                            comp["layer"],
+                        )
+                    )
 
     print("=== PASS 1 ===")
-    print(
-        f"articles                    : "
-        f"{articles:,}"
-    )
-    print(
-        f"events                      : "
-        f"{events:,}"
-    )
-    print(
-        f"events with stated location : "
-        f"{events_with_stated_location:,}"
-    )
-    print(
-        f"raw component mentions      : "
-        f"{component_mentions:,}"
-    )
-    print(
-        f"unique location/layer keys  : "
-        f"{len(unique_keys):,}"
-    )
-    print(
-        f"admin count mismatches      : "
-        f"{component_count_mismatches:,}"
-    )
+    print(f"articles                    : {articles:,}")
+    print(f"events                      : {events:,}")
+    print(f"events with stated location : {events_with_stated_location:,}")
+    print(f"raw component mentions      : {component_mentions:,}")
+    print(f"unique location/layer keys  : {len(unique_keys):,}")
+    print(f"admin count mismatches      : {component_count_mismatches:,}")
 
     # ---------------------------------------------------------
-    # Read only required rows from the native-WSL lookup DB.
+    # Read only required rows from the SQLite lookup database.
     # ---------------------------------------------------------
 
     con = sqlite3.connect(
@@ -398,8 +366,7 @@ def main():
             print(repr(key))
 
         raise RuntimeError(
-            "Some location/layer keys are absent "
-            "from the final Photon lookup DB."
+            "Some location/layer keys are absent from the final Photon lookup DB."
         )
 
     # ---------------------------------------------------------
@@ -424,11 +391,7 @@ def main():
         tmp.open("w", encoding="utf-8") as fout,
     ):
         for line in fin:
-
-            if (
-                args.limit_articles
-                and out_articles >= args.limit_articles
-            ):
+            if args.limit_articles and out_articles >= args.limit_articles:
                 break
 
             obj = json.loads(line)
@@ -465,17 +428,9 @@ def main():
                     geotaxonomy.append(geo)
                     out_components += 1
 
-                    photon_status[
-                        geo.get(
-                            "photon_resolution_status"
-                        )
-                        or "NULL"
-                    ] += 1
+                    photon_status[geo.get("photon_resolution_status") or "NULL"] += 1
 
-                    wb_status[
-                        geo.get("wb_match_status")
-                        or "NULL"
-                    ] += 1
+                    wb_status[geo.get("wb_match_status") or "NULL"] += 1
 
                 # Additive only.
                 # event_location and
@@ -496,22 +451,14 @@ def main():
     # ---------------------------------------------------------
 
     if out_articles != articles:
-        raise RuntimeError(
-            f"Article mismatch: "
-            f"{out_articles:,} != {articles:,}"
-        )
+        raise RuntimeError(f"Article mismatch: {out_articles:,} != {articles:,}")
 
     if out_events != events:
-        raise RuntimeError(
-            f"Event mismatch: "
-            f"{out_events:,} != {events:,}"
-        )
+        raise RuntimeError(f"Event mismatch: {out_events:,} != {events:,}")
 
     if out_components != component_mentions:
         raise RuntimeError(
-            f"Component mismatch: "
-            f"{out_components:,} != "
-            f"{component_mentions:,}"
+            f"Component mismatch: {out_components:,} != {component_mentions:,}"
         )
 
     os.replace(tmp, out)
@@ -520,34 +467,17 @@ def main():
         "input": str(inp),
         "output": str(out),
         "lookup_db": str(lookup_db),
-
         "limited": bool(args.limit_articles),
-        "limit_articles": (
-            args.limit_articles or None
-        ),
-
+        "limit_articles": (args.limit_articles or None),
         "articles": articles,
         "events": events,
-
-        "events_with_stated_location":
-            events_with_stated_location,
-
-        "raw_component_mentions":
-            component_mentions,
-
-        "unique_location_layer_keys":
-            len(unique_keys),
-
+        "events_with_stated_location": events_with_stated_location,
+        "raw_component_mentions": component_mentions,
+        "unique_location_layer_keys": len(unique_keys),
         "missing_unique_lookup_keys": 0,
-
-        "admin_component_count_mismatches":
-            component_count_mismatches,
-
-        "photon_resolution_status":
-            dict(photon_status),
-
-        "wb_match_status":
-            dict(wb_status),
+        "admin_component_count_mismatches": component_count_mismatches,
+        "photon_resolution_status": dict(photon_status),
+        "wb_match_status": dict(wb_status),
     }
 
     audit_path.write_text(
@@ -564,28 +494,19 @@ def main():
     print("=== MATERIALIZATION COMPLETE ===")
     print(f"articles   : {articles:,}")
     print(f"events     : {events:,}")
-    print(
-        f"components : "
-        f"{component_mentions:,}"
-    )
+    print(f"components : {component_mentions:,}")
 
     print()
     print("Photon statuses:")
 
     for k, v in photon_status.most_common():
-        print(
-            f"  {k:<34} "
-            f"{v:>12,}"
-        )
+        print(f"  {k:<34} {v:>12,}")
 
     print()
     print("WB statuses:")
 
     for k, v in wb_status.most_common():
-        print(
-            f"  {k:<42} "
-            f"{v:>12,}"
-        )
+        print(f"  {k:<42} {v:>12,}")
 
     print()
     print("output:", out)

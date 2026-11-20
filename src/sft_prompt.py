@@ -19,9 +19,7 @@ SCHEMA_WITH_ARGS_CONTEXT = (
     '{"events":[{"event_type":"...", "trigger":{"text":"...", "left_context":"...", "right_context":"..."}, '
     '"arguments":[{"role":"...", "span":{"text":"...", "left_context":"...", "right_context":"..."}, "location_type":"..."}]}]}'
 )
-SCHEMA_EVENTS_ONLY_CONTEXT = (
-    '{"events":[{"event_type":"...", "trigger":{"text":"...", "left_context":"...", "right_context":"..."}}]}'
-)
+SCHEMA_EVENTS_ONLY_CONTEXT = '{"events":[{"event_type":"...", "trigger":{"text":"...", "left_context":"...", "right_context":"..."}}]}'
 SCHEMA_WITH_ARGS_TEXT_ONLY = (
     '{"events":[{"event_type":"...", "trigger":{"text":"..."}, '
     '"arguments":[{"role":"...", "span":{"text":"..."}, "location_type":"..."}]}]}'
@@ -47,7 +45,9 @@ USER_TEMPLATE = (
 )
 
 
-def _build_system_prompt(*, events_only: bool, omit_offsets: bool, omit_context: bool = False) -> str:
+def _build_system_prompt(
+    *, events_only: bool, omit_offsets: bool, omit_context: bool = False
+) -> str:
     task_line = SYSTEM_PROMPT_EVENTS_ONLY if events_only else SYSTEM_PROMPT_WITH_ARGS
     if events_only and omit_offsets and omit_context:
         schema = SCHEMA_EVENTS_ONLY_TEXT_ONLY
@@ -86,7 +86,7 @@ def _build_system_prompt(*, events_only: bool, omit_offsets: bool, omit_context:
             "5) Use only the provided event labels.",
             "6) Extract only events that clearly match the provided event labels.",
             "7) Event spans must be the shortest exact trigger phrase, not a full clause or sentence.",
-            "8) If no valid event matches the provided labels, return {\"events\":[]}.",
+            '8) If no valid event matches the provided labels, return {"events":[]}.',
             "9) Do not paraphrase. Do not add unsupported events.",
         ]
     elif omit_offsets and omit_context:
@@ -139,7 +139,13 @@ def _build_system_prompt(*, events_only: bool, omit_offsets: bool, omit_context:
             "12) Never place event labels in the argument role field.",
         ]
 
-    return task_line + "Return JSON only with this shape:\n" + schema + "\nRules:\n" + "\n".join(rules)
+    return (
+        task_line
+        + "Return JSON only with this shape:\n"
+        + schema
+        + "\nRules:\n"
+        + "\n".join(rules)
+    )
 
 
 def build_user_prompt(
@@ -173,6 +179,7 @@ def build_user_prompt(
         argument_roles=_render_candidates(argument_roles),
         location_types=_render_candidates(location_types),
     )
+
 
 def build_messages(
     document: str,

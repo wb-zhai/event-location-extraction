@@ -60,6 +60,7 @@ except ImportError:
 
 try:
     from dotenv import dotenv_values
+
     _env = dotenv_values(Path(__file__).resolve().parents[2] / ".env")
 except ImportError:
     _env = {}
@@ -67,26 +68,30 @@ except ImportError:
 
 # ── Connection ────────────────────────────────────────────────────────────────
 
+
 def _e(key: str, fallback: str | None = None) -> str | None:
     return _env.get(key) or os.environ.get(key) or fallback
 
 
 def get_connection_params() -> dict:
     return {
-        "host":     _e("SQL_HOST",     _e("PGHOST", "localhost")),
-        "port":     _e("SQL_PORT",     _e("PGPORT", "5432")),
-        "dbname":   _e("SQL_DATABASE", _e("PGDATABASE")),
-        "user":     _e("SQL_USERNAME", _e("PGUSER")),
+        "host": _e("SQL_HOST", _e("PGHOST", "localhost")),
+        "port": _e("SQL_PORT", _e("PGPORT", "5432")),
+        "dbname": _e("SQL_DATABASE", _e("PGDATABASE")),
+        "user": _e("SQL_USERNAME", _e("PGUSER")),
         "password": _e("SQL_PASSWORD", _e("PGPASSWORD")),
     }
 
 
 # ── Input (local or GCS) ─────────────────────────────────────────────────────
 
+
 def parse_gcs_uri(uri: str) -> tuple[str, str]:
     parsed = urlparse(uri)
     if parsed.scheme != "gs" or not parsed.netloc or not parsed.path.strip("/"):
-        raise ValueError(f"Invalid GCS URI: {uri}. Expected gs://bucket/path/to/file.csv")
+        raise ValueError(
+            f"Invalid GCS URI: {uri}. Expected gs://bucket/path/to/file.csv"
+        )
     return parsed.netloc, parsed.path.lstrip("/")
 
 
@@ -117,7 +122,9 @@ def _expand_gcs_input(uri: str) -> list[str]:
     try:
         from google.cloud import storage
     except ImportError:
-        print("google-cloud-storage is not installed. Run: pip install google-cloud-storage")
+        print(
+            "google-cloud-storage is not installed. Run: pip install google-cloud-storage"
+        )
         sys.exit(1)
     bucket_name, blob_name = parse_gcs_uri(uri)
     client = storage.Client()
@@ -129,7 +136,8 @@ def _expand_gcs_input(uri: str) -> list[str]:
 
     prefix = blob_name + "/"
     csv_names = sorted(
-        blob.name for blob in client.list_blobs(bucket, prefix=prefix)
+        blob.name
+        for blob in client.list_blobs(bucket, prefix=prefix)
         if blob.name.endswith(".csv")
     )
     if not csv_names:
@@ -148,7 +156,9 @@ def open_input(path_or_uri: str) -> Generator[TextIO, None, None]:
         try:
             from google.cloud import storage
         except ImportError:
-            print("google-cloud-storage is not installed. Run: pip install google-cloud-storage")
+            print(
+                "google-cloud-storage is not installed. Run: pip install google-cloud-storage"
+            )
             sys.exit(1)
         bucket_name, blob_name = parse_gcs_uri(path_or_uri)
         client = storage.Client()
@@ -171,7 +181,16 @@ LABEL_ALIASES = {"label", "relevant", "is_relevant", "relevance", "relevance_lab
 VERSION_ALIASES = {"version", "relevance_version"}
 
 TRUE_VALUES = {"true", "t", "1", "yes", "y", "relevant"}
-FALSE_VALUES = {"false", "f", "0", "no", "n", "not relevant", "not_relevant", "irrelevant"}
+FALSE_VALUES = {
+    "false",
+    "f",
+    "0",
+    "no",
+    "n",
+    "not relevant",
+    "not_relevant",
+    "irrelevant",
+}
 
 
 def _normalize(cell: str) -> str:
@@ -186,8 +205,12 @@ def sniff_header(row: list[str]) -> dict[str, int] | None:
     label_idx = next((i for i, c in enumerate(normalized) if c in LABEL_ALIASES), None)
     if uri_idx is None or label_idx is None:
         return None
-    version_idx = next((i for i, c in enumerate(normalized) if c in VERSION_ALIASES), None)
-    recognized = {uri_idx, label_idx} | ({version_idx} if version_idx is not None else set())
+    version_idx = next(
+        (i for i, c in enumerate(normalized) if c in VERSION_ALIASES), None
+    )
+    recognized = {uri_idx, label_idx} | (
+        {version_idx} if version_idx is not None else set()
+    )
     if len(recognized) != len(row):
         raise ValueError(f"Unrecognized column(s) in header {row!r}")
     return {"uri": uri_idx, "label": label_idx, "version": version_idx}
@@ -218,7 +241,9 @@ def _chain(*iterables):
         yield from it
 
 
-def read_rows(path_or_uri: str, cli_version: str | None) -> Iterator[tuple[str, bool, str]]:
+def read_rows(
+    path_or_uri: str, cli_version: str | None
+) -> Iterator[tuple[str, bool, str]]:
     """Yield (article_uri, is_relevant, relevance_version) tuples for one file."""
     with open_input(path_or_uri) as f:
         reader = csv.reader(f)
@@ -231,7 +256,9 @@ def read_rows(path_or_uri: str, cli_version: str | None) -> Iterator[tuple[str, 
             columns = sniff_header(first_row)
             if columns is None:
                 columns = columns_from_width(first_row)
-                rows: Iterator[tuple[int, list[str]]] = _chain([(1, first_row)], enumerate(reader, start=2))
+                rows: Iterator[tuple[int, list[str]]] = _chain(
+                    [(1, first_row)], enumerate(reader, start=2)
+                )
             else:
                 rows = enumerate(reader, start=2)
         except ValueError as exc:
@@ -288,7 +315,9 @@ RETURNING 1
 """
 
 
-def flush_batch(cur, batch: dict[tuple[str, str], bool], on_conflict: str) -> tuple[int, int]:
+def flush_batch(
+    cur, batch: dict[tuple[str, str], bool], on_conflict: str
+) -> tuple[int, int]:
     """Upsert `batch` (keyed by (article_uri, relevance_version)). Returns
     (attempted, affected) row counts.
 
@@ -300,13 +329,16 @@ def flush_batch(cur, batch: dict[tuple[str, str], bool], on_conflict: str) -> tu
     """
     if not batch:
         return 0, 0
-    values = [(uri, version, is_relevant) for (uri, version), is_relevant in batch.items()]
+    values = [
+        (uri, version, is_relevant) for (uri, version), is_relevant in batch.items()
+    ]
     sql = _UPSERT_SQL_UPDATE if on_conflict == "update" else _UPSERT_SQL_SKIP
     returned = psycopg2.extras.execute_values(cur, sql, values, fetch=True)
     return len(values), len(returned)
 
 
 # ── Per-file processing ───────────────────────────────────────────────────────
+
 
 @dataclass
 class FileResult:
@@ -338,7 +370,9 @@ def process_file(
             conn = psycopg2.connect(**conn_params)
         cur = conn.cursor() if conn else None
         batch: dict[tuple[str, str], bool] = {}
-        for article_uri, is_relevant, relevance_version in read_rows(path_or_uri, version):
+        for article_uri, is_relevant, relevance_version in read_rows(
+            path_or_uri, version
+        ):
             result.read += 1
             batch[(article_uri, relevance_version)] = is_relevant
             if len(batch) >= batch_size:
@@ -348,7 +382,12 @@ def process_file(
                     result.affected += affected
                 batch.clear()
                 if show_progress:
-                    print(f"  read {result.read:,} rows\033[K", end="\r", file=sys.stderr, flush=True)
+                    print(
+                        f"  read {result.read:,} rows\033[K",
+                        end="\r",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
         if cur is not None:
             attempted, affected = flush_batch(cur, batch, on_conflict)
@@ -386,6 +425,7 @@ def print_file_result(result: FileResult, dry_run: bool, on_conflict: str) -> No
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Ingest article relevance CSVs into article_event_extraction.article_relevance.",
@@ -393,32 +433,41 @@ def parse_args() -> argparse.Namespace:
         epilog=__doc__,
     )
     parser.add_argument(
-        "inputs", nargs="+",
+        "inputs",
+        nargs="+",
         help="CSV file path(s) or folder(s), local or gs://bucket/path. A "
-             "folder/prefix is expanded to the .csv files it contains.",
+        "folder/prefix is expanded to the .csv files it contains.",
     )
     parser.add_argument(
-        "--version", default=None,
+        "--version",
+        default=None,
         help="Relevance version to use for rows/files that don't specify one.",
     )
     parser.add_argument(
-        "--batch-size", type=int, default=1000,
+        "--batch-size",
+        type=int,
+        default=1000,
         help="Rows per DB batch upsert (default 1000).",
     )
     parser.add_argument(
-        "--on-conflict", choices=["update", "skip"], default="update",
+        "--on-conflict",
+        choices=["update", "skip"],
+        default="update",
         help="On (relevance_version, article_uri) conflict: overwrite is_relevant "
-             "('update', default) or leave the existing row untouched ('skip').",
+        "('update', default) or leave the existing row untouched ('skip').",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Parse and validate the input files without connecting to the DB.",
     )
     parser.add_argument(
-        "--workers", type=int, default=1,
+        "--workers",
+        type=int,
+        default=1,
         help="Number of files to ingest concurrently, each on its own DB "
-             "connection (default 1 = sequential). Only safe when input files "
-             "don't share (relevance_version, article_uri) keys.",
+        "connection (default 1 = sequential). Only safe when input files "
+        "don't share (relevance_version, article_uri) keys.",
     )
     args = parser.parse_args()
     if args.batch_size < 1:
@@ -430,12 +479,15 @@ def parse_args() -> argparse.Namespace:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     args = parse_args()
 
     inputs = expand_inputs(args.inputs)
     if inputs != args.inputs:
-        print(f"Resolved {len(args.inputs)} input path(s) to {len(inputs)} CSV file(s).")
+        print(
+            f"Resolved {len(args.inputs)} input path(s) to {len(inputs)} CSV file(s)."
+        )
 
     conn_params = None
     if not args.dry_run:
@@ -455,8 +507,13 @@ def main() -> None:
     if workers <= 1:
         for path_or_uri in inputs:
             result = process_file(
-                path_or_uri, conn_params, args.version, args.batch_size,
-                args.on_conflict, args.dry_run, show_progress=True,
+                path_or_uri,
+                conn_params,
+                args.version,
+                args.batch_size,
+                args.on_conflict,
+                args.dry_run,
+                show_progress=True,
             )
             results.append(result)
             print_file_result(result, args.dry_run, args.on_conflict)
@@ -465,8 +522,14 @@ def main() -> None:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
                 executor.submit(
-                    process_file, path_or_uri, conn_params, args.version,
-                    args.batch_size, args.on_conflict, args.dry_run, False,
+                    process_file,
+                    path_or_uri,
+                    conn_params,
+                    args.version,
+                    args.batch_size,
+                    args.on_conflict,
+                    args.dry_run,
+                    False,
                 ): path_or_uri
                 for path_or_uri in inputs
             }

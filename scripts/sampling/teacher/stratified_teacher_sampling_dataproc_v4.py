@@ -38,11 +38,17 @@ from urllib.parse import urlparse
 from google.cloud import storage
 from pyspark.sql import SparkSession, Window
 from pyspark.sql.functions import (
-    col, countDistinct, from_unixtime, length, lit, row_number, when, xxhash64, year
+    col,
+    countDistinct,
+    from_unixtime,
+    length,
+    lit,
+    row_number,
+    when,
+    xxhash64,
+    year,
 )
-from pyspark.sql.types import (
-    StructType, StructField, StringType, IntegerType
-)
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 from flashtext2 import KeywordProcessor
 
 
@@ -60,38 +66,30 @@ EVENT_GROUP = {
     "water shortage": "weather and natural hazards",
     "pest infestation": "weather and natural hazards",
     "cyclone": "weather and natural hazards",
-
     # Food insecurity
     "food scarcity": "food insecurity",
     "famine": "food insecurity",
     "crop failure": "food insecurity",
-
     # Public health
     "disease spread": "public health",
-
     # Economic stress
     "economic decline": "economic stress",
     "poverty": "economic stress",
     "food price inflation": "economic stress",
     "trade disruption": "economic stress",
-
     # Environmental degradation
     "environmental degradation": "environment",
     "land degradation": "environment",
-
     # Displacement and migration
     "internal displacement": "displacement and migration",
     "refugee movement": "displacement and migration",
     "migrant influx": "displacement and migration",
     "shelter loss": "displacement and migration",
-
     # Humanitarian disruption
     "aid obstruction": "humanitarian disruption",
     "funding shortfall": "humanitarian disruption",
-
     # Political instability
     "governance breakdown": "political instability",
-
     # Conflict and security
     "armed violence": "conflict and security",
     "militant activity": "conflict and security",
@@ -168,20 +166,20 @@ def make_parser():
 
     # Optional upstream filters needed for full document compliance.
     ap.add_argument(
-        "--relevant-uris-path", default=None,
-        help="Optional Spark-readable path with a 'uri' column containing relevant articles."
+        "--relevant-uris-path",
+        default=None,
+        help="Optional Spark-readable path with a 'uri' column containing relevant articles.",
     )
     ap.add_argument(
-        "--relevant-format", default="parquet",
-        choices=("parquet", "json", "csv")
+        "--relevant-format", default="parquet", choices=("parquet", "json", "csv")
     )
     ap.add_argument(
-        "--geo-map-path", default=None,
-        help="Optional Spark-readable article->country table with columns uri,country."
+        "--geo-map-path",
+        default=None,
+        help="Optional Spark-readable article->country table with columns uri,country.",
     )
     ap.add_argument(
-        "--geo-map-format", default="parquet",
-        choices=("parquet", "json", "csv")
+        "--geo-map-format", default="parquet", choices=("parquet", "json", "csv")
     )
     return ap
 
@@ -195,7 +193,9 @@ def main():
 
     run_id = str(uuid.uuid4())
     pairs_path = f"{args.output_root.rstrip('/')}/teacher_pairs_{run_id}/"
-    diagnostics_path = f"{args.output_root.rstrip('/')}/teacher_sampling_diagnostics_{run_id}/"
+    diagnostics_path = (
+        f"{args.output_root.rstrip('/')}/teacher_sampling_diagnostics_{run_id}/"
+    )
     manifest_path = f"{args.output_root.rstrip('/')}/teacher_manifest_{run_id}/"
 
     spark = SparkSession.builder.getOrCreate()
@@ -244,13 +244,15 @@ def main():
     articles = spark.read.parquet(args.articles_glob)
 
     # Keep fields needed by the manifest and diagnostics.
-    keep_cols = [
-        "uri", "body", "published_at", "language", "title", "source_uri"
-    ]
+    keep_cols = ["uri", "body", "published_at", "language", "title", "source_uri"]
     available = set(articles.columns)
     keep_cols = [c for c in keep_cols if c in available]
 
-    if "uri" not in keep_cols or "body" not in keep_cols or "published_at" not in keep_cols:
+    if (
+        "uri" not in keep_cols
+        or "body" not in keep_cols
+        or "published_at" not in keep_cols
+    ):
         raise RuntimeError("Article parquet must contain uri, body, and published_at.")
 
     df = articles.select(*keep_cols)
@@ -258,12 +260,16 @@ def main():
     if "language" in df.columns:
         df = df.filter(col("language") == lit(args.language))
     else:
-        print("[language] WARNING: parquet has no language field; language filter not applied.")
+        print(
+            "[language] WARNING: parquet has no language field; language filter not applied."
+        )
 
     df = (
-        df.withColumn("pub_year", year(from_unixtime(col("published_at") / 1_000_000_000)))
-          .filter(col("pub_year") >= args.min_year)
-          .filter(col("body").isNotNull() & (length(col("body")) >= args.min_body_chars))
+        df.withColumn(
+            "pub_year", year(from_unixtime(col("published_at") / 1_000_000_000))
+        )
+        .filter(col("pub_year") >= args.min_year)
+        .filter(col("body").isNotNull() & (length(col("body")) >= args.min_body_chars))
     )
 
     # Document says to start from existing relevant articles.
@@ -284,15 +290,17 @@ def main():
     df = df.repartition(4000)
 
     if use_text_geo:
-        schema = StructType([
-            StructField("sampling_group", StringType(), False),
-            StructField("event_type", StringType(), False),
-            StructField("country", StringType(), False),
-            StructField("pub_year", IntegerType(), True),
-            StructField("pool", StringType(), False),
-            StructField("uri", StringType(), False),
-            StructField("matched_keyword", StringType(), False),
-        ])
+        schema = StructType(
+            [
+                StructField("sampling_group", StringType(), False),
+                StructField("event_type", StringType(), False),
+                StructField("country", StringType(), False),
+                StructField("pub_year", IntegerType(), True),
+                StructField("pool", StringType(), False),
+                StructField("uri", StringType(), False),
+                StructField("matched_keyword", StringType(), False),
+            ]
+        )
 
         def process_partition(rows):
             kp_event = KeywordProcessor(case_sensitive=False)
@@ -338,23 +346,30 @@ def main():
                     group = bc_groups.value[et]
                     for country in geos:
                         yield (
-                            group, et, country, row["pub_year"],
-                            pool, str(row["uri"]), matched_keyword
+                            group,
+                            et,
+                            country,
+                            row["pub_year"],
+                            pool,
+                            str(row["uri"]),
+                            matched_keyword,
                         )
 
         pairs_df = spark.createDataFrame(
             df.select("body", "uri", "pub_year").rdd.mapPartitions(process_partition),
-            schema=schema
+            schema=schema,
         )
     else:
-        event_schema = StructType([
-            StructField("sampling_group", StringType(), False),
-            StructField("event_type", StringType(), False),
-            StructField("pub_year", IntegerType(), True),
-            StructField("pool", StringType(), False),
-            StructField("uri", StringType(), False),
-            StructField("matched_keyword", StringType(), False),
-        ])
+        event_schema = StructType(
+            [
+                StructField("sampling_group", StringType(), False),
+                StructField("event_type", StringType(), False),
+                StructField("pub_year", IntegerType(), True),
+                StructField("pool", StringType(), False),
+                StructField("uri", StringType(), False),
+                StructField("matched_keyword", StringType(), False),
+            ]
+        )
 
         def process_partition_no_geo(rows):
             kp_event = KeywordProcessor(case_sensitive=False)
@@ -389,13 +404,19 @@ def main():
                         else "strict"
                     )
                     yield (
-                        bc_groups.value[et], et, row["pub_year"], pool,
-                        str(row["uri"]), sorted(terms)[0]
+                        bc_groups.value[et],
+                        et,
+                        row["pub_year"],
+                        pool,
+                        str(row["uri"]),
+                        sorted(terms)[0],
                     )
 
         event_df = spark.createDataFrame(
-            df.select("body", "uri", "pub_year").rdd.mapPartitions(process_partition_no_geo),
-            schema=event_schema
+            df.select("body", "uri", "pub_year").rdd.mapPartitions(
+                process_partition_no_geo
+            ),
+            schema=event_schema,
         )
 
         reader = spark.read.format(args.geo_map_format)
@@ -408,22 +429,24 @@ def main():
             .dropDuplicates(["uri", "country"])
         )
         pairs_df = event_df.join(geo, "uri", "inner").select(
-            "sampling_group", "event_type", "country", "pub_year",
-            "pool", "uri", "matched_keyword"
+            "sampling_group",
+            "event_type",
+            "country",
+            "pub_year",
+            "pool",
+            "uri",
+            "matched_keyword",
         )
 
     # One row per article/stratum; preserve strict if duplicate evidence yields both.
     dedup_w = Window.partitionBy(
         "sampling_group", "event_type", "country", "uri"
-    ).orderBy(
-        when(col("pool") == "strict", 0).otherwise(1),
-        col("matched_keyword")
-    )
+    ).orderBy(when(col("pool") == "strict", 0).otherwise(1), col("matched_keyword"))
     pairs_df = (
         pairs_df.withColumn("_d", row_number().over(dedup_w))
-                .filter(col("_d") == 1)
-                .drop("_d")
-                .cache()
+        .filter(col("_d") == 1)
+        .drop("_d")
+        .cache()
     )
 
     print("[pairs] writing candidate pairs:", pairs_path)
@@ -432,16 +455,16 @@ def main():
     # Availability at each level. These are small enough to collect.
     group_caps_rows = (
         pairs_df.groupBy("sampling_group")
-                .agg(countDistinct("uri").alias("n"))
-                .collect()
+        .agg(countDistinct("uri").alias("n"))
+        .collect()
     )
     group_caps = {r["sampling_group"]: int(r["n"]) for r in group_caps_rows}
     group_quotas = allocate_even_with_caps(args.total_budget, group_caps)
 
     type_caps_rows = (
         pairs_df.groupBy("sampling_group", "event_type")
-                .agg(countDistinct("uri").alias("n"))
-                .collect()
+        .agg(countDistinct("uri").alias("n"))
+        .collect()
     )
     type_caps = defaultdict(dict)
     for r in type_caps_rows:
@@ -455,8 +478,8 @@ def main():
 
     geo_caps_rows = (
         pairs_df.groupBy("sampling_group", "event_type", "country")
-                .agg(countDistinct("uri").alias("n"))
-                .collect()
+        .agg(countDistinct("uri").alias("n"))
+        .collect()
     )
     geo_caps = defaultdict(dict)
     for r in geo_caps_rows:
@@ -473,35 +496,38 @@ def main():
         for (g, et, c), q in geo_quotas.items()
         if q > 0
     ]
-    quota_schema = StructType([
-        StructField("sampling_group", StringType(), False),
-        StructField("event_type", StringType(), False),
-        StructField("country", StringType(), False),
-        StructField("quota", IntegerType(), False),
-        StructField("candidate_count", IntegerType(), False),
-    ])
+    quota_schema = StructType(
+        [
+            StructField("sampling_group", StringType(), False),
+            StructField("event_type", StringType(), False),
+            StructField("country", StringType(), False),
+            StructField("quota", IntegerType(), False),
+            StructField("candidate_count", IntegerType(), False),
+        ]
+    )
     quota_df = spark.createDataFrame(quota_rows, schema=quota_schema)
 
     # Build only an oversized candidate pool around the final quotas.
-    ranked_w = Window.partitionBy(
-        "sampling_group", "event_type", "country"
-    ).orderBy(
+    ranked_w = Window.partitionBy("sampling_group", "event_type", "country").orderBy(
         when(col("pool") == "strict", 0).otherwise(1),
-        xxhash64(col("uri"), lit(args.seed))
+        xxhash64(col("uri"), lit(args.seed)),
     )
 
     oversized = (
-        pairs_df.join(
-            quota_df,
-            ["sampling_group", "event_type", "country"],
-            "inner"
-        )
+        pairs_df.join(quota_df, ["sampling_group", "event_type", "country"], "inner")
         .withColumn("_rank", row_number().over(ranked_w))
         .filter(col("_rank") <= col("quota") * lit(args.oversample))
         .select(
-            "sampling_group", "event_type", "country", "pub_year",
-            "pool", "uri", "matched_keyword", "quota",
-            "candidate_count", "_rank"
+            "sampling_group",
+            "event_type",
+            "country",
+            "pub_year",
+            "pool",
+            "uri",
+            "matched_keyword",
+            "quota",
+            "candidate_count",
+            "_rank",
         )
     )
 
@@ -517,10 +543,7 @@ def main():
     # Already ranked strict-first in Spark, but make ordering explicit.
     for key in by_stratum:
         by_stratum[key].sort(
-            key=lambda r: (
-                0 if r["pool"] == "strict" else 1,
-                int(r["_rank"])
-            )
+            key=lambda r: (0 if r["pool"] == "strict" else 1, int(r["_rank"]))
         )
 
     selected_ids = set()
@@ -549,8 +572,7 @@ def main():
 
     # First pass: exact geography quotas. Rarest strata claim articles first.
     strata_order = sorted(
-        geo_quotas,
-        key=lambda k: (geo_caps[k[:2]].get(k[2], 0), k[0], k[1], k[2])
+        geo_quotas, key=lambda k: (geo_caps[k[:2]].get(k[2], 0), k[0], k[1], k[2])
     )
     for key in strata_order:
         need = geo_quotas[key] - selected_by_stratum[key]
@@ -570,7 +592,7 @@ def main():
             key=lambda r: (
                 0 if r["pool"] == "strict" else 1,
                 int(r["candidate_count"]),
-                int(r["_rank"])
+                int(r["_rank"]),
             )
         )
         take_from_rows(candidates, deficit)
@@ -588,7 +610,7 @@ def main():
             key=lambda r: (
                 0 if r["pool"] == "strict" else 1,
                 int(r["candidate_count"]),
-                int(r["_rank"])
+                int(r["_rank"]),
             )
         )
         take_from_rows(candidates, deficit)
@@ -604,29 +626,35 @@ def main():
                 int(r["_rank"]),
                 r["sampling_group"],
                 r["event_type"],
-                r["country"]
+                r["country"],
             )
         )
         take_from_rows(all_candidates, global_deficit)
 
     selected_records = [
         (
-            r["sampling_group"], r["event_type"], r["country"],
+            r["sampling_group"],
+            r["event_type"],
+            r["country"],
             int(r["pub_year"]) if r["pub_year"] is not None else None,
-            r["pool"], r["uri"], r["matched_keyword"]
+            r["pool"],
+            r["uri"],
+            r["matched_keyword"],
         )
         for r in selected
     ]
 
-    selected_schema = StructType([
-        StructField("sampling_group", StringType(), False),
-        StructField("sampling_event_type", StringType(), False),
-        StructField("geography_field", StringType(), False),
-        StructField("pub_year", IntegerType(), True),
-        StructField("pool", StringType(), False),
-        StructField("article_id", StringType(), False),
-        StructField("matched_keyword", StringType(), False),
-    ])
+    selected_schema = StructType(
+        [
+            StructField("sampling_group", StringType(), False),
+            StructField("sampling_event_type", StringType(), False),
+            StructField("geography_field", StringType(), False),
+            StructField("pub_year", IntegerType(), True),
+            StructField("pool", StringType(), False),
+            StructField("article_id", StringType(), False),
+            StructField("matched_keyword", StringType(), False),
+        ]
+    )
     selected_df = spark.createDataFrame(selected_records, schema=selected_schema)
 
     # Join article metadata/body for Gemini handoff.
@@ -634,14 +662,9 @@ def main():
     meta_cols = [c for c in meta_cols if c in df.columns]
     bodies = df.select(*meta_cols).dropDuplicates(["uri"])
 
-    manifest = (
-        selected_df.join(
-            bodies,
-            selected_df.article_id == bodies.uri,
-            "inner"
-        )
-        .drop("uri")
-    )
+    manifest = selected_df.join(
+        bodies, selected_df.article_id == bodies.uri, "inner"
+    ).drop("uri")
 
     print("[manifest] writing:", manifest_path)
     manifest.write.mode("overwrite").parquet(manifest_path)
@@ -649,24 +672,26 @@ def main():
     # Diagnostics required by the method document.
     diag_group = (
         manifest.groupBy("sampling_group")
-                .agg(countDistinct("article_id").alias("selected_articles"))
-                .withColumn("diagnostic_level", lit("group"))
+        .agg(countDistinct("article_id").alias("selected_articles"))
+        .withColumn("diagnostic_level", lit("group"))
     )
     diag_type = (
         manifest.groupBy("sampling_group", "sampling_event_type")
-                .agg(countDistinct("article_id").alias("selected_articles"))
-                .withColumn("diagnostic_level", lit("event_type"))
+        .agg(countDistinct("article_id").alias("selected_articles"))
+        .withColumn("diagnostic_level", lit("event_type"))
     )
     diag_geo = (
         manifest.groupBy("sampling_group", "sampling_event_type", "geography_field")
-                .agg(countDistinct("article_id").alias("selected_articles"))
-                .withColumn("diagnostic_level", lit("event_type_x_geography"))
+        .agg(countDistinct("article_id").alias("selected_articles"))
+        .withColumn("diagnostic_level", lit("event_type_x_geography"))
     )
 
     # Write separate subfolders to avoid schema-union ambiguity.
     diag_group.write.mode("overwrite").parquet(diagnostics_path + "by_group/")
     diag_type.write.mode("overwrite").parquet(diagnostics_path + "by_event_type/")
-    diag_geo.write.mode("overwrite").parquet(diagnostics_path + "by_event_type_geography/")
+    diag_geo.write.mode("overwrite").parquet(
+        diagnostics_path + "by_event_type_geography/"
+    )
 
     print()
     print("DONE")
@@ -678,7 +703,9 @@ def main():
     if not args.relevant_uris_path:
         print("WARNING: relevance filter was not applied.")
     if not args.geo_map_path:
-        print("WARNING: geography used text matching, not authoritative pre-existing metadata.")
+        print(
+            "WARNING: geography used text matching, not authoritative pre-existing metadata."
+        )
 
 
 if __name__ == "__main__":

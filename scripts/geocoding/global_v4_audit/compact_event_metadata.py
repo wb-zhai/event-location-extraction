@@ -11,13 +11,17 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 
-SRC_ROOT = Path(
-    "outputs/geography/global_v4_audit/postprocessing_v1"
-)
+SRC_ROOT = Path("outputs/geography/global_v4_audit/postprocessing_v1")
 
-OUT_ROOT = Path(
-    "/home/bonadossou/global_v4_work/"
-    "compact_event_metadata_v1"
+OUT_ROOT = (
+    Path(
+        os.environ.get(
+            "GLOBAL_V4_WORK_DIR",
+            Path(__file__).resolve().parents[2]
+            / "outputs/geography/global_v4_audit/work",
+        )
+    ).expanduser()
+    / "compact_event_metadata_v1"
 )
 
 ARTICLE_DIR = OUT_ROOT / "articles"
@@ -39,40 +43,39 @@ EXPECTED_CONSTANTS = {
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
-article_schema = pa.schema([
-    ("id", pa.string()),
-    ("shard", pa.int16()),
-    ("language", pa.string()),
-    ("publish_date", pa.string()),
-    ("source_gcs_path", pa.string()),
-])
+article_schema = pa.schema(
+    [
+        ("id", pa.string()),
+        ("shard", pa.int16()),
+        ("language", pa.string()),
+        ("publish_date", pa.string()),
+        ("source_gcs_path", pa.string()),
+    ]
+)
 
 
 # event_key is stored reversibly as the raw 32 SHA-256 bytes,
 # instead of 64 hexadecimal characters.
-event_schema = pa.schema([
-    ("event_key", pa.binary(32)),
-    ("id", pa.string()),
-    ("shard", pa.int16()),
-    ("event_index", pa.int32()),
-
-    ("raw_event_time", pa.string()),
-
-    ("count", pa.string()),
-    ("syntax_kind", pa.string()),
-    ("parse_status", pa.string()),
-    ("review_reason", pa.string()),
-
-    ("start_token", pa.string()),
-    ("end_token", pa.string()),
-    ("start_precision", pa.string()),
-    ("end_precision", pa.string()),
-
-    ("lower_bound_date", pa.string()),
-    ("upper_bound_date", pa.string()),
-
-    ("source_verified", pa.string()),
-])
+event_schema = pa.schema(
+    [
+        ("event_key", pa.binary(32)),
+        ("id", pa.string()),
+        ("shard", pa.int16()),
+        ("event_index", pa.int32()),
+        ("raw_event_time", pa.string()),
+        ("count", pa.string()),
+        ("syntax_kind", pa.string()),
+        ("parse_status", pa.string()),
+        ("review_reason", pa.string()),
+        ("start_token", pa.string()),
+        ("end_token", pa.string()),
+        ("start_precision", pa.string()),
+        ("end_precision", pa.string()),
+        ("lower_bound_date", pa.string()),
+        ("upper_bound_date", pa.string()),
+        ("source_verified", pa.string()),
+    ]
+)
 
 
 ARTICLE_DICT_COLS = [
@@ -131,30 +134,16 @@ def write_batch(writer, rows, schema):
 def process_shard(i):
     shard = f"shard-{i:03d}"
 
-    src = (
-        SRC_ROOT
-        / shard
-        / "event_metadata.jsonl"
-    )
+    src = SRC_ROOT / shard / "event_metadata.jsonl"
 
     if not src.is_file():
-        raise RuntimeError(
-            f"missing metadata file: {src}"
-        )
+        raise RuntimeError(f"missing metadata file: {src}")
 
-    article_final = (
-        ARTICLE_DIR / f"{shard}.parquet"
-    )
-    event_final = (
-        EVENT_DIR / f"{shard}.parquet"
-    )
+    article_final = ARTICLE_DIR / f"{shard}.parquet"
+    event_final = EVENT_DIR / f"{shard}.parquet"
 
-    article_tmp = Path(
-        str(article_final) + ".tmp"
-    )
-    event_tmp = Path(
-        str(event_final) + ".tmp"
-    )
+    article_tmp = Path(str(article_final) + ".tmp")
+    event_tmp = Path(str(event_final) + ".tmp")
 
     article_tmp.unlink(missing_ok=True)
     event_tmp.unlink(missing_ok=True)
@@ -197,7 +186,6 @@ def process_shard(i):
             "r",
             encoding="utf-8",
         ) as f:
-
             for row_num, line in enumerate(f, 1):
                 x = json.loads(line)
 
@@ -207,9 +195,7 @@ def process_shard(i):
                 # Proven global constants
                 # --------------------------------
 
-                for field, expected in (
-                    EXPECTED_CONSTANTS.items()
-                ):
+                for field, expected in EXPECTED_CONSTANTS.items():
                     if x.get(field) != expected:
                         raise RuntimeError(
                             f"{shard} row {row_num}: "
@@ -221,8 +207,7 @@ def process_shard(i):
 
                 if changes != []:
                     raise RuntimeError(
-                        f"{shard} row {row_num}: "
-                        f"changes is not []: {changes!r}"
+                        f"{shard} row {row_num}: changes is not []: {changes!r}"
                     )
 
                 # --------------------------------
@@ -236,31 +221,22 @@ def process_shard(i):
 
                 if int(x.get("shard", -1)) != i:
                     raise RuntimeError(
-                        f"{shard} row {row_num}: "
-                        f"metadata shard={x.get('shard')!r}"
+                        f"{shard} row {row_num}: metadata shard={x.get('shard')!r}"
                     )
 
                 event_index = x.get("event_index")
 
-                if (
-                    not isinstance(event_index, int)
-                    or event_index < 0
-                ):
+                if not isinstance(event_index, int) or event_index < 0:
                     raise RuntimeError(
-                        f"{shard} row {row_num}: "
-                        f"bad event_index={event_index!r}"
+                        f"{shard} row {row_num}: bad event_index={event_index!r}"
                     )
 
                 event_key = x.get("event_key")
 
-                if (
-                    not isinstance(event_key, str)
-                    or not HEX64.fullmatch(event_key)
-                ):
+                if not isinstance(event_key, str) or not HEX64.fullmatch(event_key):
                     stats["missing_or_invalid_event_key"] += 1
                     raise RuntimeError(
-                        f"{shard} row {row_num}: "
-                        f"invalid event_key={event_key!r}"
+                        f"{shard} row {row_num}: invalid event_key={event_key!r}"
                     )
 
                 # --------------------------------
@@ -270,31 +246,27 @@ def process_shard(i):
                 article_values = {
                     "id": article_id,
                     "shard": i,
-                    "language":
-                        require_string_or_none(
-                            x.get("language"),
-                            "language",
-                            shard,
-                            row_num,
-                        ),
-                    "publish_date":
-                        require_string_or_none(
-                            x.get("publish_date"),
-                            "publish_date",
-                            shard,
-                            row_num,
-                        ),
-                    "source_gcs_path":
-                        require_string_or_none(
-                            x.get("source_gcs_path"),
-                            "source_gcs_path",
-                            shard,
-                            row_num,
-                        ),
+                    "language": require_string_or_none(
+                        x.get("language"),
+                        "language",
+                        shard,
+                        row_num,
+                    ),
+                    "publish_date": require_string_or_none(
+                        x.get("publish_date"),
+                        "publish_date",
+                        shard,
+                        row_num,
+                    ),
+                    "source_gcs_path": require_string_or_none(
+                        x.get("source_gcs_path"),
+                        "source_gcs_path",
+                        shard,
+                        row_num,
+                    ),
                 }
 
                 if current_id != article_id:
-
                     if current_id is not None:
                         closed_ids.add(current_id)
 
@@ -308,9 +280,7 @@ def process_shard(i):
                     current_id = article_id
                     current_article = article_values
 
-                    article_rows.append(
-                        article_values
-                    )
+                    article_rows.append(article_values)
 
                     stats["articles"] += 1
 
@@ -347,10 +317,7 @@ def process_shard(i):
                 t = x.get("temporal")
 
                 if not isinstance(t, dict):
-                    raise RuntimeError(
-                        f"{shard} row {row_num}: "
-                        "temporal is not a dict"
-                    )
+                    raise RuntimeError(f"{shard} row {row_num}: temporal is not a dict")
 
                 raw_value = require_string_or_none(
                     t.get("raw_value"),
@@ -392,31 +359,26 @@ def process_shard(i):
                 review_reason[rr] += 1
                 source_verified[verified] += 1
 
-                event_rows.append({
-                    "event_key":
-                        bytes.fromhex(event_key),
-                    "id": article_id,
-                    "shard": i,
-                    "event_index": event_index,
-                    "raw_event_time": raw_time,
-
-                    "count": count,
-                    "syntax_kind": syntax_kind,
-                    "parse_status": parse_status,
-                    "review_reason": rr,
-
-                    "start_token": start_token,
-                    "end_token": end_token,
-                    "start_precision":
-                        start_precision,
-                    "end_precision":
-                        end_precision,
-
-                    "lower_bound_date": lower,
-                    "upper_bound_date": upper,
-
-                    "source_verified": verified,
-                })
+                event_rows.append(
+                    {
+                        "event_key": bytes.fromhex(event_key),
+                        "id": article_id,
+                        "shard": i,
+                        "event_index": event_index,
+                        "raw_event_time": raw_time,
+                        "count": count,
+                        "syntax_kind": syntax_kind,
+                        "parse_status": parse_status,
+                        "review_reason": rr,
+                        "start_token": start_token,
+                        "end_token": end_token,
+                        "start_precision": start_precision,
+                        "end_precision": end_precision,
+                        "lower_bound_date": lower,
+                        "upper_bound_date": upper,
+                        "source_verified": verified,
+                    }
+                )
 
                 stats["events"] += 1
 
@@ -456,24 +418,18 @@ def process_shard(i):
     # Verify Parquet footer row counts
     # --------------------------------
 
-    a_rows = pq.ParquetFile(
-        article_tmp
-    ).metadata.num_rows
+    a_rows = pq.ParquetFile(article_tmp).metadata.num_rows
 
-    e_rows = pq.ParquetFile(
-        event_tmp
-    ).metadata.num_rows
+    e_rows = pq.ParquetFile(event_tmp).metadata.num_rows
 
     if a_rows != stats["articles"]:
         raise RuntimeError(
-            f"{shard}: article parquet rows "
-            f"{a_rows:,} != {stats['articles']:,}"
+            f"{shard}: article parquet rows {a_rows:,} != {stats['articles']:,}"
         )
 
     if e_rows != stats["events"]:
         raise RuntimeError(
-            f"{shard}: event parquet rows "
-            f"{e_rows:,} != {stats['events']:,}"
+            f"{shard}: event parquet rows {e_rows:,} != {stats['events']:,}"
         )
 
     os.replace(article_tmp, article_final)
@@ -484,40 +440,27 @@ def process_shard(i):
         "shard": i,
         "articles": stats["articles"],
         "events": stats["events"],
-        "metadata_rows":
-            stats["metadata_rows"],
-        "missing_or_invalid_event_key":
-            stats[
-                "missing_or_invalid_event_key"
-            ],
-        "raw_value_mismatch":
-            stats["raw_value_mismatch"],
-        "temporal_count":
-            dict(temporal_count),
-        "review_reason":
-            dict(review_reason),
-        "source_verified":
-            dict(source_verified),
-        "article_parquet":
-            str(article_final),
-        "event_parquet":
-            str(event_final),
-        "article_bytes":
-            article_final.stat().st_size,
-        "event_bytes":
-            event_final.stat().st_size,
+        "metadata_rows": stats["metadata_rows"],
+        "missing_or_invalid_event_key": stats["missing_or_invalid_event_key"],
+        "raw_value_mismatch": stats["raw_value_mismatch"],
+        "temporal_count": dict(temporal_count),
+        "review_reason": dict(review_reason),
+        "source_verified": dict(source_verified),
+        "article_parquet": str(article_final),
+        "event_parquet": str(event_final),
+        "article_bytes": article_final.stat().st_size,
+        "event_bytes": event_final.stat().st_size,
     }
 
-    audit_path = (
-        AUDIT_DIR / f"{shard}.audit.json"
-    )
+    audit_path = AUDIT_DIR / f"{shard}.audit.json"
 
     audit_path.write_text(
         json.dumps(
             audit,
             ensure_ascii=False,
             indent=2,
-        ) + "\n",
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -538,14 +481,8 @@ def main():
 
     completed = 0
 
-    with ProcessPoolExecutor(
-        max_workers=2
-    ) as ex:
-
-        futures = {
-            ex.submit(process_shard, i): i
-            for i in range(200)
-        }
+    with ProcessPoolExecutor(max_workers=2) as ex:
+        futures = {ex.submit(process_shard, i): i for i in range(200)}
 
         for fut in as_completed(futures):
             i = futures[fut]
@@ -553,34 +490,20 @@ def main():
             try:
                 a = fut.result()
             except Exception as e:
-                print(
-                    f"FAILED shard-{i:03d}: {e}"
-                )
+                print(f"FAILED shard-{i:03d}: {e}")
                 raise
 
             completed += 1
 
             total["articles"] += a["articles"]
             total["events"] += a["events"]
-            total["metadata_rows"] += (
-                a["metadata_rows"]
-            )
-            total["article_bytes"] += (
-                a["article_bytes"]
-            )
-            total["event_bytes"] += (
-                a["event_bytes"]
-            )
+            total["metadata_rows"] += a["metadata_rows"]
+            total["article_bytes"] += a["article_bytes"]
+            total["event_bytes"] += a["event_bytes"]
 
-            count_dist.update(
-                a["temporal_count"]
-            )
-            review_dist.update(
-                a["review_reason"]
-            )
-            verified_dist.update(
-                a["source_verified"]
-            )
+            count_dist.update(a["temporal_count"])
+            review_dist.update(a["review_reason"])
+            verified_dist.update(a["source_verified"])
 
             print(
                 f"[{completed:03d}/200] "
@@ -590,91 +513,58 @@ def main():
             )
 
     if total["articles"] != 34_388_866:
-        raise RuntimeError(
-            f"expected 34,388,866 articles, "
-            f"got {total['articles']:,}"
-        )
+        raise RuntimeError(f"expected 34,388,866 articles, got {total['articles']:,}")
 
     if total["events"] != 128_267_182:
-        raise RuntimeError(
-            f"expected 128,267,182 events, "
-            f"got {total['events']:,}"
-        )
+        raise RuntimeError(f"expected 128,267,182 events, got {total['events']:,}")
 
     if total["metadata_rows"] != 128_267_182:
         raise RuntimeError(
-            f"expected 128,267,182 metadata rows, "
-            f"got {total['metadata_rows']:,}"
+            f"expected 128,267,182 metadata rows, got {total['metadata_rows']:,}"
         )
 
     manifest = {
         "status": "PASS",
-        "version":
-            "compact_event_metadata_v1",
+        "version": "compact_event_metadata_v1",
         "shards": 200,
-
-        "articles":
-            total["articles"],
-        "events":
-            total["events"],
-        "metadata_rows":
-            total["metadata_rows"],
-
+        "articles": total["articles"],
+        "events": total["events"],
+        "metadata_rows": total["metadata_rows"],
         "removed_global_constants": {
-            "schema_status":
-                "structurally_valid",
-            "grounding_status":
-                "not_verified",
-            "clustering_time_status":
-                "source_review_required",
+            "schema_status": "structurally_valid",
+            "grounding_status": "not_verified",
+            "clustering_time_status": "source_review_required",
             "changes": [],
         },
-
         "normalizations": {
-            "temporal.raw_value":
-                "omitted because validated "
-                "equal to raw_event_time "
-                "for every row",
-            "event_key":
-                "SHA-256 hex encoded as "
-                "reversible 32-byte fixed binary; "
-                "recover with event_key.hex()",
-            "article_metadata":
-                "language, publish_date and "
-                "source_gcs_path stored once "
-                "per article after validating "
-                "within-article constancy",
-            "event_index":
-                "original pre-quarantine "
-                "event index",
+            "temporal.raw_value": "omitted because validated "
+            "equal to raw_event_time "
+            "for every row",
+            "event_key": "SHA-256 hex encoded as "
+            "reversible 32-byte fixed binary; "
+            "recover with event_key.hex()",
+            "article_metadata": "language, publish_date and "
+            "source_gcs_path stored once "
+            "per article after validating "
+            "within-article constancy",
+            "event_index": "original pre-quarantine event index",
         },
-
-        "temporal_count_distribution":
-            dict(count_dist),
-
-        "review_reason_distribution":
-            dict(review_dist),
-
-        "source_verified_distribution":
-            dict(verified_dist),
-
-        "article_bytes":
-            total["article_bytes"],
-
-        "event_bytes":
-            total["event_bytes"],
+        "temporal_count_distribution": dict(count_dist),
+        "review_reason_distribution": dict(review_dist),
+        "source_verified_distribution": dict(verified_dist),
+        "article_bytes": total["article_bytes"],
+        "event_bytes": total["event_bytes"],
     }
 
-    manifest_path = (
-        OUT_ROOT / "MANIFEST.json"
-    )
+    manifest_path = OUT_ROOT / "MANIFEST.json"
 
     manifest_path.write_text(
         json.dumps(
             manifest,
             ensure_ascii=False,
             indent=2,
-        ) + "\n",
+        )
+        + "\n",
         encoding="utf-8",
     )
 

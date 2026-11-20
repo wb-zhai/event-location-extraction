@@ -193,6 +193,7 @@ except ImportError:
 
 try:
     from dotenv import dotenv_values
+
     # This file lives at <repo_root>/scripts/download/sample_from_db.py, i.e.
     # two directories below the repo root -> parents[2].
     _env = dotenv_values(Path(__file__).resolve().parents[2] / ".env")
@@ -202,21 +203,23 @@ except ImportError:
 
 # ── Connection ────────────────────────────────────────────────────────────────
 
+
 def _e(key: str, fallback: str | None = None) -> str | None:
     return _env.get(key) or os.environ.get(key) or fallback
 
 
 def get_connection_params() -> dict:
     return {
-        "host":     _e("SQL_HOST",     _e("PGHOST", "localhost")),
-        "port":     _e("SQL_PORT",     _e("PGPORT", "5432")),
-        "dbname":   _e("SQL_DATABASE", _e("PGDATABASE")),
-        "user":     _e("SQL_USERNAME", _e("PGUSER")),
+        "host": _e("SQL_HOST", _e("PGHOST", "localhost")),
+        "port": _e("SQL_PORT", _e("PGPORT", "5432")),
+        "dbname": _e("SQL_DATABASE", _e("PGDATABASE")),
+        "user": _e("SQL_USERNAME", _e("PGUSER")),
         "password": _e("SQL_PASSWORD", _e("PGPASSWORD")),
     }
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
+
 
 def parse_month(value: str) -> date:
     try:
@@ -230,92 +233,152 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Download a country-stratified relevant/not-relevant sample from the DB.",
     )
-    parser.add_argument("--n", type=int, required=True,
-        help="Total number of articles to download.")
-    parser.add_argument("--output", "-o", required=True,
-        help="Output JSONL path (local or gs://bucket/path).")
-    parser.add_argument("--language", type=str, default="eng",
+    parser.add_argument(
+        "--n", type=int, required=True, help="Total number of articles to download."
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        required=True,
+        help="Output JSONL path (local or gs://bucket/path).",
+    )
+    parser.add_argument(
+        "--language",
+        type=str,
+        default="eng",
         help="article_downloads language filter (default eng). Confirmed during "
-             "discovery (phase 1b) for both the is_relevant=true and =false pools "
-             "before either is selectable. Only --language eng builds the relevant "
-             "pool from a risk-factor-category-balanced draw and round-robins over "
-             "those categories in phase 3 (see --tag-method-id, --risk-factor-k) — "
-             "other languages get a uniform-random relevant pool (see "
-             "--relevant-oversample) with plain country/year stratification.")
-    parser.add_argument("--pos-ratio", type=float, default=0.7,
+        "discovery (phase 1b) for both the is_relevant=true and =false pools "
+        "before either is selectable. Only --language eng builds the relevant "
+        "pool from a risk-factor-category-balanced draw and round-robins over "
+        "those categories in phase 3 (see --tag-method-id, --risk-factor-k) — "
+        "other languages get a uniform-random relevant pool (see "
+        "--relevant-oversample) with plain country/year stratification.",
+    )
+    parser.add_argument(
+        "--pos-ratio",
+        type=float,
+        default=0.7,
         help="Fraction of articles that are is_relevant=true (default 0.7). "
-             "Those are geo-tagged and stratified by country/year; the rest "
-             "are sampled uniformly at random from is_relevant=false candidates.")
-    parser.add_argument("--relevance-version", type=str, default="any",
+        "Those are geo-tagged and stratified by country/year; the rest "
+        "are sampled uniformly at random from is_relevant=false candidates.",
+    )
+    parser.add_argument(
+        "--relevance-version",
+        type=str,
+        default="any",
         help="article_relevance.relevance_version to sample from (e.g. "
-             "gemini-2.5-flash-v1). Default 'any' fetches every distinct version in "
-             "the table (fetch_relevance_versions()) and keeps each article's most "
-             "recently created verdict across them — pin to a specific version to "
-             "fetch just that one instead. Discovery starts from this table directly "
-             "(phase 1a), not from article_downloads, which is what keeps the pool "
-             "small from the start (see module docstring).")
-    parser.add_argument("--tag-method-id", type=int, default=1,
+        "gemini-2.5-flash-v1). Default 'any' fetches every distinct version in "
+        "the table (fetch_relevance_versions()) and keeps each article's most "
+        "recently created verdict across them — pin to a specific version to "
+        "fetch just that one instead. Discovery starts from this table directly "
+        "(phase 1a), not from article_downloads, which is what keeps the pool "
+        "small from the start (see module docstring).",
+    )
+    parser.add_argument(
+        "--tag-method-id",
+        type=int,
+        default=1,
         help="tag_method_id filter for article_risk_factor_tags (default 1). Only "
-             "used when --language eng: selects which tagging pipeline's rows phase "
-             "1a' draws the risk-factor-balanced candidate pool from, and which "
-             "fetch_selected_risk_factors() re-probes post-selection for the "
-             "output's 'risk_factors' field. Ignored for other languages, which "
-             "have no coverage in that table yet.")
-    parser.add_argument("--risk-factor-k", type=int, default=10_000,
+        "used when --language eng: selects which tagging pipeline's rows phase "
+        "1a' draws the risk-factor-balanced candidate pool from, and which "
+        "fetch_selected_risk_factors() re-probes post-selection for the "
+        "output's 'risk_factors' field. Ignored for other languages, which "
+        "have no coverage in that table yet.",
+    )
+    parser.add_argument(
+        "--risk-factor-k",
+        type=int,
+        default=10_000,
         help="Raw per-risk-factor-category draw size for phase 1a' (default 10000): "
-             "up to this many article_uris are pulled per category directly from "
-             "article_risk_factor_tags, BEFORE any is_relevant/--language/date/geo "
-             "filtering narrows it down (see module docstring's phase 1a'). Only "
-             "used for --language eng — it's what replaces --relevant-oversample's "
-             "uniform random slice for eng specifically, so that a category with "
-             "even a handful of relevant articles overall still gets a chance at "
-             "representation instead of depending on a lucky random draw. Raising "
-             "it doesn't meaningfully add to 1a''s DB cost (that query scans the "
-             "whole table once regardless of K), but does add to 1b/1c's cost "
-             "downstream, since more candidates survive to be confirmed/geo-tagged. "
-             "If a category's candidate pool still ends up small in the output, "
-             "that generally means the category is just genuinely rare in the DB, "
-             "not that K needs raising.")
-    parser.add_argument("--seed", type=int, default=42,
-        help="Seed for deterministic sampling (default 42).")
-    parser.add_argument("--not-relevant-oversample", type=float, default=5.0,
+        "up to this many article_uris are pulled per category directly from "
+        "article_risk_factor_tags, BEFORE any is_relevant/--language/date/geo "
+        "filtering narrows it down (see module docstring's phase 1a'). Only "
+        "used for --language eng — it's what replaces --relevant-oversample's "
+        "uniform random slice for eng specifically, so that a category with "
+        "even a handful of relevant articles overall still gets a chance at "
+        "representation instead of depending on a lucky random draw. Raising "
+        "it doesn't meaningfully add to 1a''s DB cost (that query scans the "
+        "whole table once regardless of K), but does add to 1b/1c's cost "
+        "downstream, since more candidates survive to be confirmed/geo-tagged. "
+        "If a category's candidate pool still ends up small in the output, "
+        "that generally means the category is just genuinely rare in the DB, "
+        "not that K needs raising.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed for deterministic sampling (default 42).",
+    )
+    parser.add_argument(
+        "--not-relevant-oversample",
+        type=float,
+        default=5.0,
         help="Multiplier applied to the not-relevant quota (n * (1 - pos_ratio)) to size "
-             "a random pre-filter of is_relevant=false candidates BEFORE they're confirmed "
-             "against --language/date-window in phase 1b (default 5.0), instead of "
-             "confirming the entire (often 100x+ larger) not-relevant pool just to discard "
-             "most of it in phase 3. Raise this if the run ends short of its not-relevant "
-             "quota (printed as a warning after phase 1b) — a narrow --language or "
-             "--start-month/--end-month window can fail confirmation for most candidates.")
-    parser.add_argument("--relevant-oversample", type=float, default=10.0,
+        "a random pre-filter of is_relevant=false candidates BEFORE they're confirmed "
+        "against --language/date-window in phase 1b (default 5.0), instead of "
+        "confirming the entire (often 100x+ larger) not-relevant pool just to discard "
+        "most of it in phase 3. Raise this if the run ends short of its not-relevant "
+        "quota (printed as a warning after phase 1b) — a narrow --language or "
+        "--start-month/--end-month window can fail confirmation for most candidates.",
+    )
+    parser.add_argument(
+        "--relevant-oversample",
+        type=float,
+        default=10.0,
         help="Only used for languages OTHER than eng (eng builds its relevant pool "
-             "from --risk-factor-k's balanced draw instead — see --language). Same "
-             "idea as --not-relevant-oversample but for the is_relevant=true pool "
-             "(multiplier on the relevant quota, n * pos_ratio). The classified relevant "
-             "pool is often orders of magnitude bigger than what --n actually needs, and "
-             "confirming/geo-tagging (phases 1b/1c) all of it is the single most expensive "
-             "part of a run when that's the case. Downsampling it randomly BEFORE geo-tagging "
-             "means phase 3's country/year rarity is computed from a sample, not the true "
-             "population — a country with only a handful of relevant articles overall has a "
-             "real, if usually small, chance of losing all representation. Default 10.0 is a "
-             "reasonable balance; raise it (at the cost of speed) if the output's country "
-             "coverage looks thinner than expected, or lower it if the relevant pool is "
-             "already close in size to what you need and speed matters more.")
-    parser.add_argument("--start-month", type=parse_month, default=None,
+        "from --risk-factor-k's balanced draw instead — see --language). Same "
+        "idea as --not-relevant-oversample but for the is_relevant=true pool "
+        "(multiplier on the relevant quota, n * pos_ratio). The classified relevant "
+        "pool is often orders of magnitude bigger than what --n actually needs, and "
+        "confirming/geo-tagging (phases 1b/1c) all of it is the single most expensive "
+        "part of a run when that's the case. Downsampling it randomly BEFORE geo-tagging "
+        "means phase 3's country/year rarity is computed from a sample, not the true "
+        "population — a country with only a handful of relevant articles overall has a "
+        "real, if usually small, chance of losing all representation. Default 10.0 is a "
+        "reasonable balance; raise it (at the cost of speed) if the output's country "
+        "coverage looks thinner than expected, or lower it if the relevant pool is "
+        "already close in size to what you need and speed matters more.",
+    )
+    parser.add_argument(
+        "--start-month",
+        type=parse_month,
+        default=None,
         help="Earliest publication month to allow, YYYY-MM (default: unbounded). "
-             "Applied to both pools during discovery (phase 1b) — see --language.")
-    parser.add_argument("--end-month", type=parse_month, default=None,
+        "Applied to both pools during discovery (phase 1b) — see --language.",
+    )
+    parser.add_argument(
+        "--end-month",
+        type=parse_month,
+        default=None,
         help="Latest publication month to allow inclusive, YYYY-MM (default: current "
-             "month). Applied to both pools during discovery (phase 1b) — see --language.")
-    parser.add_argument("--workers", type=int, default=12,
-        help="Parallel DB connections for discovery queries (default 12).")
-    parser.add_argument("--probe-chunk-size", type=int, default=2_000,
-        help="URIs per language/date, geo, or risk-factor probe query (default 2000).")
-    parser.add_argument("--chunk-size", type=int, default=5_000,
-        help="Max URIs per article_downloads content fetch (default 5000).")
-    parser.add_argument("--resume", action="store_true",
+        "month). Applied to both pools during discovery (phase 1b) — see --language.",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=12,
+        help="Parallel DB connections for discovery queries (default 12).",
+    )
+    parser.add_argument(
+        "--probe-chunk-size",
+        type=int,
+        default=2_000,
+        help="URIs per language/date, geo, or risk-factor probe query (default 2000).",
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=5_000,
+        help="Max URIs per article_downloads content fetch (default 5000).",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
         help="Skip articles already present in --output (matched by 'id') and "
-             "append the rest. Use after a content-fetch run was interrupted or "
-             "a chunk failed all its retries.")
+        "append the rest. Use after a content-fetch run was interrupted or "
+        "a chunk failed all its retries.",
+    )
     args = parser.parse_args()
     if not 0.0 < args.pos_ratio < 1.0:
         parser.error("--pos-ratio must be strictly between 0 and 1")
@@ -339,15 +402,20 @@ def parse_args() -> argparse.Namespace:
 
 # ── GCS output ────────────────────────────────────────────────────────────────
 
+
 def parse_gcs_uri(uri: str) -> tuple[str, str]:
     parsed = urlparse(uri)
     if parsed.scheme != "gs" or not parsed.netloc or not parsed.path.strip("/"):
-        raise ValueError(f"Invalid GCS URI: {uri}. Expected gs://bucket/path/to/file.jsonl")
+        raise ValueError(
+            f"Invalid GCS URI: {uri}. Expected gs://bucket/path/to/file.jsonl"
+        )
     return parsed.netloc, parsed.path.lstrip("/")
 
 
 @contextmanager
-def open_output(path_or_uri: str, initial_text: str = "") -> Generator[TextIO, None, None]:
+def open_output(
+    path_or_uri: str, initial_text: str = ""
+) -> Generator[TextIO, None, None]:
     """Open for writing. initial_text (the cleaned contents of a prior run,
     from load_resume_state) is written back first so --resume effectively
     appends without relying on true append-mode support (GCS blobs don't have
@@ -356,7 +424,9 @@ def open_output(path_or_uri: str, initial_text: str = "") -> Generator[TextIO, N
         try:
             from google.cloud import storage
         except ImportError:
-            print("google-cloud-storage is not installed. Run: pip install google-cloud-storage")
+            print(
+                "google-cloud-storage is not installed. Run: pip install google-cloud-storage"
+            )
             sys.exit(1)
         bucket_name, blob_name = parse_gcs_uri(path_or_uri)
         client = storage.Client()
@@ -382,6 +452,7 @@ def load_resume_state(path_or_uri: str) -> tuple[set[str], str]:
     ever be at the tail."""
     if path_or_uri.startswith("gs://"):
         from google.cloud import storage
+
         bucket_name, blob_name = parse_gcs_uri(path_or_uri)
         blob = storage.Client().bucket(bucket_name).blob(blob_name)
         text = blob.download_as_text() if blob.exists() else ""
@@ -452,6 +523,7 @@ WITH RECURSIVE versions AS (
 SELECT relevance_version FROM versions WHERE relevance_version IS NOT NULL
 """
 
+
 # Phase 1b: confirm --language (and, if given, --start-month/--end-month) for a
 # chunk of is_relevant=true article URIs from 1a, and read off published_at for
 # year-stratification while at it. Built dynamically (see
@@ -473,7 +545,9 @@ def _build_language_date_probe_sql(has_start: bool, has_end: bool) -> str:
         clauses.append("published_at >= %(start)s")
     if has_end:
         clauses.append("published_at < %(end)s")
-    return "SELECT uri, published_at FROM article_downloads WHERE " + " AND ".join(clauses)
+    return "SELECT uri, published_at FROM article_downloads WHERE " + " AND ".join(
+        clauses
+    )
 
 
 # Phase 1c: geo concepts for a chunk of article URIs. Runs only against the
@@ -587,6 +661,7 @@ WHERE uri = ANY(%(uris)s)
 
 # ── Threaded, cancellable discovery ────────────────────────────────────────────
 
+
 class Cancelled(Exception):
     """Worker aborted because the run is being cancelled."""
 
@@ -671,7 +746,9 @@ def _deterministic_sample(uris: list[str], k: int, seed: int) -> list[str]:
     pool BEFORE phase 1b's language/date confirmation (see discover())."""
     if k >= len(uris):
         return uris
-    return sorted(uris, key=lambda uri: hashlib.md5(f"{uri}:{seed}".encode()).hexdigest())[:k]
+    return sorted(
+        uris, key=lambda uri: hashlib.md5(f"{uri}:{seed}".encode()).hexdigest()
+    )[:k]
 
 
 def fetch_relevance_versions(params: dict, relevance_version: str) -> list[str]:
@@ -687,18 +764,28 @@ def fetch_relevance_versions(params: dict, relevance_version: str) -> list[str]:
 
 
 def fetch_relevance_for_version(
-    params: dict, version: str,
+    params: dict,
+    version: str,
 ) -> list[tuple[str, bool, str, object]]:
     """Every (article_uri, is_relevant, relevance_version, created_at) row for
     one relevance_version — see _RELEVANCE_ALL_FOR_VERSION_SQL."""
-    rows = _run_query(params, _RELEVANCE_ALL_FOR_VERSION_SQL, {"relevance_version": version},
-                      f"relevance fetch (version={version})")
-    return [(str(uri), bool(is_relevant), str(row_version), created_at)
-            for uri, is_relevant, row_version, created_at in rows]
+    rows = _run_query(
+        params,
+        _RELEVANCE_ALL_FOR_VERSION_SQL,
+        {"relevance_version": version},
+        f"relevance fetch (version={version})",
+    )
+    return [
+        (str(uri), bool(is_relevant), str(row_version), created_at)
+        for uri, is_relevant, row_version, created_at in rows
+    ]
 
 
 def fetch_risk_factor_balanced_pool(
-    params: dict, tag_method_id: int, per_factor_k: int, seed: int,
+    params: dict,
+    tag_method_id: int,
+    per_factor_k: int,
+    seed: int,
 ) -> list[tuple[str, int]]:
     """Phase 1a' (--language eng only): up to per_factor_k article_uris per
     risk_factor category, in one single-pass query — see
@@ -708,33 +795,54 @@ def fetch_risk_factor_balanced_pool(
     step for the eng relevant pool, not a follow-up probe against an
     already-known set. Not filtered by is_relevant/--language/date; that
     happens in Python once discover()'s 1a relevance_map is available."""
-    rows = _run_query(params, _RISK_FACTOR_BALANCED_POOL_SQL,
-                      {"tag_method_id": tag_method_id, "per_factor_k": per_factor_k, "seed": str(seed)},
-                      "risk-factor-balanced pool draw")
+    rows = _run_query(
+        params,
+        _RISK_FACTOR_BALANCED_POOL_SQL,
+        {
+            "tag_method_id": tag_method_id,
+            "per_factor_k": per_factor_k,
+            "seed": str(seed),
+        },
+        "risk-factor-balanced pool draw",
+    )
     return [(str(uri), int(risk_factor)) for uri, risk_factor in rows]
 
 
 def probe_language_date_chunk(
-    params: dict, uris: list[str], language: str, sql: str, extra_params: dict,
+    params: dict,
+    uris: list[str],
+    language: str,
+    sql: str,
+    extra_params: dict,
 ) -> list[tuple[str, object]]:
     query_params = {"uris": uris, "language": language, **extra_params}
-    rows = _run_query(params, sql, query_params, f"language/date probe of {len(uris)} uris")
+    rows = _run_query(
+        params, sql, query_params, f"language/date probe of {len(uris)} uris"
+    )
     return [(str(uri), published_at) for uri, published_at in rows]
 
 
 def probe_geo_chunk(params: dict, uris: list[str]) -> list[tuple[str, str]]:
-    rows = _run_query(params, _GEO_PROBE_SQL, {"uris": uris},
-                      f"geo probe of {len(uris)} uris")
+    rows = _run_query(
+        params, _GEO_PROBE_SQL, {"uris": uris}, f"geo probe of {len(uris)} uris"
+    )
     return [(str(uri), str(adm0)) for uri, adm0 in rows]
 
 
 def probe_risk_factor_chunk(
-    params: dict, tag_method_id: int, uris: list[str],
+    params: dict,
+    tag_method_id: int,
+    uris: list[str],
 ) -> list[tuple[str, list[int]]]:
-    rows = _run_query(params, _RISK_FACTOR_PROBE_SQL,
-                      {"tag_method_id": tag_method_id, "uris": uris},
-                      f"risk-factor probe of {len(uris)} uris")
-    return [(str(uri), [int(x) for x in risk_factor_ids]) for uri, risk_factor_ids in rows]
+    rows = _run_query(
+        params,
+        _RISK_FACTOR_PROBE_SQL,
+        {"tag_method_id": tag_method_id, "uris": uris},
+        f"risk-factor probe of {len(uris)} uris",
+    )
+    return [
+        (str(uri), [int(x) for x in risk_factor_ids]) for uri, risk_factor_ids in rows
+    ]
 
 
 def discover(
@@ -752,7 +860,12 @@ def discover(
     not_relevant_quota: int,
     not_relevant_oversample: float,
     risk_factor_k: int,
-) -> tuple[dict[str, set[str]], dict[str, int], dict[str, tuple[bool, str]], dict[int, dict[str, set[str]]]]:
+) -> tuple[
+    dict[str, set[str]],
+    dict[str, int],
+    dict[str, tuple[bool, str]],
+    dict[int, dict[str, set[str]]],
+]:
     """Discovery: relevance fetch (+ risk-factor-balanced draw, eng only, run
     concurrently) -> language/date confirm (both pools pre-sampled) -> geo
     probe (relevant-only).
@@ -801,7 +914,12 @@ def discover(
         rf_balanced_future = None
         if tag_method_id is not None:
             rf_balanced_future = pool.submit(
-                fetch_risk_factor_balanced_pool, params, tag_method_id, risk_factor_k, seed)
+                fetch_risk_factor_balanced_pool,
+                params,
+                tag_method_id,
+                risk_factor_k,
+                seed,
+            )
 
         rel_futures = {
             pool.submit(fetch_relevance_for_version, params, version): version
@@ -813,18 +931,27 @@ def discover(
                 prev = raw.get(uri)
                 if prev is None or created_at > prev[2]:
                     raw[uri] = (is_relevant, row_version, created_at)
-            print(f"  1a: {done}/{len(relevance_versions)} relevance version(s) fetched, "
-                  f"{len(raw):,} distinct classified articles\033[K",
-                  end="\r", file=sys.stderr, flush=True)
+            print(
+                f"  1a: {done}/{len(relevance_versions)} relevance version(s) fetched, "
+                f"{len(raw):,} distinct classified articles\033[K",
+                end="\r",
+                file=sys.stderr,
+                flush=True,
+            )
         print(file=sys.stderr)
         relevance_map: dict[str, tuple[bool, str]] = {
-            sys.intern(uri): (is_relevant, version) for uri, (is_relevant, version, _created_at) in raw.items()
+            sys.intern(uri): (is_relevant, version)
+            for uri, (is_relevant, version, _created_at) in raw.items()
         }
         del raw
 
-        not_relevant_uris = [uri for uri, (is_relevant, _v) in relevance_map.items() if not is_relevant]
+        not_relevant_uris = [
+            uri for uri, (is_relevant, _v) in relevance_map.items() if not is_relevant
+        ]
         not_relevant_target = math.ceil(not_relevant_quota * not_relevant_oversample)
-        sampled_not_relevant = _deterministic_sample(not_relevant_uris, not_relevant_target, seed)
+        sampled_not_relevant = _deterministic_sample(
+            not_relevant_uris, not_relevant_target, seed
+        )
 
         # rf_candidates_relevant: risk_factor_id -> confirmed-eligible relevant
         # article_uris carrying that tag (eng only) — built from 1a' intersected
@@ -833,36 +960,60 @@ def discover(
         # nested rf_candidates (crossed with country, from 1c) further down.
         rf_candidates_relevant: dict[int, list[str]] = {}
         if tag_method_id is not None:
-            print(f"  1a: waiting for the risk-factor-balanced pool draw "
-                  f"(single whole-table pass, no usable index — see module "
-                  f"docstring's phase 1a')...\033[K", end="\r", file=sys.stderr, flush=True)
+            print(
+                f"  1a: waiting for the risk-factor-balanced pool draw "
+                f"(single whole-table pass, no usable index — see module "
+                f"docstring's phase 1a')...\033[K",
+                end="\r",
+                file=sys.stderr,
+                flush=True,
+            )
             for uri, risk_factor in rf_balanced_future.result():
                 if relevance_map.get(uri, (False,))[0] is True:
-                    rf_candidates_relevant.setdefault(risk_factor, []).append(sys.intern(uri))
-            relevant_uris = sorted(set().union(*rf_candidates_relevant.values())) \
-                if rf_candidates_relevant else []
-            print(f"  1a: risk-factor-balanced draw: {len(rf_candidates_relevant):,} categories, "
-                  f"{len(relevant_uris):,} distinct relevant articles (>=1 tag, up to "
-                  f"--risk-factor-k={risk_factor_k:,} raw draw per category); "
-                  f"sampling {len(sampled_not_relevant):,} not-relevant candidates "
-                  f"(quota {not_relevant_quota:,} x {not_relevant_oversample} oversample) before "
-                  f"confirming language/date", file=sys.stderr)
-            sampled_relevant = relevant_uris  # already bounded; no further downsampling needed
+                    rf_candidates_relevant.setdefault(risk_factor, []).append(
+                        sys.intern(uri)
+                    )
+            relevant_uris = (
+                sorted(set().union(*rf_candidates_relevant.values()))
+                if rf_candidates_relevant
+                else []
+            )
+            print(
+                f"  1a: risk-factor-balanced draw: {len(rf_candidates_relevant):,} categories, "
+                f"{len(relevant_uris):,} distinct relevant articles (>=1 tag, up to "
+                f"--risk-factor-k={risk_factor_k:,} raw draw per category); "
+                f"sampling {len(sampled_not_relevant):,} not-relevant candidates "
+                f"(quota {not_relevant_quota:,} x {not_relevant_oversample} oversample) before "
+                f"confirming language/date",
+                file=sys.stderr,
+            )
+            sampled_relevant = (
+                relevant_uris  # already bounded; no further downsampling needed
+            )
         else:
-            relevant_uris = [uri for uri, (is_relevant, _v) in relevance_map.items() if is_relevant]
+            relevant_uris = [
+                uri for uri, (is_relevant, _v) in relevance_map.items() if is_relevant
+            ]
             relevant_target = math.ceil(relevant_quota * relevant_oversample)
-            sampled_relevant = _deterministic_sample(relevant_uris, relevant_target, seed)
-            print(f"  1a: {len(relevant_uris):,} relevant / {len(not_relevant_uris):,} not-relevant "
-                  f"classified; sampling {len(sampled_relevant):,} relevant "
-                  f"(quota {relevant_quota:,} x {relevant_oversample} oversample) and "
-                  f"{len(sampled_not_relevant):,} not-relevant candidates "
-                  f"(quota {not_relevant_quota:,} x {not_relevant_oversample} oversample) before "
-                  f"confirming language/date", file=sys.stderr)
+            sampled_relevant = _deterministic_sample(
+                relevant_uris, relevant_target, seed
+            )
+            print(
+                f"  1a: {len(relevant_uris):,} relevant / {len(not_relevant_uris):,} not-relevant "
+                f"classified; sampling {len(sampled_relevant):,} relevant "
+                f"(quota {relevant_quota:,} x {relevant_oversample} oversample) and "
+                f"{len(sampled_not_relevant):,} not-relevant candidates "
+                f"(quota {not_relevant_quota:,} x {not_relevant_oversample} oversample) before "
+                f"confirming language/date",
+                file=sys.stderr,
+            )
 
         # 1b: confirm language/date for the (already downsampled, one way or
         # another — see above) relevant and not-relevant pools together.
         all_uris = sampled_relevant + sampled_not_relevant
-        sql = _build_language_date_probe_sql(start_month is not None, end_month is not None)
+        sql = _build_language_date_probe_sql(
+            start_month is not None, end_month is not None
+        )
         extra_params: dict = {}
         if start_month is not None:
             extra_params["start"] = start_month
@@ -870,9 +1021,14 @@ def discover(
             extra_params["end"] = end_month
 
         lang_futures = {
-            pool.submit(probe_language_date_chunk, params, all_uris[i:i + probe_chunk_size],
-                        language, sql, extra_params):
-                len(all_uris[i:i + probe_chunk_size])
+            pool.submit(
+                probe_language_date_chunk,
+                params,
+                all_uris[i : i + probe_chunk_size],
+                language,
+                sql,
+                extra_params,
+            ): len(all_uris[i : i + probe_chunk_size])
             for i in range(0, len(all_uris), probe_chunk_size)
         }
         confirmed: set[str] = set()
@@ -887,34 +1043,54 @@ def discover(
             processed += lang_futures[future]
             rate = processed / max(time.time() - t0, 1e-9)
             eta_min = (len(all_uris) - processed) / max(rate, 1e-9) / 60
-            print(f"  1b: {processed:,}/{len(all_uris):,} articles language/date-confirmed, "
-                  f"{len(confirmed):,} matched ({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
-                  end="\r", file=sys.stderr, flush=True)
+            print(
+                f"  1b: {processed:,}/{len(all_uris):,} articles language/date-confirmed, "
+                f"{len(confirmed):,} matched ({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
+                end="\r",
+                file=sys.stderr,
+                flush=True,
+            )
         print(file=sys.stderr)
 
         # Only confirmed (--language, and if bounded, in-window) articles are
         # selectable downstream, for either pool.
         relevance_map = {uri: relevance_map[uri] for uri in confirmed}
-        n_confirmed_relevant = sum(1 for is_relevant, _v in relevance_map.values() if is_relevant)
-        n_confirmed_not_relevant = sum(1 for is_relevant, _v in relevance_map.values() if not is_relevant)
+        n_confirmed_relevant = sum(
+            1 for is_relevant, _v in relevance_map.values() if is_relevant
+        )
+        n_confirmed_not_relevant = sum(
+            1 for is_relevant, _v in relevance_map.values() if not is_relevant
+        )
         if n_confirmed_relevant < relevant_quota:
-            hint = (f"raise --risk-factor-k (currently {risk_factor_k:,})" if tag_method_id is not None
-                    else f"raise --relevant-oversample (currently {relevant_oversample})")
-            print(f"  warning: only {n_confirmed_relevant:,} relevant candidates confirmed "
-                  f"(--language={language!r}/date-window match) before geo-tagging, short of "
-                  f"the {relevant_quota:,} needed (some will also fail to geo-tag in 1c); "
-                  f"{hint} or rerun.", file=sys.stderr)
+            hint = (
+                f"raise --risk-factor-k (currently {risk_factor_k:,})"
+                if tag_method_id is not None
+                else f"raise --relevant-oversample (currently {relevant_oversample})"
+            )
+            print(
+                f"  warning: only {n_confirmed_relevant:,} relevant candidates confirmed "
+                f"(--language={language!r}/date-window match) before geo-tagging, short of "
+                f"the {relevant_quota:,} needed (some will also fail to geo-tag in 1c); "
+                f"{hint} or rerun.",
+                file=sys.stderr,
+            )
         if n_confirmed_not_relevant < not_relevant_quota:
-            print(f"  warning: only {n_confirmed_not_relevant:,} not-relevant candidates confirmed "
-                  f"(--language={language!r}/date-window match), short of the {not_relevant_quota:,} "
-                  f"needed; raise --not-relevant-oversample (currently {not_relevant_oversample}) "
-                  f"or rerun.", file=sys.stderr)
+            print(
+                f"  warning: only {n_confirmed_not_relevant:,} not-relevant candidates confirmed "
+                f"(--language={language!r}/date-window match), short of the {not_relevant_quota:,} "
+                f"needed; raise --not-relevant-oversample (currently {not_relevant_oversample}) "
+                f"or rerun.",
+                file=sys.stderr,
+            )
 
         # 1c: geo-tag the confirmed is_relevant=true URIs in chunked PK probes
-        confirmed_list = [uri for uri, (is_relevant, _version) in relevance_map.items() if is_relevant]
+        confirmed_list = [
+            uri for uri, (is_relevant, _version) in relevance_map.items() if is_relevant
+        ]
         geo_futures = {
-            pool.submit(probe_geo_chunk, params, confirmed_list[i:i + probe_chunk_size]):
-                len(confirmed_list[i:i + probe_chunk_size])
+            pool.submit(
+                probe_geo_chunk, params, confirmed_list[i : i + probe_chunk_size]
+            ): len(confirmed_list[i : i + probe_chunk_size])
             for i in range(0, len(confirmed_list), probe_chunk_size)
         }
         t0, processed = time.time(), 0
@@ -925,9 +1101,13 @@ def discover(
             processed += geo_futures[future]
             rate = processed / max(time.time() - t0, 1e-9)
             eta_min = (len(confirmed_list) - processed) / max(rate, 1e-9) / 60
-            print(f"  1c: {processed:,}/{len(confirmed_list):,} relevant articles geo-probed "
-                  f"({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
-                  end="\r", file=sys.stderr, flush=True)
+            print(
+                f"  1c: {processed:,}/{len(confirmed_list):,} relevant articles geo-probed "
+                f"({rate:,.0f}/s, ~{eta_min:.0f} min left)\033[K",
+                end="\r",
+                file=sys.stderr,
+                flush=True,
+            )
         print(file=sys.stderr)
 
         # Cross 1a''s per-category grouping (narrowed to `confirmed` by 1b)
@@ -946,7 +1126,9 @@ def discover(
                     if uri not in confirmed:
                         continue
                     for adm0 in uri_to_adm0.get(uri, ()):
-                        rf_candidates.setdefault(risk_factor, {}).setdefault(adm0, set()).add(uri)
+                        rf_candidates.setdefault(risk_factor, {}).setdefault(
+                            adm0, set()
+                        ).add(uri)
 
         pool.shutdown(wait=True)
     except BaseException:
@@ -962,6 +1144,7 @@ def discover(
 
 
 # ── Phase 3: stratified selection ─────────────────────────────────────────────
+
 
 def _round_robin_order(groups: dict[object, list[str]]) -> list[str]:
     """Interleave each group's (already-sorted) items, rarest group first.
@@ -1090,8 +1273,10 @@ def stratified_sample_rf(
         rf: _country_year_stream(country_map, seed, None, uri_year, seen)
         for rf, country_map in rf_candidates.items()
     }
-    order = sorted(rf_candidates,
-                    key=lambda rf: (sum(len(u) for u in rf_candidates[rf].values()), rf))
+    order = sorted(
+        rf_candidates,
+        key=lambda rf: (sum(len(u) for u in rf_candidates[rf].values()), rf),
+    )
     selected: list[dict] = []
     active = deque(order)
     while active and len(selected) < n:
@@ -1141,7 +1326,11 @@ def sample_articles(
         selected = stratified_sample(candidates, n_relevant, seed, uri_year=uri_year)
 
     not_relevant_uris = sorted(
-        (uri for uri, (is_relevant, _) in relevance_map.items() if is_relevant is False),
+        (
+            uri
+            for uri, (is_relevant, _) in relevance_map.items()
+            if is_relevant is False
+        ),
         key=lambda uri: hashlib.md5(f"{uri}:{seed}".encode()).hexdigest(),
     )
     selected += [
@@ -1150,11 +1339,14 @@ def sample_articles(
     ]
 
     for meta in selected:
-        meta["is_relevant"], meta["relevance_version_used"] = relevance_map[meta["article_uri"]]
+        meta["is_relevant"], meta["relevance_version_used"] = relevance_map[
+            meta["article_uri"]
+        ]
     return selected
 
 
 # ── Content fetch, resumable ──────────────────────────────────────────────────
+
 
 def fetch_country_names(params: dict) -> dict[str, str]:
     conn = psycopg2.connect(**params)
@@ -1177,7 +1369,11 @@ def fetch_risk_factor_names(params: dict) -> dict[int, str]:
 
 
 def fetch_selected_risk_factors(
-    params: dict, tag_method_id: int, uris: list[str], workers: int, probe_chunk_size: int,
+    params: dict,
+    tag_method_id: int,
+    uris: list[str],
+    workers: int,
+    probe_chunk_size: int,
 ) -> dict[str, list[int]]:
     """Accurate, complete risk-factor tag lookup for a SMALL, already-selected
     set of article URIs — called from main() after phase 3, not part of
@@ -1196,8 +1392,12 @@ def fetch_selected_risk_factors(
     risk_factor_map: dict[str, list[int]] = {}
     try:
         futures = {
-            pool.submit(probe_risk_factor_chunk, params, tag_method_id, uris[i:i + probe_chunk_size]):
-                len(uris[i:i + probe_chunk_size])
+            pool.submit(
+                probe_risk_factor_chunk,
+                params,
+                tag_method_id,
+                uris[i : i + probe_chunk_size],
+            ): len(uris[i : i + probe_chunk_size])
             for i in range(0, len(uris), probe_chunk_size)
         }
         t0, processed = time.time(), 0
@@ -1206,8 +1406,13 @@ def fetch_selected_risk_factors(
                 risk_factor_map[uri] = risk_factor_ids
             processed += futures[future]
             rate = processed / max(time.time() - t0, 1e-9)
-            print(f"  risk-factor tags: {processed:,}/{len(uris):,} selected articles probed "
-                  f"({rate:,.0f}/s)\033[K", end="\r", file=sys.stderr, flush=True)
+            print(
+                f"  risk-factor tags: {processed:,}/{len(uris):,} selected articles probed "
+                f"({rate:,.0f}/s)\033[K",
+                end="\r",
+                file=sys.stderr,
+                flush=True,
+            )
         print(file=sys.stderr)
         pool.shutdown(wait=True)
     except BaseException:
@@ -1241,12 +1446,12 @@ def build_record(
         "adm0_codes_all": all_countries,
         "language": language,
         "source": {
-            "title":        str(content.get("title") or ""),
-            "text":         str(content.get("body") or ""),
+            "title": str(content.get("title") or ""),
+            "text": str(content.get("body") or ""),
             "published_at": content.get("published_at"),
             "article_type": content.get("article_type"),
-            "source_url":   content.get("source_uri"),
-            "cloud_uri":    content.get("cloud_uri"),
+            "source_url": content.get("source_uri"),
+            "cloud_uri": content.get("cloud_uri"),
         },
         "relevance": {
             # Per-article actual version (relevant with --relevance-version any,
@@ -1300,7 +1505,7 @@ def fetch_and_write_content(
     try:
         with open_output(output, initial_text=existing_text) as f:
             for i in range(0, total, chunk_size):
-                chunk = to_fetch[i:i + chunk_size]
+                chunk = to_fetch[i : i + chunk_size]
                 uris = [m["article_uri"] for m in chunk]
                 rows: list[dict] | None = None
                 last_exc: Exception | None = None
@@ -1314,10 +1519,12 @@ def fetch_and_write_content(
                             conn.close()
                         except Exception:
                             pass
-                        wait = min(2 ** attempt, 30)
-                        print(f"\n  chunk fetch failed ({exc}); "
-                              f"reconnecting, retry {attempt + 1}/{max_retries} in {wait}s...",
-                              file=sys.stderr)
+                        wait = min(2**attempt, 30)
+                        print(
+                            f"\n  chunk fetch failed ({exc}); "
+                            f"reconnecting, retry {attempt + 1}/{max_retries} in {wait}s...",
+                            file=sys.stderr,
+                        )
                         time.sleep(wait)
                         conn = psycopg2.connect(**params)
                         conn.autocommit = True
@@ -1334,20 +1541,34 @@ def fetch_and_write_content(
                         missing += 1
                         continue
                     all_countries = sorted(
-                        adm0 for adm0, member_uris in candidates.items()
+                        adm0
+                        for adm0, member_uris in candidates.items()
                         if meta["article_uri"] in member_uris
                     )
-                    record = build_record(meta, content, language, all_countries, country_names, rf_names)
-                    f.write(json.dumps(record, ensure_ascii=False, default=str,
-                                        separators=(",", ":")) + "\n")
+                    record = build_record(
+                        meta, content, language, all_countries, country_names, rf_names
+                    )
+                    f.write(
+                        json.dumps(
+                            record,
+                            ensure_ascii=False,
+                            default=str,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
                     written += 1
                     written_uris.add(meta["article_uri"])
                 f.flush()
 
                 done = min(i + chunk_size, total)
-                print(f"  fetched {done:,}/{total:,} articles "
-                      f"({written:,} written, {missing:,} missing)\033[K",
-                      end="\r", file=sys.stderr, flush=True)
+                print(
+                    f"  fetched {done:,}/{total:,} articles "
+                    f"({written:,} written, {missing:,} missing)\033[K",
+                    end="\r",
+                    file=sys.stderr,
+                    flush=True,
+                )
             print(file=sys.stderr)
     finally:
         conn.close()
@@ -1355,6 +1576,7 @@ def fetch_and_write_content(
 
 
 # ── Output ────────────────────────────────────────────────────────────────────
+
 
 def print_summary(
     selected: list[dict],
@@ -1381,9 +1603,17 @@ def print_summary(
     print("\n=== Sample complete ===")
     print(f"Total articles written : {len(written_uris):,}")
     if skipped:
-        print(f"  ({written:,} written this run, {skipped:,} already present from --resume)")
-    stratification = "risk-factor-category + country/year round-robin" if rf_candidates else "country/year-stratified"
-    print(f"  Relevant              : {n_relevant:,} (version={relevance_version}, {stratification})")
+        print(
+            f"  ({written:,} written this run, {skipped:,} already present from --resume)"
+        )
+    stratification = (
+        "risk-factor-category + country/year round-robin"
+        if rf_candidates
+        else "country/year-stratified"
+    )
+    print(
+        f"  Relevant              : {n_relevant:,} (version={relevance_version}, {stratification})"
+    )
     print(f"  Not relevant          : {n_not_relevant:,} (uniform random)")
     print(f"Countries covered       : {len(per_country):,} / {len(candidates):,}")
     per_rf: dict[int, int] = {}
@@ -1412,6 +1642,7 @@ def print_summary(
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     args = parse_args()
     params = get_connection_params()
@@ -1424,52 +1655,81 @@ def main() -> None:
     add_risk_factors = args.language == "eng"
     tag_method_id = args.tag_method_id if add_risk_factors else None
     if not add_risk_factors and args.tag_method_id != 1:
-        print(f"Note: --tag-method-id only applies to --language eng "
-              f"(article_risk_factor_tags has no coverage for {args.language!r}); ignoring it.")
+        print(
+            f"Note: --tag-method-id only applies to --language eng "
+            f"(article_risk_factor_tags has no coverage for {args.language!r}); ignoring it."
+        )
 
     relevance_versions = fetch_relevance_versions(params, args.relevance_version)
     if not relevance_versions:
-        print(f"No relevance_version rows found at all "
-              f"(relevance-version={args.relevance_version!r}). Nothing to sample.")
+        print(
+            f"No relevance_version rows found at all "
+            f"(relevance-version={args.relevance_version!r}). Nothing to sample."
+        )
         return
     if args.relevance_version == "any":
-        print(f"relevance-version 'any' resolved to {len(relevance_versions)} "
-              f"classifier version(s): {relevance_versions}")
+        print(
+            f"relevance-version 'any' resolved to {len(relevance_versions)} "
+            f"classifier version(s): {relevance_versions}"
+        )
         if len(relevance_versions) > 10:
-            print(f"  warning: phase 1a fetches all {len(relevance_versions)} of these "
-                  f"separately — pin --relevance-version to a specific one if this is slow.")
+            print(
+                f"  warning: phase 1a fetches all {len(relevance_versions)} of these "
+                f"separately — pin --relevance-version to a specific one if this is slow."
+            )
 
     n_want_relevant = round(args.n * args.pos_ratio)
     n_want_not_relevant = args.n - n_want_relevant
 
-    start_label = f"{args.start_month:%Y-%m}" if args.start_month is not None else "(unbounded)"
-    print(f"\nPhase 1-2: discovering articles for language={args.language!r}, "
-          f"relevance-version={args.relevance_version!r}, "
-          f"relevant-pool window={start_label}..{args.end_month:%Y-%m}, "
-          f"with {args.workers} workers"
-          f"{f', tag-method-id={tag_method_id}' if tag_method_id is not None else ''}...")
+    start_label = (
+        f"{args.start_month:%Y-%m}" if args.start_month is not None else "(unbounded)"
+    )
+    print(
+        f"\nPhase 1-2: discovering articles for language={args.language!r}, "
+        f"relevance-version={args.relevance_version!r}, "
+        f"relevant-pool window={start_label}..{args.end_month:%Y-%m}, "
+        f"with {args.workers} workers"
+        f"{f', tag-method-id={tag_method_id}' if tag_method_id is not None else ''}..."
+    )
     candidates, uri_year, relevance_map, rf_candidates = discover(
-        params, args.language, args.workers, args.probe_chunk_size,
+        params,
+        args.language,
+        args.workers,
+        args.probe_chunk_size,
         relevance_versions=relevance_versions,
-        start_month=args.start_month, end_month=args.end_month,
+        start_month=args.start_month,
+        end_month=args.end_month,
         tag_method_id=tag_method_id,
         seed=args.seed,
-        relevant_quota=n_want_relevant, relevant_oversample=args.relevant_oversample,
-        not_relevant_quota=n_want_not_relevant, not_relevant_oversample=args.not_relevant_oversample,
+        relevant_quota=n_want_relevant,
+        relevant_oversample=args.relevant_oversample,
+        not_relevant_quota=n_want_not_relevant,
+        not_relevant_oversample=args.not_relevant_oversample,
         risk_factor_k=args.risk_factor_k,
     )
     n_relevant_geo = len(set().union(*candidates.values())) if candidates else 0
-    n_not_relevant_avail = sum(1 for is_relevant, _ in relevance_map.values() if is_relevant is False)
-    print(f"  {n_relevant_geo:,} relevant articles geo-tagged across {len(candidates):,} countries; "
-          f"{n_not_relevant_avail:,} not-relevant articles available")
+    n_not_relevant_avail = sum(
+        1 for is_relevant, _ in relevance_map.values() if is_relevant is False
+    )
+    print(
+        f"  {n_relevant_geo:,} relevant articles geo-tagged across {len(candidates):,} countries; "
+        f"{n_not_relevant_avail:,} not-relevant articles available"
+    )
     if tag_method_id is not None:
-        n_rf_tagged = len(set().union(*(u for m in rf_candidates.values() for u in m.values()))) \
-            if rf_candidates else 0
-        print(f"  {n_rf_tagged:,} relevant articles risk-factor-balanced across "
-              f"{len(rf_candidates):,} categories (tag_method_id={tag_method_id})")
+        n_rf_tagged = (
+            len(set().union(*(u for m in rf_candidates.values() for u in m.values())))
+            if rf_candidates
+            else 0
+        )
+        print(
+            f"  {n_rf_tagged:,} relevant articles risk-factor-balanced across "
+            f"{len(rf_candidates):,} categories (tag_method_id={tag_method_id})"
+        )
     if not relevance_map:
-        print("No relevance-classified articles found for this language/window/version. "
-              "Nothing to sample.")
+        print(
+            "No relevance-classified articles found for this language/window/version. "
+            "Nothing to sample."
+        )
         return
 
     n_risk_factors = 0
@@ -1478,28 +1738,48 @@ def main() -> None:
         rf_names = fetch_risk_factor_names(params)
         n_risk_factors = len(rf_names)
 
-    print(f"\nPhase 3: sampling {args.n:,} articles (pos-ratio={args.pos_ratio} -> "
-          f"{n_want_relevant:,} relevant ["
-          f"{'risk-factor-category + country/year round-robin' if rf_candidates else 'country/year-stratified'}], "
-          f"{args.n - n_want_relevant:,} not relevant [uniform random])...")
+    print(
+        f"\nPhase 3: sampling {args.n:,} articles (pos-ratio={args.pos_ratio} -> "
+        f"{n_want_relevant:,} relevant ["
+        f"{'risk-factor-category + country/year round-robin' if rf_candidates else 'country/year-stratified'}], "
+        f"{args.n - n_want_relevant:,} not relevant [uniform random])..."
+    )
     selected = sample_articles(
-        candidates, relevance_map, args.n, args.pos_ratio, args.seed, uri_year,
+        candidates,
+        relevance_map,
+        args.n,
+        args.pos_ratio,
+        args.seed,
+        uri_year,
         rf_candidates=rf_candidates if tag_method_id is not None else None,
     )
     n_sel_relevant = sum(1 for m in selected if m["is_relevant"])
     n_sel_not_relevant = len(selected) - n_sel_relevant
-    print(f"  selected {len(selected):,} articles ({n_sel_relevant:,} relevant, {n_sel_not_relevant:,} not relevant) "
-          f"across {len({m['adm0_code'] for m in selected if m['adm0_code'] is not None}):,} countries")
+    print(
+        f"  selected {len(selected):,} articles ({n_sel_relevant:,} relevant, {n_sel_not_relevant:,} not relevant) "
+        f"across {len({m['adm0_code'] for m in selected if m['adm0_code'] is not None}):,} countries"
+    )
 
     if tag_method_id is not None:
-        selected_relevant_uris = [m["article_uri"] for m in selected if m["is_relevant"]]
-        print(f"\nFetching complete risk-factor tags for the {len(selected_relevant_uris):,} "
-              f"selected relevant articles (accurate, not just the categories they were "
-              f"drawn under during phase 1a' — see module docstring)...")
+        selected_relevant_uris = [
+            m["article_uri"] for m in selected if m["is_relevant"]
+        ]
+        print(
+            f"\nFetching complete risk-factor tags for the {len(selected_relevant_uris):,} "
+            f"selected relevant articles (accurate, not just the categories they were "
+            f"drawn under during phase 1a' — see module docstring)..."
+        )
         final_rf_map = fetch_selected_risk_factors(
-            params, tag_method_id, selected_relevant_uris, args.workers, args.probe_chunk_size)
+            params,
+            tag_method_id,
+            selected_relevant_uris,
+            args.workers,
+            args.probe_chunk_size,
+        )
         for m in selected:
-            m["risk_factor_ids"] = final_rf_map.get(m["article_uri"], []) if m["is_relevant"] else []
+            m["risk_factor_ids"] = (
+                final_rf_map.get(m["article_uri"], []) if m["is_relevant"] else []
+            )
 
     try:
         country_names = fetch_country_names(params)
@@ -1512,18 +1792,39 @@ def main() -> None:
     if args.resume:
         already_written, existing_text = load_resume_state(args.output)
         if already_written:
-            print(f"  --resume: {len(already_written):,} articles already in {args.output}")
+            print(
+                f"  --resume: {len(already_written):,} articles already in {args.output}"
+            )
 
-    print(f"\nPhase 4: fetching content for {len(selected):,} articles "
-          f"(writing to {args.output} as each chunk completes)...")
+    print(
+        f"\nPhase 4: fetching content for {len(selected):,} articles "
+        f"(writing to {args.output} as each chunk completes)..."
+    )
     written, missing, skipped, written_uris = fetch_and_write_content(
-        params, args.output, selected, candidates, country_names, rf_names, args.language,
-        args.chunk_size, already_written, existing_text,
+        params,
+        args.output,
+        selected,
+        candidates,
+        country_names,
+        rf_names,
+        args.language,
+        args.chunk_size,
+        already_written,
+        existing_text,
     )
     print_summary(
-        selected, candidates, written_uris, country_names, written, missing, skipped, args.output,
-        args.relevance_version, n_risk_factors,
-        rf_candidates=rf_candidates if tag_method_id is not None else None, rf_names=rf_names,
+        selected,
+        candidates,
+        written_uris,
+        country_names,
+        written,
+        missing,
+        skipped,
+        args.output,
+        args.relevance_version,
+        n_risk_factors,
+        rf_candidates=rf_candidates if tag_method_id is not None else None,
+        rf_names=rf_names,
     )
 
 
@@ -1531,8 +1832,11 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nInterrupted — queued work dropped, in-flight queries cancelled "
-              "server-side.", file=sys.stderr)
+        print(
+            "\nInterrupted — queued work dropped, in-flight queries cancelled "
+            "server-side.",
+            file=sys.stderr,
+        )
         sys.exit(130)
     except psycopg2.extensions.QueryCanceledError:
         # wait_select turns Ctrl+C during a main-thread query into this

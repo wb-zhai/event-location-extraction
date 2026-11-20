@@ -2,6 +2,7 @@
 import argparse, json
 from pathlib import Path
 
+
 def gold_events(row):
     ann = row.get("annotation")
     if isinstance(ann, dict):
@@ -10,6 +11,7 @@ def gold_events(row):
     if isinstance(ann, list):
         return ann
     return []
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -86,13 +88,12 @@ def main():
     noevent_recall = correct_empty / empty_gold if empty_gold else 0.0
     noevent_f1 = (
         2 * noevent_precision * noevent_recall / (noevent_precision + noevent_recall)
-        if (noevent_precision + noevent_recall) else 0.0
+        if (noevent_precision + noevent_recall)
+        else 0.0
     )
     fp_rate_empty = fp_empty_docs / empty_gold if empty_gold else 0.0
     fn_rate_positive = fn_positive_docs / positive_gold if positive_gold else 0.0
-    mean_spurious = (
-        total_spurious_empty / fp_empty_docs if fp_empty_docs else 0.0
-    )
+    mean_spurious = total_spurious_empty / fp_empty_docs if fp_empty_docs else 0.0
 
     print("=" * 72)
     print("V1 TEACHER FINAL CHECKS")
@@ -103,12 +104,12 @@ def main():
     print(f"predicted-empty:                 {predicted_empty}")
     print(f"correct empty:                   {correct_empty}")
     print(f"FP empty-docs:                   {fp_empty_docs}")
-    print(f"FP rate empty:                   {100*fp_rate_empty:.2f}%")
+    print(f"FP rate empty:                   {100 * fp_rate_empty:.2f}%")
     print(f"false-negative positive docs:    {fn_positive_docs}")
-    print(f"FN rate positive:                {100*fn_rate_positive:.2f}%")
-    print(f"no-event precision:              {100*noevent_precision:.2f}%")
-    print(f"no-event recall:                 {100*noevent_recall:.2f}%")
-    print(f"no-event F1:                     {100*noevent_f1:.2f}%")
+    print(f"FN rate positive:                {100 * fn_rate_positive:.2f}%")
+    print(f"no-event precision:              {100 * noevent_precision:.2f}%")
+    print(f"no-event recall:                 {100 * noevent_recall:.2f}%")
+    print(f"no-event F1:                     {100 * noevent_f1:.2f}%")
     print(f"mean spurious events / FP-empty: {mean_spurious:.3f}")
     print(f"total spurious events on empty:  {total_spurious_empty}")
     print()
@@ -137,7 +138,7 @@ def main():
             if key in r:
                 val = r[key]
                 if key.endswith("_rate"):
-                    print(f"{key}: {100*float(val):.2f}%")
+                    print(f"{key}: {100 * float(val):.2f}%")
                 else:
                     print(f"{key}: {val}")
         print("unmapped_labels:")
@@ -146,6 +147,7 @@ def main():
     else:
         print()
         print(f"Mapping report not found: {mr}")
+
 
 if __name__ == "__main__":
     main()

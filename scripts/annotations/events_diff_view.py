@@ -26,7 +26,16 @@ EVENT_FIELDS = [
 ]
 DIFF_FIELDS = [f for f in EVENT_FIELDS if f != "grounding_quote"]
 
-TABLE_COLUMNS = ["#", "id", "title", "annotated_by", "completed", "changed", "human events", "original events"]
+TABLE_COLUMNS = [
+    "#",
+    "id",
+    "title",
+    "annotated_by",
+    "completed",
+    "changed",
+    "human events",
+    "original events",
+]
 
 
 def load_records(path: Path) -> list[dict[str, Any]]:
@@ -56,7 +65,9 @@ def human_events(r: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def original_events(r: dict[str, Any]) -> list[dict[str, Any]]:
-    return ((r.get("annotation") or {}).get("original_annotation") or {}).get("events") or []
+    return ((r.get("annotation") or {}).get("original_annotation") or {}).get(
+        "events"
+    ) or []
 
 
 def annotated_by(r: dict[str, Any]) -> str | None:
@@ -75,7 +86,9 @@ def index_by_quote(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {ev.get("grounding_quote", ""): ev for ev in events if isinstance(ev, dict)}
 
 
-def event_status(ev: dict[str, Any], other_by_quote: dict[str, dict[str, Any]]) -> tuple[str, list[str]]:
+def event_status(
+    ev: dict[str, Any], other_by_quote: dict[str, dict[str, Any]]
+) -> tuple[str, list[str]]:
     """Status of `ev` relative to the other side's events, keyed by grounding_quote."""
     other = other_by_quote.get(ev.get("grounding_quote", ""))
     if other is None:
@@ -84,15 +97,31 @@ def event_status(ev: dict[str, Any], other_by_quote: dict[str, dict[str, Any]]) 
     return ("modified" if diffs else "unchanged"), diffs
 
 
-def format_events_side(events: list[dict[str, Any]], other_by_quote: dict[str, dict[str, Any]], unmatched_label: str) -> str:
+def format_events_side(
+    events: list[dict[str, Any]],
+    other_by_quote: dict[str, dict[str, Any]],
+    unmatched_label: str,
+) -> str:
     if not events:
         return "_(no events)_"
     parts = []
     for i, ev in enumerate(events, 1):
         status, diffs = event_status(ev, other_by_quote)
-        marker = {"unchanged": "", "modified": "✏️ ", "unmatched": f"🔶 {unmatched_label} "}[status]
-        parts.append(f"{i}. {marker}**{ev.get('event_type', 'n/a')}** — _{ev.get('grounding_quote', '')}_")
-        for field in ["event_location", "event_location_admin_level", "event_time", "time_status", "severity"]:
+        marker = {
+            "unchanged": "",
+            "modified": "✏️ ",
+            "unmatched": f"🔶 {unmatched_label} ",
+        }[status]
+        parts.append(
+            f"{i}. {marker}**{ev.get('event_type', 'n/a')}** — _{ev.get('grounding_quote', '')}_"
+        )
+        for field in [
+            "event_location",
+            "event_location_admin_level",
+            "event_time",
+            "time_status",
+            "severity",
+        ]:
             value = ev.get(field, "n/a")
             if field in diffs:
                 parts.append(f"   - **{field}: {value}**")
@@ -138,7 +167,11 @@ def build_app(records: list[dict[str, Any]]):
                 continue
             if changed_filter == "Unchanged only" and (not completed or changed):
                 continue
-            if needle and needle not in record_title(r).lower() and needle not in record_text(r).lower():
+            if (
+                needle
+                and needle not in record_title(r).lower()
+                and needle not in record_text(r).lower()
+            ):
                 continue
             idxs.append(i)
         return idxs
@@ -186,14 +219,22 @@ def build_app(records: list[dict[str, Any]]):
         return title_md, original_md, human_md, record_text(r)
 
     with gr.Blocks(title="Event annotation diff viewer") as demo:
-        gr.Markdown("## Compare human-corrected events against the model's original annotation")
+        gr.Markdown(
+            "## Compare human-corrected events against the model's original annotation"
+        )
         with gr.Row():
-            user_filter = gr.Dropdown(["All", *users], value="All", label="Annotated by")
+            user_filter = gr.Dropdown(
+                ["All", *users], value="All", label="Annotated by"
+            )
             changed_filter = gr.Radio(
-                ["All", "Changed only", "Unchanged only"], value="All", label="Correction status"
+                ["All", "Changed only", "Unchanged only"],
+                value="All",
+                label="Correction status",
             )
             completed_filter = gr.Radio(
-                ["All", "Completed only", "Not completed only"], value="Completed only", label="Completion"
+                ["All", "Completed only", "Not completed only"],
+                value="Completed only",
+                label="Completion",
             )
             search = gr.Textbox(label="Search title/text")
 
@@ -215,7 +256,15 @@ def build_app(records: list[dict[str, Any]]):
         detail_text = gr.Textbox(label="Full text", lines=15, max_lines=30)
 
         filter_inputs = [user_filter, changed_filter, completed_filter, search]
-        table_outputs = [table, idxs_state, count_label, detail_title, detail_original, detail_human, detail_text]
+        table_outputs = [
+            table,
+            idxs_state,
+            count_label,
+            detail_title,
+            detail_original,
+            detail_human,
+            detail_text,
+        ]
         detail_outputs = [detail_title, detail_original, detail_human, detail_text]
 
         for comp in filter_inputs:
@@ -229,7 +278,9 @@ def build_app(records: list[dict[str, Any]]):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, type=str, help="Exported event-annotation JSONL file")
+    parser.add_argument(
+        "--input", required=True, type=str, help="Exported event-annotation JSONL file"
+    )
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--share", action="store_true")
     args = parser.parse_args()

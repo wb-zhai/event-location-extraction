@@ -36,11 +36,26 @@ def get_events(rec: dict[str, Any], source: str) -> list[dict[str, Any]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Top-N Photon-resolved location distribution.")
-    parser.add_argument("--input", required=True, help="Path to a JSONL file with event.geotaxonomy entries.")
-    parser.add_argument("--source", choices=["predictions", "annotation"], default="predictions",
-        help="Which events to read: model predictions (default) or gold annotation.")
-    parser.add_argument("--top-n", type=int, default=30, help="Number of top locations to show (default 30).")
+    parser = argparse.ArgumentParser(
+        description="Top-N Photon-resolved location distribution."
+    )
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to a JSONL file with event.geotaxonomy entries.",
+    )
+    parser.add_argument(
+        "--source",
+        choices=["predictions", "annotation"],
+        default="predictions",
+        help="Which events to read: model predictions (default) or gold annotation.",
+    )
+    parser.add_argument(
+        "--top-n",
+        type=int,
+        default=30,
+        help="Number of top locations to show (default 30).",
+    )
     args = parser.parse_args()
 
     path = resolve_path(args.input)
@@ -82,12 +97,16 @@ def main() -> None:
     print(f"Events with no geotaxonomy match: {unresolved_events}")
     print()
 
-    print(f"Top {args.top_n} resolved locations (geotaxonomy[].resolved_name, {n_places_total} place mentions total):")
+    print(
+        f"Top {args.top_n} resolved locations (geotaxonomy[].resolved_name, {n_places_total} place mentions total):"
+    )
     print_counter(resolved_names, n_places_total, args.top_n)
     print()
 
     n_countries_total = sum(countries.values())
-    print(f"Top {args.top_n} resolved countries (geotaxonomy[].country, {n_countries_total} place mentions total):")
+    print(
+        f"Top {args.top_n} resolved countries (geotaxonomy[].country, {n_countries_total} place mentions total):"
+    )
     print_counter(countries, n_countries_total, args.top_n)
 
 

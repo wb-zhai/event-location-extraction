@@ -79,7 +79,9 @@ def vllm_infer(
     Usage: python vllm_infer.py --model_name_or_path meta-llama/Llama-2-7b-hf --template llama --dataset alpaca_en_demo
     """
     if pipeline_parallel_size > get_device_count():
-        raise ValueError("Pipeline parallel size should be smaller than the number of gpus.")
+        raise ValueError(
+            "Pipeline parallel size should be smaller than the number of gpus."
+        )
 
     model_args, data_args, _, generating_args = get_infer_args(
         dict(
@@ -129,11 +131,14 @@ def vllm_infer(
     llm = LLM(**engine_args)
 
     # load datasets
-    dataset_module = get_dataset(template_obj, model_args, data_args, training_args, "ppo", **tokenizer_module)
+    dataset_module = get_dataset(
+        template_obj, model_args, data_args, training_args, "ppo", **tokenizer_module
+    )
     train_dataset = dataset_module["train_dataset"]
 
     sampling_params = SamplingParams(
-        repetition_penalty=generating_args.repetition_penalty or 1.0,  # repetition_penalty must > 0
+        repetition_penalty=generating_args.repetition_penalty
+        or 1.0,  # repetition_penalty must > 0
         temperature=generating_args.temperature,
         top_p=generating_args.top_p or 1.0,  # top_p must > 0
         top_k=generating_args.top_k or -1,  # top_k must > 0
@@ -153,7 +158,9 @@ def vllm_infer(
 
     model_predict_start_time = time.time()
     # Add batch process to avoid the issue of too many files opened
-    for i in tqdm(range(0, len(train_dataset), batch_size), desc="Processing batched inference"):
+    for i in tqdm(
+        range(0, len(train_dataset), batch_size), desc="Processing batched inference"
+    ):
         vllm_inputs, prompts, labels = [], [], []
         batch = train_dataset[i : min(i + batch_size, len(train_dataset))]
 
@@ -164,7 +171,9 @@ def vllm_infer(
             if batch["images"][j] is not None:
                 image = batch["images"][j]
                 multi_modal_data["image"] = template_obj.mm_plugin._regularize_images(
-                    image, image_max_pixels=image_max_pixels, image_min_pixels=image_min_pixels
+                    image,
+                    image_max_pixels=image_max_pixels,
+                    image_min_pixels=image_min_pixels,
                 )["images"]
 
             if batch["videos"][j] is not None:
@@ -178,13 +187,17 @@ def vllm_infer(
                 )["videos"]
                 if need_video_kwargs:
                     container = av.open(video[0], "r")
-                    video_stream = next(stream for stream in container.streams if stream.type == "video")
+                    video_stream = next(
+                        stream for stream in container.streams if stream.type == "video"
+                    )
                     sampling_indices = template_obj.mm_plugin._get_video_sample_indices(
                         video_stream, video_fps, video_maxlen
                     )
                     total_frames = video_stream.frames
                     video_metadata_kwargs = {
-                        "fps": getattr(tokenizer_module["processor"], "video_fps", 24.0),
+                        "fps": getattr(
+                            tokenizer_module["processor"], "video_fps", 24.0
+                        ),
                         "do_sample_frames": False,
                         "total_num_frames": total_frames,
                     }
@@ -194,7 +207,10 @@ def vllm_infer(
                         total_num_frames=total_frames,
                         video_backend="opencv",
                     )
-                    multi_modal_data["video"] = (multi_modal_data["video"], video_metadata)
+                    multi_modal_data["video"] = (
+                        multi_modal_data["video"],
+                        video_metadata,
+                    )
 
             if batch["audios"][j] is not None:
                 audio = batch["audios"][j]
@@ -202,14 +218,23 @@ def vllm_infer(
                     audio,
                     sampling_rate=16000,
                 )
-                multi_modal_data["audio"] = zip(audio_data["audios"], audio_data["sampling_rates"])
+                multi_modal_data["audio"] = zip(
+                    audio_data["audios"], audio_data["sampling_rates"]
+                )
 
-            vllm_input_data = {"prompt_token_ids": batch["input_ids"][j], "multi_modal_data": multi_modal_data or None}
+            vllm_input_data = {
+                "prompt_token_ids": batch["input_ids"][j],
+                "multi_modal_data": multi_modal_data or None,
+            }
             if video_metadata_kwargs is not None:
                 vllm_input_data["mm_processor_kwargs"] = video_metadata_kwargs
 
             vllm_inputs.append(vllm_input_data)
-            prompts.append(tokenizer.decode(batch["input_ids"][j], skip_special_tokens=skip_special_tokens))
+            prompts.append(
+                tokenizer.decode(
+                    batch["input_ids"][j], skip_special_tokens=skip_special_tokens
+                )
+            )
             labels.append(
                 tokenizer.decode(
                     list(filter(lambda x: x != IGNORE_INDEX, batch["labels"][j])),
@@ -232,7 +257,13 @@ def vllm_infer(
     # save_name.parent.mkdir(parents=True, exist_ok=True)
     with open(save_name, "w", encoding="utf-8") as f:
         for text, pred, label in zip(all_prompts, all_preds, all_labels):
-            f.write(json.dumps({"prompt": text, "predict": pred, "label": label}, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {"prompt": text, "predict": pred, "label": label},
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
 
     print("*" * 70)
     print(f"{len(all_prompts)} total generated results have been saved at {save_name}.")
@@ -259,7 +290,9 @@ def vllm_infer(
 
         start_time = time.time()
         dataset = load_dataset("json", data_files=save_name, split="train")
-        dataset = dataset.map(compute_metrics, num_proc=8, remove_columns=dataset.column_names)
+        dataset = dataset.map(
+            compute_metrics, num_proc=8, remove_columns=dataset.column_names
+        )
         score_dict = dataset.to_dict()
 
         average_score = {}
@@ -271,14 +304,20 @@ def vllm_infer(
         average_score["predict_model_preparation_time"] = preparation_time
         average_score["predict_runtime"] = predict_time
         num_steps = len(range(0, len(train_dataset), batch_size))
-        average_score["predict_samples_per_second"] = len(dataset) / predict_time if predict_time > 0 else 0.0
-        average_score["predict_steps_per_second"] = num_steps / predict_time if predict_time > 0 else 0.0
+        average_score["predict_samples_per_second"] = (
+            len(dataset) / predict_time if predict_time > 0 else 0.0
+        )
+        average_score["predict_steps_per_second"] = (
+            num_steps / predict_time if predict_time > 0 else 0.0
+        )
 
         with open(matrix_save_name, "w", encoding="utf-8") as f:
             json.dump(average_score, f, indent=4)
 
         print("*" * 70)
-        print(f"\nDone in {time.time() - start_time:.3f}s.\nScore file saved to {matrix_save_name}.")
+        print(
+            f"\nDone in {time.time() - start_time:.3f}s.\nScore file saved to {matrix_save_name}."
+        )
         print("*" * 70)
 
 

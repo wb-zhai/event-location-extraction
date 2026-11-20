@@ -58,7 +58,9 @@ def get_decision_labels(records: list[dict]) -> list[str]:
 
 def get_model_name(records: list[dict]) -> str | None:
     for r in records:
-        model = (r.get("relevance") or {}).get("model") or (r.get("llm") or {}).get("model")
+        model = (r.get("relevance") or {}).get("model") or (r.get("llm") or {}).get(
+            "model"
+        )
         if model:
             return model
     return None
@@ -93,7 +95,11 @@ def build_app(records: list[dict]):
                 continue
             if (rel.get("confidence") or 0.0) < min_conf:
                 continue
-            if needle and needle not in record_title(r).lower() and needle not in record_text(r).lower():
+            if (
+                needle
+                and needle not in record_title(r).lower()
+                and needle not in record_text(r).lower()
+            ):
                 continue
             idxs.append(i)
         return idxs
@@ -121,14 +127,14 @@ def build_app(records: list[dict]):
         )
         return meta, record_text(r)
 
-    decision_choices = ["All"] + [label.capitalize() for label in get_decision_labels(records)]
+    decision_choices = ["All"] + [
+        label.capitalize() for label in get_decision_labels(records)
+    ]
 
     with gr.Blocks(title="Relevance filter viewer") as demo:
         gr.Markdown("## Relevance filter output viewer")
         with gr.Row():
-            decision_filter = gr.Radio(
-                decision_choices, value="All", label="Decision"
-            )
+            decision_filter = gr.Radio(decision_choices, value="All", label="Decision")
             filtered_filter = gr.Radio(
                 ["All", "Filtered only", "Kept only"], value="All", label="Filtered"
             )
@@ -156,7 +162,9 @@ def build_app(records: list[dict]):
             comp.change(refresh_table, inputs=inputs, outputs=outputs)
 
         demo.load(refresh_table, inputs=inputs, outputs=outputs)
-        table.select(show_detail, inputs=[idxs_state], outputs=[detail_meta, detail_text])
+        table.select(
+            show_detail, inputs=[idxs_state], outputs=[detail_meta, detail_text]
+        )
 
     return demo
 
@@ -192,7 +200,9 @@ def build_compare_app(
     if output_path.exists():
         for r in load_records(output_path):
             adjudications[record_key(r)] = r
-        print(f"Resuming: {len(adjudications)} adjudications already saved in {output_path}.")
+        print(
+            f"Resuming: {len(adjudications)} adjudications already saved in {output_path}."
+        )
 
     def write_output():
         with output_path.open("w", encoding="utf-8") as f:
@@ -215,7 +225,11 @@ def build_compare_app(
                 continue
             if status_filter == "Done only" and not done:
                 continue
-            if needle and needle not in record_title(ra).lower() and needle not in record_text(ra).lower():
+            if (
+                needle
+                and needle not in record_title(ra).lower()
+                and needle not in record_text(ra).lower()
+            ):
                 continue
             idxs.append(i)
         return idxs
@@ -295,7 +309,20 @@ def build_compare_app(
             k = common_ids[(start + offset) % len(common_ids)]
             if k not in adjudications:
                 return load_id(k)
-        return load_id(current_id) if current_id else (None, "", "", "", "", gr.update(choices=[], value=None), "", "No pending records left.")
+        return (
+            load_id(current_id)
+            if current_id
+            else (
+                None,
+                "",
+                "",
+                "",
+                "",
+                gr.update(choices=[], value=None),
+                "",
+                "No pending records left.",
+            )
+        )
 
     def save(current_id, choice, note, agreement_filter, status_filter, search):
         if not current_id:
@@ -336,13 +363,20 @@ def build_compare_app(
         }
         write_output()
         rows, idxs, count = refresh_table(agreement_filter, status_filter, search)
-        return rows, idxs, count, f"Saved ({len(adjudications)}/{len(common_ids)} done)."
+        return (
+            rows,
+            idxs,
+            count,
+            f"Saved ({len(adjudications)}/{len(common_ids)} done).",
+        )
 
     with gr.Blocks(title="Relevance comparison / adjudication") as demo:
         gr.Markdown(f"## Compare {a_name} vs {b_name}")
         with gr.Row():
             agreement_filter = gr.Radio(
-                ["All", "Agree only", "Disagree only"], value="Disagree only", label="Agreement"
+                ["All", "Agree only", "Disagree only"],
+                value="Disagree only",
+                label="Agreement",
             )
             status_filter = gr.Radio(
                 ["All", "Pending only", "Done only"], value="All", label="Status"
@@ -376,7 +410,16 @@ def build_compare_app(
 
         filter_inputs = [agreement_filter, status_filter, search]
         table_outputs = [table, idxs_state, count_label]
-        detail_outputs = [current_id_state, detail_title, detail_meta_a, detail_meta_b, detail_text, choice, note, save_status]
+        detail_outputs = [
+            current_id_state,
+            detail_title,
+            detail_meta_a,
+            detail_meta_b,
+            detail_text,
+            choice,
+            note,
+            save_status,
+        ]
 
         for comp in filter_inputs:
             comp.change(refresh_table, inputs=filter_inputs, outputs=table_outputs)
@@ -398,13 +441,34 @@ def main():
         description="Browse relevance_filter.py JSONL output, or compare two prediction "
         "files side by side and adjudicate disagreements."
     )
-    parser.add_argument("--input", type=str, help="Path to a single relevance_filter.py output JSONL (view mode)")
-    parser.add_argument("--a", type=str, help="First predictions file (compare/adjudicate mode)")
-    parser.add_argument("--b", type=str, help="Second predictions file (compare/adjudicate mode)")
-    parser.add_argument("--a-name", type=str, default=None, help="Label for --a (default: model name from file)")
-    parser.add_argument("--b-name", type=str, default=None, help="Label for --b (default: model name from file)")
     parser.add_argument(
-        "--output", type=str, default=None, help="Where to write adjudications JSONL (required with --a/--b)"
+        "--input",
+        type=str,
+        help="Path to a single relevance_filter.py output JSONL (view mode)",
+    )
+    parser.add_argument(
+        "--a", type=str, help="First predictions file (compare/adjudicate mode)"
+    )
+    parser.add_argument(
+        "--b", type=str, help="Second predictions file (compare/adjudicate mode)"
+    )
+    parser.add_argument(
+        "--a-name",
+        type=str,
+        default=None,
+        help="Label for --a (default: model name from file)",
+    )
+    parser.add_argument(
+        "--b-name",
+        type=str,
+        default=None,
+        help="Label for --b (default: model name from file)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Where to write adjudications JSONL (required with --a/--b)",
     )
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--share", action="store_true")
@@ -413,13 +477,17 @@ def main():
     if args.a and args.b:
         if not args.output:
             parser.error("Compare mode requires --output.")
-        demo = build_compare_app(Path(args.a), Path(args.b), Path(args.output), args.a_name, args.b_name)
+        demo = build_compare_app(
+            Path(args.a), Path(args.b), Path(args.output), args.a_name, args.b_name
+        )
     elif args.a or args.b or args.input:
         path = args.input or args.a or args.b
         records = load_records(Path(path))
         demo = build_app(records)
     else:
-        parser.error("Provide --input for view mode, or --a/--b/--output for compare mode.")
+        parser.error(
+            "Provide --input for view mode, or --a/--b/--output for compare mode."
+        )
 
     demo.launch(server_port=args.port, share=args.share)
 

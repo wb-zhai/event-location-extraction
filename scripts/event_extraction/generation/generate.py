@@ -148,7 +148,7 @@ def normalized_source(record: dict[str, Any]) -> dict[str, str]:
 
 
 def render_prompt(template: str, record: dict[str, Any]) -> str:
-    article = f"Title: {source_title(record)}\n" "\n" f"{source_text(record)}"
+    article = f"Title: {source_title(record)}\n\n{source_text(record)}"
     return template.replace(
         "{{PUBLISH_DATE}}", source_publish_date(record) or "not_stated"
     ).replace("{{ARTICLE_TEXT}}", article)
@@ -467,7 +467,9 @@ def _cost_ledger_entry(result: dict[str, Any]) -> dict[str, Any] | None:
     return {"generation_llm": generation_llm}
 
 
-def _print_cost_report(label: str, ledger: list[dict[str, Any]], *, batch: bool) -> None:
+def _print_cost_report(
+    label: str, ledger: list[dict[str, Any]], *, batch: bool
+) -> None:
     from scripts.event_extraction.generation.costs import aggregate, report
 
     report(label, aggregate(ledger), batch=batch)

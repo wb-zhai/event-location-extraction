@@ -73,52 +73,172 @@ RETRIEVER_MAX_MODEL_LEN="${RETRIEVER_MAX_MODEL_LEN:-}"
 # ---- Parse args ----
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --tier)            TIER="$2";            shift 2 ;;
-        --shards)          SHARDS="$2";          shift 2 ;;
-        --image)           IMAGE="$2";           shift 2 ;;
-        --manifest)        MANIFEST_GCS="$2";    shift 2 ;;
-        --output)          OUTPUT_GCS="$2";      shift 2 ;;
-        --model)           MODEL_GCS="$2";       shift 2 ;;
-        --project)         PROJECT="$2";         shift 2 ;;
-        --region)          REGION="$2";          shift 2 ;;
-        --job-id)          JOB_ID="$2";          shift 2 ;;
-        --max-new-tokens)     MAX_NEW_TOKENS="$2";     shift 2 ;;
-        --batch-size)         BATCH_SIZE="$2";         shift 2 ;;
-        --max-run-duration)   MAX_RUN_DURATION="$2";   shift 2 ;;
-        --max-chars)          MAX_CHARS="$2";          shift 2 ;;
-        --max-model-len)      MAX_MODEL_LEN="$2";      shift 2 ;;
-        --top-k-candidates)   TOP_K_CANDIDATES="$2";   shift 2 ;;
-        --quantization)            QUANTIZATION="$2";            shift 2 ;;
-        --gpu-memory-util)         GPU_MEMORY_UTIL="$2";         shift 2 ;;
-        --gcs-read-concurrency)    GCS_READ_CONCURRENCY="$2";    shift 2 ;;
-        --min-chars)               MIN_CHARS="$2";               shift 2 ;;
-        --max-paras)               MAX_PARAS="$2";               shift 2 ;;
-        --overlap-paras)           OVERLAP_PARAS="$2";           shift 2 ;;
-        --temperature)             TEMPERATURE="$2";             shift 2 ;;
-        --use-guided-decoding)     USE_GUIDED_DECODING="true";   shift 1 ;;
-        --guided-decoding-backend) GUIDED_DECODING_BACKEND="$2"; shift 2 ;;
-        --ontology)                ONTOLOGY="$2";                shift 2 ;;
-        --ontology-descriptions)   ONTOLOGY_DESCRIPTIONS="$2";   shift 2 ;;
-        --lean-output)             LEAN_OUTPUT="$2";             shift 2 ;;
-        --skip-manifest-check)     SKIP_MANIFEST_CHECK="true";   shift 1 ;;
-        --retriever-model-name)    RETRIEVER_MODEL_NAME="$2";    shift 2 ;;
-        --retriever-index)         RETRIEVER_INDEX="$2";         shift 2 ;;
-        --retriever-gpu-mem-util)  RETRIEVER_GPU_MEM_UTIL="$2";  shift 2 ;;
-        --retriever-query-mode)    RETRIEVER_QUERY_MODE="$2";    shift 2 ;;
-        --retriever-max-model-len) RETRIEVER_MAX_MODEL_LEN="$2"; shift 2 ;;
-        *) echo "Unknown arg: $1" >&2; exit 1 ;;
+        --tier)
+            TIER="$2"
+            shift 2
+            ;;
+        --shards)
+            SHARDS="$2"
+            shift 2
+            ;;
+        --image)
+            IMAGE="$2"
+            shift 2
+            ;;
+        --manifest)
+            MANIFEST_GCS="$2"
+            shift 2
+            ;;
+        --output)
+            OUTPUT_GCS="$2"
+            shift 2
+            ;;
+        --model)
+            MODEL_GCS="$2"
+            shift 2
+            ;;
+        --project)
+            PROJECT="$2"
+            shift 2
+            ;;
+        --region)
+            REGION="$2"
+            shift 2
+            ;;
+        --job-id)
+            JOB_ID="$2"
+            shift 2
+            ;;
+        --max-new-tokens)
+            MAX_NEW_TOKENS="$2"
+            shift 2
+            ;;
+        --batch-size)
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
+        --max-run-duration)
+            MAX_RUN_DURATION="$2"
+            shift 2
+            ;;
+        --max-chars)
+            MAX_CHARS="$2"
+            shift 2
+            ;;
+        --max-model-len)
+            MAX_MODEL_LEN="$2"
+            shift 2
+            ;;
+        --top-k-candidates)
+            TOP_K_CANDIDATES="$2"
+            shift 2
+            ;;
+        --quantization)
+            QUANTIZATION="$2"
+            shift 2
+            ;;
+        --gpu-memory-util)
+            GPU_MEMORY_UTIL="$2"
+            shift 2
+            ;;
+        --gcs-read-concurrency)
+            GCS_READ_CONCURRENCY="$2"
+            shift 2
+            ;;
+        --min-chars)
+            MIN_CHARS="$2"
+            shift 2
+            ;;
+        --max-paras)
+            MAX_PARAS="$2"
+            shift 2
+            ;;
+        --overlap-paras)
+            OVERLAP_PARAS="$2"
+            shift 2
+            ;;
+        --temperature)
+            TEMPERATURE="$2"
+            shift 2
+            ;;
+        --use-guided-decoding)
+            USE_GUIDED_DECODING="true"
+            shift 1
+            ;;
+        --guided-decoding-backend)
+            GUIDED_DECODING_BACKEND="$2"
+            shift 2
+            ;;
+        --ontology)
+            ONTOLOGY="$2"
+            shift 2
+            ;;
+        --ontology-descriptions)
+            ONTOLOGY_DESCRIPTIONS="$2"
+            shift 2
+            ;;
+        --lean-output)
+            LEAN_OUTPUT="$2"
+            shift 2
+            ;;
+        --skip-manifest-check)
+            SKIP_MANIFEST_CHECK="true"
+            shift 1
+            ;;
+        --retriever-model-name)
+            RETRIEVER_MODEL_NAME="$2"
+            shift 2
+            ;;
+        --retriever-index)
+            RETRIEVER_INDEX="$2"
+            shift 2
+            ;;
+        --retriever-gpu-mem-util)
+            RETRIEVER_GPU_MEM_UTIL="$2"
+            shift 2
+            ;;
+        --retriever-query-mode)
+            RETRIEVER_QUERY_MODE="$2"
+            shift 2
+            ;;
+        --retriever-max-model-len)
+            RETRIEVER_MAX_MODEL_LEN="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown arg: $1" >&2
+            exit 1
+            ;;
     esac
 done
 
 # ---- Validate required args ----
-[[ -z "${IMAGE}"        ]] && { echo "ERROR: --image is required" >&2; exit 1; }
-[[ -z "${MANIFEST_GCS}" ]] && { echo "ERROR: --manifest is required" >&2; exit 1; }
-[[ -z "${OUTPUT_GCS}"   ]] && { echo "ERROR: --output is required" >&2; exit 1; }
-[[ -z "${MODEL_GCS}"    ]] && { echo "ERROR: --model is required" >&2; exit 1; }
-[[ -z "${PROJECT}" ]] && { echo "ERROR: --project required (gcloud config has no project set)" >&2; exit 1; }
+[[ -z "${IMAGE}" ]] && {
+    echo "ERROR: --image is required" >&2
+    exit 1
+}
+[[ -z "${MANIFEST_GCS}" ]] && {
+    echo "ERROR: --manifest is required" >&2
+    exit 1
+}
+[[ -z "${OUTPUT_GCS}" ]] && {
+    echo "ERROR: --output is required" >&2
+    exit 1
+}
+[[ -z "${MODEL_GCS}" ]] && {
+    echo "ERROR: --model is required" >&2
+    exit 1
+}
+[[ -z "${PROJECT}" ]] && {
+    echo "ERROR: --project required (gcloud config has no project set)" >&2
+    exit 1
+}
 
 TEMPLATE="${HERE}/batch_job.${TIER}.json"
-[[ -f "${TEMPLATE}" ]] || { echo "ERROR: unknown tier '${TIER}' (no template ${TEMPLATE})" >&2; exit 1; }
+[[ -f "${TEMPLATE}" ]] || {
+    echo "ERROR: unknown tier '${TIER}' (no template ${TEMPLATE})" >&2
+    exit 1
+}
 
 # ---- Manifest/shard count must match ----
 # Task N reads manifest-NNN.jsonl. Too few manifests and those tasks die on the gsutil cp;
@@ -142,8 +262,9 @@ if [[ "${SKIP_MANIFEST_CHECK}" != "true" ]]; then
 fi
 
 # ---- Render the template into a temporary config ----
-TMP_CONFIG="$(mktemp /tmp/batch_job_XXXXXX.json)"
-trap "rm -f ${TMP_CONFIG}" EXIT
+TMP_JOB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/batch_job.XXXXXX")"
+TMP_CONFIG="$TMP_JOB_DIR/job.json"
+trap 'rm -f "$TMP_CONFIG"; rmdir "$TMP_JOB_DIR"' EXIT
 
 sed \
     -e "s|\"TASK_COUNT\"|\"${SHARDS}\"|g" \
@@ -174,7 +295,7 @@ sed \
     -e "s|VAL_RETRIEVER_GPU_MEM_UTIL|${RETRIEVER_GPU_MEM_UTIL}|g" \
     -e "s|VAL_RETRIEVER_QUERY_MODE|${RETRIEVER_QUERY_MODE}|g" \
     -e "s|VAL_RETRIEVER_MAX_MODEL_LEN|${RETRIEVER_MAX_MODEL_LEN}|g" \
-    "${TEMPLATE}" > "${TMP_CONFIG}"
+    "${TEMPLATE}" >"${TMP_CONFIG}"
 
 echo "=== Job config (${TIER}, ${SHARDS} shards) ==="
 cat "${TMP_CONFIG}"

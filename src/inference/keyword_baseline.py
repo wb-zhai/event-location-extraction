@@ -230,7 +230,9 @@ def _normalize_prediction(document: str, prediction: dict[str, Any]) -> dict[str
     return {"events": normalized_events}
 
 
-def _extract_passage_event_candidates(row: dict[str, Any]) -> list[tuple[str, str]] | None:
+def _extract_passage_event_candidates(
+    row: dict[str, Any],
+) -> list[tuple[str, str]] | None:
     passages = row.get("passages")
     if not isinstance(passages, list):
         return None
@@ -309,7 +311,11 @@ def _match_trigger_in_sentence(
     if phrase_index >= 0:
         start = sentence_start + phrase_index
         end = start + len(label)
-        return {"start": start, "end": end, "text": sentence[phrase_index : phrase_index + len(label)]}
+        return {
+            "start": start,
+            "end": end,
+            "text": sentence[phrase_index : phrase_index + len(label)],
+        }
 
     keywords = _label_keywords(label)
     if not keywords:
@@ -335,7 +341,11 @@ def _match_trigger_in_sentence(
     keyword_index, keyword = matched_keywords[0]
     start = sentence_start + keyword_index
     end = start + len(keyword)
-    return {"start": start, "end": end, "text": sentence[keyword_index : keyword_index + len(keyword)]}
+    return {
+        "start": start,
+        "end": end,
+        "text": sentence[keyword_index : keyword_index + len(keyword)],
+    }
 
 
 def _default_location_type(location_types: list[str] | dict[str, str]) -> str | None:
@@ -374,7 +384,9 @@ def _extract_location_arguments(
         role = "location"
         if preposition in _SOURCE_PREPOSITIONS and "source_location" in available_roles:
             role = "source_location"
-        elif preposition in _TARGET_PREPOSITIONS and "target_location" in available_roles:
+        elif (
+            preposition in _TARGET_PREPOSITIONS and "target_location" in available_roles
+        ):
             role = "target_location"
         elif "location" not in available_roles:
             continue
@@ -407,7 +419,11 @@ def predict_document(
     location_types: list[str] | dict[str, str],
     events_only: bool = False,
 ) -> dict[str, Any]:
-    labels = list(event_labels.keys()) if isinstance(event_labels, dict) else list(event_labels)
+    labels = (
+        list(event_labels.keys())
+        if isinstance(event_labels, dict)
+        else list(event_labels)
+    )
     raw_events: list[dict[str, Any]] = []
 
     for sentence, sentence_start, _ in _iter_sentences(document):

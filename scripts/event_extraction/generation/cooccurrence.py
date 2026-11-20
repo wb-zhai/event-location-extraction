@@ -40,15 +40,30 @@ from scripts.event_extraction.generation.stats import get_events
 
 # Sequential blue ramp, light -> dark (low -> high magnitude).
 _RAMP = [
-    "#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7",
-    "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b",
+    "#cde2fb",
+    "#b7d3f6",
+    "#9ec5f4",
+    "#86b6ef",
+    "#6da7ec",
+    "#5598e7",
+    "#3987e5",
+    "#2a78d6",
+    "#256abf",
+    "#1c5cab",
+    "#184f95",
+    "#104281",
+    "#0d366b",
 ]
 _CMAP = LinearSegmentedColormap.from_list("sequential_blue", _RAMP)
 
 
 def compute_matrix(path: Path, top_n: int | None) -> dict[str, Any]:
-    doc_count: Counter = Counter()   # articles containing at least one event of this type
-    pair_count: Counter = Counter()  # (type_a, type_b) unordered, a < b -> co-occurrence count
+    doc_count: Counter = (
+        Counter()
+    )  # articles containing at least one event of this type
+    pair_count: Counter = (
+        Counter()
+    )  # (type_a, type_b) unordered, a < b -> co-occurrence count
     n_articles_with_events = 0
     n_articles = 0
 
@@ -100,7 +115,9 @@ def overlap_matrix(matrix: np.ndarray) -> np.ndarray:
     return rate
 
 
-def plot_heatmap(data: dict[str, Any], output: Path, dpi: int, metric: str = "count") -> None:
+def plot_heatmap(
+    data: dict[str, Any], output: Path, dpi: int, metric: str = "count"
+) -> None:
     labels = data["labels"]
     raw = np.array(data["matrix"], dtype=float)
     n = len(labels)
@@ -108,7 +125,9 @@ def plot_heatmap(data: dict[str, Any], output: Path, dpi: int, metric: str = "co
     if metric == "overlap":
         matrix = overlap_matrix(raw)
         scaled = matrix.copy()  # already bounded [0, 1], no need to compress the range
-        np.fill_diagonal(scaled, np.nan)  # trivially 1.0 -- gray it out rather than let it dominate as "darkest"
+        np.fill_diagonal(
+            scaled, np.nan
+        )  # trivially 1.0 -- gray it out rather than let it dominate as "darkest"
     else:
         matrix = raw
         # sqrt scale so mid-range pairs stay visible next to the dominant pairs
@@ -128,8 +147,11 @@ def plot_heatmap(data: dict[str, Any], output: Path, dpi: int, metric: str = "co
 
     # outline the diagonal (self-frequency / trivial self-overlap, not a real co-occurrence)
     for i in range(n):
-        ax.add_patch(plt.Rectangle((i - 0.5, i - 0.5), 1, 1, fill=False,
-                                    edgecolor="white", linewidth=1.2))
+        ax.add_patch(
+            plt.Rectangle(
+                (i - 0.5, i - 0.5), 1, 1, fill=False, edgecolor="white", linewidth=1.2
+            )
+        )
 
     # thin gridlines between cells
     ax.set_xticks(np.arange(-0.5, n, 1), minor=True)
@@ -155,7 +177,9 @@ def plot_heatmap(data: dict[str, Any], output: Path, dpi: int, metric: str = "co
 
     n_articles = data.get("n_articles")
     n_with_events = data.get("n_articles_with_events")
-    subtitle = f"{n_with_events}/{n_articles} articles with ≥1 event" if n_articles else ""
+    subtitle = (
+        f"{n_with_events}/{n_articles} articles with ≥1 event" if n_articles else ""
+    )
     if metric == "overlap":
         title = (
             f"Event type co-occurrence\n{subtitle}\n"
@@ -173,23 +197,38 @@ def plot_heatmap(data: dict[str, Any], output: Path, dpi: int, metric: str = "co
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Event-type co-occurrence heatmap (within-article).")
+    parser = argparse.ArgumentParser(
+        description="Event-type co-occurrence heatmap (within-article)."
+    )
     parser.add_argument("--input", required=True, help="Path to a JSONL file.")
     parser.add_argument("--output", required=True, help="Output image path (.png).")
-    parser.add_argument("--top-n", type=int, default=None, help="Number of most-frequent event types to keep (default: all).")
-    parser.add_argument("--dpi", type=int, default=180)
-    parser.add_argument("--json", default=None, help="Also write the raw co-occurrence matrix to this JSON path.")
     parser.add_argument(
-        "--metric", choices=["count", "overlap"], default="count",
+        "--top-n",
+        type=int,
+        default=None,
+        help="Number of most-frequent event types to keep (default: all).",
+    )
+    parser.add_argument("--dpi", type=int, default=180)
+    parser.add_argument(
+        "--json",
+        default=None,
+        help="Also write the raw co-occurrence matrix to this JSON path.",
+    )
+    parser.add_argument(
+        "--metric",
+        choices=["count", "overlap"],
+        default="count",
         help="'count' = raw # articles (default); 'overlap' = count / min(diag_X, diag_Y), "
-             "i.e. the fraction of the rarer type's articles that also show the other type.",
+        "i.e. the fraction of the rarer type's articles that also show the other type.",
     )
     args = parser.parse_args()
 
     path = resolve_path(args.input)
     data = compute_matrix(path, args.top_n)
-    print(f"{len(data['labels'])} types, {data['n_articles_with_events']} articles with events "
-          f"out of {data['n_articles']}.")
+    print(
+        f"{len(data['labels'])} types, {data['n_articles_with_events']} articles with events "
+        f"out of {data['n_articles']}."
+    )
 
     if args.json:
         json_path = Path(args.json)

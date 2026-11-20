@@ -193,7 +193,7 @@ async def process_file(args: argparse.Namespace) -> None:
     filtered = counts["filtered"]
     print(f"Total records: {total}")
     if total:
-        print(f"Filtered out: {filtered} ({filtered/total:.2%})")
+        print(f"Filtered out: {filtered} ({filtered / total:.2%})")
 
 
 def main() -> None:

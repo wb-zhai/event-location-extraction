@@ -889,6 +889,8 @@ TODO
 - Inference output: `gs://zhai-risk-factor-extraction/extraction/output/run-001`
 ## Global V4 structural postprocessing
 
+Lookup databases and compact event metadata default to `outputs/geography/global_v4_audit/work/`. Set `GLOBAL_V4_WORK_DIR` to an absolute path if these files are stored elsewhere. Use the same value when running the first-pass clustering script in `llm-risk-factors-extraction`.
+
 Run from the repository root with authenticated GCS access and the frozen audit
 inputs under `outputs/geography/global_v4_audit/`. Process one full shard with:
 

@@ -18,7 +18,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-
     arg_parser = argparse.ArgumentParser(
         description="Train GLiNER2 on a custom NER dataset"
     )
@@ -190,7 +189,9 @@ if __name__ == "__main__":
             "[OUTPUT]",
             "[DESCRIPTION]",
         ]
-        tokenizer.add_special_tokens({"additional_special_tokens": additional_special_tokens})
+        tokenizer.add_special_tokens(
+            {"additional_special_tokens": additional_special_tokens}
+        )
         model = GLiNER2(config, encoder_config=encoder_config, tokenizer=tokenizer)
 
     config = TrainingConfig(
@@ -223,7 +224,7 @@ if __name__ == "__main__":
     print("Training completed!")
     print(f"Best validation loss: {results['best_metric']:.4f}")
     print(f"Total steps: {results['total_steps']}")
-    print(f"Training time: {results['total_time_seconds']/60:.1f} minutes")
+    print(f"Training time: {results['total_time_seconds'] / 60:.1f} minutes")
 
     # Step 7: Load best model for inference
     # best_model = GLiNER2.from_pretrained(args.output_dir + "/best")

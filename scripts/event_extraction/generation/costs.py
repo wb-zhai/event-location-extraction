@@ -5,6 +5,7 @@ Token counts are stored per-record in llm.metadata by generate.py and fix_events
 For fix_events.py output in --mode per-article, multiple rows share the same LLM call.
 Pass --dedup-key doc_id to count each article's tokens only once in that case.
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -20,41 +21,41 @@ TIER_THRESHOLD = 200_000
 PRICING: dict[str, dict[str, dict[str, dict[str, float]]]] = {
     "gemini-2.5-flash": {
         "standard": {
-            "low":  {"input": 0.30,  "output": 2.50, "cached": 0.03,  "thinking": 2.50},
-            "high": {"input": 0.30,  "output": 2.50, "cached": 0.03,  "thinking": 2.50},
+            "low": {"input": 0.30, "output": 2.50, "cached": 0.03, "thinking": 2.50},
+            "high": {"input": 0.30, "output": 2.50, "cached": 0.03, "thinking": 2.50},
         },
         "batch": {
-            "low":  {"input": 0.15,  "output": 1.25, "cached": 0.03,  "thinking": 1.25},
-            "high": {"input": 0.15,  "output": 1.25, "cached": 0.03,  "thinking": 1.25},
+            "low": {"input": 0.15, "output": 1.25, "cached": 0.03, "thinking": 1.25},
+            "high": {"input": 0.15, "output": 1.25, "cached": 0.03, "thinking": 1.25},
         },
     },
     "gemini-2.5-pro": {
         "standard": {
-            "low":  {"input": 1.25,  "output": 10.0, "cached": 0.125, "thinking": 10.0},
-            "high": {"input": 2.50,  "output": 15.0, "cached": 0.25,  "thinking": 15.0},
+            "low": {"input": 1.25, "output": 10.0, "cached": 0.125, "thinking": 10.0},
+            "high": {"input": 2.50, "output": 15.0, "cached": 0.25, "thinking": 15.0},
         },
         "batch": {
-            "low":  {"input": 0.625, "output": 5.0,  "cached": 0.125, "thinking": 5.0},
-            "high": {"input": 1.25,  "output": 7.50, "cached": 0.25,  "thinking": 7.50},
+            "low": {"input": 0.625, "output": 5.0, "cached": 0.125, "thinking": 5.0},
+            "high": {"input": 1.25, "output": 7.50, "cached": 0.25, "thinking": 7.50},
         },
     },
     "gemini-3.1-pro-preview": {
         "standard": {
-            "low":  {"input": 2.00, "output": 12.0, "cached": 0.20, "thinking": 12.0},
+            "low": {"input": 2.00, "output": 12.0, "cached": 0.20, "thinking": 12.0},
             "high": {"input": 4.00, "output": 18.0, "cached": 0.40, "thinking": 18.0},
         },
         "batch": {
-            "low":  {"input": 1.00, "output": 6.0,  "cached": 0.20, "thinking": 6.0},
-            "high": {"input": 2.00, "output": 9.0,  "cached": 0.40, "thinking": 9.0},
+            "low": {"input": 1.00, "output": 6.0, "cached": 0.20, "thinking": 6.0},
+            "high": {"input": 2.00, "output": 9.0, "cached": 0.40, "thinking": 9.0},
         },
     },
     "gemini-3-flash-preview": {
         "standard": {
-            "low":  {"input": 0.50, "output": 3.00, "cached": 0.05, "thinking": 3.00},
+            "low": {"input": 0.50, "output": 3.00, "cached": 0.05, "thinking": 3.00},
             "high": {"input": 0.50, "output": 3.00, "cached": 0.05, "thinking": 3.00},
         },
         "batch": {
-            "low":  {"input": 0.25, "output": 1.50, "cached": 0.05, "thinking": 1.50},
+            "low": {"input": 0.25, "output": 1.50, "cached": 0.05, "thinking": 1.50},
             "high": {"input": 0.25, "output": 1.50, "cached": 0.05, "thinking": 1.50},
         },
     },
@@ -139,7 +140,9 @@ def _fmt(n: int) -> str:
     return str(n)
 
 
-def report(label: str, totals: dict[str, dict[str, Any]], *, batch: bool = False) -> None:
+def report(
+    label: str, totals: dict[str, dict[str, Any]], *, batch: bool = False
+) -> None:
     tier = "batch" if batch else "standard"
     tier_label = " [batch pricing]" if batch else ""
 
@@ -150,10 +153,18 @@ def report(label: str, totals: dict[str, dict[str, Any]], *, batch: bool = False
 
     W = 36
     print(f"\n=== Token report: {label}{tier_label} ===")
-    print(f"{'Model':<{W}} {'Recs':>6}  {'Input':>10}  {'Output':>10}  {'Cached':>10}  {'Thinking':>10}")
+    print(
+        f"{'Model':<{W}} {'Recs':>6}  {'Input':>10}  {'Output':>10}  {'Cached':>10}  {'Thinking':>10}"
+    )
     print("-" * (W + 52))
 
-    grand: dict[str, int] = {"records": 0, "prompt": 0, "completion": 0, "cached": 0, "thinking": 0}
+    grand: dict[str, int] = {
+        "records": 0,
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "thinking": 0,
+    }
     total_cost = 0.0
     has_unknown = False
 
@@ -190,14 +201,19 @@ def report(label: str, totals: dict[str, dict[str, Any]], *, batch: bool = False
             ("thinking", "thinking", "thinking"),
         ]:
             type_cost = sum(
-                d[bucket][tok] / 1e6 * rates_by_bucket[bucket][rate_key] for bucket in ("low", "high")
+                d[bucket][tok] / 1e6 * rates_by_bucket[bucket][rate_key]
+                for bucket in ("low", "high")
             )
             cost += type_cost
             if d[tok]:
                 parts.append(f"{lbl}=${type_cost:.4f}")
         total_cost += cost
 
-        tier_note = f" ({_fmt(d['high']['prompt'])} tokens at >200k rate)" if d["high"]["records"] else ""
+        tier_note = (
+            f" ({_fmt(d['high']['prompt'])} tokens at >200k rate)"
+            if d["high"]["records"]
+            else ""
+        )
         print(f"  {model}: {' + '.join(parts)} → ${cost:.4f}{tier_note}")
 
     suffix = " (known models only)" if has_unknown else ""

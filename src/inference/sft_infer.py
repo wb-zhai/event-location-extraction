@@ -9,8 +9,10 @@ from typing import Any
 try:
     from tqdm import tqdm
 except ModuleNotFoundError:  # pragma: no cover - optional for file/batch progress only
+
     def tqdm(iterable, *args, **kwargs):
         return iterable
+
 
 import torch
 from torch.utils.data import DataLoader
@@ -195,8 +197,10 @@ def _normalize_span_prediction(
         (isinstance(left_context, str) and left_context)
         or (isinstance(right_context, str) and right_context)
     )
-    if span_text and not has_context and (
-        not isinstance(text, str) or not text or text == span_text
+    if (
+        span_text
+        and not has_context
+        and (not isinstance(text, str) or not text or text == span_text)
     ):
         normalized = {
             "start": start,
@@ -615,8 +619,9 @@ def _require_unsloth() -> None:
         )
 
 
-
-def _extract_passage_event_candidates(row: dict[str, Any]) -> list[tuple[str, str]] | None:
+def _extract_passage_event_candidates(
+    row: dict[str, Any],
+) -> list[tuple[str, str]] | None:
     passages = row.get("passages")
     if not isinstance(passages, list):
         return None
@@ -642,6 +647,7 @@ def _extract_passage_event_candidates(row: dict[str, Any]) -> list[tuple[str, st
         candidates.append((text, description))
 
     return candidates or None
+
 
 def _interactive_should_stop(text: str) -> bool:
     return text.strip().lower() in {"exit", "quit"}
@@ -756,7 +762,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def run_inference_file(args: argparse.Namespace) -> None:
-    
+
     event_labels, argument_roles, location_types = _load_ontology_arguments(args)
     model, tokenizer = load_inference_model(args)
 
@@ -772,21 +778,19 @@ def run_inference_file(args: argparse.Namespace) -> None:
     is_first = True
     batch_size = args.batch_size
 
-    
-
     def collate_fn(batch):
         prompt_texts = []
         for d in batch:
             doc = d["question"]
             d_event_labels = event_labels
-            
+
             passage_candidates = _extract_passage_event_candidates(d)
             if passage_candidates is not None:
                 if isinstance(d_event_labels, dict):
                     d_event_labels = {label: desc for label, desc in passage_candidates}
                 else:
                     d_event_labels = [label for label, _ in passage_candidates]
-                    
+
             prompt_texts.append(
                 render_chat(
                     tokenizer,
@@ -812,18 +816,23 @@ def run_inference_file(args: argparse.Namespace) -> None:
         lines,
         batch_size=batch_size,
         collate_fn=collate_fn,
-        num_workers=getattr(args, "num_workers", 0)
+        num_workers=getattr(args, "num_workers", 0),
     )
 
     generation_kwargs = {
         "max_new_tokens": args.max_new_tokens,
         "do_sample": args.temperature is not None and args.temperature > 0.0,
     }
-    if args.temperature is not None: generation_kwargs["temperature"] = args.temperature
-    if args.min_p is not None: generation_kwargs["min_p"] = args.min_p
-    if args.top_k is not None: generation_kwargs["top_k"] = args.top_k
-    if args.top_p is not None: generation_kwargs["top_p"] = args.top_p
-    if args.repetition_penalty is not None: generation_kwargs["repetition_penalty"] = args.repetition_penalty
+    if args.temperature is not None:
+        generation_kwargs["temperature"] = args.temperature
+    if args.min_p is not None:
+        generation_kwargs["min_p"] = args.min_p
+    if args.top_k is not None:
+        generation_kwargs["top_k"] = args.top_k
+    if args.top_p is not None:
+        generation_kwargs["top_p"] = args.top_p
+    if args.repetition_penalty is not None:
+        generation_kwargs["repetition_penalty"] = args.repetition_penalty
 
     with open(args.output_file, "w", encoding="utf-8") as fout:
         for batch_data, prompt_texts, model_inputs in tqdm(
@@ -841,9 +850,13 @@ def run_inference_file(args: argparse.Namespace) -> None:
 
             prompt_length = int(model_inputs["input_ids"].shape[-1])
             generated_tokens = outputs[:, prompt_length:]
-            prediction_texts = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+            prediction_texts = tokenizer.batch_decode(
+                generated_tokens, skip_special_tokens=True
+            )
 
-            for data, doc, pred_text in zip(batch_data, [d["question"] for d in batch_data], prediction_texts):
+            for data, doc, pred_text in zip(
+                batch_data, [d["question"] for d in batch_data], prediction_texts
+            ):
                 if is_first:
                     print("====== DEBUG RAW OUTPUT ======")
                     print(pred_text)

@@ -30,13 +30,9 @@ con.execute("PRAGMA synchronous=NORMAL")
 con.execute("ATTACH DATABASE ? AS photon", (str(photon),))
 con.execute("ATTACH DATABASE ? AS wb", (str(wb),))
 
-photon_n = con.execute(
-    "SELECT COUNT(*) FROM photon.final_resolution"
-).fetchone()[0]
+photon_n = con.execute("SELECT COUNT(*) FROM photon.final_resolution").fetchone()[0]
 
-wb_n = con.execute(
-    "SELECT COUNT(*) FROM wb.wb_resolution"
-).fetchone()[0]
+wb_n = con.execute("SELECT COUNT(*) FROM wb.wb_resolution").fetchone()[0]
 
 print("Photon rows:", f"{photon_n:,}")
 print("WB rows    :", f"{wb_n:,}")
@@ -207,11 +203,7 @@ for status, rows, mentions in con.execute("""
     GROUP BY COALESCE(wb_match_status, 'NO_PHOTON_CANDIDATE')
     ORDER BY SUM(mention_count) DESC
 """):
-    print(
-        f"  {status:<28} "
-        f"pairs={rows:>10,} "
-        f"mentions={mentions:>12,}"
-    )
+    print(f"  {status:<28} pairs={rows:>10,} mentions={mentions:>12,}")
 
 if total[0] != 1_238_328:
     raise RuntimeError("lookup row accounting failed")

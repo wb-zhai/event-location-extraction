@@ -6,6 +6,7 @@ Output JSONL: same fields + "predictions" (merged/deduplicated events)
 
 Recovery: re-running on an existing output file skips already-processed articles.
 """
+
 from __future__ import annotations
 
 import gc
@@ -24,7 +25,9 @@ from vllm import LLM, SamplingParams
 HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "science.json"
-DEFAULT_PROMPT_DIR = REPO_ROOT / "scripts" / "event_extraction" / "generation" / "prompts" / "student"
+DEFAULT_PROMPT_DIR = (
+    REPO_ROOT / "scripts" / "event_extraction" / "generation" / "prompts" / "student"
+)
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -44,6 +47,7 @@ from scripts.event_extraction.generation.to_sft import (  # noqa: E402
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _article_key(row: dict) -> str:
     text = (row.get("source") or {}).get("text") or json.dumps(row, sort_keys=True)
@@ -90,7 +94,7 @@ def _resolve_events(window_preds: list[dict]) -> list[dict]:
     merged: list[dict] = []
     for wp in window_preds:
         prediction = wp.get("prediction") or {}
-        for event in (prediction.get("events") or []):
+        for event in prediction.get("events") or []:
             gq = (event.get("grounding_quote") or "").strip()
             if gq and gq in seen_quotes:
                 continue
@@ -133,7 +137,9 @@ def _build_windows(
     if not paras:
         return []
 
-    windows = build_paragraph_windows(paras, max_chars=max_chars, max_paras=max_paras, overlap=overlap)
+    windows = build_paragraph_windows(
+        paras, max_chars=max_chars, max_paras=max_paras, overlap=overlap
+    )
     windows = coalesce_short_windows(
         paras, windows, min_chars=min_chars, max_chars=max_chars, max_paras=max_paras
     )
@@ -147,13 +153,17 @@ def _build_windows(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_msg},
         ]
-        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        result.append({
-            "prompt": prompt,
-            "window_start": ws,
-            "window_end": we,
-            "window_text": window_text,
-        })
+        prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        result.append(
+            {
+                "prompt": prompt,
+                "window_start": ws,
+                "window_end": we,
+                "window_text": window_text,
+            }
+        )
 
     return result
 
@@ -161,6 +171,7 @@ def _build_windows(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def vllm_infer(
     model_name_or_path: str,
@@ -191,11 +202,15 @@ def vllm_infer(
     ontology_path = pathlib.Path(ontology) if ontology else DEFAULT_ONTOLOGY
     prompt_dir_path = pathlib.Path(prompt_dir) if prompt_dir else DEFAULT_PROMPT_DIR
 
-    system_template = (prompt_dir_path / "system_prompt.txt").read_text(encoding="utf-8")
+    system_template = (prompt_dir_path / "system_prompt.txt").read_text(
+        encoding="utf-8"
+    )
     user_template = (prompt_dir_path / "user_prompt.txt").read_text(encoding="utf-8")
     default_labels = load_ontology_labels(ontology_path)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name_or_path, trust_remote_code=True
+    )
 
     engine_kwargs: dict = {
         "model": model_name_or_path,
@@ -214,6 +229,7 @@ def vllm_infer(
     lora_request = None
     if adapter_name_or_path is not None:
         from vllm.lora.request import LoRARequest
+
         lora_request = LoRARequest("default", 1, adapter_name_or_path)
 
     sampling_params = SamplingParams(
@@ -241,7 +257,9 @@ def vllm_infer(
     output_path = pathlib.Path(output)
     processed_keys = _load_processed_keys(output_path)
     if processed_keys:
-        print(f"Skipping {len(processed_keys)} already-processed articles (found in {output_path})")
+        print(
+            f"Skipping {len(processed_keys)} already-processed articles (found in {output_path})"
+        )
 
     pending = [row for row in articles if _article_key(row) not in processed_keys]
     print(f"Processing {len(pending)} / {len(articles)} articles")
@@ -249,15 +267,24 @@ def vllm_infer(
     n_batches = (len(pending) + batch_size - 1) // batch_size
 
     with open(output_path, "a", encoding="utf-8") as out_f:
-        for batch in tqdm(_batched(pending, batch_size), desc="Batches", total=n_batches):
+        for batch in tqdm(
+            _batched(pending, batch_size), desc="Batches", total=n_batches
+        ):
             # Build windows for every article in this batch
             article_windows: list[list[dict]] = []
             for row in batch:
                 try:
                     windows = _build_windows(
-                        row, system_template, user_template, default_labels, tokenizer,
-                        max_chars=max_chars, max_paras=max_paras, overlap=overlap_paras,
-                        min_chars=min_chars, top_k_candidates=top_k_candidates,
+                        row,
+                        system_template,
+                        user_template,
+                        default_labels,
+                        tokenizer,
+                        max_chars=max_chars,
+                        max_paras=max_paras,
+                        overlap=overlap_paras,
+                        min_chars=min_chars,
+                        top_k_candidates=top_k_candidates,
                     )
                 except Exception as e:
                     print(f"Window error: {e}", file=sys.stderr)
@@ -274,7 +301,9 @@ def vllm_infer(
 
             # Single vLLM call for the entire batch
             if all_prompts:
-                results = llm.generate(all_prompts, sampling_params, lora_request=lora_request)
+                results = llm.generate(
+                    all_prompts, sampling_params, lora_request=lora_request
+                )
             else:
                 results = []
 
@@ -283,12 +312,14 @@ def vllm_infer(
             for (a_idx, w_idx), result in zip(prompt_map, results):
                 pred_text = result.outputs[0].text
                 w = article_windows[a_idx][w_idx]
-                article_preds[a_idx].append({
-                    "window_start": w["window_start"],
-                    "window_end": w["window_end"],
-                    "window_text": w["window_text"],
-                    "prediction": _parse_json_output(pred_text),
-                })
+                article_preds[a_idx].append(
+                    {
+                        "window_start": w["window_start"],
+                        "window_end": w["window_end"],
+                        "window_text": w["window_text"],
+                        "prediction": _parse_json_output(pred_text),
+                    }
+                )
 
             # Write one output line per article immediately
             for row, win_preds in zip(batch, article_preds):
