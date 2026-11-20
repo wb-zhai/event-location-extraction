@@ -289,7 +289,9 @@ def push(args: argparse.Namespace) -> None:
         stale_ids = existing_ids - new_ids
         if stale_ids:
             dataset.records.delete([rg.Record(id=i) for i in stale_ids])
-            print(f"Deleted {len(stale_ids)} stale record(s) not present in this push.")
+            print(
+                f"Deleted {len(stale_ids)} stale record(s) not present in this push."
+            )
 
 
 def export(args: argparse.Namespace) -> None:
@@ -360,10 +362,7 @@ def main() -> None:
         "--input-a", required=True, type=str, help="First relevance-labeled JSONL file."
     )
     push_parser.add_argument(
-        "--input-b",
-        required=True,
-        type=str,
-        help="Second relevance-labeled JSONL file.",
+        "--input-b", required=True, type=str, help="Second relevance-labeled JSONL file."
     )
     push_parser.add_argument(
         "--name-a",

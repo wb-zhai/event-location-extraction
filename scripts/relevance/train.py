@@ -26,11 +26,7 @@ import numpy as np
 import torch
 import yasbd
 from datasets import Dataset
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    precision_recall_fscore_support,
-)
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
 from torch.nn import CrossEntropyLoss
 from transformers import (
@@ -237,9 +233,7 @@ class RelevanceTrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         if self.class_weights is None:
-            return super().compute_loss(
-                model, inputs, return_outputs=return_outputs, **kwargs
-            )
+            return super().compute_loss(model, inputs, return_outputs=return_outputs, **kwargs)
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.logits
@@ -272,18 +266,12 @@ class RelevanceTrainer(Trainer):
         )
 
         optimizer_grouped_parameters = [
-            {
-                "params": params,
-                "lr": lrs[part],
-                "weight_decay": self.args.weight_decay if decay else 0.0,
-            }
+            {"params": params, "lr": lrs[part], "weight_decay": self.args.weight_decay if decay else 0.0}
             for (part, decay), params in buckets.items()
             if params
         ]
 
-        optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(
-            self.args, opt_model
-        )
+        optimizer_cls, optimizer_kwargs = self.get_optimizer_cls_and_kwargs(self.args, opt_model)
         optimizer_kwargs.pop("lr", None)
         self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
         return self.optimizer
@@ -311,9 +299,7 @@ def log_split_stats(name: str, examples: list[dict[str, Any]]) -> None:
     )
 
 
-def save_split_by_source(
-    run_dir: Path, split_name: str, examples: list[dict[str, Any]]
-) -> None:
+def save_split_by_source(run_dir: Path, split_name: str, examples: list[dict[str, Any]]) -> None:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for ex in examples:
         grouped.setdefault(ex["source"], []).append(ex)
@@ -331,20 +317,8 @@ def save_split_by_source(
         split_path = run_dir / f"{split_name}_{name}.jsonl"
         with split_path.open("w", encoding="utf-8") as f:
             for ex in group:
-                f.write(
-                    json.dumps(
-                        {k: v for k, v in ex.items() if k != "source"},
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        LOGGER.info(
-            "Saved %s split (%d examples) from %s to %s",
-            split_name,
-            len(group),
-            source,
-            split_path,
-        )
+                f.write(json.dumps({k: v for k, v in ex.items() if k != "source"}, ensure_ascii=False) + "\n")
+        LOGGER.info("Saved %s split (%d examples) from %s to %s", split_name, len(group), source, split_path)
 
 
 def build_dataset(
@@ -357,14 +331,11 @@ def build_dataset(
 
     def tokenize(batch: dict[str, list[Any]]) -> dict[str, Any]:
         texts = [
-            build_text(title, text, title_only)
-            for title, text in zip(batch["title"], batch["text"])
+            build_text(title, text, title_only) for title, text in zip(batch["title"], batch["text"])
         ]
         return tokenizer(texts, truncation=True, max_length=max_length)
 
-    dataset = dataset.map(
-        tokenize, batched=True, remove_columns=["title", "text", "id", "source"]
-    )
+    dataset = dataset.map(tokenize, batched=True, remove_columns=["title", "text", "id", "source"])
     return dataset
 
 
@@ -420,9 +391,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="+",
         help="Training JSONL file(s). Multiple files are concatenated (deduped by id/url).",
     )
-    parser.add_argument(
-        "--output-dir", required=True, type=Path, help="Output directory"
-    )
+    parser.add_argument("--output-dir", required=True, type=Path, help="Output directory")
     parser.add_argument(
         "--eval-file",
         type=Path,
@@ -454,10 +423,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument(
-        "--learning-rate",
-        type=float,
-        default=DEFAULT_LEARNING_RATE,
-        help="Learning rate for the classification head (and the whole model, if --backbone-lr is not set).",
+        "--learning-rate", type=float, default=DEFAULT_LEARNING_RATE, help="Learning rate for the classification head (and the whole model, if --backbone-lr is not set)."
     )
     parser.add_argument(
         "--backbone-lr",
@@ -473,10 +439,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--eval-frac", type=float, default=DEFAULT_EVAL_FRAC)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument(
-        "--precision",
-        type=str,
-        default="auto",
-        choices=["auto", "fp16", "bf16", "fp32"],
+        "--precision", type=str, default="auto", choices=["auto", "fp16", "bf16", "fp32"]
     )
     parser.add_argument(
         "--metric-for-best",
@@ -503,9 +466,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parse_args(argv)
 
-    resolved_precision, fp16_enabled, bf16_enabled = resolve_precision_flags(
-        args.precision
-    )
+    resolved_precision, fp16_enabled, bf16_enabled = resolve_precision_flags(args.precision)
     device_label = detect_device_label()
     LOGGER.info(
         "Training precision requested=%s resolved=%s (fp16=%s, bf16=%s) on device=%s",
@@ -517,9 +478,7 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     if args.title_only:
-        LOGGER.info(
-            "Training mode: title-only (article text is ignored as model input)"
-        )
+        LOGGER.info("Training mode: title-only (article text is ignored as model input)")
 
     tokenizer_name = args.tokenizer_name or args.model_name
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
@@ -527,9 +486,7 @@ def main(argv: list[str] | None = None) -> None:
     model_max = tokenizer.model_max_length
     if model_max < 1_000_000:
         LOGGER.info(
-            "Tokenizer model_max_length=%d; requested --max-length=%d",
-            model_max,
-            args.max_length,
+            "Tokenizer model_max_length=%d; requested --max-length=%d", model_max, args.max_length
         )
         if args.max_length > model_max:
             raise ValueError(
@@ -538,23 +495,16 @@ def main(argv: list[str] | None = None) -> None:
             )
     else:
         LOGGER.info(
-            "Tokenizer does not declare a max length; using --max-length=%d",
-            args.max_length,
+            "Tokenizer does not declare a max length; using --max-length=%d", args.max_length
         )
 
     if args.eval_file is not None:
-        train_examples = load_examples(
-            args.input, args.max_chars, args.title_only, args.lang
-        )
-        eval_examples = load_examples(
-            args.eval_file, args.max_chars, args.title_only, args.lang
-        )
+        train_examples = load_examples(args.input, args.max_chars, args.title_only, args.lang)
+        eval_examples = load_examples(args.eval_file, args.max_chars, args.title_only, args.lang)
         log_split_stats("train", train_examples)
         log_split_stats("eval", eval_examples)
     else:
-        all_examples = load_examples(
-            args.input, args.max_chars, args.title_only, args.lang
-        )
+        all_examples = load_examples(args.input, args.max_chars, args.title_only, args.lang)
         labels = [e["label"] for e in all_examples]
         train_examples, eval_examples = train_test_split(
             all_examples,
@@ -586,12 +536,8 @@ def main(argv: list[str] | None = None) -> None:
     save_split_by_source(run_dir, "train", train_examples)
     save_split_by_source(run_dir, "dev", eval_examples)
 
-    train_dataset = build_dataset(
-        train_examples, tokenizer, args.max_length, args.title_only
-    )
-    eval_dataset = build_dataset(
-        eval_examples, tokenizer, args.max_length, args.title_only
-    )
+    train_dataset = build_dataset(train_examples, tokenizer, args.max_length, args.title_only)
+    eval_dataset = build_dataset(eval_examples, tokenizer, args.max_length, args.title_only)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     model = AutoModelForSequenceClassification.from_pretrained(

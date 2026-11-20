@@ -68,24 +68,14 @@ WHERE adm_level = 0
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--input",
-        required=True,
-        help="Local CSV file or directory containing Spark part-*.csv files.",
-    )
+    ap.add_argument("--input", required=True,
+                    help="Local CSV file or directory containing Spark part-*.csv files.")
     ap.add_argument("--output", default="outputs/geography/candidate_geo_map.csv")
     ap.add_argument("--env-file", default=".env")
-    ap.add_argument(
-        "--host",
-        default=None,
-        help="Override SQL host. For the SSH tunnel use localhost.",
-    )
-    ap.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="Override SQL port. For the SSH tunnel use 5439.",
-    )
+    ap.add_argument("--host", default=None,
+                    help="Override SQL host. For the SSH tunnel use localhost.")
+    ap.add_argument("--port", type=int, default=None,
+                    help="Override SQL port. For the SSH tunnel use 5439.")
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--chunk-size", type=int, default=1200)
     return ap.parse_args()
@@ -105,16 +95,11 @@ def connection_params(args, env):
     dbname = env.get("SQL_DATABASE") or env.get("PGDATABASE")
     user = env.get("SQL_USERNAME") or env.get("PGUSER")
     password = env.get("SQL_PASSWORD") or env.get("PGPASSWORD")
-    missing = [
-        k
-        for k, v in {"database": dbname, "user": user, "password": password}.items()
-        if not v
-    ]
+    missing = [k for k, v in {"database": dbname, "user": user, "password": password}.items() if not v]
     if missing:
         raise SystemExit(
-            "Missing DB settings: "
-            + ", ".join(missing)
-            + ". Provide them via the existing .env/environment; do not put secrets on the command line."
+            "Missing DB settings: " + ", ".join(missing) +
+            ". Provide them via the existing .env/environment; do not put secrets on the command line."
         )
     return dict(host=host, port=port, dbname=dbname, user=user, password=password)
 
@@ -149,9 +134,7 @@ def probe_chunk(params, uris):
 def input_files(path: Path):
     if path.is_file():
         return [path]
-    files = sorted(
-        p for p in path.rglob("*.csv") if p.is_file() and not p.name.startswith("_")
-    )
+    files = sorted(p for p in path.rglob("*.csv") if p.is_file() and not p.name.startswith("_"))
     if not files:
         raise SystemExit(f"No CSV files found under {path}")
     return files
@@ -226,11 +209,8 @@ def main():
                                 writer.writerow([str(uri), country])
                                 mapped_pairs += 1
 
-                    print(
-                        f"\r[progress] candidate URIs submitted={processed:,} mapped pairs={mapped_pairs:,}",
-                        end="",
-                        flush=True,
-                    )
+                    print(f"\r[progress] candidate URIs submitted={processed:,} mapped pairs={mapped_pairs:,}",
+                          end="", flush=True)
 
             while pending:
                 done, pending = wait(pending, return_when=FIRST_COMPLETED)
@@ -241,11 +221,8 @@ def main():
                         if country:
                             writer.writerow([str(uri), country])
                             mapped_pairs += 1
-                print(
-                    f"\r[progress] candidate URIs submitted={processed:,} mapped pairs={mapped_pairs:,}",
-                    end="",
-                    flush=True,
-                )
+                print(f"\r[progress] candidate URIs submitted={processed:,} mapped pairs={mapped_pairs:,}",
+                      end="", flush=True)
 
     print()
     print(f"DONE")

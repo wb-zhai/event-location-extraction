@@ -41,79 +41,33 @@ BATCH_SIZE="${BATCH_SIZE:-500}"
 # ---- Parse args ----
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --tier)
-            TIER="$2"
-            shift 2
-            ;;
-        --shards)
-            SHARDS="$2"
-            shift 2
-            ;;
-        --image)
-            IMAGE="$2"
-            shift 2
-            ;;
-        --input)
-            INPUT_GCS="$2"
-            shift 2
-            ;;
-        --output)
-            OUTPUT_GCS="$2"
-            shift 2
-            ;;
-        --model)
-            MODEL_GCS="$2"
-            shift 2
-            ;;
-        --project)
-            PROJECT="$2"
-            shift 2
-            ;;
-        --region)
-            REGION="$2"
-            shift 2
-            ;;
-        --job-id)
-            JOB_ID="$2"
-            shift 2
-            ;;
-        --max-new-tokens)
-            MAX_NEW_TOKENS="$2"
-            shift 2
-            ;;
-        --batch-size)
-            BATCH_SIZE="$2"
-            shift 2
-            ;;
-        *)
-            echo "Unknown arg: $1" >&2
-            exit 1
-            ;;
+        --tier)            TIER="$2";            shift 2 ;;
+        --shards)          SHARDS="$2";          shift 2 ;;
+        --image)           IMAGE="$2";           shift 2 ;;
+        --input)           INPUT_GCS="$2";       shift 2 ;;
+        --output)          OUTPUT_GCS="$2";      shift 2 ;;
+        --model)           MODEL_GCS="$2";       shift 2 ;;
+        --project)         PROJECT="$2";         shift 2 ;;
+        --region)          REGION="$2";          shift 2 ;;
+        --job-id)          JOB_ID="$2";          shift 2 ;;
+        --max-new-tokens)  MAX_NEW_TOKENS="$2";  shift 2 ;;
+        --batch-size)      BATCH_SIZE="$2";      shift 2 ;;
+        *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
 
 # ---- Validate required args ----
 for var in IMAGE INPUT_GCS OUTPUT_GCS MODEL_GCS; do
-    [[ -z "${!var}" ]] && {
-        echo "ERROR: --${var//_/-} is required" >&2
-        exit 1
-    }
+    [[ -z "${!var}" ]] && { echo "ERROR: --${var//_/-} is required" >&2; exit 1; }
 done
-[[ -z "${PROJECT}" ]] && {
-    echo "ERROR: --project required (gcloud config has no project set)" >&2
-    exit 1
-}
+[[ -z "${PROJECT}" ]] && { echo "ERROR: --project required (gcloud config has no project set)" >&2; exit 1; }
 
 TEMPLATE="${HERE}/batch_job.${TIER}.json"
-[[ -f "${TEMPLATE}" ]] || {
-    echo "ERROR: unknown tier '${TIER}' (no template ${TEMPLATE})" >&2
-    exit 1
-}
+[[ -f "${TEMPLATE}" ]] || { echo "ERROR: unknown tier '${TIER}' (no template ${TEMPLATE})" >&2; exit 1; }
 
 # ---- Render the template into a temporary config ----
-TMP_JOB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/batch_job.XXXXXX")"
-TMP_CONFIG="$TMP_JOB_DIR/job.json"
-trap 'rm -f "$TMP_CONFIG"; rmdir "$TMP_JOB_DIR"' EXIT
+TMP_CONFIG="$(mktemp /tmp/batch_job_XXXXXX.json)"
+trap "rm -f ${TMP_CONFIG}" EXIT
 
 sed \
     -e "s|TASK_COUNT|${SHARDS}|g" \
@@ -123,7 +77,7 @@ sed \
     -e "s|VAL_MODEL_GCS|${MODEL_GCS}|g" \
     -e "s|VAL_MAX_NEW_TOKENS|${MAX_NEW_TOKENS}|g" \
     -e "s|VAL_BATCH_SIZE|${BATCH_SIZE}|g" \
-    "${TEMPLATE}" >"${TMP_CONFIG}"
+    "${TEMPLATE}" > "${TMP_CONFIG}"
 
 echo "=== Job config (${TIER}, ${SHARDS} shards) ==="
 cat "${TMP_CONFIG}"

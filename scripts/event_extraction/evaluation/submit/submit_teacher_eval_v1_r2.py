@@ -25,7 +25,8 @@ DEFAULT_IMAGE = (
 )
 
 DEFAULT_INPUT = (
-    "gs://zhai-risk-factor-extraction/extraction/eval/v3_teacher_dev_articles.jsonl"
+    "gs://zhai-risk-factor-extraction/extraction/eval/"
+    "v3_teacher_dev_articles.jsonl"
 )
 
 DEFAULT_MODEL = (
@@ -34,19 +35,23 @@ DEFAULT_MODEL = (
 )
 
 DEFAULT_RETRIEVER_MODEL = (
-    "gs://zhai-risk-factor-extraction/vertexai/retrievers/harrier-oss-v1-0.6b"
+    "gs://zhai-risk-factor-extraction/vertexai/retrievers/"
+    "harrier-oss-v1-0.6b"
 )
 
 DEFAULT_RETRIEVER_INDEX = (
-    "gs://zhai-risk-factor-extraction/vertexai/index/science/index/harrier-oss-v1-0.6b"
+    "gs://zhai-risk-factor-extraction/vertexai/index/science/index/"
+    "harrier-oss-v1-0.6b"
 )
 
 DEFAULT_OUTPUT_PREFIX = (
-    "gs://zhai-risk-factor-extraction/extraction/eval/v1_teacher_predictions_raw"
+    "gs://zhai-risk-factor-extraction/extraction/eval/"
+    "v1_teacher_predictions_raw"
 )
 
 DEFAULT_RUNTIME_SRC = (
-    "gs://zhai-risk-factor-extraction/extraction/eval/v1_runtime_src_21055.tar.gz"
+    "gs://zhai-risk-factor-extraction/extraction/eval/"
+    "v1_runtime_src_21055.tar.gz"
 )
 
 
@@ -128,7 +133,7 @@ def main() -> None:
     output_prefix = args.output_prefix.rstrip("/")
     remote_output = output_prefix + "/shard-0.jsonl"
 
-    shell = f"""
+    shell = f'''
 set -euo pipefail
 
 export INPUT_GCS={q(args.input_gcs)}
@@ -212,7 +217,7 @@ print("[v1-teacher] predictions:", len(row.get("predictions") or []))
 PY
 
 echo "[v1-teacher] validation passed"
-""".strip()
+'''.strip()
 
     task_spec["runnables"] = [
         {

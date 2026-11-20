@@ -180,7 +180,6 @@ def parse_no_event(path: Path) -> dict:
 
     parsed = []
     for header, block in zip(headers, blocks[1:]):
-
         def val(pattern: str) -> float:
             m = re.search(pattern, block)
             if not m:
@@ -440,26 +439,24 @@ def print_summary(reports: dict, no_event: dict):
         print(
             f"  Event extraction relaxed F1: "
             f"{a['relaxed_f1']:.1f} -> {b['relaxed_f1']:.1f} "
-            f"({b['relaxed_f1'] - a['relaxed_f1']:+.1f})"
+            f"({b['relaxed_f1']-a['relaxed_f1']:+.1f})"
         )
         print(
             f"  Event extraction exact F1:   "
             f"{a['exact_f1']:.1f} -> {b['exact_f1']:.1f} "
-            f"({b['exact_f1'] - a['exact_f1']:+.1f})"
+            f"({b['exact_f1']-a['exact_f1']:+.1f})"
         )
         print(
             f"  48-label relaxed macro F1:    "
             f"{macro_v3:.2f} -> {macro_v4:.2f} "
-            f"({macro_v4 - macro_v3:+.2f})"
+            f"({macro_v4-macro_v3:+.2f})"
         )
         print(
             f"  48-label exact macro F1:      "
             f"{exact_macro_v3:.2f} -> {exact_macro_v4:.2f} "
-            f"({exact_macro_v4 - exact_macro_v3:+.2f})"
+            f"({exact_macro_v4-exact_macro_v3:+.2f})"
         )
-        print(
-            f"  Per-label relaxed F1:         {gains} up / {losses} down / {ties} tied"
-        )
+        print(f"  Per-label relaxed F1:         {gains} up / {losses} down / {ties} tied")
         print(
             f"  No-event F1:                  "
             f"{no_event[language]['V3']['no_event_f1']:.2f} -> "
@@ -524,7 +521,8 @@ def main():
         for language, pair in files.items()
     }
     no_event = {
-        language: parse_no_event(path) for language, path in no_event_files.items()
+        language: parse_no_event(path)
+        for language, path in no_event_files.items()
     }
 
     plot_core(

@@ -35,17 +35,7 @@ from geotaxonomy_utils import get_latlon_to_id_from_path
 # PHOTON_URL = "https://photon.komoot.io/api/"
 PHOTON_URL = "http://localhost:2322/api"
 
-_PHOTON_LAYERS = {
-    "country",
-    "state",
-    "county",
-    "city",
-    "district",
-    "locality",
-    "street",
-    "house",
-    "poi",
-}
+_PHOTON_LAYERS = {"country", "state", "county", "city", "district", "locality", "street", "house", "poi"}
 
 PHOTON_TYPE_TO_OURS = {
     "continent": "country",
@@ -153,22 +143,9 @@ def _feature_score(feat: dict, query: str) -> float:
 # real name match — so genuine multi-word names ("New York City", "Mexico City")
 # are left alone, since those score well on the first attempt.
 _GENERIC_ADMIN_WORDS = {
-    "city",
-    "town",
-    "village",
-    "municipality",
-    "province",
-    "state",
-    "region",
-    "district",
-    "county",
-    "governorate",
-    "prefecture",
-    "department",
-    "territory",
-    "area",
-    "zone",
-    "capital",
+    "city", "town", "village", "municipality", "province", "state", "region",
+    "district", "county", "governorate", "prefecture", "department", "territory",
+    "area", "zone", "capital",
 }
 
 # A reranker factor at or below this counts as "no real name match" — the winner
@@ -399,9 +376,7 @@ def process_events(
         if not loc or loc.lower() == "not_stated":
             continue
         admin_level = event.get("event_location_admin_level") or None
-        event["geotaxonomy"] = resolve_event_location(
-            loc, cache, cache_lock, delay, admin_level
-        )
+        event["geotaxonomy"] = resolve_event_location(loc, cache, cache_lock, delay, admin_level)
 
 
 def process_obj(
@@ -441,9 +416,7 @@ def _spatial_join_one_level(
     df = pd.DataFrame(rows)
     path = os.path.join(geotaxonomy_dir, f"geotaxonomy_prewb_{level}.geojson")
     try:
-        result_df = get_latlon_to_id_from_path(
-            df, path, ["adm_code", "adm_level"], "lat", "lon"
-        )
+        result_df = get_latlon_to_id_from_path(df, path, ["adm_code", "adm_level"], "lat", "lon")
         rows_out = [
             (row.latitude, row.longitude, row.adm_code, row.adm_level)
             for row in result_df.itertuples(index=False)
@@ -477,9 +450,7 @@ def _build_adm_code_lookup(
     n_workers = len(active_levels)
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         future_to_level = {
-            executor.submit(
-                _spatial_join_one_level, lvl, level_to_rows[lvl], geotaxonomy_dir
-            ): lvl
+            executor.submit(_spatial_join_one_level, lvl, level_to_rows[lvl], geotaxonomy_dir): lvl
             for lvl in active_levels
         }
         for future in tqdm(

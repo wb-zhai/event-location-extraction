@@ -17,7 +17,6 @@ Usage:
   uv run scripts/location/eval/run_eval.py \\
       --dataset wnut17 --backend gliner2 --match fuzzy --limit 100
 """
-
 # /// script
 # dependencies = [
 #   "gliner2>=1.2.6,<1.3.0",
@@ -45,20 +44,13 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.location.extractors import build_extractor, coarsen  # noqa: E402
 from scripts.location.eval.loaders import DATASET_REGISTRY, BACKEND_FINE_SCHEMA  # noqa: E402
-from scripts.location.eval.metrics import (
-    Accumulator,
-    MATCH_TIERS,
-    dedupe_locations,
-    score_sets,
-)  # noqa: E402
+from scripts.location.eval.metrics import Accumulator, MATCH_TIERS, dedupe_locations, score_sets  # noqa: E402
 
 
 def _load_docs(dataset: str, dataset_path: str | None, split: str, limit: int | None):
     loader = DATASET_REGISTRY.get(dataset)
     if loader is None:
-        raise ValueError(
-            f"Unknown dataset '{dataset}'. Choose from {sorted(DATASET_REGISTRY)}."
-        )
+        raise ValueError(f"Unknown dataset '{dataset}'. Choose from {sorted(DATASET_REGISTRY)}.")
     if dataset == "zhai":
         return loader(path=dataset_path, limit=limit)
     return loader(split=split, limit=limit)
@@ -134,31 +126,23 @@ def main(
         tp, fp, fn = score_sets(pred_coarse, doc.locations, tier=match)
         coarse_acc.add(tp, fp, fn)
         if (fp or fn) and len(errors) < 20:
-            errors.append(
-                {
-                    "id": doc.id,
-                    "gold": doc.locations,
-                    "pred": pred_coarse,
-                    "tp": tp,
-                    "fp": fp,
-                    "fn": fn,
-                }
-            )
+            errors.append({
+                "id": doc.id,
+                "gold": doc.locations,
+                "pred": pred_coarse,
+                "tp": tp, "fp": fp, "fn": fn,
+            })
 
         if fine_supported and doc.fine_schema == fine_schema:
             for label, gold_spans in doc.fine.items():
-                pred_label = dedupe_locations(
-                    [m.text for m in mentions if m.label == label]
-                )
+                pred_label = dedupe_locations([m.text for m in mentions if m.label == label])
                 ltp, lfp, lfn = score_sets(pred_label, gold_spans, tier=match)
                 fine_accs.setdefault(label, Accumulator()).add(ltp, lfp, lfn)
 
     coarse_micro = coarse_acc.micro()
     coarse_macro = coarse_acc.macro()
 
-    print(
-        f"\n{dataset} / {backend}  (match={match}, n={len(docs)} docs, {elapsed:.1f}s)"
-    )
+    print(f"\n{dataset} / {backend}  (match={match}, n={len(docs)} docs, {elapsed:.1f}s)")
     print(
         f"  coarse micro  P={coarse_micro['precision']:.3f} "
         f"R={coarse_micro['recall']:.3f} F1={coarse_micro['f1']:.3f} "
@@ -182,23 +166,16 @@ def main(
     report_path = pathlib.Path(report_dir)
     report_path.mkdir(parents=True, exist_ok=True)
     out_file = report_path / f"{dataset}_{backend}_{match}.json"
-    out_file.write_text(
-        json.dumps(
-            {
-                "dataset": dataset,
-                "backend": backend,
-                "match": match,
-                "n_docs": len(docs),
-                "elapsed_s": round(elapsed, 2),
-                "coarse": {"micro": coarse_micro, "macro": coarse_macro},
-                "fine": fine_report,
-                "sample_errors": errors,
-            },
-            indent=2,
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
+    out_file.write_text(json.dumps({
+        "dataset": dataset,
+        "backend": backend,
+        "match": match,
+        "n_docs": len(docs),
+        "elapsed_s": round(elapsed, 2),
+        "coarse": {"micro": coarse_micro, "macro": coarse_macro},
+        "fine": fine_report,
+        "sample_errors": errors,
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nWrote {out_file}")
 
 

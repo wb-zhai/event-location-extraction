@@ -86,7 +86,9 @@ def _document_group_keys(rows: list[dict[str, Any]]) -> list[str]:
 
         metadata = row.get("metadata")
         start = (
-            metadata.get("document_char_start") if isinstance(metadata, dict) else None
+            metadata.get("document_char_start")
+            if isinstance(metadata, dict)
+            else None
         )
         if isinstance(start, int):
             if previous_start is None or start <= previous_start:

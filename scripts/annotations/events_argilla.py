@@ -119,7 +119,6 @@ def render_event_type_reference(allowed_event_types: list[str]) -> str:
             lines.append(f"- **{event_type}**")
     return "\n".join(lines)
 
-
 EVENT_JSON_TEMPLATE = """```json
 [
   {
@@ -148,17 +147,11 @@ SYSTEM_PROMPT_PATH = (
 
 def load_allowed_event_types() -> list[str]:
     if not SYSTEM_PROMPT_PATH.exists():
-        raise SystemExit(
-            f"Missing {SYSTEM_PROMPT_PATH} (needed for the allowed event_type list)."
-        )
+        raise SystemExit(f"Missing {SYSTEM_PROMPT_PATH} (needed for the allowed event_type list).")
     text = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
-    match = re.search(
-        r"<allowed_event_types>\n(.*?)\n</allowed_event_types>", text, re.S
-    )
+    match = re.search(r"<allowed_event_types>\n(.*?)\n</allowed_event_types>", text, re.S)
     if not match:
-        raise SystemExit(
-            f"Could not find <allowed_event_types> block in {SYSTEM_PROMPT_PATH}."
-        )
+        raise SystemExit(f"Could not find <allowed_event_types> block in {SYSTEM_PROMPT_PATH}.")
     return [line.strip() for line in match.group(1).splitlines() if line.strip()]
 
 
@@ -347,9 +340,7 @@ def sync_dataset_settings(dataset) -> None:
     target = build_settings()
     dataset.settings.guidelines = target.guidelines
     for collection_name in ("fields", "questions", "metadata"):
-        existing_names = {
-            item.name for item in getattr(dataset.settings, collection_name)
-        }
+        existing_names = {item.name for item in getattr(dataset.settings, collection_name)}
         for item in getattr(target, collection_name):
             if item.name not in existing_names:
                 getattr(dataset.settings, collection_name).add(item)
@@ -369,17 +360,12 @@ def get_or_create_workspace(client, name: str):
     return workspace
 
 
-def get_or_create_dataset(
-    client, name: str, workspace: str, update_settings: bool = False
-):
+def get_or_create_dataset(client, name: str, workspace: str, update_settings: bool = False):
 
     get_or_create_workspace(client, workspace)
     dataset = client.datasets(name=name, workspace=workspace)
     if dataset is not None:
-        print(
-            f"[dataset] found existing dataset {name!r} in workspace {workspace!r}.",
-            flush=True,
-        )
+        print(f"[dataset] found existing dataset {name!r} in workspace {workspace!r}.", flush=True)
         if update_settings:
             print(f"[dataset] updating schema + guidelines for {name!r}...", flush=True)
             sync_dataset_settings(dataset)
@@ -391,10 +377,7 @@ def get_or_create_dataset(
                 flush=True,
             )
         return dataset
-    print(
-        f"[dataset] {name!r} not found in workspace {workspace!r}, creating (schema + guidelines)...",
-        flush=True,
-    )
+    print(f"[dataset] {name!r} not found in workspace {workspace!r}, creating (schema + guidelines)...", flush=True)
     dataset = rg.Dataset(name=name, workspace=workspace, settings=build_settings())
     dataset.create()
     print(f"[dataset] created {name!r}.", flush=True)
@@ -437,12 +420,8 @@ def reasoning_trace_text(rec: dict[str, Any]) -> str:
     """Render the model's thinking-mode thought summaries (generation_llm.metadata
     .thought_summaries), if any, as markdown for the reference field."""
     generation_llm = rec.get("generation_llm")
-    metadata = (
-        generation_llm.get("metadata") if isinstance(generation_llm, dict) else None
-    )
-    summaries = (
-        metadata.get("thought_summaries") if isinstance(metadata, dict) else None
-    )
+    metadata = generation_llm.get("metadata") if isinstance(generation_llm, dict) else None
+    summaries = metadata.get("thought_summaries") if isinstance(metadata, dict) else None
     if not summaries:
         return "_No reasoning trace available._"
     return "\n\n---\n\n".join(str(s) for s in summaries)
@@ -457,11 +436,7 @@ def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str)
     if not isinstance(annotation, dict):
         annotation = {}
 
-    events = [
-        normalize_event(ev)
-        for ev in (annotation.get("events") or [])
-        if isinstance(ev, dict)
-    ]
+    events = [normalize_event(ev) for ev in (annotation.get("events") or []) if isinstance(ev, dict)]
 
     record_id = _record_key(rec) or None
 
@@ -480,11 +455,7 @@ def build_record(rec: dict[str, Any], max_chars: int, event_type_reference: str)
     if quality_score is not None:
         metadata["quality_score"] = float(quality_score)
     source = rec.get("source") or {}
-    publish_date = (
-        (source.get("publish_date") or source.get("published_at"))
-        if isinstance(source, dict)
-        else None
-    )
+    publish_date = (source.get("publish_date") or source.get("published_at")) if isinstance(source, dict) else None
     if publish_date:
         metadata["publish_date"] = str(publish_date)
 
@@ -534,10 +505,7 @@ def push(args: argparse.Namespace) -> None:
     skipped = total - len(records)
     if args.limit:
         records = records[: args.limit]
-    print(
-        f"[load] {len(records)} record(s) to push ({skipped} skipped as not_relevant).",
-        flush=True,
-    )
+    print(f"[load] {len(records)} record(s) to push ({skipped} skipped as not_relevant).", flush=True)
 
     event_type_reference = render_event_type_reference(load_allowed_event_types())
     rg_records = [
@@ -588,28 +556,17 @@ def validate_events_annotation(
                 continue
             value = event[field]
             if not isinstance(value, str):
-                errors.append(
-                    f"event {i}: {field} must be a string; got {type(value).__name__}"
-                )
+                errors.append(f"event {i}: {field} must be a string; got {type(value).__name__}")
             elif value == "":
-                errors.append(
-                    f"event {i}: {field} is empty; use 'not_stated' when missing"
-                )
+                errors.append(f"event {i}: {field} is empty; use 'not_stated' when missing")
 
         event_type = event.get("event_type")
         if isinstance(event_type, str) and event_type not in allowed_event_types:
-            errors.append(
-                f"event {i}: event_type {event_type!r} is not in the ontology"
-            )
+            errors.append(f"event {i}: event_type {event_type!r} is not in the ontology")
 
         grounding_quote = event.get("grounding_quote")
-        if (
-            not isinstance(grounding_quote, str)
-            or grounding_quote in MISSING_TEXT_VALUES
-        ):
-            errors.append(
-                f"event {i}: grounding_quote is required and must be an article span"
-            )
+        if not isinstance(grounding_quote, str) or grounding_quote in MISSING_TEXT_VALUES:
+            errors.append(f"event {i}: grounding_quote is required and must be an article span")
         elif grounding_quote not in text:
             errors.append(
                 f"event {i} [{event_type}]: grounding_quote={grounding_quote!r} not found verbatim in article"
@@ -629,9 +586,7 @@ def validate_events_annotation(
         for field, choices in CHOICE_DETAIL_FIELDS.items():
             value = event.get(field)
             if isinstance(value, str) and value not in choices:
-                errors.append(
-                    f"event {i}: {field} must be one of {choices}; got {value!r}"
-                )
+                errors.append(f"event {i}: {field} must be one of {choices}; got {value!r}")
 
         admin_level = event.get("event_location_admin_level")
         if isinstance(admin_level, str):
@@ -649,9 +604,7 @@ def validate_events_annotation(
                     if isinstance(location, str)
                     else []
                 )
-                if isinstance(location, str) and len(admin_level_parts) != len(
-                    location_parts
-                ):
+                if isinstance(location, str) and len(admin_level_parts) != len(location_parts):
                     errors.append(
                         f"event {i}: event_location_admin_level has "
                         f"{len(admin_level_parts)} ';'-separated value(s) but event_location "

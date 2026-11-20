@@ -106,7 +106,9 @@ class LLMClient:
         )
 
     @staticmethod
-    def parse_response_format(response_format: Any, add_cot_field: bool = True) -> Any:
+    def parse_response_format(
+        response_format: Any, add_cot_field: bool = True
+    ) -> Any:
         """
         Parse the response format into a Pydantic model.
         This method converts a dictionary or Pydantic model into a structured response format.
@@ -132,9 +134,7 @@ class LLMClient:
             response_format_model = create_schema_from_dict(
                 response_format, name="ResponseFormat"
             )
-        elif isinstance(response_format, type) and issubclass(
-            response_format, BaseModel
-        ):
+        elif isinstance(response_format, type) and issubclass(response_format, BaseModel):
             response_format_model = response_format
         elif isinstance(response_format, BaseModel):
             response_format_model = type(response_format)
@@ -167,7 +167,7 @@ class LLMClient:
             # try to treat it as a raw string template
             template_name = template_name.replace(".prompt", "")
             template = jinja2.Template(template_name)
-
+        
         rendered_prompt = template.render(**kwargs)
         return rendered_prompt
 
@@ -252,11 +252,10 @@ def _describe_gemini_response(response: Any) -> str:
                 }
             )
         return (
-            f"prompt_feedback.block_reason={block_reason} candidates={candidate_info}"
+            f"prompt_feedback.block_reason={block_reason} "
+            f"candidates={candidate_info}"
         )
-    except (
-        Exception
-    ) as exc:  # pragma: no cover - diagnostics must never mask the real error
+    except Exception as exc:  # pragma: no cover - diagnostics must never mask the real error
         return f"<failed to introspect response: {exc}; repr={response!r}>"
 
 
@@ -710,6 +709,289 @@ class AnthropicVertexLLMClient(LLMClient):
             },
             parsed=getattr(response, "parsed", None) if response_format_model else None,
         )
+
+
+# class LiteLLMClient(LLMClient):
+#     """LLM client class for handling prompts and generating responses using liteLLM."""
+
+#     litellm.enable_json_schema_validation = True
+#     litellm.drop_params = True
+
+#     def __init__(
+#         self,
+#         model_name: str,
+#         system_prompt: str | None = None,
+#         prompts_dir: str | os.PathLike | None = None,
+#         temperature: float = 0.1,
+#         max_tokens: int = 8192,
+#         reasoning_effort: str | int | None = None,
+#         use_content_cache: bool = False,
+#         verbose: bool = False,
+#         **kwargs: Any,
+#     ):
+#         """
+#         Initialize the LLM client.
+
+#         Args:
+#             model_name: Name of the LLM model to use
+#             system_prompt: Optional system prompt to set the context
+#             prompts_dir: Directory containing prompt templates
+#             temperature: Sampling temperature for generation
+#             max_tokens: Maximum number of tokens to generate
+#             reasoning_effort: Level of reasoning effort (e.g., "low", "medium", "high")
+#             use_content_cache: Whether to use content caching for responses
+#             verbose: Whether to enable verbose logging
+#         """
+#         super().__init__(
+#             model_name,
+#             system_prompt,
+#             prompts_dir,
+#             temperature,
+#             max_tokens,
+#             reasoning_effort,
+#             use_content_cache,
+#             verbose,
+#         )
+
+#         # log a warning that content cache and gemini do not work well with LiteLLMClient for the moment
+#         if self.use_content_cache and "gemini" in self.model_name:
+#             logger.warning(
+#                 f"`use_content_cache=True` with a Gemini model ({self.model_name}) is not fully supported in `LiteLLMClient`. "
+#                 "Content cache integration for Gemini models is currently unstable and may lead to unexpected behavior."
+#             )
+
+#     async def generate(
+#         self,
+#         prompt: str,
+#         system_prompt: str | None = None,
+#         override_settings: Optional[Dict[str, Any]] = None,
+#         response_format: Dict[str, Any] | BaseModel | None = None,
+#         add_cot_field: bool = True,
+#         conversation_history: Optional[List[Dict[str, str]]] = None,
+#         reasoning_effort: str | int | None = None,
+#         num_retries: int = 10,
+#         retry_strategy: str = "exponential_backoff_retry",
+#         **kwargs,
+#     ) -> LLMResponse:
+#         """
+#         Generate a response using the configured LLM.
+
+#         Args:
+#             prompt: Input prompt text
+#             system_prompt: Optional system prompt to set the context
+#             override_settings: Optional dictionary to override settings for this call
+#             response_format: Optional response format schema
+#             add_cot_field: Whether to add a chain of thought field to the response
+#             conversation_history: Optional list of previous messages in the conversation
+#             reasoning_effort: Optional reasoning effort level (e.g., "low", "medium", "high")
+#             num_retries: Number of retries for the generation
+#             retry_strategy: Strategy for retrying failed requests
+#             **kwargs: Additional keyword arguments for the generation call
+
+#         Returns:
+#             Generated response text
+#         """
+
+#         response_format_model = None
+#         if response_format is not None:
+#             response_format_model = self.parse_response_format(
+#                 response_format, add_cot_field
+#             )
+
+#         system_prompt = system_prompt or self.system_prompt
+
+#         messages = []
+#         if system_prompt is not None:
+#             if self.use_content_cache:
+#                 # Use system prompt as a message if not using content cache
+#                 messages.append(
+#                     {
+#                         "role": "system",
+#                         "content": [
+#                             {
+#                                 "type": "text",
+#                                 "text": system_prompt,
+#                                 "cache_control": {"type": "ephemeral"},
+#                             }
+#                         ],
+#                     }
+#                 )
+#             else:
+#                 messages.append({"role": "system", "content": system_prompt})
+
+#         if conversation_history is None:
+#             conversation_history = []
+
+#         for conversation in conversation_history:
+#             if self.use_content_cache:
+#                 messages.append(
+#                     {
+#                         "role": conversation.get("role"),
+#                         "content": [
+#                             {
+#                                 "type": "text",
+#                                 "text": conversation.get("message"),
+#                                 "cache_control": {"type": "ephemeral"},
+#                             }
+#                         ],
+#                     }
+#                 )
+#             else:
+#                 messages.append(
+#                     {"role": conversation.get("role"), "content": conversation}
+#                 )
+
+#         if self.use_content_cache:
+#             messages.append(
+#                 {
+#                     "role": "user",
+#                     "content": [
+#                         {
+#                             "type": "text",
+#                             "text": prompt,
+#                             "cache_control": {"type": "ephemeral"},
+#                         }
+#                     ],
+#                 }
+#             )
+#         else:
+#             messages.append({"role": "user", "content": prompt})
+
+#         logger.info("Messages:")
+#         logger.info(messages)
+
+#         reasoning_kwargs = {}
+#         if reasoning_effort is not None:
+#             logger.info("Reasoning effort: %s", reasoning_effort)
+#             reasoning_kwargs["reasoning_effort"] = reasoning_effort
+#             reasoning_kwargs["thinking"] = {
+#                 "type": "enabled",
+#                 "budget_tokens": reasoning_effort,
+#             }
+
+#         try:
+#             # Use acompletion with full message history
+#             response = await acompletion(
+#                 model=self.model_name,
+#                 messages=messages,
+#                 **{
+#                     k: v
+#                     for k, v in override_settings.items()
+#                     # this is weird. drop_params=True doesn't seem to always work
+#                     if k not in {"model_name", "prompt_name"}
+#                 },
+#                 drop_params=True,
+#                 response_format=response_format_model,
+#                 num_retries=num_retries,
+#                 retry_strategy=retry_strategy,
+#                 **reasoning_kwargs,
+#             )
+
+#             parsed_response = None
+#             if response_format_model is not None:
+#                 # spoofing to avoid parse_chat_completion error
+#                 response.choices[0].message.refusal = None
+#                 # use OpenAI's parse_chat_completion to parse the response
+#                 parsed_response = parse_chat_completion(
+#                     response_format=response_format_model,
+#                     input_tools=NOT_GIVEN,
+#                     chat_completion=response,
+#                 )
+
+#             yield LLMResponse(
+#                 text=response.choices[0].message.content,
+#                 metadata={
+#                     "prompt_tokens": response.usage.prompt_tokens,
+#                     "completion_tokens": response.usage.completion_tokens,
+#                     "cached_tokens": response.usage.prompt_tokens_details.cached_tokens
+#                     or 0,
+#                 },
+#                 parsed=(
+#                     parsed_response.choices[0].message.parsed
+#                     if parsed_response
+#                     else None
+#                 ),
+#             )
+
+#         except Exception as e:
+#             raise Exception(f"Error generating response: {str(e)}")
+
+#     async def generate_with_template(
+#         self,
+#         template_name: str,
+#         system_template_name: str | None = None,
+#         template_vars: dict[str, str] | None = None,
+#         system_template_vars: dict[str, str] | None = None,
+#         override_settings: Optional[Dict[str, Any]] = None,
+#         response_format: Dict[str, Any] | BaseModel | None = None,
+#         add_cot_field: bool = True,
+#         conversation_history: Optional[List[Dict[str, str]]] = None,
+#         reasoning_effort: Optional[str] = None,
+#         num_retries: int = 10,
+#         retry_strategy: str = "exponential_backoff_retry",
+#     ) -> str:
+#         """
+#         Generate a response using a prompt template.
+
+#         Args:
+#             template_name: Name of the prompt template to use
+#             system_template_name: Optional name of the system prompt template
+#             template_vars: Variables to render in the prompt template
+#             system_template_vars: Variables to render in the system prompt template
+#             override_settings: Optional dictionary to override settings for this call
+#             response_format: Optional response format schema
+#             add_cot_field: Whether to add a chain of thought field to the response
+#             conversation_history: Optional list of previous messages in the conversation
+#             reasoning_effort: Optional reasoning effort level (e.g., "low", "medium", "high")
+#             num_retries: Number of retries for the generation
+#             retry_strategy: Strategy for retrying failed requests
+
+#         Returns:
+#             Generated response text
+#         """
+#         if template_vars is None:
+#             template_vars = {}
+#         prompt = self.render_prompt(template_name, **template_vars)
+
+#         if system_template_name is not None:
+#             if system_template_vars is None:
+#                 system_template_vars = {}
+#             system_prompt = self.render_prompt(
+#                 system_template_name, **system_template_vars
+#             )
+
+#         return await self.generate(
+#             prompt,
+#             system_prompt,
+#             override_settings,
+#             response_format,
+#             add_cot_field,
+#             conversation_history,
+#             reasoning_effort,
+#             num_retries,
+#             retry_strategy,
+#         )
+
+#     @classmethod
+#     def from_env(
+#         cls, prompts_dir: str | os.PathLike = "config/prompts"
+#     ) -> "LiteLLMClient":
+#         """
+#         Create an LLMClient instance from environment variables.
+
+#         Args:
+#             prompts_dir: Directory containing prompt templates
+
+#         Returns:
+#             Configured LLMClient instance
+#         """
+#         settings = LLMSettings(
+#             model_name=os.getenv("LLM_MODEL_NAME", "gpt-4o-mini"),
+#             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "8192")),
+#             temperature=float(os.getenv("LLM_TEMPERATURE", "0.2")),
+#             prompts_dir=prompts_dir,
+#         )
+#         return cls(**settings.to_dict())
 
 
 class OpenAILLMClient(LLMClient):

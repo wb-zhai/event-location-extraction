@@ -5,7 +5,6 @@ threshold are ported from `scripts/train/inference/eval_v3_sft.py`
 (`_norm_loc` / `_LOC_FUZZY_THRESHOLD`), which already solves the same
 "compare two location strings" problem for the SFT event evaluator.
 """
-
 from __future__ import annotations
 
 import statistics
@@ -57,9 +56,7 @@ def dedupe_locations(strings: list[str]) -> list[str]:
     return out
 
 
-def score_sets(
-    pred: list[str], gold: list[str], tier: str = "normalized"
-) -> tuple[int, int, int]:
+def score_sets(pred: list[str], gold: list[str], tier: str = "normalized") -> tuple[int, int, int]:
     """Greedy one-to-one matching between two (already deduped) location sets.
 
     Returns (tp, fp, fn). Greedy is sufficient here because both inputs are
@@ -69,11 +66,7 @@ def score_sets(
     matched_pred = 0
     for p in pred:
         match_idx = next(
-            (
-                j
-                for j, g in enumerate(gold_remaining)
-                if g is not None and _matches(p, g, tier)
-            ),
+            (j for j, g in enumerate(gold_remaining) if g is not None and _matches(p, g, tier)),
             None,
         )
         if match_idx is not None:

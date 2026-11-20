@@ -97,9 +97,7 @@ def check_event(
         categories.add("enum")
 
     admin_level = event.get("event_location_admin_level", "")
-    admin_level_parts = (
-        [p.strip() for p in admin_level.split(";")] if admin_level else []
-    )
+    admin_level_parts = [p.strip() for p in admin_level.split(";")] if admin_level else []
     invalid_admin_levels = [p for p in admin_level_parts if p not in VALID_ADMIN_LEVEL]
     if invalid_admin_levels:
         errors.append(f"invalid event_location_admin_level: {admin_level!r}")
@@ -236,10 +234,9 @@ def main() -> None:
     invalid_path = Path(stem + ".invalid.jsonl")
     clean_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with (
-        clean_path.open("w", encoding="utf-8") as ch,
-        invalid_path.open("w", encoding="utf-8") as ih,
-    ):
+    with clean_path.open("w", encoding="utf-8") as ch, invalid_path.open(
+        "w", encoding="utf-8"
+    ) as ih:
         stats = process(records, ontology, ch, ih)
 
     total = stats["total_events"]
@@ -251,8 +248,8 @@ def main() -> None:
         f"Records processed   : {stats['total']}  ({stats['skipped_error_status']} error-status skipped)"
     )
     print(f"Events total        : {total}")
-    print(f"Events clean        : {clean}  ({100 * clean / max(total, 1):.1f}%)")
-    print(f"Events invalid      : {invalid}  ({100 * invalid / max(total, 1):.1f}%)")
+    print(f"Events clean        : {clean}  ({100*clean/max(total,1):.1f}%)")
+    print(f"Events invalid      : {invalid}  ({100*invalid/max(total,1):.1f}%)")
     print(f"  off-ontology      : {stats['by_off_ontology']}")
     print(f"  grounding fail    : {stats['by_grounding']}")
     print(f"  enum invalid      : {stats['by_enum']}")

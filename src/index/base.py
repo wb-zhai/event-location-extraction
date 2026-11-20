@@ -475,7 +475,7 @@ class Indexer:
                         if vector is None:
                             raise ValueError(
                                 "Missing 'vector' field while building mmap at "
-                                f"line {i + 1}"
+                                f"line {i+1}"
                             )
 
                         if dim is None:
@@ -483,7 +483,7 @@ class Indexer:
                         elif len(vector) != dim:
                             raise ValueError(
                                 "Vector length mismatch at line "
-                                f"{i + 1}: expected {dim}, got {len(vector)}"
+                                f"{i+1}: expected {dim}, got {len(vector)}"
                             )
 
                         rows += 1
@@ -505,7 +505,7 @@ class Indexer:
                         if vector is None:
                             raise ValueError(
                                 "Missing 'vector' field while building mmap at "
-                                f"line {row_idx + 1}"
+                                f"line {row_idx+1}"
                             )
 
                         mmap_array[row_idx] = np.asarray(vector, dtype=dtype)
@@ -555,7 +555,7 @@ class Indexer:
 
                     if vector is None:
                         raise ValueError(
-                            f"Record is missing 'vector' field at line {i + 1}"
+                            f"Record is missing 'vector' field at line {i+1}"
                         )
 
                     embedding = torch.tensor(vector, device=device)

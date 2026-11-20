@@ -8,17 +8,11 @@ import shlex
 import subprocess
 from pathlib import Path
 
-DEFAULT_IMAGE = (
-    "us-central1-docker.pkg.dev/zerohungerai/event-extraction/event-infer:latest"
-)
-DEFAULT_INPUT = (
-    "gs://zhai-risk-factor-extraction/extraction/eval/v3_teacher_dev_articles.jsonl"
-)
-
+DEFAULT_IMAGE = "us-central1-docker.pkg.dev/zerohungerai/event-extraction/event-infer:latest"
+DEFAULT_INPUT = "gs://zhai-risk-factor-extraction/extraction/eval/v3_teacher_dev_articles.jsonl"
 
 def q(s: str) -> str:
     return shlex.quote(s)
-
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -27,10 +21,7 @@ def main() -> None:
     ap.add_argument("--output-gcs", required=True)
     ap.add_argument("--input-gcs", default=DEFAULT_INPUT)
     ap.add_argument("--image", default=DEFAULT_IMAGE)
-    ap.add_argument(
-        "--template",
-        default="vertexai/inference/event-extraction/batch_job.spot-a100.json",
-    )
+    ap.add_argument("--template", default="vertexai/inference/event-extraction/batch_job.spot-a100.json")
     ap.add_argument("--project", default="zerohungerai")
     ap.add_argument("--region", default="us-central1")
     ap.add_argument("--expected-rows", type=int, default=2198)
@@ -161,11 +152,7 @@ docker run --rm \
     print("guided decode: FALSE")
 
     cmd = [
-        "gcloud",
-        "batch",
-        "jobs",
-        "submit",
-        args.job_id,
+        "gcloud", "batch", "jobs", "submit", args.job_id,
         f"--project={args.project}",
         f"--location={args.region}",
         f"--config={config_path}",
@@ -175,7 +162,6 @@ docker run --rm \
 
     if not args.dry_run:
         subprocess.run(cmd, check=True)
-
 
 if __name__ == "__main__":
     main()

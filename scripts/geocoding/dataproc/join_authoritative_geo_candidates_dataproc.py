@@ -40,8 +40,12 @@ def main():
     pairs_path = f"{root}/authoritative_geo_candidate_pairs_{run_id}/"
     diagnostics_path = f"{root}/authoritative_geo_diagnostics_{run_id}/"
 
-    events = spark.read.parquet(args.event_candidates_path).select(
-        "sampling_group", "event_type", "pub_year", "pool", "uri", "matched_keyword"
+    events = (
+        spark.read.parquet(args.event_candidates_path)
+        .select(
+            "sampling_group", "event_type", "pub_year",
+            "pool", "uri", "matched_keyword"
+        )
     )
 
     reader = spark.read.format(args.geo_map_format)
@@ -62,16 +66,18 @@ def main():
 
     # An article may have matched several positive terms for the same
     # event_type/country. Keep one row for that stratum, preferring STRICT.
-    w = Window.partitionBy("sampling_group", "event_type", "country", "uri").orderBy(
+    w = Window.partitionBy(
+        "sampling_group", "event_type", "country", "uri"
+    ).orderBy(
         when(col("pool") == "strict", 0).otherwise(1),
         col("matched_keyword"),
     )
 
     pairs = (
         pairs.withColumn("_rn", row_number().over(w))
-        .filter(col("_rn") == 1)
-        .drop("_rn")
-        .cache()
+             .filter(col("_rn") == 1)
+             .drop("_rn")
+             .cache()
     )
 
     print("[pairs] writing:", pairs_path)
@@ -81,37 +87,37 @@ def main():
 
     (
         pairs.groupBy("sampling_group")
-        .agg(countDistinct("uri").alias("candidate_articles"))
-        .write.mode("overwrite")
-        .parquet(diagnostics_path + "candidate_by_group/")
+             .agg(countDistinct("uri").alias("candidate_articles"))
+             .write.mode("overwrite")
+             .parquet(diagnostics_path + "candidate_by_group/")
     )
 
     (
         pairs.groupBy("sampling_group", "event_type")
-        .agg(countDistinct("uri").alias("candidate_articles"))
-        .write.mode("overwrite")
-        .parquet(diagnostics_path + "candidate_by_event_type/")
+             .agg(countDistinct("uri").alias("candidate_articles"))
+             .write.mode("overwrite")
+             .parquet(diagnostics_path + "candidate_by_event_type/")
     )
 
     (
         pairs.groupBy("sampling_group", "event_type", "country")
-        .agg(countDistinct("uri").alias("candidate_articles"))
-        .write.mode("overwrite")
-        .parquet(diagnostics_path + "candidate_by_event_type_geography/")
+             .agg(countDistinct("uri").alias("candidate_articles"))
+             .write.mode("overwrite")
+             .parquet(diagnostics_path + "candidate_by_event_type_geography/")
     )
 
     (
         pairs.groupBy("sampling_group", "event_type", "country", "pool")
-        .agg(countDistinct("uri").alias("candidate_articles"))
-        .write.mode("overwrite")
-        .parquet(diagnostics_path + "candidate_by_stratum_pool/")
+             .agg(countDistinct("uri").alias("candidate_articles"))
+             .write.mode("overwrite")
+             .parquet(diagnostics_path + "candidate_by_stratum_pool/")
     )
 
     (
         pairs.groupBy("pub_year")
-        .agg(countDistinct("uri").alias("candidate_articles"))
-        .write.mode("overwrite")
-        .parquet(diagnostics_path + "candidate_by_year/")
+             .agg(countDistinct("uri").alias("candidate_articles"))
+             .write.mode("overwrite")
+             .parquet(diagnostics_path + "candidate_by_year/")
     )
 
     # Useful coverage diagnostic: how many pre-geo candidate URIs found at least

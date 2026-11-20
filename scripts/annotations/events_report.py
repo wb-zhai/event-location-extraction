@@ -63,11 +63,7 @@ def report(records: list[dict[str, Any]]) -> None:
     for user, count in completed_by_user.most_common():
         print(f"  {user:<20} {count}")
     print()
-    print(
-        f"Corrected/changed vs original annotation: {changed} ({changed / completed:.0%} of completed)"
-        if completed
-        else "Corrected/changed vs original annotation: 0"
-    )
+    print(f"Corrected/changed vs original annotation: {changed} ({changed / completed:.0%} of completed)" if completed else "Corrected/changed vs original annotation: 0")
     print()
     print("Corrected/changed by user:")
     for user, count in changed_by_user.most_common():
@@ -77,9 +73,7 @@ def report(records: list[dict[str, Any]]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--input", required=True, type=str, help="Exported event-annotation JSONL file"
-    )
+    parser.add_argument("--input", required=True, type=str, help="Exported event-annotation JSONL file")
     args = parser.parse_args()
 
     records = iter_jsonl(Path(args.input))

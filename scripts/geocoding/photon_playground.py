@@ -41,11 +41,7 @@ from add_geotaxonomy import (
 
 def query_photon(query: str, layer: str | None, limit: int, url: str) -> dict:
     session = _get_session()
-    params: list[tuple[str, str]] = [
-        ("q", query),
-        ("limit", str(limit)),
-        ("lang", "en"),
-    ]
+    params: list[tuple[str, str]] = [("q", query), ("limit", str(limit)), ("lang", "en")]
     if layer:
         params.append(("layer", layer))
     resp = session.get(url, params=params, timeout=10)
@@ -65,16 +61,12 @@ def _fetch_and_score(
         return None
     features = data.get("features", [])
     scored = sorted(
-        ((_feature_score(f, query), f) for f in features),
-        key=lambda x: x[0],
-        reverse=True,
+        ((_feature_score(f, query), f) for f in features), key=lambda x: x[0], reverse=True
     )
     return data, scored
 
 
-def _print_candidates(
-    query: str, layer: str | None, scored: list[tuple[float, dict]]
-) -> None:
+def _print_candidates(query: str, layer: str | None, scored: list[tuple[float, dict]]) -> None:
     header = f'Query: "{query}"' + (f"  layer={layer}" if layer else "  (no layer)")
     print(header)
     print("-" * len(header))
@@ -98,7 +90,9 @@ def _print_candidates(
         )
 
 
-def _try_tier(label: str, query: str, layer: str | None, limit: int, url: str) -> bool:
+def _try_tier(
+    label: str, query: str, layer: str | None, limit: int, url: str
+) -> bool:
     """Fetch + print one cascade tier. Returns True if it found a real name match."""
     print(f"\n{label}")
     fetched = _fetch_and_score(query, layer, limit, url)
@@ -135,8 +129,7 @@ def run_query(
         tiers += [(f'Tier 3: stripped, no layer ("{v}")', v, None) for v in variants]
         if layer is not None:
             tiers += [
-                (f'Tier 4: stripped, original layer ("{v}")', v, layer)
-                for v in variants
+                (f'Tier 4: stripped, original layer ("{v}")', v, layer) for v in variants
             ]
 
         for label, q, lyr in tiers:
@@ -145,13 +138,9 @@ def run_query(
                 break
         else:
             if tiers:
-                print(
-                    "\nNo tier found a real name match — falling back to the tier-1 result."
-                )
+                print("\nNo tier found a real name match — falling back to the tier-1 result.")
     elif not found:
-        print(
-            "\n(fallback disabled with --no-fallback; keeping the tier-1 result as-is)"
-        )
+        print("\n(fallback disabled with --no-fallback; keeping the tier-1 result as-is)")
 
     # Whatever happened above, get the authoritative answer straight from the
     # real pipeline function so this can never drift from production behavior.
@@ -200,22 +189,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Simulate add_geotaxonomy's Photon query/resolution for one location string."
     )
-    parser.add_argument(
-        "query", nargs="?", help="Location string to query (omit for REPL mode)"
-    )
+    parser.add_argument("query", nargs="?", help="Location string to query (omit for REPL mode)")
     parser.add_argument("--layer", choices=sorted(_PHOTON_LAYERS), default=None)
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=10,
-        help="Number of candidates to fetch (default: 10)",
-    )
-    parser.add_argument(
-        "--url", default=PHOTON_URL, help=f"Photon API URL (default: {PHOTON_URL})"
-    )
-    parser.add_argument(
-        "--json", action="store_true", help="Also print the raw Photon response"
-    )
+    parser.add_argument("--limit", type=int, default=10, help="Number of candidates to fetch (default: 10)")
+    parser.add_argument("--url", default=PHOTON_URL, help=f"Photon API URL (default: {PHOTON_URL})")
+    parser.add_argument("--json", action="store_true", help="Also print the raw Photon response")
     parser.add_argument(
         "--no-fallback",
         action="store_true",
@@ -224,19 +202,12 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.query:
-        run_query(
-            args.query,
-            args.layer,
-            args.limit,
-            args.url,
-            args.json,
-            not args.no_fallback,
-        )
+        run_query(args.query, args.layer, args.limit, args.url, args.json, not args.no_fallback)
         return
 
     print(f"Photon playground — querying {args.url}")
     print(
-        "Enter a location string, optionally followed by "
+        'Enter a location string, optionally followed by '
         '"--layer L" / "--limit N" / "--json" / "--no-fallback".'
     )
     print("Type 'quit' or Ctrl-D to exit.\n")

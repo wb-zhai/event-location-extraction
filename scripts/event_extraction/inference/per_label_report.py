@@ -126,7 +126,6 @@ def _geo_locs(field: str):
     "countrycode", "resolved_name", "photon_type". Events with no geotaxonomy
     (Photon found nothing) or a missing field fall back to "not_geocoded".
     """
-
     def extractor(ev: dict[str, Any]) -> list[str]:
         geo = ev.get("geotaxonomy") or []
         keys = []
@@ -135,7 +134,6 @@ def _geo_locs(field: str):
             if v:
                 keys.append(_norm(str(v)))
         return keys or ["not_geocoded"]
-
     return extractor
 
 
@@ -234,8 +232,8 @@ def _fmt_table(
         m = _prf(a["tp"], a["fp"], a["fn"])
         n = a["tp"] + a["fn"]
         lines.append(
-            f"  {lbl:<{_COL_W}}  {n:>5}  {m['precision'] * 100:6.1f}  "
-            f"{m['recall'] * 100:6.1f}  {m['f1'] * 100:6.1f}"
+            f"  {lbl:<{_COL_W}}  {n:>5}  {m['precision']*100:6.1f}  "
+            f"{m['recall']*100:6.1f}  {m['f1']*100:6.1f}"
             f"    {a['tp']:>4}  {a['fp']:>4}  {a['fn']:>4}"
         )
 
@@ -247,7 +245,7 @@ def _fmt_table(
         rn = rtp + rfn
         lines.append(
             f"  {f'... other ({len(rest)} labels)':<{_COL_W}}  {rn:>5}  "
-            f"{rm['precision'] * 100:6.1f}  {rm['recall'] * 100:6.1f}  {rm['f1'] * 100:6.1f}"
+            f"{rm['precision']*100:6.1f}  {rm['recall']*100:6.1f}  {rm['f1']*100:6.1f}"
             f"    {rtp:>4}  {rfp:>4}  {rfn:>4}"
         )
 
@@ -258,8 +256,8 @@ def _fmt_table(
     m = _prf(tp, fp, fn)
     lines.append("  " + "-" * (len(header) - 2))
     lines.append(
-        f"  {'MICRO (all labels)':<{_COL_W}}  {tp + fn:>5}  {m['precision'] * 100:6.1f}  "
-        f"{m['recall'] * 100:6.1f}  {m['f1'] * 100:6.1f}"
+        f"  {'MICRO (all labels)':<{_COL_W}}  {tp+fn:>5}  {m['precision']*100:6.1f}  "
+        f"{m['recall']*100:6.1f}  {m['f1']*100:6.1f}"
         f"    {tp:>4}  {fp:>4}  {fn:>4}"
     )
     return lines
@@ -287,7 +285,9 @@ def _fmt_bottom_table(
         return a["tp"] + a["fn"]
 
     eligible = [lbl for lbl in acc if support(lbl) >= min_support]
-    ranked = sorted(eligible, key=lambda lbl: (_prf(**acc[lbl])["f1"], -support(lbl)))
+    ranked = sorted(
+        eligible, key=lambda lbl: (_prf(**acc[lbl])["f1"], -support(lbl))
+    )
 
     if not eligible:
         lines.append(f"  (no labels with support >= {min_support})")
@@ -298,8 +298,8 @@ def _fmt_bottom_table(
         m = _prf(a["tp"], a["fp"], a["fn"])
         n = support(lbl)
         lines.append(
-            f"  {lbl:<{_COL_W}}  {n:>5}  {m['precision'] * 100:6.1f}  "
-            f"{m['recall'] * 100:6.1f}  {m['f1'] * 100:6.1f}"
+            f"  {lbl:<{_COL_W}}  {n:>5}  {m['precision']*100:6.1f}  "
+            f"{m['recall']*100:6.1f}  {m['f1']*100:6.1f}"
             f"    {a['tp']:>4}  {a['fp']:>4}  {a['fn']:>4}"
         )
     return lines
@@ -320,25 +320,20 @@ def main() -> None:
         help="Studio cluster JSON mapping event names to clusters.",
     )
     parser.add_argument(
-        "--tier",
-        choices=["exact", "relaxed"],
-        default="relaxed",
+        "--tier", choices=["exact", "relaxed"], default="relaxed",
         help="Matching tier for the alignment-based 'event' family.",
     )
     parser.add_argument(
-        "--by-location",
-        action="store_true",
+        "--by-location", action="store_true",
         help=(
             "Also report event-type extraction performance (event_type + "
             "quote alignment) bucketed by gold event_location."
         ),
     )
     parser.add_argument(
-        "--top-n",
-        type=int,
-        default=40,
+        "--top-n", type=int, default=40,
         help="Truncate the by-location table to the top-N locations by support "
-        "(default 40; the remainder is pooled into an 'other' row).",
+             "(default 40; the remainder is pooled into an 'other' row).",
     )
     parser.add_argument(
         "--geo-field",
@@ -352,19 +347,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
-        "--bottom-n",
-        type=int,
-        default=20,
+        "--bottom-n", type=int, default=20,
         help="Also list the N worst locations by F1 (ascending), for both "
-        "by-location tables (default 20). Set to 0 to disable.",
+             "by-location tables (default 20). Set to 0 to disable.",
     )
     parser.add_argument(
-        "--min-support",
-        type=int,
-        default=5,
+        "--min-support", type=int, default=5,
         help="Minimum support (TP+FN) a location needs to qualify for the "
-        "worst-N table, so single-occurrence locations don't dominate "
-        "(default 5).",
+             "worst-N table, so single-occurrence locations don't dominate "
+             "(default 5).",
     )
     args = parser.parse_args()
 
@@ -378,38 +369,20 @@ def main() -> None:
 
     fine = per_label_breakdown(records, tier=args.tier, cluster_map=None)
     lines.extend(_fmt_table("EVENT EXTRACTION  (per event type)", fine["event"]))
-    lines.extend(
-        _fmt_table("EVENT TYPE MULTISET  (per event type)", fine["event_type_multiset"])
-    )
-    lines.extend(
-        _fmt_table(
-            "EVENT TYPE SET (doc-level)  (per event type)", fine["event_type_set"]
-        )
-    )
+    lines.extend(_fmt_table("EVENT TYPE MULTISET  (per event type)", fine["event_type_multiset"]))
+    lines.extend(_fmt_table("EVENT TYPE SET (doc-level)  (per event type)", fine["event_type_set"]))
 
     if args.cluster:
         cluster_map = _load_cluster_map(args.cluster)
         print(f"Loaded cluster map with {len(cluster_map)} entries from {args.cluster}")
         coarse = per_label_breakdown(records, tier=args.tier, cluster_map=cluster_map)
-        lines.extend(
-            _fmt_table("CLUSTER EVENT EXTRACTION  (per cluster)", coarse["event"])
-        )
-        lines.extend(
-            _fmt_table(
-                "CLUSTER TYPE MULTISET  (per cluster)", coarse["event_type_multiset"]
-            )
-        )
-        lines.extend(
-            _fmt_table(
-                "CLUSTER TYPE SET (doc-level)  (per cluster)", coarse["event_type_set"]
-            )
-        )
+        lines.extend(_fmt_table("CLUSTER EVENT EXTRACTION  (per cluster)", coarse["event"]))
+        lines.extend(_fmt_table("CLUSTER TYPE MULTISET  (per cluster)", coarse["event_type_multiset"]))
+        lines.extend(_fmt_table("CLUSTER TYPE SET (doc-level)  (per cluster)", coarse["event_type_set"]))
 
     if args.by_location:
         locs_of = _geo_locs(args.geo_field) if args.geo_field else _text_locs
-        loc_label = (
-            f"geotaxonomy.{args.geo_field}" if args.geo_field else "raw event_location"
-        )
+        loc_label = f"geotaxonomy.{args.geo_field}" if args.geo_field else "raw event_location"
 
         by_loc = per_location_breakdown(records, tier=args.tier, locs_of=locs_of)
         lines.extend(

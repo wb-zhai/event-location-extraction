@@ -4,7 +4,6 @@
 Reads the original missing_manifest.jsonl and inspects the actual top-level
 article body. Does not rerun inference, modify GCS, or change the audit database.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -22,8 +21,8 @@ def gcloud(*args):
     last = ""
     for attempt in range(3):
         result = subprocess.run(
-            ["gcloud", *args], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
+            ["gcloud", *args], text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
         if result.returncode == 0:
             return result.stdout
         last = result.stderr
@@ -74,11 +73,7 @@ def run(args):
     target = work / "missing_diagnostic" / "corrected_recheck"
     if not source.is_file():
         raise SystemExit(f"Missing input: {source}")
-    rows = [
-        json.loads(line)
-        for line in source.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
     ids = [str(r["id"]) for r in rows]
     if len(ids) != len(set(ids)):
         raise SystemExit("Duplicate IDs in recovery manifest.")
@@ -120,43 +115,24 @@ def run(args):
 
     target.mkdir(parents=True, exist_ok=True)
     (target / "source_diagnostics.json").write_text(
-        json.dumps(results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    fields = [
-        "id",
-        "manifest_shard",
-        "language",
-        "publish_date",
-        "gcs_path",
-        "status",
-        "body_type",
-        "body_chars",
-        "body_chars_stripped",
-        "title_chars",
-        "id_matches_source_uri",
-        "source_bytes",
-        "source_generation",
-        "error",
-    ]
-    with (target / "source_diagnostics.csv").open(
-        "w", encoding="utf-8", newline=""
-    ) as f:
+        json.dumps(results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    fields = ["id", "manifest_shard", "language", "publish_date", "gcs_path",
+              "status", "body_type", "body_chars", "body_chars_stripped",
+              "title_chars", "id_matches_source_uri", "source_bytes",
+              "source_generation", "error"]
+    with (target / "source_diagnostics.csv").open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(results)
     counts = collections.Counter(r["status"] for r in results)
     summary = {
-        "checked": len(results),
-        "status_counts": dict(counts),
+        "checked": len(results), "status_counts": dict(counts),
         "basic_min_body_chars": args.min_chars,
-        "note": "This is a source-body diagnostic, not an exact replay of the inference loader. Original skip causes remain to be confirmed from code/logs.",
+        "note": "This is a source-body diagnostic, not an exact replay of the inference loader. Original skip causes remain to be confirmed from code/logs."
     }
     (target / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    text = (
-        "GLOBAL V4 SOURCE RECHECK\n"
-        + "\n".join(f"{key}: {value}" for key, value in sorted(counts.items()))
-        + "\n"
-    )
+    text = "GLOBAL V4 SOURCE RECHECK\n" + "\n".join(
+        f"{key}: {value}" for key, value in sorted(counts.items())) + "\n"
     text += "No inference was run. No original outputs were changed.\n"
     (target / "summary.txt").write_text(text, encoding="utf-8")
     print("\n" + text + "Reports: " + str(target))

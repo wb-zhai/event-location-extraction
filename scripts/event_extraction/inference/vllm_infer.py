@@ -43,12 +43,7 @@ HERE = pathlib.Path(__file__).parent
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_ONTOLOGY = REPO_ROOT / "ontologies" / "zhai" / "bona.v4.json"
 DEFAULT_PROMPT_DIR = (
-    REPO_ROOT
-    / "scripts"
-    / "event_extraction"
-    / "generation"
-    / "prompts"
-    / "student_sft"
+    REPO_ROOT / "scripts" / "event_extraction" / "generation" / "prompts" / "student_sft"
 )
 
 if str(REPO_ROOT) not in sys.path:
@@ -84,14 +79,7 @@ _BASE_ANNOTATION_SCHEMA: dict = {
                     "event_location": {"type": "string"},
                     "event_location_admin_level": {
                         "type": "string",
-                        "enum": [
-                            "country",
-                            "state",
-                            "county",
-                            "city",
-                            "district",
-                            "not_stated",
-                        ],
+                        "enum": ["country", "state", "county", "city", "district", "not_stated"],
                     },
                     "event_time": {"type": "string"},
                     "time_status": {
@@ -219,9 +207,7 @@ def _batched(items: Iterable, size: int) -> Iterator[list]:
         yield batch
 
 
-def _read_jsonl(
-    path: pathlib.Path, shard_index: int, num_shards: int
-) -> Iterator[dict]:
+def _read_jsonl(path: pathlib.Path, shard_index: int, num_shards: int) -> Iterator[dict]:
     """Stream a local JSONL, keeping line k when k % num_shards == shard_index.
 
     Streaming (rather than json.loads-ing the whole file into a list up front) keeps
@@ -315,9 +301,7 @@ def _build_windows(
         lang = row_language(row)
         system_template, user_template = templates.get(lang, templates["eng"])
         labels = row_labels(row, default_labels, top_k_candidates)
-        system_prompt = _render_system_prompt_cached(
-            system_template, labels, descriptions
-        )
+        system_prompt = _render_system_prompt_cached(system_template, labels, descriptions)
 
     paras = split_paragraphs(text) or [(0, len(text))]
     paras = split_oversized_paragraphs(text, paras, max_chars=max_chars)
@@ -580,6 +564,7 @@ def vllm_infer(
 
     with open(output_path, "a", encoding="utf-8") as out_f:
         for b_idx, batch in enumerate(_batched(pending, batch_size)):
+
             # --- Full-doc retrieval (before windowing) ---
             if retriever_llm is not None and retriever_query_mode == "full_doc":
                 pbar.set_description(f"Batch {b_idx + 1} | Retrieving")
@@ -636,7 +621,9 @@ def vllm_infer(
 
             # --- Per-window retrieval (after windowing) ---
             if retriever_llm is not None and retriever_query_mode == "per_window":
-                pbar.set_description(f"Batch {b_idx + 1} | Retrieving per window")
+                pbar.set_description(
+                    f"Batch {b_idx + 1} | Retrieving per window"
+                )
                 _win_texts: list[str] = []
                 _win_index: list[tuple[int, int]] = []
                 for a_idx, windows in enumerate(article_windows):
@@ -670,9 +657,7 @@ def vllm_infer(
                         )
                         lang = row_language(row)
                         sys_tmpl, usr_tmpl = templates.get(lang, templates["eng"])
-                        system_prompt = render_system_prompt(
-                            sys_tmpl, labels, descriptions
-                        )
+                        system_prompt = render_system_prompt(sys_tmpl, labels, descriptions)
                         w["labels"] = labels
                         user_msg = build_user_message(
                             usr_tmpl, publish_date, w["window_text"]

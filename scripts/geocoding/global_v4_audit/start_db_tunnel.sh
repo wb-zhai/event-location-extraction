@@ -4,10 +4,10 @@ set -euo pipefail
 PROJECT="$(gcloud config get-value project 2>/dev/null)"
 
 ZONE="$(
-    gcloud compute instances list \
-        --filter='name=zhai-bastion' \
-        --format='value(zone.basename())' |
-        head -1
+  gcloud compute instances list \
+    --filter='name=zhai-bastion' \
+    --format='value(zone.basename())' \
+  | head -1
 )"
 
 if [ -z "$ZONE" ]; then
@@ -15,7 +15,7 @@ if [ -z "$ZONE" ]; then
     exit 1
 fi
 
-python3 - <<'PY' >/tmp/zhai_db_target.env
+python3 - <<'PY' > /tmp/zhai_db_target.env
 from pathlib import Path
 from dotenv import dotenv_values
 
@@ -42,8 +42,8 @@ echo
 echo "Keep this terminal open."
 
 exec gcloud compute ssh zhai-bastion \
-    --project="$PROJECT" \
-    --zone="$ZONE" \
-    -- \
-    -N \
-    -L "5439:${DB_HOST}:${DB_PORT}"
+  --project="$PROJECT" \
+  --zone="$ZONE" \
+  -- \
+  -N \
+  -L "5439:${DB_HOST}:${DB_PORT}"

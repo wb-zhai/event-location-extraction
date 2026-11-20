@@ -51,7 +51,6 @@ def get_decision(rec: dict) -> str:
 
 # ── Input resolution (local files/folders and gs:// files/folders) ────────────
 
-
 def is_gcs_uri(path: str) -> bool:
     return path.startswith("gs://")
 
@@ -67,9 +66,7 @@ def _require_gcs_storage():
     try:
         from google.cloud import storage
     except ImportError:
-        print(
-            "google-cloud-storage is not installed. Run: pip install google-cloud-storage"
-        )
+        print("google-cloud-storage is not installed. Run: pip install google-cloud-storage")
         sys.exit(1)
     return storage
 
@@ -148,9 +145,7 @@ def process_file(path: str, complete: bool, pbar: tqdm) -> FileStats:
     """Stream one file and tally it in isolation (thread-local, no shared state)."""
     stats = FileStats()
     with open_input(path) as f:
-        records = (
-            _iter_csv_records(f) if path.endswith(".csv") else _iter_jsonl_records(f)
-        )
+        records = _iter_csv_records(f) if path.endswith(".csv") else _iter_jsonl_records(f)
         for rec in records:
             stats.total += 1
             label = rec.get("label") or "none"
@@ -170,31 +165,14 @@ def process_file(path: str, complete: bool, pbar: tqdm) -> FileStats:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Print stats for relevance-labeled JSONL data."
-    )
-    parser.add_argument(
-        "--input",
-        required=True,
-        help="Path to a JSONL file/folder, local or gs://bucket/prefix.",
-    )
-    parser.add_argument(
-        "--complete",
-        action="store_true",
-        help="Also print risk_factors/countries breakdowns and label-vs-decision cross tabs.",
-    )
-    parser.add_argument(
-        "--top-n",
-        type=int,
-        default=50,
-        help="Number of top risk_factors/countries to show",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=8,
-        help="Number of files to read concurrently (default 8; helps most with GCS input).",
-    )
+    parser = argparse.ArgumentParser(description="Print stats for relevance-labeled JSONL data.")
+    parser.add_argument("--input", required=True,
+        help="Path to a JSONL file/folder, local or gs://bucket/prefix.")
+    parser.add_argument("--complete", action="store_true",
+        help="Also print risk_factors/countries breakdowns and label-vs-decision cross tabs.")
+    parser.add_argument("--top-n", type=int, default=50, help="Number of top risk_factors/countries to show")
+    parser.add_argument("--workers", type=int, default=8,
+        help="Number of files to read concurrently (default 8; helps most with GCS input).")
     args = parser.parse_args()
     if args.workers < 1:
         parser.error("--workers must be at least 1")
@@ -212,16 +190,11 @@ def main() -> None:
 
     with tqdm(desc="rows", unit="rows", unit_scale=True) as pbar:
         with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {
-                pool.submit(process_file, path, args.complete, pbar): path
-                for path in files
-            }
+            futures = {pool.submit(process_file, path, args.complete, pbar): path for path in files}
             for future in as_completed(futures):
                 stats = future.result()
                 files_done += 1
-                pbar.set_postfix_str(
-                    f"files {files_done}/{len(files)}: {display_name(futures[future])}"
-                )
+                pbar.set_postfix_str(f"files {files_done}/{len(files)}: {display_name(futures[future])}")
 
                 total += stats.total
                 labels.update(stats.labels)

@@ -40,10 +40,7 @@ case "${GPU}" in
         ACCEL_YAML="      acceleratorType: NVIDIA_TESLA_T4
       acceleratorCount: 1"
         ;;
-    *)
-        echo "Unknown GPU profile '${GPU}'. Valid options: a100-40gb, l4, t4" >&2
-        exit 1
-        ;;
+    *) echo "Unknown GPU profile '${GPU}'. Valid options: a100-40gb, l4, t4" >&2; exit 1 ;;
 esac
 
 # MAX_STEPS: set to a small number (e.g. 10) for a cheap debug run.
@@ -52,11 +49,10 @@ HF_TOKEN="${HF_TOKEN:-}"
 
 JOB_NAME_PREFIX="${JOB_NAME_PREFIX:-qwen3_5-4b-base-lora}"
 JOB_NAME="${JOB_NAME_PREFIX}-${GPU}-$(date +%Y%m%d-%H%M%S)"
-TMP_JOB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vertex_job.XXXXXX")"
-JOB_SPEC="$TMP_JOB_DIR/job.yaml"
-trap 'rm -f "$JOB_SPEC"; rmdir "$TMP_JOB_DIR"' EXIT
+JOB_SPEC=$(mktemp /tmp/vertex_job_XXXXXX.yaml)
+trap 'rm -f "${JOB_SPEC}"' EXIT
 
-cat >"${JOB_SPEC}" <<YAML
+cat > "${JOB_SPEC}" <<YAML
 workerPoolSpecs:
   - replicaCount: 1
     machineSpec:
@@ -79,12 +75,12 @@ ${ACCEL_YAML}
           value: "${WANDB_API_KEY}"
 YAML
 
-[[ -n "${HF_TOKEN}" ]] && cat >>"${JOB_SPEC}" <<YAML
+[[ -n "${HF_TOKEN}" ]] && cat >> "${JOB_SPEC}" <<YAML
         - name: HF_TOKEN
           value: "${HF_TOKEN}"
 YAML
 
-[[ -n "${MAX_STEPS}" ]] && cat >>"${JOB_SPEC}" <<YAML
+[[ -n "${MAX_STEPS}" ]] && cat >> "${JOB_SPEC}" <<YAML
         - name: MAX_STEPS
           value: "${MAX_STEPS}"
 YAML

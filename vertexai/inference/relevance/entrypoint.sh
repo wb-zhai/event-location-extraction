@@ -43,12 +43,12 @@ echo "[entrypoint] model ready"
 # --- 2. Pull this task's manifest shard only ---
 echo "[entrypoint] downloading manifest ${REMOTE_INPUT}"
 gsutil cp "${REMOTE_INPUT}" "${LOCAL_INPUT}"
-echo "[entrypoint] manifest ready ($(wc -l <${LOCAL_INPUT}) rows)"
+echo "[entrypoint] manifest ready ($(wc -l < ${LOCAL_INPUT}) rows)"
 
 # --- 3. Resume: pull any partial output from a previous Spot retry ---
 echo "[entrypoint] checking for partial output at ${REMOTE_OUTPUT}"
-gsutil cp "${REMOTE_OUTPUT}" "${LOCAL_OUTPUT}" 2>/dev/null &&
-    echo "[entrypoint] resuming from $(wc -l <${LOCAL_OUTPUT}) already-labeled rows" ||
+gsutil cp "${REMOTE_OUTPUT}" "${LOCAL_OUTPUT}" 2>/dev/null && \
+    echo "[entrypoint] resuming from $(wc -l < ${LOCAL_OUTPUT}) already-labeled rows" || \
     echo "[entrypoint] no partial output found, starting fresh"
 
 # --- 4. Background sync: upload output every 90 s so Spot preemptions lose < 90 s ---
@@ -56,8 +56,8 @@ _sync_loop() {
     while true; do
         sleep 90
         if [[ -f "${LOCAL_OUTPUT}" ]]; then
-            gsutil -q cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}" &&
-                echo "[sync] uploaded $(wc -l <${LOCAL_OUTPUT}) lines at $(date -u +%H:%M:%S)"
+            gsutil -q cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}" && \
+                echo "[sync] uploaded $(wc -l < ${LOCAL_OUTPUT}) lines at $(date -u +%H:%M:%S)"
         fi
     done
 }
@@ -73,15 +73,15 @@ fi
 
 echo "[entrypoint] starting inference"
 python3 /app/relevance_vllm_infer.py \
-    --model_name_or_path "${LOCAL_MODEL}" \
-    --input "${LOCAL_INPUT}" \
-    --output "${LOCAL_OUTPUT}" \
-    --shard_index 0 \
-    --num_shards 1 \
-    --max_chars "${MAX_CHARS:-4000}" \
-    --max_length "${MAX_LENGTH:-2048}" \
-    --batch_size "${BATCH_SIZE:-2000}" \
-    --gcs_read_concurrency "${GCS_READ_CONCURRENCY:-64}" \
+    --model_name_or_path     "${LOCAL_MODEL}" \
+    --input                  "${LOCAL_INPUT}" \
+    --output                 "${LOCAL_OUTPUT}" \
+    --shard_index            0 \
+    --num_shards             1 \
+    --max_chars              "${MAX_CHARS:-4000}" \
+    --max_length             "${MAX_LENGTH:-2048}" \
+    --batch_size             "${BATCH_SIZE:-2000}" \
+    --gcs_read_concurrency   "${GCS_READ_CONCURRENCY:-64}" \
     --gpu_memory_utilization "${GPU_MEMORY_UTIL:-0.9}" \
     "${EXTRA_ARGS[@]}"
 
@@ -89,4 +89,4 @@ python3 /app/relevance_vllm_infer.py \
 kill "${SYNC_PID}" 2>/dev/null || true
 echo "[entrypoint] uploading final output to ${REMOTE_OUTPUT}"
 gsutil cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}"
-echo "[entrypoint] task ${TASK_INDEX} done — $(wc -l <${LOCAL_OUTPUT}) rows written"
+echo "[entrypoint] task ${TASK_INDEX} done — $(wc -l < ${LOCAL_OUTPUT}) rows written"

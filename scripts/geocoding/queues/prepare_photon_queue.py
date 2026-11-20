@@ -66,8 +66,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("input_tsv", type=Path)
     ap.add_argument(
-        "-o",
-        "--output",
+        "-o", "--output",
         type=Path,
         default=Path("outputs/geography/global_v4_unique_locations.jsonl"),
     )

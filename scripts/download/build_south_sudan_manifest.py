@@ -4,17 +4,13 @@ import argparse, json
 from contextlib import ExitStack
 from pathlib import Path
 
-
 def parse_args():
-    p = argparse.ArgumentParser(
-        description="Build 20 Cloud Batch manifest shards from the fixed South Sudan JSONL."
-    )
+    p = argparse.ArgumentParser(description="Build 20 Cloud Batch manifest shards from the fixed South Sudan JSONL.")
     p.add_argument("--input", required=True)
     p.add_argument("--output-dir", required=True)
     p.add_argument("--num-shards", type=int, default=20)
     p.add_argument("--default-language", default="eng")
     return p.parse_args()
-
 
 def main():
     args = parse_args()
@@ -30,9 +26,7 @@ def main():
 
     with ExitStack() as stack:
         writers = [
-            stack.enter_context(
-                (out_dir / f"manifest-{i:03d}.jsonl").open("w", encoding="utf-8")
-            )
+            stack.enter_context((out_dir / f"manifest-{i:03d}.jsonl").open("w", encoding="utf-8"))
             for i in range(args.num_shards)
         ]
 
@@ -54,11 +48,7 @@ def main():
                     or rec.get("published_at")
                     or rec.get("publish_date")
                 )
-                language = (
-                    rec.get("language")
-                    or source.get("language")
-                    or args.default_language
-                )
+                language = rec.get("language") or source.get("language") or args.default_language
 
                 if article_id is None or not gcs_path or not publish_date:
                     skipped += 1
@@ -78,7 +68,6 @@ def main():
     print(f"Wrote {total:,} rows across {args.num_shards} shards")
     print(f"Skipped {skipped:,} rows missing id/cloud_uri/publish_date")
     print(f"Shard min={min(counts):,}, max={max(counts):,}")
-
 
 if __name__ == "__main__":
     main()

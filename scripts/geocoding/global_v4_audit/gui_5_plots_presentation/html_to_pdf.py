@@ -99,13 +99,18 @@ def main():
     output_path = args.output.resolve()
 
     if not html_path.is_file():
-        raise SystemExit(f"HTML file not found: {html_path}")
+        raise SystemExit(
+            f"HTML file not found: {html_path}"
+        )
 
     print(f"Input : {html_path}")
     print(f"Output: {output_path}")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+
+        browser = p.chromium.launch(
+            headless=True
+        )
 
         page = browser.new_page(
             viewport={
@@ -130,30 +135,43 @@ def main():
         )
 
         # Use print media rules.
-        page.emulate_media(media="print")
+        page.emulate_media(
+            media="print"
+        )
 
         # Force one exact 16:9 page per slide.
-        page.add_style_tag(content=PRINT_CSS)
+        page.add_style_tag(
+            content=PRINT_CSS
+        )
 
         # Give Chromium a moment to finish layout.
         page.wait_for_timeout(500)
 
-        slide_count = page.locator(".slide").count()
+        slide_count = page.locator(
+            ".slide"
+        ).count()
 
-        print(f"Slides detected: {slide_count}")
+        print(
+            f"Slides detected: {slide_count}"
+        )
 
         page.pdf(
             path=str(output_path),
+
             width="16in",
             height="9in",
+
             margin={
                 "top": "0",
                 "right": "0",
                 "bottom": "0",
                 "left": "0",
             },
+
             print_background=True,
+
             prefer_css_page_size=True,
+
             display_header_footer=False,
         )
 

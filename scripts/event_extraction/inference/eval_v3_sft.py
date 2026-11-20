@@ -13,7 +13,6 @@ from typing import Any
 # I/O helpers
 # ---------------------------------------------------------------------------
 
-
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     rows = []
     with open(path, "r", encoding="utf-8") as f:
@@ -72,7 +71,6 @@ def _quote_sim(a: str, b: str) -> float:
 # Cluster map helpers
 # ---------------------------------------------------------------------------
 
-
 def _load_cluster_map(path: Path) -> dict[str, str]:
     """Load {normalized_event_name -> cluster} from a Studio results JSON."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -105,15 +103,14 @@ def _loc_match(gold: str, pred: str, tier: str) -> bool:
         return False
     if tier == "exact":
         return set(g_parts) == set(p_parts)
-
     # relaxed: every part in each side must fuzzy-match some part on the other side
     def _single(a: str, b: str) -> bool:
         if a == b or a in b or b in a:
             return True
         return SequenceMatcher(None, a, b).ratio() >= _LOC_FUZZY_THRESHOLD
-
-    return all(any(_single(g, p) for p in p_parts) for g in g_parts) and all(
-        any(_single(p, g) for g in g_parts) for p in p_parts
+    return (
+        all(any(_single(g, p) for p in p_parts) for g in g_parts)
+        and all(any(_single(p, g) for g in g_parts) for p in p_parts)
     )
 
 
@@ -165,8 +162,7 @@ _QUOTE_MATCH_THRESHOLD = 0.5
 
 
 def _event_sim(
-    gold: dict,
-    pred: dict,
+    gold: dict, pred: dict,
     cluster_map: dict[str, str] | None = None,
 ) -> float:
     """Similarity score for matching a predicted event to a gold event."""
@@ -185,9 +181,7 @@ def _event_sim(
 
 
 def _match_events(
-    gold: list[dict],
-    pred: list[dict],
-    tier: str,
+    gold: list[dict], pred: list[dict], tier: str,
     cluster_map: dict[str, str] | None = None,
 ) -> tuple[list[tuple[dict, dict]], list[dict], list[dict]]:
     """
@@ -224,7 +218,6 @@ def _match_events(
 # Metric aggregation
 # ---------------------------------------------------------------------------
 
-
 def _prf(tp: int, fp: int, fn: int) -> dict[str, float]:
     p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -257,7 +250,6 @@ def _macro_accuracy(per_doc: list[dict[str, float]]) -> dict[str, float]:
 # Core evaluation
 # ---------------------------------------------------------------------------
 
-
 def evaluate(
     records: list[dict[str, Any]],
     cluster_map: dict[str, str] | None = None,
@@ -269,13 +261,8 @@ def evaluate(
     macro_accuracy_acc: dict[tuple[str, str], list[dict]] = {}
 
     families = [
-        "event",
-        "event_type",
-        "event_type_set",
-        "location",
-        "event_location",
-        "event_time",
-        "event_location_admin_level",
+        "event", "event_type", "event_type_set",
+        "location", "event_location", "event_time", "event_location_admin_level",
     ]
     accuracy_families = [
         "location_on_matched_events",
@@ -287,19 +274,11 @@ def evaluate(
     ]
     if cluster_map is not None:
         families = [
-            "event",
-            "event_type",
-            "event_type_set",
-            "cluster_event",
-            "cluster_type",
-            "cluster_type_set",
-            "location",
-            "event_location",
-            "cluster_event_location",
-            "event_time",
-            "cluster_event_time",
-            "event_location_admin_level",
-            "cluster_event_location_admin_level",
+            "event", "event_type", "event_type_set",
+            "cluster_event", "cluster_type", "cluster_type_set",
+            "location", "event_location", "cluster_event_location",
+            "event_time", "cluster_event_time",
+            "event_location_admin_level", "cluster_event_location_admin_level",
         ]
         accuracy_families.extend(
             [
@@ -482,8 +461,7 @@ def evaluate(
                 c_admin_level_stated_pairs = [
                     (g, p)
                     for g, p in c_pairs
-                    if _norm(g.get("event_location_admin_level", "not_stated"))
-                    != "not_stated"
+                    if _norm(g.get("event_location_admin_level", "not_stated")) != "not_stated"
                 ]
                 c_admin_level_stated_correct = sum(
                     1
@@ -544,12 +522,8 @@ def evaluate(
             # 2c-2d. Cluster-level type metrics (only when cluster_map given)
             # ---------------------------------------------------------------
             if cluster_map is not None:
-                gold_clusters = [
-                    _to_cluster(e.get("event_type", ""), cluster_map) for e in gold
-                ]
-                pred_clusters = [
-                    _to_cluster(e.get("event_type", ""), cluster_map) for e in pred
-                ]
+                gold_clusters = [_to_cluster(e.get("event_type", ""), cluster_map) for e in gold]
+                pred_clusters = [_to_cluster(e.get("event_type", ""), cluster_map) for e in pred]
 
                 gc_bag = list(gold_clusters)
                 pc_bag = list(pred_clusters)
@@ -566,12 +540,8 @@ def evaluate(
                 acc[("cluster_type", tier)]["fn"] += ct_fn
                 macro_acc[("cluster_type", tier)].append(_prf(ct_tp, ct_fp, ct_fn))
 
-                gold_cluster_set = {
-                    _to_cluster(e.get("event_type", ""), cluster_map) for e in gold
-                }
-                pred_cluster_set = {
-                    _to_cluster(e.get("event_type", ""), cluster_map) for e in pred
-                }
+                gold_cluster_set = {_to_cluster(e.get("event_type", ""), cluster_map) for e in gold}
+                pred_cluster_set = {_to_cluster(e.get("event_type", ""), cluster_map) for e in pred}
                 cs_tp = len(gold_cluster_set & pred_cluster_set)
                 cs_fp = len(pred_cluster_set - gold_cluster_set)
                 cs_fn = len(gold_cluster_set - pred_cluster_set)
@@ -584,10 +554,14 @@ def evaluate(
             # 3. Location extraction (per-doc set, ignoring not_stated)
             # ---------------------------------------------------------------
             gold_locs = [
-                loc for e in gold for loc in _split_locs(e.get("event_location", ""))
+                loc
+                for e in gold
+                for loc in _split_locs(e.get("event_location", ""))
             ]
             pred_locs = [
-                loc for e in pred for loc in _split_locs(e.get("event_location", ""))
+                loc
+                for e in pred
+                for loc in _split_locs(e.get("event_location", ""))
             ]
 
             gl_remaining = list(gold_locs)
@@ -623,7 +597,9 @@ def evaluate(
             macro_acc[("event_location", tier)].append(_prf(el_tp, el_fp, el_fn))
 
             stated_pairs = [
-                (g, p) for g, p in pairs if _split_locs(g.get("event_location", ""))
+                (g, p)
+                for g, p in pairs
+                if _split_locs(g.get("event_location", ""))
             ]
             stated_correct = sum(
                 1
@@ -646,13 +622,9 @@ def evaluate(
 
             for g, p in pairs:
                 et = _norm(g.get("event_type", ""))
-                d = type_cond_acc.setdefault(
-                    (et, tier, "location"), {"correct": 0, "total": 0}
-                )
+                d = type_cond_acc.setdefault((et, tier, "location"), {"correct": 0, "total": 0})
                 d["total"] += 1
-                if _loc_match(
-                    g.get("event_location", ""), p.get("event_location", ""), tier
-                ):
+                if _loc_match(g.get("event_location", ""), p.get("event_location", ""), tier):
                     d["correct"] += 1
 
             # ---------------------------------------------------------------
@@ -702,14 +674,10 @@ def evaluate(
 
             for g, p in pairs:
                 et = _norm(g.get("event_type", ""))
-                d = type_cond_acc.setdefault(
-                    (et, tier, "time"), {"correct": 0, "total": 0}
-                )
+                d = type_cond_acc.setdefault((et, tier, "time"), {"correct": 0, "total": 0})
                 d["total"] += 1
                 if _time_match(
-                    g.get("event_time", "not_stated"),
-                    p.get("event_time", "not_stated"),
-                    tier,
+                    g.get("event_time", "not_stated"), p.get("event_time", "not_stated"), tier
                 ):
                     d["correct"] += 1
 
@@ -730,15 +698,12 @@ def evaluate(
             acc[("event_location_admin_level", tier)]["tp"] += al_tp
             acc[("event_location_admin_level", tier)]["fp"] += al_fp
             acc[("event_location_admin_level", tier)]["fn"] += al_fn
-            macro_acc[("event_location_admin_level", tier)].append(
-                _prf(al_tp, al_fp, al_fn)
-            )
+            macro_acc[("event_location_admin_level", tier)].append(_prf(al_tp, al_fp, al_fn))
 
             admin_level_stated_pairs = [
                 (g, p)
                 for g, p in pairs
-                if _norm(g.get("event_location_admin_level", "not_stated"))
-                != "not_stated"
+                if _norm(g.get("event_location_admin_level", "not_stated")) != "not_stated"
             ]
             admin_level_stated_correct = sum(
                 1
@@ -763,9 +728,7 @@ def evaluate(
 
             for g, p in pairs:
                 et = _norm(g.get("event_type", ""))
-                d = type_cond_acc.setdefault(
-                    (et, tier, "admin_level"), {"correct": 0, "total": 0}
-                )
+                d = type_cond_acc.setdefault((et, tier, "admin_level"), {"correct": 0, "total": 0})
                 d["total"] += 1
                 if _admin_level_match(
                     g.get("event_location_admin_level", "not_stated"),
@@ -864,26 +827,18 @@ _ACCURACY_LABELS = {
 }
 
 _COL_W = 52  # width of metric name column
-_NUM_W = 7  # width of each number column
+_NUM_W = 7   # width of each number column
 
 
-def _row(
-    label: str,
-    r_p: float,
-    r_r: float,
-    r_f1: float,
-    e_p: float,
-    e_r: float,
-    e_f1: float,
-    suffix: str = "",
-) -> str:
+def _row(label: str, r_p: float, r_r: float, r_f1: float,
+         e_p: float, e_r: float, e_f1: float, suffix: str = "") -> str:
     def pct(v: float) -> str:
         return f"{v * 100:5.1f}"
-
     return (
         f"  {label:<{_COL_W}}"
         f"  {pct(r_p)}  {pct(r_r)}  {pct(r_f1)}"
-        f"    {pct(e_p)}  {pct(e_r)}  {pct(e_f1)}" + (f"   {suffix}" if suffix else "")
+        f"    {pct(e_p)}  {pct(e_r)}  {pct(e_f1)}"
+        + (f"   {suffix}" if suffix else "")
     )
 
 
@@ -902,9 +857,11 @@ def _accuracy_row(
 ) -> str:
     def pct(v: float) -> str:
         return f"{v * 100:5.1f}"
-
-    return f"  {label:<{_COL_W}}  {pct(r_acc)}    {pct(e_acc)}" + (
-        f"   {suffix}" if suffix else ""
+    return (
+        f"  {label:<{_COL_W}}"
+        f"  {pct(r_acc)}"
+        f"    {pct(e_acc)}"
+        + (f"   {suffix}" if suffix else "")
     )
 
 
@@ -933,17 +890,11 @@ def _type_header() -> str:
 
 
 def _type_row(
-    et: str,
-    n: int,
-    r: dict[str, float],
-    e: dict[str, float],
-    loc_acc: float,
-    time_acc: float,
-    adm_acc: float,
+    et: str, n: int, r: dict[str, float], e: dict[str, float],
+    loc_acc: float, time_acc: float, adm_acc: float,
 ) -> str:
     def pct(v: float, w: int = 5) -> str:
         return f"{v * 100:{w}.1f}"
-
     return (
         f"  {et:<{_TYPE_COL_W}}  {n:>5}   "
         f"{pct(r['precision'])} {pct(r['recall'])} {pct(r['f1'])}    "
@@ -957,9 +908,7 @@ def _format_by_type_report(metrics: dict[str, Any]) -> list[str]:
     if not by_type:
         return []
     lines: list[str] = []
-    lines.append(
-        "\n\n  PER EVENT TYPE  (micro, sorted by gold support, relaxed matching)\n"
-    )
+    lines.append("\n\n  PER EVENT TYPE  (micro, sorted by gold support, relaxed matching)\n")
     lines.append(_type_header())
 
     def support(et: str) -> int:
@@ -992,18 +941,10 @@ def _format_report(metrics: dict[str, Any], n_records: int) -> str:
         mu_r = metrics[fam]["relaxed"]["micro"]
         mu_e = metrics[fam]["exact"]["micro"]
         counts = f"TP={mu_r['tp']:4d}  FP={mu_r['fp']:4d}  FN={mu_r['fn']:4d}"
-        lines.append(
-            _row(
-                label,
-                mu_r["precision"],
-                mu_r["recall"],
-                mu_r["f1"],
-                mu_e["precision"],
-                mu_e["recall"],
-                mu_e["f1"],
-                suffix=counts,
-            )
-        )
+        lines.append(_row(label,
+                          mu_r["precision"], mu_r["recall"], mu_r["f1"],
+                          mu_e["precision"], mu_e["recall"], mu_e["f1"],
+                          suffix=counts))
 
     # ── macro table ────────────────────────────────────────────────────────
     lines.append("\n\n  MACRO  (per-document average)\n")
@@ -1013,20 +954,14 @@ def _format_report(metrics: dict[str, Any], n_records: int) -> str:
             continue
         ma_r = metrics[fam]["relaxed"]["macro"]
         ma_e = metrics[fam]["exact"]["macro"]
-        lines.append(
-            _row(
-                label,
-                ma_r["precision"],
-                ma_r["recall"],
-                ma_r["f1"],
-                ma_e["precision"],
-                ma_e["recall"],
-                ma_e["f1"],
-            )
-        )
+        lines.append(_row(label,
+                          ma_r["precision"], ma_r["recall"], ma_r["f1"],
+                          ma_e["precision"], ma_e["recall"], ma_e["f1"]))
 
     accuracy_labels = {
-        fam: label for fam, label in _ACCURACY_LABELS.items() if fam in metrics
+        fam: label
+        for fam, label in _ACCURACY_LABELS.items()
+        if fam in metrics
     }
     if accuracy_labels:
         lines.append("\n\n  MICRO CONDITIONAL ACCURACY  (pooled matched events)\n")
@@ -1062,7 +997,6 @@ def _format_report(metrics: dict[str, Any], n_records: int) -> str:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(

@@ -89,7 +89,8 @@ def main() -> None:
     parser.add_argument(
         "--input",
         required=True,
-        help="Original input JSONL (same file passed to relevance_filter.py --input)",
+        help="Original input JSONL (same file "
+        "passed to relevance_filter.py --input)",
     )
     parser.add_argument(
         "--output",

@@ -24,10 +24,7 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     n = missing_path = missing_id = 0
 
-    with (
-        args.input.open(encoding="utf-8") as src,
-        args.output.open("w", encoding="utf-8") as dst,
-    ):
+    with args.input.open(encoding="utf-8") as src, args.output.open("w", encoding="utf-8") as dst:
         for line_no, line in enumerate(src, 1):
             if not line.strip():
                 continue
@@ -61,18 +58,12 @@ def main():
                 missing_path += 1
                 continue
 
-            dst.write(
-                json.dumps(
-                    {
-                        "id": article_id,
-                        "gcs_path": gcs_path,
-                        "publish_date": str(publish_date),
-                        "language": str(language),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+            dst.write(json.dumps({
+                "id": article_id,
+                "gcs_path": gcs_path,
+                "publish_date": str(publish_date),
+                "language": str(language),
+            }, ensure_ascii=False) + "\n")
             n += 1
 
     print(f"manifest rows: {n:,}")

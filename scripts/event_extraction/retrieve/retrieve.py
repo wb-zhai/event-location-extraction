@@ -23,11 +23,7 @@ def extract_query_and_metadata(obj):
                     metadata = {k: v for k, v in obj.items() if k != key}
                 return str(obj[key]).strip(), metadata
         # fallback: check nested source.text
-        if (
-            "source" in obj
-            and isinstance(obj["source"], dict)
-            and "text" in obj["source"]
-        ):
+        if "source" in obj and isinstance(obj["source"], dict) and "text" in obj["source"]:
             metadata = {k: v for k, v in obj.items() if k != "source"}
             return str(obj["source"]["text"]).strip(), metadata
     return "", {}

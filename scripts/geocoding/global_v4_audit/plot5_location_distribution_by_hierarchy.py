@@ -7,7 +7,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(
+    "/mnt/c/Users/Bonaventure/Downloads/event-location-extraction"
+)
 DB = ROOT / "outputs/geography/global_v4_audit/location_layer_pairs.sqlite"
 
 OUTDIR = ROOT / "outputs/geography/global_v4_audit/extraction_quality_plots"
@@ -74,7 +76,6 @@ con.close()
 
 df["total_mentions"] = df["total_mentions"].astype(np.int64)
 
-
 def normalize_layer(x):
     x = str(x or "").strip().lower()
 
@@ -92,7 +93,6 @@ def normalize_layer(x):
         return "Unspecified"
     return "Other"
 
-
 df["hierarchy"] = df["dominant_layer"].map(normalize_layer)
 
 n_locations = len(df)
@@ -107,11 +107,15 @@ print(f"component mentions     {n_mentions:,}")
 
 if n_locations != EXPECTED_LOCATIONS:
     raise RuntimeError(
-        f"Expected {EXPECTED_LOCATIONS:,} unique locations, found {n_locations:,}"
+        f"Expected {EXPECTED_LOCATIONS:,} unique locations, "
+        f"found {n_locations:,}"
     )
 
 if n_mentions != EXPECTED_MENTIONS:
-    raise RuntimeError(f"Expected {EXPECTED_MENTIONS:,} mentions, found {n_mentions:,}")
+    raise RuntimeError(
+        f"Expected {EXPECTED_MENTIONS:,} mentions, "
+        f"found {n_mentions:,}"
+    )
 
 order = [
     "District",
@@ -135,45 +139,57 @@ colors = {
     "Other": "#CC79A7",
 }
 
-summary = df.groupby("hierarchy", as_index=False).agg(
-    unique_locations=("location", "size"),
-    component_mentions=("total_mentions", "sum"),
+summary = (
+    df.groupby("hierarchy", as_index=False)
+      .agg(
+          unique_locations=("location", "size"),
+          component_mentions=("total_mentions", "sum"),
+      )
 )
 
-summary["location_share_pct"] = 100 * summary["unique_locations"] / n_locations
-summary["mention_share_pct"] = 100 * summary["component_mentions"] / n_mentions
-
-summary["sort_order"] = (
-    summary["hierarchy"].map({name: i for i, name in enumerate(order)}).fillna(999)
+summary["location_share_pct"] = (
+    100 * summary["unique_locations"] / n_locations
+)
+summary["mention_share_pct"] = (
+    100 * summary["component_mentions"] / n_mentions
 )
 
-summary = summary.sort_values("sort_order").drop(columns="sort_order")
+summary["sort_order"] = summary["hierarchy"].map(
+    {name: i for i, name in enumerate(order)}
+).fillna(999)
+
+summary = (
+    summary.sort_values("sort_order")
+           .drop(columns="sort_order")
+)
 
 summary.to_csv(CSV, index=False)
 
 print()
 print("Hierarchy breakdown:")
-print(
-    summary.to_string(
-        index=False,
-        formatters={
-            "unique_locations": "{:,}".format,
-            "component_mentions": "{:,}".format,
-            "location_share_pct": "{:.2f}".format,
-            "mention_share_pct": "{:.2f}".format,
-        },
-    )
-)
+print(summary.to_string(index=False, formatters={
+    "unique_locations": "{:,}".format,
+    "component_mentions": "{:,}".format,
+    "location_share_pct": "{:.2f}".format,
+    "mention_share_pct": "{:.2f}".format,
+}))
 
 maximum = int(df["total_mentions"].max())
-bins = np.logspace(0, np.log10(maximum + 1), 60)
+bins = np.logspace(
+    0,
+    np.log10(maximum + 1),
+    60
+)
 
 data = []
 labels = []
 plot_colors = []
 
 for level in order:
-    vals = df.loc[df["hierarchy"] == level, "total_mentions"].to_numpy(dtype=np.int64)
+    vals = df.loc[
+        df["hierarchy"] == level,
+        "total_mentions"
+    ].to_numpy(dtype=np.int64)
 
     if len(vals) == 0:
         continue
@@ -232,7 +248,8 @@ ax.legend(
 fig.text(
     0.01,
     0.01,
-    f"{n_locations:,} unique locations | {n_mentions:,} location-component mentions",
+    f"{n_locations:,} unique locations | "
+    f"{n_mentions:,} location-component mentions",
     fontsize=9,
 )
 

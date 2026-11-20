@@ -4,7 +4,6 @@ import uuid
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import desc, countDistinct
 
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--diagnostics-path", required=True)
@@ -25,44 +24,28 @@ def main():
     by_year = spark.read.parquet(droot + "candidate_by_year/")
     pairs = spark.read.parquet(args.candidate_pairs_path)
 
-    by_group.orderBy(desc("candidate_articles")).coalesce(1).write.mode(
-        "overwrite"
-    ).option("header", "true").csv(out + "by_group/")
-    by_type.orderBy(desc("candidate_articles")).coalesce(1).write.mode(
-        "overwrite"
-    ).option("header", "true").csv(out + "by_event_type/")
-    by_geo.orderBy("sampling_group", "event_type", desc("candidate_articles")).coalesce(
-        1
-    ).write.mode("overwrite").option("header", "true").csv(
-        out + "by_event_type_geography/"
-    )
-    by_pool.orderBy("sampling_group", "event_type", "country", "pool").coalesce(
-        1
-    ).write.mode("overwrite").option("header", "true").csv(out + "by_stratum_pool/")
-    by_year.orderBy("pub_year").coalesce(1).write.mode("overwrite").option(
-        "header", "true"
-    ).csv(out + "by_year/")
+    by_group.orderBy(desc("candidate_articles")).coalesce(1).write.mode("overwrite").option("header","true").csv(out + "by_group/")
+    by_type.orderBy(desc("candidate_articles")).coalesce(1).write.mode("overwrite").option("header","true").csv(out + "by_event_type/")
+    by_geo.orderBy("sampling_group","event_type",desc("candidate_articles")).coalesce(1).write.mode("overwrite").option("header","true").csv(out + "by_event_type_geography/")
+    by_pool.orderBy("sampling_group","event_type","country","pool").coalesce(1).write.mode("overwrite").option("header","true").csv(out + "by_stratum_pool/")
+    by_year.orderBy("pub_year").coalesce(1).write.mode("overwrite").option("header","true").csv(out + "by_year/")
 
     type_country_cov = (
-        pairs.groupBy("sampling_group", "event_type")
-        .agg(
-            countDistinct("country").alias("n_countries"),
-            countDistinct("uri").alias("candidate_articles"),
-        )
-        .orderBy("sampling_group", "event_type")
+        pairs.groupBy("sampling_group","event_type")
+             .agg(
+                 countDistinct("country").alias("n_countries"),
+                 countDistinct("uri").alias("candidate_articles")
+             )
+             .orderBy("sampling_group","event_type")
     )
-    type_country_cov.coalesce(1).write.mode("overwrite").option("header", "true").csv(
-        out + "event_type_country_coverage/"
-    )
+    type_country_cov.coalesce(1).write.mode("overwrite").option("header","true").csv(out + "event_type_country_coverage/")
 
     pool_type = (
-        pairs.groupBy("sampling_group", "event_type", "pool")
-        .agg(countDistinct("uri").alias("candidate_articles"))
-        .orderBy("sampling_group", "event_type", "pool")
+        pairs.groupBy("sampling_group","event_type","pool")
+             .agg(countDistinct("uri").alias("candidate_articles"))
+             .orderBy("sampling_group","event_type","pool")
     )
-    pool_type.coalesce(1).write.mode("overwrite").option("header", "true").csv(
-        out + "strict_fallback_by_event_type/"
-    )
+    pool_type.coalesce(1).write.mode("overwrite").option("header","true").csv(out + "strict_fallback_by_event_type/")
 
     total_unique_articles = pairs.select("uri").dropDuplicates(["uri"]).count()
     total_pairs = pairs.count()
@@ -78,7 +61,6 @@ def main():
     print(f"event types:                          {n_event_types:,}")
     print(f"countries:                            {n_countries:,}")
     print(f"inspection output:                    {out}")
-
 
 if __name__ == "__main__":
     main()

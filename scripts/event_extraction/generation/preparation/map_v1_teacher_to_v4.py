@@ -96,10 +96,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--crosswalk-source",
-        default=str(
-            Path(__file__).resolve().parents[4].parent
-            / "llm-risk-factors-extraction/scripts/events/clustering/baseline_clustering_v4.py"
-        ),
+        default=str(Path(__file__).resolve().parents[4].parent / "llm-risk-factors-extraction/scripts/events/clustering/baseline_clustering_v4.py"),
     )
     ap.add_argument(
         "--taxonomy",
@@ -144,10 +141,7 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with (
-        in_path.open(encoding="utf-8") as fin,
-        out_path.open("w", encoding="utf-8") as fout,
-    ):
+    with in_path.open(encoding="utf-8") as fin, out_path.open("w", encoding="utf-8") as fout:
         for line_no, line in enumerate(fin, 1):
             if not line.strip():
                 continue
@@ -240,16 +234,12 @@ def main() -> None:
         "unknown_unmapped_prediction_events": unknown_unmapped_events,
         "rows_with_unmapped_predictions": rows_with_unmapped,
         "unmapped_labels": dict(unmapped_label_counts.most_common()),
-        "intentionally_unmapped_labels": dict(
-            intentional_unmapped_label_counts.most_common()
-        ),
+        "intentionally_unmapped_labels": dict(intentional_unmapped_label_counts.most_common()),
         "unknown_unmapped_labels": dict(unknown_unmapped_label_counts.most_common()),
         "raw_label_counts": dict(raw_label_counts.most_common()),
         "mapped_v4_label_counts": dict(mapped_label_counts.most_common()),
     }
-    report_path.write_text(
-        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     print("=" * 72)
     print("V1 OLD -> V4 MAPPING")

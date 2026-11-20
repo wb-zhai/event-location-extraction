@@ -38,94 +38,79 @@ def audit_shard(i):
 
             articles += 1
 
-            for event_index, event in enumerate(obj.get("predictions") or []):
+            for event_index, event in enumerate(
+                obj.get("predictions") or []
+            ):
                 events += 1
 
                 mline = meta.readline()
 
                 if not mline:
-                    mismatches.append(
-                        {
-                            "kind": "metadata_ended_early",
-                            "article_id": article_id,
-                            "event_index": event_index,
-                        }
-                    )
-                    return (
-                        shard,
-                        "FAIL",
-                        {
-                            "articles": articles,
-                            "events": events,
-                            "metadata_rows": metadata_rows,
-                            "mismatches": mismatches[:20],
-                        },
-                    )
+                    mismatches.append({
+                        "kind": "metadata_ended_early",
+                        "article_id": article_id,
+                        "event_index": event_index,
+                    })
+                    return shard, "FAIL", {
+                        "articles": articles,
+                        "events": events,
+                        "metadata_rows": metadata_rows,
+                        "mismatches": mismatches[:20],
+                    }
 
                 m = json.loads(mline)
                 metadata_rows += 1
 
                 if str(m.get("id")) != article_id:
-                    mismatches.append(
-                        {
-                            "kind": "id_mismatch",
-                            "expected_id": article_id,
-                            "metadata_id": m.get("id"),
-                            "event_index": event_index,
-                            "metadata_event_index": m.get("event_index"),
-                        }
-                    )
+                    mismatches.append({
+                        "kind": "id_mismatch",
+                        "expected_id": article_id,
+                        "metadata_id": m.get("id"),
+                        "event_index": event_index,
+                        "metadata_event_index":
+                            m.get("event_index"),
+                    })
 
                 if int(m.get("event_index", -1)) != event_index:
-                    mismatches.append(
-                        {
-                            "kind": "event_index_mismatch",
-                            "id": article_id,
-                            "expected_event_index": event_index,
-                            "metadata_event_index": m.get("event_index"),
-                        }
-                    )
+                    mismatches.append({
+                        "kind": "event_index_mismatch",
+                        "id": article_id,
+                        "expected_event_index": event_index,
+                        "metadata_event_index":
+                            m.get("event_index"),
+                    })
 
                 if len(mismatches) >= 20:
-                    return (
-                        shard,
-                        "FAIL",
-                        {
-                            "articles": articles,
-                            "events": events,
-                            "metadata_rows": metadata_rows,
-                            "mismatches": mismatches,
-                        },
-                    )
+                    return shard, "FAIL", {
+                        "articles": articles,
+                        "events": events,
+                        "metadata_rows": metadata_rows,
+                        "mismatches": mismatches,
+                    }
 
         # Metadata must also end here.
         extra = meta.readline()
 
         if extra:
             x = json.loads(extra)
-            mismatches.append(
-                {
-                    "kind": "extra_metadata_rows",
-                    "first_extra_id": x.get("id"),
-                    "first_extra_event_index": x.get("event_index"),
-                }
-            )
+            mismatches.append({
+                "kind": "extra_metadata_rows",
+                "first_extra_id": x.get("id"),
+                "first_extra_event_index":
+                    x.get("event_index"),
+            })
 
     finally:
         meta.close()
 
     status = "PASS" if not mismatches else "FAIL"
 
-    return (
-        shard,
-        status,
-        {
-            "articles": articles,
-            "events": events,
-            "metadata_rows": metadata_rows,
-            "mismatches": mismatches[:20],
-        },
-    )
+    return shard, status, {
+        "articles": articles,
+        "events": events,
+        "metadata_rows": metadata_rows,
+        "mismatches": mismatches[:20],
+    }
 
 
 results = []
@@ -158,13 +143,20 @@ for x in failures[:20]:
     print(json.dumps(x, ensure_ascii=False, indent=2))
 
 if failures:
-    raise RuntimeError(f"{len(failures)} shards failed metadata alignment")
+    raise RuntimeError(
+        f"{len(failures)} shards failed metadata alignment"
+    )
 
 if total_events != 128_267_182:
-    raise RuntimeError(f"Expected 128,267,182 events, got {total_events:,}")
+    raise RuntimeError(
+        f"Expected 128,267,182 events, got {total_events:,}"
+    )
 
 if total_metadata != total_events:
-    raise RuntimeError(f"Metadata rows {total_metadata:,} != events {total_events:,}")
+    raise RuntimeError(
+        f"Metadata rows {total_metadata:,} != "
+        f"events {total_events:,}"
+    )
 
 print()
 print("EVENT METADATA ALIGNMENT: PASS")

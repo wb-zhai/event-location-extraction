@@ -92,9 +92,7 @@ class ArticleFetcher:
         source = article.get("source") or {}
         if not isinstance(source, dict):
             source = {}
-        text = str(
-            article.get("body") or article.get("text") or source.get("text") or ""
-        )
+        text = str(article.get("body") or article.get("text") or source.get("text") or "")
         if not text.strip():
             return None
 
@@ -111,10 +109,7 @@ class ArticleFetcher:
 
 
 def stream_fetched(
-    rows: Iterable[dict],
-    fetcher: ArticleFetcher,
-    concurrency: int,
-    max_inflight: int | None = None,
+    rows: Iterable[dict], fetcher: ArticleFetcher, concurrency: int, max_inflight: int | None = None
 ) -> Iterator[dict]:
     """Fetch articles concurrently with a bounded number of in-flight requests, so we never
     enqueue the whole shard at once. Yields rows as each GET completes.

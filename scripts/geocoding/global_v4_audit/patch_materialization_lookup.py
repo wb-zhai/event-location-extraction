@@ -4,41 +4,32 @@ import json
 import shutil
 import sqlite3
 from collections import Counter
-import os
 from pathlib import Path
 
 
-BASE = (
-    Path(
-        os.environ.get(
-            "GLOBAL_V4_WORK_DIR",
-            Path(__file__).resolve().parents[2]
-            / "outputs/geography/global_v4_audit/work",
-        )
-    ).expanduser()
-    / "global_v4_geotaxonomy_lookup.sqlite"
+BASE = Path(
+    "/home/bonadossou/global_v4_work/"
+    "global_v4_geotaxonomy_lookup.sqlite"
 )
 
-PATCHED = (
-    Path(
-        os.environ.get(
-            "GLOBAL_V4_WORK_DIR",
-            Path(__file__).resolve().parents[2]
-            / "outputs/geography/global_v4_audit/work",
-        )
-    ).expanduser()
-    / "global_v4_geotaxonomy_lookup.PATCHED.sqlite"
+PATCHED = Path(
+    "/home/bonadossou/global_v4_work/"
+    "global_v4_geotaxonomy_lookup.PATCHED.sqlite"
 )
 
 EXCEPTIONS = Path(
-    "outputs/geography/global_v4_audit/missing_final_location_layer_enriched.json"
+    "outputs/geography/global_v4_audit/"
+    "missing_final_location_layer_enriched.json"
 )
 
 FAILED_SHARDS_FILE = Path(
-    "outputs/geography/global_v4_audit/failed_materialization_shards.txt"
+    "outputs/geography/global_v4_audit/"
+    "failed_materialization_shards.txt"
 )
 
-POST_ROOT = Path("outputs/geography/global_v4_audit/postprocessing_v1")
+POST_ROOT = Path(
+    "outputs/geography/global_v4_audit/postprocessing_v1"
+)
 
 
 PHOTON_LAYERS = {
@@ -82,7 +73,11 @@ def event_components(event):
         if not query or query.lower() == "not_stated":
             continue
 
-        raw_level = raw_levels[i].strip() if i < len(raw_levels) else ""
+        raw_level = (
+            raw_levels[i].strip()
+            if i < len(raw_levels)
+            else ""
+        )
 
         layer = raw_level if raw_level in PHOTON_LAYERS else ""
 
@@ -97,12 +92,19 @@ if not BASE.is_file():
 if not EXCEPTIONS.is_file():
     raise SystemExit(f"Missing exception file: {EXCEPTIONS}")
 
-exceptions = json.loads(EXCEPTIONS.read_text(encoding="utf-8"))
+exceptions = json.loads(
+    EXCEPTIONS.read_text(encoding="utf-8")
+)
 
 if len(exceptions) != 13:
-    raise RuntimeError(f"Expected 13 exceptions, found {len(exceptions)}")
+    raise RuntimeError(
+        f"Expected 13 exceptions, found {len(exceptions)}"
+    )
 
-exception_keys = {(x["location"], x["layer"]) for x in exceptions}
+exception_keys = {
+    (x["location"], x["layer"])
+    for x in exceptions
+}
 
 if len(exception_keys) != 13:
     raise RuntimeError("Exception keys are not unique")
@@ -118,14 +120,20 @@ if len(exception_keys) != 13:
 
 failed = [
     x.strip()
-    for x in FAILED_SHARDS_FILE.read_text(encoding="utf-8").splitlines()
+    for x in FAILED_SHARDS_FILE.read_text(
+        encoding="utf-8"
+    ).splitlines()
     if x.strip()
 ]
 
 counts = Counter()
 
 for shard_name in failed:
-    p = POST_ROOT / shard_name / "candidate_geocoding_input.jsonl"
+    p = (
+        POST_ROOT
+        / shard_name
+        / "candidate_geocoding_input.jsonl"
+    )
 
     if not p.is_file():
         raise RuntimeError(f"Missing candidate file: {p}")
@@ -148,10 +156,16 @@ print("=== EXCEPTION RAW OCCURRENCE COUNTS ===")
 for key in sorted(exception_keys):
     print(f"{key!r:<55} {counts[key]:>8,}")
 
-missing_counts = [key for key in exception_keys if counts[key] == 0]
+missing_counts = [
+    key for key in exception_keys
+    if counts[key] == 0
+]
 
 if missing_counts:
-    raise RuntimeError(f"Exception keys not found in failed shards: {missing_counts}")
+    raise RuntimeError(
+        f"Exception keys not found in failed shards: "
+        f"{missing_counts}"
+    )
 
 
 # ---------------------------------------------------------
@@ -166,10 +180,14 @@ shutil.copy2(BASE, PATCHED)
 con = sqlite3.connect(PATCHED)
 con.row_factory = sqlite3.Row
 
-before = con.execute("SELECT COUNT(*) FROM geotaxonomy_lookup").fetchone()[0]
+before = con.execute(
+    "SELECT COUNT(*) FROM geotaxonomy_lookup"
+).fetchone()[0]
 
 if before != 1_238_328:
-    raise RuntimeError(f"Unexpected base row count: {before:,}")
+    raise RuntimeError(
+        f"Unexpected base row count: {before:,}"
+    )
 
 
 # Keep exact patch provenance separately rather than changing
@@ -225,18 +243,17 @@ VALUES (
 for x in exceptions:
     key = (x["location"], x["layer"])
 
-    exists = con.execute(
-        """
+    exists = con.execute("""
         SELECT 1
         FROM geotaxonomy_lookup
         WHERE location=?
           AND layer=?
-    """,
-        key,
-    ).fetchone()
+    """, key).fetchone()
 
     if exists:
-        raise RuntimeError(f"Exception key already exists in base lookup: {key!r}")
+        raise RuntimeError(
+            f"Exception key already exists in base lookup: {key!r}"
+        )
 
     con.execute(
         insert_sql,
@@ -244,23 +261,30 @@ for x in exceptions:
             x["location"],
             x["layer"],
             counts[key],
+
             x.get("resolution_status"),
             x.get("fallback_step"),
             x.get("fallback_label"),
+
             x.get("selected_query"),
             x.get("selected_layer"),
+
             x.get("resolved_name"),
             x.get("zhai"),
             x.get("photon_type"),
+
             x.get("lat"),
             x.get("lon"),
+
             x.get("osm_id"),
             x.get("osm_type"),
+
             x.get("country"),
             x.get("countrycode"),
             x.get("province"),
             x.get("district"),
             x.get("city"),
+
             x.get("wb_level"),
             x.get("wb_matched"),
             x.get("adm_code"),
@@ -270,8 +294,7 @@ for x in exceptions:
         ),
     )
 
-    con.execute(
-        """
+    con.execute("""
         INSERT INTO materialization_exception_patch (
             location,
             layer,
@@ -279,29 +302,31 @@ for x in exceptions:
             payload_json
         )
         VALUES (?, ?, ?, ?)
-    """,
-        (
-            x["location"],
-            x["layer"],
-            counts[key],
-            json.dumps(
-                x,
-                ensure_ascii=False,
-                sort_keys=True,
-            ),
+    """, (
+        x["location"],
+        x["layer"],
+        counts[key],
+        json.dumps(
+            x,
+            ensure_ascii=False,
+            sort_keys=True,
         ),
-    )
+    ))
 
 
 con.commit()
 
-after = con.execute("SELECT COUNT(*) FROM geotaxonomy_lookup").fetchone()[0]
+after = con.execute(
+    "SELECT COUNT(*) FROM geotaxonomy_lookup"
+).fetchone()[0]
 
 patch_n = con.execute(
     "SELECT COUNT(*) FROM materialization_exception_patch"
 ).fetchone()[0]
 
-quick = con.execute("PRAGMA quick_check").fetchone()[0]
+quick = con.execute(
+    "PRAGMA quick_check"
+).fetchone()[0]
 
 print()
 print("=== PATCH AUDIT ===")
@@ -312,21 +337,26 @@ print(f"quick_check     : {quick}")
 print(f"output          : {PATCHED}")
 
 if after != before + 13:
-    raise RuntimeError(f"Expected {before + 13:,} patched rows, got {after:,}")
+    raise RuntimeError(
+        f"Expected {before + 13:,} patched rows, got {after:,}"
+    )
 
 if patch_n != 13:
-    raise RuntimeError(f"Expected 13 provenance rows, got {patch_n:,}")
+    raise RuntimeError(
+        f"Expected 13 provenance rows, got {patch_n:,}"
+    )
 
 if quick != "ok":
-    raise RuntimeError(f"SQLite quick_check failed: {quick}")
+    raise RuntimeError(
+        f"SQLite quick_check failed: {quick}"
+    )
 
 
 print()
 print("=== VERIFY ALL 13 KEYS ===")
 
 for key in sorted(exception_keys):
-    row = con.execute(
-        """
+    row = con.execute("""
         SELECT
             resolution_status,
             wb_match_status,
@@ -334,12 +364,12 @@ for key in sorted(exception_keys):
         FROM geotaxonomy_lookup
         WHERE location=?
           AND layer=?
-    """,
-        key,
-    ).fetchone()
+    """, key).fetchone()
 
     if row is None:
-        raise RuntimeError(f"Patched key missing: {key!r}")
+        raise RuntimeError(
+            f"Patched key missing: {key!r}"
+        )
 
     print(
         f"{key!r:<55} "

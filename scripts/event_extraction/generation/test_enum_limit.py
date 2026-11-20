@@ -110,9 +110,9 @@ def sweep(
     builder,
     name: str,
 ) -> None:
-    print(f"\n{'─' * 60}")
+    print(f"\n{'─'*60}")
     print(f"  {name}  (model: {model})")
-    print(f"{'─' * 60}")
+    print(f"{'─'*60}")
     last_ok = 0
     for n in sorted(sizes):
         subset = labels[:n]

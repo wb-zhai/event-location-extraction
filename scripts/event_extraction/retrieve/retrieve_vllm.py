@@ -26,11 +26,7 @@ def extract_query_and_metadata(obj):
                     metadata = {k: v for k, v in obj.items() if k != key}
                 return str(obj[key]).strip(), metadata
         # fallback: check nested source.text
-        if (
-            "source" in obj
-            and isinstance(obj["source"], dict)
-            and "text" in obj["source"]
-        ):
+        if "source" in obj and isinstance(obj["source"], dict) and "text" in obj["source"]:
             metadata = {k: v for k, v in obj.items() if k != "source"}
             return str(obj["source"]["text"]).strip(), metadata
     return "", {}
@@ -43,7 +39,9 @@ def make_output_row(record):
     return {"query": record["query"]}
 
 
-def load_prompt_from_st_config(model_name: str, prompt_name: str | None) -> str | None:
+def load_prompt_from_st_config(
+    model_name: str, prompt_name: str | None
+) -> str | None:
     """Return the literal prompt string from config_sentence_transformers.json.
 
     Tries the HF local cache first (local_files_only), then a local directory
@@ -300,16 +298,12 @@ if __name__ == "__main__":
     args = arg_parser.parse_args()
 
     if args.query_prompt and args.query_prompt_name:
-        arg_parser.error(
-            "--query-prompt and --query-prompt-name are mutually exclusive"
-        )
+        arg_parser.error("--query-prompt and --query-prompt-name are mutually exclusive")
 
     # Resolve the literal prompt string: explicit > inferred from ST config > None.
     query_prompt: str | None = args.query_prompt
     if query_prompt is None:
-        query_prompt = load_prompt_from_st_config(
-            args.model_name, args.query_prompt_name
-        )
+        query_prompt = load_prompt_from_st_config(args.model_name, args.query_prompt_name)
         if query_prompt is not None:
             key = args.query_prompt_name or "(default_prompt_name)"
             print(f"Using query prompt '{key}' from config_sentence_transformers.json")
@@ -332,7 +326,8 @@ if __name__ == "__main__":
     # Encode all queries in a single call; vLLM handles batching internally.
     # https://docs.vllm.ai/en/stable/models/pooling_models/#llmencode
     prompts = [
-        apply_query_prompt(record["query"], query_prompt) for record in query_records
+        apply_query_prompt(record["query"], query_prompt)
+        for record in query_records
     ]
     pooling_outputs = llm.encode(prompts, pooling_task="embed")
     query_embeddings = torch.stack(

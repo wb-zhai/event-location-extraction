@@ -4,7 +4,6 @@ Supports paragraph-based windowing (default) so each training example fits
 within a small model's context window.  Oversized paragraphs are split before
 windowing.  Use --no-window to fall back to one record per whole article.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -48,7 +47,7 @@ def split_paragraphs(text: str) -> list[tuple[int, int]]:
     paras: list[tuple[int, int]] = []
     cursor = 0
     for m in _BLANK_LINE_RE.finditer(text):
-        seg = text[cursor : m.start()]
+        seg = text[cursor:m.start()]
         if seg.strip():
             paras.append((cursor, m.start()))
         cursor = m.end()
@@ -127,7 +126,6 @@ def split_oversized_paragraphs(
 # Event span location
 # ---------------------------------------------------------------------------
 
-
 def _all_occurrences(text: str, span: str) -> list[tuple[int, int]]:
     """Return all (start, end) positions of *span* in *text* (exact match)."""
     out: list[tuple[int, int]] = []
@@ -187,7 +185,6 @@ def locate_event_span(text: str, event: dict) -> tuple[int, int] | None:
 # Window building
 # ---------------------------------------------------------------------------
 
-
 def build_paragraph_windows(
     paras: list[tuple[int, int]],
     *,
@@ -237,7 +234,9 @@ def _window_chars(paras: list[tuple[int, int]], window: tuple[int, int]) -> int:
     return end - start
 
 
-def _merge_window_ranges(a: tuple[int, int], b: tuple[int, int]) -> tuple[int, int]:
+def _merge_window_ranges(
+    a: tuple[int, int], b: tuple[int, int]
+) -> tuple[int, int]:
     return min(a[0], b[0]), max(a[1], b[1])
 
 
@@ -291,7 +290,6 @@ def coalesce_short_windows(
 # ---------------------------------------------------------------------------
 # SFT record building
 # ---------------------------------------------------------------------------
-
 
 def filter_annotation(annotation: dict, ignore: set[str]) -> dict:
     result = {k: v for k, v in annotation.items() if k not in ignore}
@@ -399,15 +397,15 @@ def render_system_prompt(
         count=1,
     )
     if count != 1:
-        raise ValueError(
-            "system prompt must contain one {{ALLOWED_EVENT_TYPES}} placeholder"
-        )
+        raise ValueError("system prompt must contain one {{ALLOWED_EVENT_TYPES}} placeholder")
     return rendered
 
 
 def build_user_message(template: str, publish_date: str, article_text: str) -> str:
-    return template.replace("{{PUBLISH_DATE}}", publish_date).replace(
-        "{{ARTICLE_TEXT}}", article_text
+    return (
+        template
+        .replace("{{PUBLISH_DATE}}", publish_date)
+        .replace("{{ARTICLE_TEXT}}", article_text)
     )
 
 
@@ -454,7 +452,10 @@ def _build_windowed_records(
         event_spans.append(span)
 
     # Build base window char ranges
-    win_char_ranges = [(paras[lo][0], paras[hi - 1][1]) for lo, hi in windows]
+    win_char_ranges = [
+        (paras[lo][0], paras[hi - 1][1])
+        for lo, hi in windows
+    ]
 
     # Expansion pass: for each event not covered by any window, widen its
     # home window (the first one whose start para contains the grounding anchor).
@@ -468,7 +469,8 @@ def _build_windowed_records(
 
         # Check if any window already covers this event
         already_covered = any(
-            ws <= ev_start and ev_end <= we for ws, we in expanded_ranges
+            ws <= ev_start and ev_end <= we
+            for ws, we in expanded_ranges
         )
         if already_covered:
             continue
@@ -507,7 +509,10 @@ def _build_windowed_records(
         new_lo = min(new_lo, lo)
         new_hi = max(new_hi, hi)
         expanded_start, expanded_end = paras[new_lo][0], paras[new_hi - 1][1]
-        if expanded_end - expanded_start <= max_chars and new_hi - new_lo <= max_paras:
+        if (
+            expanded_end - expanded_start <= max_chars
+            and new_hi - new_lo <= max_paras
+        ):
             expanded_windows[home] = (new_lo, new_hi)
             expanded_ranges[home] = (expanded_start, expanded_end)
 
@@ -529,24 +534,20 @@ def _build_windowed_records(
 
         window_annotation = {**annotation, "events": assigned}
         user_msg = build_user_message(user_template, publish_date, window_text)
-        assistant_msg = json.dumps(
-            filter_annotation(window_annotation, ignore), ensure_ascii=False
-        )
+        assistant_msg = json.dumps(filter_annotation(window_annotation, ignore), ensure_ascii=False)
 
         if min_chars > 0 and len(window_text) < min_chars and not assigned:
             continue
 
-        records.append(
-            {
-                "system": system_prompt,
-                "instruction": "",
-                "input": user_msg,
-                "output": assistant_msg,
-                "_window_chars": len(window_text),
-                "_window_paras": hi - lo,
-                "_window_events": len(assigned),
-            }
-        )
+        records.append({
+            "system": system_prompt,
+            "instruction": "",
+            "input": user_msg,
+            "output": assistant_msg,
+            "_window_chars": len(window_text),
+            "_window_paras": hi - lo,
+            "_window_events": len(assigned),
+        })
 
     return records
 
@@ -554,7 +555,6 @@ def _build_windowed_records(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-
 
 def _load_rows(paths: list[pathlib.Path]) -> list[tuple[str, dict]]:
     """Read JSONL *paths*, returning (source_file_name, row) tuples."""
@@ -618,10 +618,7 @@ def _rows_to_records(
     for source_name, row in rows:
         annotation = row.get("annotation")
         if annotation is None:
-            print(
-                f"Skipping row from {source_name} (id: {row.get('id')}): no annotation",
-                file=sys.stderr,
-            )
+            print(f"Skipping row from {source_name} (id: {row.get('id')}): no annotation", file=sys.stderr)
             continue
 
         lang = row_language(row)
@@ -641,10 +638,7 @@ def _rows_to_records(
                 descriptions,
             )
         except ValueError as e:
-            print(
-                f"Skipping row from {source_name} (id: {row.get('id')}): {e}",
-                file=sys.stderr,
-            )
+            print(f"Skipping row from {source_name} (id: {row.get('id')}): {e}", file=sys.stderr)
             continue
 
         if args.no_window:
@@ -654,20 +648,16 @@ def _rows_to_records(
                 source.get("publish_date", ""),
                 source.get("text", ""),
             )
-            assistant_msg = json.dumps(
-                filter_annotation(annotation, ignore), ensure_ascii=False
-            )
-            records.append(
-                {
-                    "system": system_prompt,
-                    "instruction": "",
-                    "input": user_msg,
-                    "output": assistant_msg,
-                    "_window_chars": len(source.get("text", "")),
-                    "_window_paras": None,
-                    "_window_events": len((annotation.get("events") or [])),
-                }
-            )
+            assistant_msg = json.dumps(filter_annotation(annotation, ignore), ensure_ascii=False)
+            records.append({
+                "system": system_prompt,
+                "instruction": "",
+                "input": user_msg,
+                "output": assistant_msg,
+                "_window_chars": len(source.get("text", "")),
+                "_window_paras": None,
+                "_window_events": len((annotation.get("events") or [])),
+            })
         else:
             records.extend(
                 _build_windowed_records(
@@ -837,11 +827,7 @@ def main():
                 '(expected {"events": {label: description}})'
             )
 
-    prompt_dir = (
-        pathlib.Path(args.prompt_dir)
-        if args.prompt_dir
-        else HERE / "prompts" / "student_sft"
-    )
+    prompt_dir = pathlib.Path(args.prompt_dir) if args.prompt_dir else HERE / "prompts" / "student_sft"
     templates: dict[str, tuple[str, str]] = {
         "eng": (
             (prompt_dir / "system_prompt.txt").read_text(),
@@ -878,7 +864,8 @@ def main():
 
         # Strip internal metadata before writing
         output_records = [
-            {k: v for k, v in r.items() if not k.startswith("_")} for r in records
+            {k: v for k, v in r.items() if not k.startswith("_")}
+            for r in records
         ]
         file_name = _resolve_split_filename(dataset_info, dataset_name)
         output_path = output_dir / file_name
@@ -891,10 +878,7 @@ def main():
         if args.tokenizer and records:
             _print_token_stats(output_records, args.tokenizer, label=split_name)
 
-        dataset_info[dataset_name] = {
-            "file_name": file_name,
-            "columns": LLAMAFACTORY_COLUMNS,
-        }
+        dataset_info[dataset_name] = {"file_name": file_name, "columns": LLAMAFACTORY_COLUMNS}
 
         by_source: dict[str, list[dict]] = {}
         for source_name, row in split_rows:
@@ -955,10 +939,7 @@ def _drop_empty_windows(
     to_drop = set(rng.sample(empty_indices, len(empty_indices) - max_keep))
     dropped = len(to_drop)
     result = [r for i, r in enumerate(records) if i not in to_drop]
-    print(
-        f"Dropped {dropped} empty windows to meet --max-empty-ratio {max_empty_ratio}",
-        file=sys.stderr,
-    )
+    print(f"Dropped {dropped} empty windows to meet --max-empty-ratio {max_empty_ratio}", file=sys.stderr)
     return result
 
 
@@ -986,9 +967,7 @@ def _print_window_stats(records: list[dict], *, label: str = "") -> None:
     print(f"windows without events: {no_event_count} ({no_event_pct:.1f}%)")
 
 
-def _print_token_stats(
-    records: list[dict], tokenizer_name: str, *, label: str = ""
-) -> None:
+def _print_token_stats(records: list[dict], tokenizer_name: str, *, label: str = "") -> None:
     from transformers import AutoTokenizer
 
     prefix = f"{label} " if label else ""
@@ -1002,15 +981,11 @@ def _print_token_stats(
         output_counts.append(len(tok.encode(r["output"])))
 
     def _stats(counts: list[int]) -> str:
-        return (
-            f"avg={sum(counts) / len(counts):.0f}  min={min(counts)}  max={max(counts)}"
-        )
+        return f"avg={sum(counts)/len(counts):.0f}  min={min(counts)}  max={max(counts)}"
 
     print(f"{prefix}input  tokens: {_stats(input_counts)}")
     print(f"{prefix}output tokens: {_stats(output_counts)}")
-    print(
-        f"{prefix}total  tokens: {_stats([i + o for i, o in zip(input_counts, output_counts)])}"
-    )
+    print(f"{prefix}total  tokens: {_stats([i + o for i, o in zip(input_counts, output_counts)])}")
 
 
 if __name__ == "__main__":

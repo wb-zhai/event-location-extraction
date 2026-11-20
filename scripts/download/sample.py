@@ -202,15 +202,11 @@ def count_strata(
     # Parallelized like pass 2: fully JSON-parsing every record (including its large
     # text body) just to read adm0_code/label is CPU-bound, and single-threaded this
     # pass over a multi-GB, 5M-record corpus dominated runtime.
-    with (
-        input_path.open("rb") as fh,
-        multiprocessing.Pool(
-            workers, initializer=_count_worker_init, initargs=(cluster_map, use_decade)
-        ) as pool,
-        tqdm(
-            total=file_size, unit="B", unit_scale=True, desc="Pass 1/2: counting strata"
-        ) as bar,
-    ):
+    with input_path.open("rb") as fh, multiprocessing.Pool(
+        workers, initializer=_count_worker_init, initargs=(cluster_map, use_decade)
+    ) as pool, tqdm(
+        total=file_size, unit="B", unit_scale=True, desc="Pass 1/2: counting strata"
+    ) as bar:
         for key, n in pool.imap(_count_line, fh, chunksize=CHUNK_RECORD_CAP):
             bar.update(n)
             if key is not None:
@@ -465,14 +461,11 @@ def sample_reservoirs(
         if expected_total
         else 1
     )
-    with (
-        input_path.open("rb") as fh,
-        multiprocessing.Pool(
-            workers,
-            initializer=_worker_init,
-            initargs=(min_quality_score, quotas, cluster_map, use_decade),
-        ) as pool,
-    ):
+    with input_path.open("rb") as fh, multiprocessing.Pool(
+        workers,
+        initializer=_worker_init,
+        initargs=(min_quality_score, quotas, cluster_map, use_decade),
+    ) as pool:
         results = pool.imap(_score_line, _iter_offset_lines(fh), chunksize=chunksize)
         for result in tqdm(
             results, total=expected_total or None, desc="Pass 2/2: sampling", unit="rec"

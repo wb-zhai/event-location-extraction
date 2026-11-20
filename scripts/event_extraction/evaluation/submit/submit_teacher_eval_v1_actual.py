@@ -29,7 +29,8 @@ DEFAULT_IMAGE = (
 )
 
 DEFAULT_INPUT = (
-    "gs://zhai-risk-factor-extraction/extraction/eval/v3_teacher_dev_articles.jsonl"
+    "gs://zhai-risk-factor-extraction/extraction/eval/"
+    "v3_teacher_dev_articles.jsonl"
 )
 
 DEFAULT_MODEL = (
@@ -38,7 +39,8 @@ DEFAULT_MODEL = (
 )
 
 DEFAULT_OUTPUT_PREFIX = (
-    "gs://zhai-risk-factor-extraction/extraction/eval/v1_teacher_predictions_actual"
+    "gs://zhai-risk-factor-extraction/extraction/eval/"
+    "v1_teacher_predictions_actual"
 )
 
 
@@ -198,11 +200,7 @@ echo "[v1-teacher] validation passed"
     print()
 
     cmd = [
-        "gcloud",
-        "batch",
-        "jobs",
-        "submit",
-        args.job_id,
+        "gcloud", "batch", "jobs", "submit", args.job_id,
         f"--project={args.project}",
         f"--location={args.region}",
         f"--config={config_path}",

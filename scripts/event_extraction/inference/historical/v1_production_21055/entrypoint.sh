@@ -45,12 +45,12 @@ echo "[entrypoint] model ready"
 # --- 2. Pull input ---
 echo "[entrypoint] downloading input from ${INPUT_GCS}"
 gsutil cp "${INPUT_GCS}" "${LOCAL_INPUT}"
-echo "[entrypoint] input ready ($(wc -l <${LOCAL_INPUT}) lines)"
+echo "[entrypoint] input ready ($(wc -l < ${LOCAL_INPUT}) lines)"
 
 # --- 3. Resume: pull any partial output from a previous Spot retry ---
 echo "[entrypoint] checking for partial output at ${REMOTE_OUTPUT}"
-gsutil cp "${REMOTE_OUTPUT}" "${LOCAL_OUTPUT}" 2>/dev/null &&
-    echo "[entrypoint] resuming from $(wc -l <${LOCAL_OUTPUT}) already-processed articles" ||
+gsutil cp "${REMOTE_OUTPUT}" "${LOCAL_OUTPUT}" 2>/dev/null && \
+    echo "[entrypoint] resuming from $(wc -l < ${LOCAL_OUTPUT}) already-processed articles" || \
     echo "[entrypoint] no partial output found, starting fresh"
 
 # --- 4. Background sync: upload output every 90 s so Spot preemptions lose < 90 s ---
@@ -58,8 +58,8 @@ _sync_loop() {
     while true; do
         sleep 90
         if [[ -f "${LOCAL_OUTPUT}" ]]; then
-            gsutil -q cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}" &&
-                echo "[sync] uploaded $(wc -l <${LOCAL_OUTPUT}) lines at $(date -u +%H:%M:%S)"
+            gsutil -q cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}" && \
+                echo "[sync] uploaded $(wc -l < ${LOCAL_OUTPUT}) lines at $(date -u +%H:%M:%S)"
         fi
     done
 }
@@ -69,29 +69,29 @@ trap "kill ${SYNC_PID} 2>/dev/null || true" EXIT
 
 # --- 5. Build extra args ---
 EXTRA_ARGS=""
-[[ -n "${MAX_MODEL_LEN:-}" ]] && EXTRA_ARGS+=" --max_model_len ${MAX_MODEL_LEN}"
-[[ -n "${TOP_K_CANDIDATES:-}" ]] && EXTRA_ARGS+=" --top_k_candidates ${TOP_K_CANDIDATES}"
+[[ -n "${MAX_MODEL_LEN:-}" ]]      && EXTRA_ARGS+=" --max_model_len ${MAX_MODEL_LEN}"
+[[ -n "${TOP_K_CANDIDATES:-}" ]]   && EXTRA_ARGS+=" --top_k_candidates ${TOP_K_CANDIDATES}"
 
 # --- 6. Run inference ---
 echo "[entrypoint] starting inference"
 python3 /app/scripts/event_extraction/inference/historical/v1_production_21055/vllm_infer.py \
     --model_name_or_path "${LOCAL_MODEL}" \
-    --input "${LOCAL_INPUT}" \
-    --output "${LOCAL_OUTPUT}" \
-    --shard_index "${TASK_INDEX}" \
-    --num_shards "${TASK_COUNT}" \
-    --max_new_tokens "${MAX_NEW_TOKENS:-4096}" \
-    --max_chars "${MAX_CHARS:-3000}" \
-    --min_chars "${MIN_CHARS:-200}" \
-    --max_paras "${MAX_PARAS:-15}" \
-    --overlap_paras "${OVERLAP_PARAS:-1}" \
-    --batch_size "${BATCH_SIZE:-500}" \
+    --input               "${LOCAL_INPUT}" \
+    --output              "${LOCAL_OUTPUT}" \
+    --shard_index         "${TASK_INDEX}" \
+    --num_shards          "${TASK_COUNT}" \
+    --max_new_tokens      "${MAX_NEW_TOKENS:-4096}" \
+    --max_chars           "${MAX_CHARS:-3000}" \
+    --min_chars           "${MIN_CHARS:-200}" \
+    --max_paras           "${MAX_PARAS:-15}" \
+    --overlap_paras       "${OVERLAP_PARAS:-1}" \
+    --batch_size          "${BATCH_SIZE:-500}" \
     --gpu_memory_utilization "${GPU_MEMORY_UTIL:-0.95}" \
-    --temperature "${TEMPERATURE:-0.0}" \
+    --temperature         "${TEMPERATURE:-0.0}" \
     ${EXTRA_ARGS}
 
 # --- 7. Final upload ---
 kill "${SYNC_PID}" 2>/dev/null || true
 echo "[entrypoint] uploading final output to ${REMOTE_OUTPUT}"
 gsutil cp "${LOCAL_OUTPUT}" "${REMOTE_OUTPUT}"
-echo "[entrypoint] task ${TASK_INDEX} done — $(wc -l <${LOCAL_OUTPUT}) articles written"
+echo "[entrypoint] task ${TASK_INDEX} done — $(wc -l < ${LOCAL_OUTPUT}) articles written"

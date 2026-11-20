@@ -20,10 +20,12 @@ from pathlib import Path
 
 
 DEFAULT_IMAGE = (
-    "us-central1-docker.pkg.dev/zerohungerai/event-extraction/event-infer:latest"
+    "us-central1-docker.pkg.dev/zerohungerai/"
+    "event-extraction/event-infer:latest"
 )
 DEFAULT_INPUT = (
-    "gs://zhai-risk-factor-extraction/extraction/eval/v3_teacher_dev_articles.jsonl"
+    "gs://zhai-risk-factor-extraction/extraction/eval/"
+    "v3_teacher_dev_articles.jsonl"
 )
 
 
@@ -172,11 +174,7 @@ echo "[teacher-eval] done"
     print()
 
     cmd = [
-        "gcloud",
-        "batch",
-        "jobs",
-        "submit",
-        args.job_id,
+        "gcloud", "batch", "jobs", "submit", args.job_id,
         f"--project={args.project}",
         f"--location={args.region}",
         f"--config={config_path}",

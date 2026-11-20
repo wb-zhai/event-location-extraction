@@ -120,33 +120,30 @@ def build_joined_rows(metrics, v3_samples, v4_samples, v3_mentions, v4_mentions)
         v3m = int(v3_mentions.get(label, 0))
         v4m = int(v4_mentions.get(label, 0))
 
-        out.append(
-            {
-                "language": r["language"],
-                "event_type": label,
-                "eval_support": int(float(r["support"])),
-                "v3_train_samples": v3n,
-                "v4_train_samples": v4n,
-                "delta_train_samples": delta,
-                "pct_increase_train_samples": pct,
-                "v3_train_mentions": v3m,
-                "v4_train_mentions": v4m,
-                "delta_train_mentions": v4m - v3m,
-                "v3_relaxed_f1": float(r["v3_relaxed_f1"]),
-                "v4_relaxed_f1": float(r["v4_relaxed_f1"]),
-                "delta_relaxed_f1": float(r["delta_relaxed_f1"]),
-                "v3_exact_f1": float(r["v3_exact_f1"]),
-                "v4_exact_f1": float(r["v4_exact_f1"]),
-                "delta_exact_f1": float(r["delta_exact_f1"]),
-            }
-        )
+        out.append({
+            "language": r["language"],
+            "event_type": label,
+            "eval_support": int(float(r["support"])),
+            "v3_train_samples": v3n,
+            "v4_train_samples": v4n,
+            "delta_train_samples": delta,
+            "pct_increase_train_samples": pct,
+            "v3_train_mentions": v3m,
+            "v4_train_mentions": v4m,
+            "delta_train_mentions": v4m - v3m,
+            "v3_relaxed_f1": float(r["v3_relaxed_f1"]),
+            "v4_relaxed_f1": float(r["v4_relaxed_f1"]),
+            "delta_relaxed_f1": float(r["delta_relaxed_f1"]),
+            "v3_exact_f1": float(r["v3_exact_f1"]),
+            "v4_exact_f1": float(r["v4_exact_f1"]),
+            "delta_exact_f1": float(r["delta_exact_f1"]),
+        })
     return out
 
 
 def correlation_stats(rows, xkey, ykey, min_support=None):
     use = [
-        r
-        for r in rows
+        r for r in rows
         if (min_support is None or r["eval_support"] >= min_support)
         and math.isfinite(float(r[xkey]))
         and math.isfinite(float(r[ykey]))
@@ -157,9 +154,7 @@ def correlation_stats(rows, xkey, ykey, min_support=None):
 
 
 def scatter(rows, language, xkey, xlabel, out, min_support=20):
-    use = [
-        r for r in rows if r["language"] == language and math.isfinite(float(r[xkey]))
-    ]
+    use = [r for r in rows if r["language"] == language and math.isfinite(float(r[xkey]))]
     x = [float(r[xkey]) for r in use]
     y = [float(r["delta_relaxed_f1"]) for r in use]
 
@@ -178,11 +173,7 @@ def scatter(rows, language, xkey, xlabel, out, min_support=20):
 
     if x:
         xmin, xmax = min(x), max(x)
-        xs = (
-            [xmin + (xmax - xmin) * i / 99 for i in range(100)]
-            if xmax > xmin
-            else [xmin]
-        )
+        xs = [xmin + (xmax - xmin) * i / 99 for i in range(100)] if xmax > xmin else [xmin]
         ax.plot(xs, [slope * xx + intercept for xx in xs])
 
     ax.axhline(0, linewidth=1)
@@ -204,12 +195,9 @@ def scatter(rows, language, xkey, xlabel, out, min_support=20):
         f"Eval support >= {min_support}: r={r2:.3f}, rho={rho2:.3f}, n={len(supported)}"
     )
     ax.text(
-        0.02,
-        0.98,
-        note,
+        0.02, 0.98, note,
         transform=ax.transAxes,
-        ha="left",
-        va="top",
+        ha="left", va="top",
         fontsize=9,
         bbox={"boxstyle": "round", "alpha": 0.12},
     )
@@ -221,22 +209,12 @@ def scatter(rows, language, xkey, xlabel, out, min_support=20):
 
 def write_csv(path, rows):
     fields = [
-        "language",
-        "event_type",
-        "eval_support",
-        "v3_train_samples",
-        "v4_train_samples",
-        "delta_train_samples",
+        "language", "event_type", "eval_support",
+        "v3_train_samples", "v4_train_samples", "delta_train_samples",
         "pct_increase_train_samples",
-        "v3_train_mentions",
-        "v4_train_mentions",
-        "delta_train_mentions",
-        "v3_relaxed_f1",
-        "v4_relaxed_f1",
-        "delta_relaxed_f1",
-        "v3_exact_f1",
-        "v4_exact_f1",
-        "delta_exact_f1",
+        "v3_train_mentions", "v4_train_mentions", "delta_train_mentions",
+        "v3_relaxed_f1", "v4_relaxed_f1", "delta_relaxed_f1",
+        "v3_exact_f1", "v4_exact_f1", "delta_exact_f1",
     ]
     with path.open("w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields)
@@ -263,9 +241,7 @@ def main():
     ap.add_argument(
         "--metrics",
         type=Path,
-        default=Path(
-            "data/extraction/eval/v4_reports/plots/v3_v4_per_label_metrics.csv"
-        ),
+        default=Path("data/extraction/eval/v4_reports/plots/v3_v4_per_label_metrics.csv"),
     )
     ap.add_argument(
         "--out-dir",
@@ -285,7 +261,7 @@ def main():
     v4 = load_sft(args.v4_train)
     print(f"V3 train windows: {len(v3):,}")
     print(f"V4 train windows: {len(v4):,}")
-    print(f"Added V4 train windows: {len(v4) - len(v3):,}")
+    print(f"Added V4 train windows: {len(v4)-len(v3):,}")
 
     print("\nChecking that V4 preserves the exact V3 training prefix...")
     check_v4_contains_v3_prefix(v3, v4)
@@ -296,36 +272,24 @@ def main():
     v4_samples, v4_mentions = count_training_exposure(v4)
 
     metrics = load_metrics(args.metrics)
-    joined = build_joined_rows(
-        metrics, v3_samples, v4_samples, v3_mentions, v4_mentions
-    )
+    joined = build_joined_rows(metrics, v3_samples, v4_samples, v3_mentions, v4_mentions)
     write_csv(args.out_dir / "training_sample_change_vs_f1.csv", joined)
 
     for language in ("French", "English"):
         rows = [r for r in joined if r["language"] == language]
 
         n, r, rho = correlation_stats(rows, "delta_train_samples", "delta_relaxed_f1")
-        nr, rr, rhor = correlation_stats(
-            rows, "pct_increase_train_samples", "delta_relaxed_f1"
-        )
+        nr, rr, rhor = correlation_stats(rows, "pct_increase_train_samples", "delta_relaxed_f1")
         ne, re, rhoe = correlation_stats(rows, "delta_train_samples", "delta_exact_f1")
         nh, rh, rhoh = correlation_stats(
             rows, "delta_train_samples", "delta_relaxed_f1", min_support=20
         )
 
         print(f"\n===== {language.upper()} =====")
-        print(
-            f"Added train windows vs relaxed F1 change: Pearson r={r:.3f}, Spearman rho={rho:.3f}, n={n}"
-        )
-        print(
-            f"% train-window increase vs relaxed F1 change: Pearson r={rr:.3f}, Spearman rho={rhor:.3f}, n={nr}"
-        )
-        print(
-            f"Added train windows vs exact F1 change: Pearson r={re:.3f}, Spearman rho={rhoe:.3f}, n={ne}"
-        )
-        print(
-            f"Added train windows vs relaxed F1 change, eval support >=20: Pearson r={rh:.3f}, Spearman rho={rhoh:.3f}, n={nh}"
-        )
+        print(f"Added train windows vs relaxed F1 change: Pearson r={r:.3f}, Spearman rho={rho:.3f}, n={n}")
+        print(f"% train-window increase vs relaxed F1 change: Pearson r={rr:.3f}, Spearman rho={rhor:.3f}, n={nr}")
+        print(f"Added train windows vs exact F1 change: Pearson r={re:.3f}, Spearman rho={rhoe:.3f}, n={ne}")
+        print(f"Added train windows vs relaxed F1 change, eval support >=20: Pearson r={rh:.3f}, Spearman rho={rhoh:.3f}, n={nh}")
 
     scatter(
         joined,

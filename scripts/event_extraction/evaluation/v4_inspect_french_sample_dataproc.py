@@ -19,14 +19,14 @@ print("selected_unique_articles:", m.select("article_id").distinct().count())
 
 if "language" in m.columns:
     print("language_counts:")
-    m.groupBy("language").agg(countDistinct("article_id").alias("articles")).orderBy(
-        "language"
-    ).show(100, False)
+    m.groupBy("language").agg(
+        countDistinct("article_id").alias("articles")
+    ).orderBy("language").show(100, False)
 
 print("groups:")
-m.groupBy("sampling_group").agg(countDistinct("article_id").alias("articles")).orderBy(
-    "sampling_group"
-).show(100, False)
+m.groupBy("sampling_group").agg(
+    countDistinct("article_id").alias("articles")
+).orderBy("sampling_group").show(100, False)
 
 print("event_types:")
 m.groupBy("sampling_group", "sampling_event_type").agg(
@@ -34,9 +34,9 @@ m.groupBy("sampling_group", "sampling_event_type").agg(
 ).orderBy("sampling_group", "sampling_event_type").show(200, False)
 
 print("pool:")
-m.groupBy("pool").agg(countDistinct("article_id").alias("articles")).orderBy(
-    "pool"
-).show(20, False)
+m.groupBy("pool").agg(
+    countDistinct("article_id").alias("articles")
+).orderBy("pool").show(20, False)
 
 print("\n=== CANDIDATE AVAILABILITY ===")
 print("candidate_unique_articles:", p.select("uri").distinct().count())
@@ -52,9 +52,9 @@ p.groupBy("sampling_group", "event_type").agg(
 ).orderBy("sampling_group", "event_type").show(200, False)
 
 print("candidate_pool:")
-p.groupBy("pool").agg(countDistinct("uri").alias("candidate_articles")).orderBy(
-    "pool"
-).show(20, False)
+p.groupBy("pool").agg(
+    countDistinct("uri").alias("candidate_articles")
+).orderBy("pool").show(20, False)
 
 print("observed_event_types:", p.select("event_type").distinct().count())
 print("observed_groups:", p.select("sampling_group").distinct().count())

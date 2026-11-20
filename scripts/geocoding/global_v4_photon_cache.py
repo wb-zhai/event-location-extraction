@@ -42,7 +42,9 @@ def get_session():
     s = getattr(_tls, "session", None)
     if s is None:
         s = requests.Session()
-        s.headers.update({"User-Agent": "ZHAI-global-v4-geocoding/1.0"})
+        s.headers.update({
+            "User-Agent": "ZHAI-global-v4-geocoding/1.0"
+        })
         _tls.session = s
     return s
 
@@ -111,7 +113,7 @@ def load_queue(con: sqlite3.Connection, queue_path: Path, batch_size: int = 1000
     after = con.execute("SELECT COUNT(*) FROM photon_cache").fetchone()[0]
     print(f"cache rows before : {before:,}")
     print(f"cache rows after  : {after:,}")
-    print(f"new queue rows    : {after - before:,}")
+    print(f"new queue rows    : {after-before:,}")
 
 
 def fetch_one(
@@ -171,7 +173,7 @@ def fetch_one(
         if local_try + 1 < remaining:
             # Private service should normally not need this, but it protects
             # against startup/load spikes and transient failures.
-            delay = min(30.0, (2**local_try) + random.random())
+            delay = min(30.0, (2 ** local_try) + random.random())
             time.sleep(delay)
 
     return {
@@ -210,7 +212,8 @@ def print_db_stats(con):
         "FROM photon_cache WHERE status='ok'"
     ).fetchone()
     empty = con.execute(
-        "SELECT COUNT(*) FROM photon_cache WHERE status='ok' AND feature_count=0"
+        "SELECT COUNT(*) FROM photon_cache "
+        "WHERE status='ok' AND feature_count=0"
     ).fetchone()[0]
     failed = con.execute(
         "SELECT COUNT(*) FROM photon_cache WHERE status='failed'"
@@ -258,11 +261,7 @@ def export_jsonl(con, out_path: Path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("queue_jsonl", type=Path)
-    ap.add_argument(
-        "--db",
-        type=Path,
-        default=Path("outputs/geography/global_v4_photon_cache.sqlite"),
-    )
+    ap.add_argument("--db", type=Path, default=Path("outputs/geography/global_v4_photon_cache.sqlite"))
     ap.add_argument(
         "--endpoint",
         default="http://127.0.0.1:2322/api",
@@ -317,7 +316,9 @@ def main():
         if not isinstance(test_obj.get("features"), list):
             raise ValueError("health-check response has no list-valued features")
     except Exception as e:
-        raise SystemExit(f"Photon connectivity check failed for {args.endpoint}: {e}")
+        raise SystemExit(
+            f"Photon connectivity check failed for {args.endpoint}: {e}"
+        )
 
     work = pending_iter(con, args.max_attempts, args.limit)
     executor = cf.ThreadPoolExecutor(max_workers=args.concurrency)
@@ -402,7 +403,7 @@ def main():
                         f"processed={done_total:,} "
                         f"ok={done_ok:,} failed={done_failed:,} "
                         f"empty={done_empty:,} "
-                        f"run_qps={done_total / elapsed:.2f} "
+                        f"run_qps={done_total/elapsed:.2f} "
                         f"run_mentions_covered={mention_ok:,}",
                         flush=True,
                     )

@@ -117,17 +117,13 @@ def build_event_rows(rec: dict[str, Any]) -> list[list[str]]:
     return rows
 
 
-def write_sheet(
-    records: list[dict[str, Any]], output_path: Path, delimiter: str, max_chars: int
-) -> None:
+def write_sheet(records: list[dict[str, Any]], output_path: Path, delimiter: str, max_chars: int) -> None:
     event_type_reference = render_event_type_reference(load_allowed_event_types())
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter=delimiter)
         for rec in records:
             writer.writerow(ARTICLE_META_FIELDS)
-            writer.writerow(
-                build_article_meta_row(rec, max_chars, event_type_reference)
-            )
+            writer.writerow(build_article_meta_row(rec, max_chars, event_type_reference))
             writer.writerow(EVENT_ROW_FIELDS)
             event_rows = build_event_rows(rec)
             if event_rows:
@@ -138,19 +134,12 @@ def write_sheet(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--delimiter", choices=list(DELIMITERS), default="tab")
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument(
-        "--max-chars",
-        type=int,
-        default=0,
-        help="Truncate article text to N chars (0 = no truncation).",
-    )
+    parser.add_argument("--max-chars", type=int, default=0, help="Truncate article text to N chars (0 = no truncation).")
     parser.add_argument(
         "--only-relevant",
         action="store_true",

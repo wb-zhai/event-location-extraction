@@ -77,9 +77,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument(
-        "-n", "--n-rows", type=int, default=1000, help="Total rows to sample"
-    )
+    parser.add_argument("-n", "--n-rows", type=int, default=1000, help="Total rows to sample")
     parser.add_argument(
         "--not-relevant-ratio",
         type=float,

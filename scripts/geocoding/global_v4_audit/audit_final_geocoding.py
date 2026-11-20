@@ -55,11 +55,27 @@ for p in audit_paths:
     ):
         totals[key] += int(d.get(key, 0))
 
-    missing_lookup += int(d.get("missing_unique_lookup_keys", 0))
+    missing_lookup += int(
+        d.get("missing_unique_lookup_keys", 0)
+    )
 
-    photon.update({k: int(v) for k, v in d.get("photon_resolution_status", {}).items()})
+    photon.update(
+        {
+            k: int(v)
+            for k, v in d.get(
+                "photon_resolution_status", {}
+            ).items()
+        }
+    )
 
-    wb.update({k: int(v) for k, v in d.get("wb_match_status", {}).items()})
+    wb.update(
+        {
+            k: int(v)
+            for k, v in d.get(
+                "wb_match_status", {}
+            ).items()
+        }
+    )
 
 
 print()
@@ -109,9 +125,15 @@ print("=== ACCOUNTING ===")
 print(f"Photon status total          : {photon_total:,}")
 print(f"WB status total              : {wb_total:,}")
 
-clean_delta = totals["raw_component_mentions"] - EXPECTED["clean_component_mentions"]
+clean_delta = (
+    totals["raw_component_mentions"]
+    - EXPECTED["clean_component_mentions"]
+)
 
-print(f"raw - clean component delta  : {clean_delta:,}")
+print(
+    f"raw - clean component delta  : "
+    f"{clean_delta:,}"
+)
 
 
 # ---------------------------------------------------------
@@ -120,11 +142,14 @@ print(f"raw - clean component delta  : {clean_delta:,}")
 
 if limited:
     raise RuntimeError(
-        f"{len(limited)} final audits were produced with --limit-articles"
+        f"{len(limited)} final audits were produced "
+        f"with --limit-articles"
     )
 
 if missing_lookup != 0:
-    raise RuntimeError(f"{missing_lookup:,} missing lookup keys remain")
+    raise RuntimeError(
+        f"{missing_lookup:,} missing lookup keys remain"
+    )
 
 for key in (
     "articles",
@@ -136,17 +161,25 @@ for key in (
     expected = EXPECTED[key]
 
     if observed != expected:
-        raise RuntimeError(f"{key}: expected {expected:,}, observed {observed:,}")
+        raise RuntimeError(
+            f"{key}: expected {expected:,}, "
+            f"observed {observed:,}"
+        )
 
 if photon_total != totals["raw_component_mentions"]:
-    raise RuntimeError("Photon status accounting does not close")
+    raise RuntimeError(
+        "Photon status accounting does not close"
+    )
 
 if wb_total != totals["raw_component_mentions"]:
-    raise RuntimeError("WB status accounting does not close")
+    raise RuntimeError(
+        "WB status accounting does not close"
+    )
 
 if clean_delta != 5_984:
     raise RuntimeError(
-        f"Expected raw-clean component delta 5,984; observed {clean_delta:,}"
+        f"Expected raw-clean component delta 5,984; "
+        f"observed {clean_delta:,}"
     )
 
 
@@ -157,8 +190,10 @@ result = {
     "missing_lookup_keys": missing_lookup,
     "photon_resolution_status": dict(photon),
     "wb_match_status": dict(wb),
-    "canonical_clean_component_mentions": EXPECTED["clean_component_mentions"],
-    "raw_minus_clean_component_delta": clean_delta,
+    "canonical_clean_component_mentions":
+        EXPECTED["clean_component_mentions"],
+    "raw_minus_clean_component_delta":
+        clean_delta,
     "materialization_exception_pairs": 13,
     "repaired_shards": 15,
 }
@@ -170,8 +205,7 @@ out.write_text(
         result,
         ensure_ascii=False,
         indent=2,
-    )
-    + "\n",
+    ) + "\n",
     encoding="utf-8",
 )
 

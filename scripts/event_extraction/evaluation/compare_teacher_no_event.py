@@ -3,7 +3,6 @@ import argparse
 import json
 from pathlib import Path
 
-
 def load(path):
     rows = {}
     with open(path, encoding="utf-8") as f:
@@ -15,19 +14,15 @@ def load(path):
             rows[rid] = r
     return rows
 
-
 def gold_events(r):
     ann = r.get("annotation") or {}
     return ann.get("events") or []
 
-
 def pred_events(r):
     return r.get("predictions") or []
 
-
 def safe_div(a, b):
     return a / b if b else 0.0
-
 
 def summarize(name, rows):
     n = len(rows)
@@ -72,21 +67,14 @@ def summarize(name, rows):
     print(f"predicted-empty articles:        {pred_empty_total}")
     print(f"correct Teacher-empty:           {correct_empty}")
     print(f"false-positive empty-docs:       {fp_empty_docs}")
-    print(
-        f"FP rate on Teacher-empty:        {100 * safe_div(fp_empty_docs, gold_empty):.2f}%"
-    )
+    print(f"FP rate on Teacher-empty:        {100*safe_div(fp_empty_docs, gold_empty):.2f}%")
     print(f"false-negative positive-docs:    {fn_positive_docs}")
-    print(
-        f"FN rate on Teacher-positive:     {100 * safe_div(fn_positive_docs, gold_positive):.2f}%"
-    )
-    print(f"no-event precision:              {100 * prec:.2f}%")
-    print(f"no-event recall:                 {100 * rec:.2f}%")
-    print(f"no-event F1:                     {100 * f1:.2f}%")
-    print(
-        f"mean spurious events / FP empty: {safe_div(sum(spurious_counts), len(spurious_counts)):.3f}"
-    )
+    print(f"FN rate on Teacher-positive:     {100*safe_div(fn_positive_docs, gold_positive):.2f}%")
+    print(f"no-event precision:              {100*prec:.2f}%")
+    print(f"no-event recall:                 {100*rec:.2f}%")
+    print(f"no-event F1:                     {100*f1:.2f}%")
+    print(f"mean spurious events / FP empty: {safe_div(sum(spurious_counts), len(spurious_counts)):.3f}")
     print(f"total spurious events on empty:  {sum(spurious_counts)}")
-
 
 def main():
     ap = argparse.ArgumentParser()
@@ -114,7 +102,6 @@ def main():
 
     summarize("V2", v2)
     summarize("V3", v3)
-
 
 if __name__ == "__main__":
     main()

@@ -12,7 +12,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import matplotlib
-
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -138,7 +137,9 @@ def iter_metadata(path: Path):
             try:
                 yield json.loads(line)
             except Exception as e:
-                raise RuntimeError(f"Invalid metadata JSON: {path}:{line_no}: {e}")
+                raise RuntimeError(
+                    f"Invalid metadata JSON: {path}:{line_no}: {e}"
+                )
 
 
 def first_pass(root: Path):
@@ -176,6 +177,7 @@ def first_pass(root: Path):
     total_events = 0
 
     for shard_no, shard_dir in enumerate(shard_dirs, 1):
+
         candidate_path = shard_dir / "candidate_geocoding_input.jsonl"
         metadata_path = shard_dir / "event_metadata.jsonl"
 
@@ -190,7 +192,9 @@ def first_pass(root: Path):
         shard_events = 0
 
         with candidate_path.open(encoding="utf-8") as f:
+
             for line_no, line in enumerate(f, 1):
+
                 if not line.strip():
                     continue
 
@@ -205,6 +209,7 @@ def first_pass(root: Path):
                     )
 
                 for event in predictions:
+
                     try:
                         meta = next(meta_it)
                     except StopIteration:
@@ -261,11 +266,13 @@ def first_pass(root: Path):
 
         if extra_meta is not None:
             raise RuntimeError(
-                f"Metadata contains extra structurally-valid events in {shard_dir.name}"
+                f"Metadata contains extra structurally-valid events in "
+                f"{shard_dir.name}"
             )
 
         print(
-            f"[PASS1 {shard_no:03d}/200] {shard_dir.name}: events={shard_events:,}",
+            f"[PASS1 {shard_no:03d}/200] "
+            f"{shard_dir.name}: events={shard_events:,}",
             flush=True,
         )
 
@@ -281,7 +288,9 @@ def first_pass(root: Path):
     print()
 
     if len(event_counts) != 48:
-        print(f"WARNING: expected 48 event classes, observed {len(event_counts)}")
+        print(
+            f"WARNING: expected 48 event classes, observed {len(event_counts)}"
+        )
 
     return {
         "event_counts": event_counts,
@@ -305,28 +314,37 @@ def rare_location_pass(
     """
     shard_dirs = sorted(root.glob("shard-*"))
 
-    counts = {event_type: Counter() for event_type in rare_types}
+    counts = {
+        event_type: Counter()
+        for event_type in rare_types
+    }
 
     component_totals = Counter()
 
     for shard_no, shard_dir in enumerate(shard_dirs, 1):
+
         path = shard_dir / "candidate_geocoding_input.jsonl"
         shard_matches = 0
 
         with path.open(encoding="utf-8") as f:
+
             for line in f:
+
                 if not line.strip():
                     continue
 
                 obj = json.loads(line)
 
                 for event in obj.get("predictions", []):
+
                     event_type = event.get("event_type")
 
                     if event_type not in rare_types:
                         continue
 
-                    locations = clean_locations(event.get("event_location"))
+                    locations = clean_locations(
+                        event.get("event_location")
+                    )
 
                     for location in locations:
                         counts[event_type][location] += 1
@@ -366,16 +384,20 @@ def choose_local_hotspots(
     rows = []
 
     for event_type in rare_types:
+
         global_components = rare_component_totals[event_type]
 
         if not global_components:
             continue
 
-        global_share = global_components / total_location_mentions
+        global_share = (
+            global_components / total_location_mentions
+        )
 
         candidates = []
 
         for location, event_count in rare_location_counts[event_type].items():
+
             location_total = location_counts.get(location, 0)
 
             if (
@@ -383,7 +405,11 @@ def choose_local_hotspots(
                 and event_count >= min_rare_mentions
             ):
                 local_share = event_count / location_total
-                enrichment = local_share / global_share if global_share > 0 else 0
+                enrichment = (
+                    local_share / global_share
+                    if global_share > 0
+                    else 0
+                )
 
                 candidates.append(
                     (
@@ -397,13 +423,20 @@ def choose_local_hotspots(
 
         # Relax thresholds if a very rare class has no qualifying location.
         if not candidates:
+
             for location, event_count in rare_location_counts[event_type].items():
+
                 location_total = location_counts.get(location, 0)
 
                 if location_total >= 100 and event_count >= 3:
+
                     local_share = event_count / location_total
 
-                    enrichment = local_share / global_share if global_share > 0 else 0
+                    enrichment = (
+                        local_share / global_share
+                        if global_share > 0
+                        else 0
+                    )
 
                     candidates.append(
                         (
@@ -453,6 +486,7 @@ def write_event_csv(
     path = out / "event_distribution.csv"
 
     with path.open("w", encoding="utf-8", newline="") as f:
+
         writer = csv.writer(f)
 
         writer.writerow(
@@ -468,6 +502,7 @@ def write_event_csv(
         )
 
         for event_type, count in event_counts.most_common():
+
             en = lang_event_counts["eng"][event_type]
             fr = lang_event_counts["fra"][event_type]
 
@@ -477,9 +512,17 @@ def write_event_csv(
                     count,
                     100 * count / total,
                     en,
-                    (100 * en / lang_totals["eng"] if lang_totals["eng"] else 0),
+                    (
+                        100 * en / lang_totals["eng"]
+                        if lang_totals["eng"]
+                        else 0
+                    ),
                     fr,
-                    (100 * fr / lang_totals["fra"] if lang_totals["fra"] else 0),
+                    (
+                        100 * fr / lang_totals["fra"]
+                        if lang_totals["fra"]
+                        else 0
+                    ),
                 ]
             )
 
@@ -493,6 +536,7 @@ def write_location_csv(out: Path, location_counts: Counter):
         encoding="utf-8",
         newline="",
     ) as f:
+
         writer = csv.writer(f)
 
         writer.writerow(
@@ -513,6 +557,7 @@ def write_year_csv(
     path = out / "time_distribution.csv"
 
     with path.open("w", encoding="utf-8", newline="") as f:
+
         writer = csv.writer(f)
         writer.writerow(["year", "event_mentions"])
 
@@ -535,6 +580,7 @@ def write_rare_csv(out: Path, rows: list[dict]):
     ]
 
     with path.open("w", encoding="utf-8", newline="") as f:
+
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
@@ -581,14 +627,27 @@ def plot_language_distribution(
     lang_totals,
 ):
     # Keep the same ordering as the overall distribution.
-    ordered = [event_type for event_type, _ in event_counts.most_common()][::-1]
+    ordered = [
+        event_type
+        for event_type, _ in event_counts.most_common()
+    ][::-1]
 
     en = np.array(
-        [100 * lang_event_counts["eng"][x] / lang_totals["eng"] for x in ordered]
+        [
+            100
+            * lang_event_counts["eng"][x]
+            / lang_totals["eng"]
+            for x in ordered
+        ]
     )
 
     fr = np.array(
-        [100 * lang_event_counts["fra"][x] / lang_totals["fra"] for x in ordered]
+        [
+            100
+            * lang_event_counts["fra"][x]
+            / lang_totals["fra"]
+            for x in ordered
+        ]
     )
 
     y = np.arange(len(ordered))
@@ -613,12 +672,15 @@ def plot_language_distribution(
     ax.set_yticks(y)
     ax.set_yticklabels(ordered)
 
-    ax.set_xlabel("Share of all extracted mentions within language (%)")
+    ax.set_xlabel(
+        "Share of all extracted mentions within language (%)"
+    )
 
     ax.set_ylabel("Event type")
 
     ax.set_title(
-        "English vs French event-type distribution\nNormalized within each language"
+        "English vs French event-type distribution\n"
+        "Normalized within each language"
     )
 
     ax.legend()
@@ -652,16 +714,25 @@ def plot_rare_hotspots(
         key=lambda x: x["enrichment"],
     )
 
-    labels = [f"{r['event_type']}  —  {r['location']}" for r in rows]
+    labels = [
+        f"{r['event_type']}  —  {r['location']}"
+        for r in rows
+    ]
 
-    global_pct = np.array([r["global_share_pct"] for r in rows])
+    global_pct = np.array(
+        [r["global_share_pct"] for r in rows]
+    )
 
-    local_pct = np.array([r["local_share_pct"] for r in rows])
+    local_pct = np.array(
+        [r["local_share_pct"] for r in rows]
+    )
 
     y = np.arange(len(rows))
     height = 0.38
 
-    fig, ax = plt.subplots(figsize=(13, max(7, 0.8 * len(rows))))
+    fig, ax = plt.subplots(
+        figsize=(13, max(7, 0.8 * len(rows)))
+    )
 
     ax.barh(
         y - height / 2,
@@ -684,7 +755,9 @@ def plot_rare_hotspots(
     if np.all(global_pct > 0) and np.all(local_pct > 0):
         ax.set_xscale("log")
 
-    ax.set_xlabel("Share of location-event component mentions (%)")
+    ax.set_xlabel(
+        "Share of location-event component mentions (%)"
+    )
 
     ax.set_title(
         "Globally rare events can be locally concentrated\n"
@@ -738,9 +811,13 @@ def plot_location_histogram(
     ax.set_xscale("log")
     ax.set_yscale("log")
 
-    ax.set_xlabel("Extracted mentions per cleaned location (log scale)")
+    ax.set_xlabel(
+        "Extracted mentions per cleaned location (log scale)"
+    )
 
-    ax.set_ylabel("Number of unique cleaned locations (log scale)")
+    ax.set_ylabel(
+        "Number of unique cleaned locations (log scale)"
+    )
 
     ax.set_title(
         "Location-frequency distribution\n"
@@ -767,11 +844,16 @@ def plot_time_distribution(
     time_no_year: int,
 ):
     if not year_counts:
-        raise RuntimeError("No explicit year tokens found in event_time.")
+        raise RuntimeError(
+            "No explicit year tokens found in event_time."
+        )
 
     years = sorted(year_counts)
 
-    counts = [year_counts[y] for y in years]
+    counts = [
+        year_counts[y]
+        for y in years
+    ]
 
     fig, ax = plt.subplots(figsize=(12, 7))
 
@@ -834,7 +916,9 @@ def plot_low_classes(
     ax.set_xlabel("Extracted event mentions")
     ax.set_ylabel("Event type")
 
-    ax.set_title(f"Backup: {n} lowest-represented event classes")
+    ax.set_title(
+        f"Backup: {n} lowest-represented event classes"
+    )
 
     ax.grid(axis="x", alpha=0.25)
 
@@ -864,21 +948,27 @@ def main():
     ap.add_argument(
         "--root",
         type=Path,
-        default=Path("outputs/geography/global_v4_audit/postprocessing_v1"),
+        default=Path(
+            "outputs/geography/global_v4_audit/postprocessing_v1"
+        ),
         help="Folder containing shard-000 ... shard-199",
     )
 
     ap.add_argument(
         "--location-pairs",
         type=Path,
-        default=Path("outputs/geography/global_v4_audit/location_layer_pairs.jsonl"),
+        default=Path(
+            "outputs/geography/global_v4_audit/location_layer_pairs.jsonl"
+        ),
         help="Previously built cleaned location/layer inventory.",
     )
 
     ap.add_argument(
         "--out",
         type=Path,
-        default=Path("outputs/geography/global_v4_audit/extraction_quality_plots"),
+        default=Path(
+            "outputs/geography/global_v4_audit/extraction_quality_plots"
+        ),
     )
 
     ap.add_argument(
@@ -925,7 +1015,9 @@ def main():
     # Existing cleaned location inventory
     # ---------------------------------------------------------
 
-    location_counts = load_location_counts(args.location_pairs)
+    location_counts = load_location_counts(
+        args.location_pairs
+    )
 
     # ---------------------------------------------------------
     # Full structurally-valid event pass
@@ -950,7 +1042,11 @@ def main():
         rare_ordered,
         1,
     ):
-        print(f"{rank:2d}. {event_type:<40} {event_counts[event_type]:,}")
+        print(
+            f"{rank:2d}. "
+            f"{event_type:<40} "
+            f"{event_counts[event_type]:,}"
+        )
 
     print()
 
@@ -958,9 +1054,11 @@ def main():
     # Second pass only for rare classes × locations
     # ---------------------------------------------------------
 
-    rare_location_counts, rare_component_totals = rare_location_pass(
-        args.root,
-        set(rare_ordered),
+    rare_location_counts, rare_component_totals = (
+        rare_location_pass(
+            args.root,
+            set(rare_ordered),
+        )
     )
 
     rare_rows = choose_local_hotspots(
@@ -1051,10 +1149,14 @@ def main():
         "english_events": result["lang_totals"]["eng"],
         "french_events": result["lang_totals"]["fra"],
         "unique_cleaned_locations": len(location_counts),
-        "cleaned_location_component_mentions": sum(location_counts.values()),
+        "cleaned_location_component_mentions": sum(
+            location_counts.values()
+        ),
         "time_not_stated": result["time_not_stated"],
         "time_stated_without_four_digit_year": result["time_no_year"],
-        "time_with_explicit_year": sum(result["year_counts"].values()),
+        "time_with_explicit_year": sum(
+            result["year_counts"].values()
+        ),
         "rare_classes": [
             {
                 "event_type": x,
@@ -1065,7 +1167,9 @@ def main():
         "rare_event_location_hotspots": rare_rows,
     }
 
-    (args.out / "summary.json").write_text(
+    (
+        args.out / "summary.json"
+    ).write_text(
         json.dumps(
             summary,
             ensure_ascii=False,

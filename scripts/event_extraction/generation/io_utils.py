@@ -63,10 +63,7 @@ def append_jsonl_row(path: Path, row: dict[str, Any]) -> None:
 
 def load_records(path: Path) -> list[dict[str, Any]]:
     if path.suffix.lower() == ".jsonl":
-        return [
-            normalize_input_record(row, index)
-            for index, row in enumerate(iter_jsonl(path))
-        ]
+        return [normalize_input_record(row, index) for index, row in enumerate(iter_jsonl(path))]
 
     payload = load_json_tolerant(path)
     if isinstance(payload, list):
@@ -91,17 +88,11 @@ def normalize_input_record(record: dict[str, Any], index: int) -> dict[str, Any]
     text = record.get("text") or record.get("body") or source.get("text") or ""
     return {
         **record,
-        "id": str(
-            record.get("id") or record.get("uri") or record.get("doc_id") or index
-        ),
+        "id": str(record.get("id") or record.get("uri") or record.get("doc_id") or index),
         "title": str(record.get("title") or source.get("title") or ""),
         "text": str(text),
-        "source_url": record.get("source_url")
-        or record.get("url")
-        or source.get("source_url"),
-        "publish_date": record.get("publish_date")
-        or record.get("published_at")
-        or source.get("publish_date"),
+        "source_url": record.get("source_url") or record.get("url") or source.get("source_url"),
+        "publish_date": record.get("publish_date") or record.get("published_at") or source.get("publish_date"),
     }
 
 

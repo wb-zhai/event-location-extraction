@@ -237,9 +237,7 @@ def process_model(
         "empty_rate": (empty_articles / n_articles) if n_articles else 0.0,
         "total_events": total_events,
         "mean_events_per_article": (total_events / n_articles) if n_articles else 0.0,
-        "median_events_per_article": statistics.median(event_counts)
-        if event_counts
-        else 0.0,
+        "median_events_per_article": statistics.median(event_counts) if event_counts else 0.0,
         "p95_events_per_article": percentile_sorted(event_counts, 0.95),
         "p99_events_per_article": percentile_sorted(event_counts, 0.99),
         "unique_event_types": len(label_counts),
@@ -330,9 +328,7 @@ def main():
             seen_v3 INTEGER NOT NULL DEFAULT 0
         )
     """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_seen ON articles(seen_v1, seen_v2, seen_v3)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seen ON articles(seen_v1, seen_v2, seen_v3)")
     conn.commit()
 
     summaries = []
@@ -358,18 +354,16 @@ def main():
         FROM articles
     """).fetchone()
 
-    coverage = [
-        {
-            "union_articles": coverage_row[0] or 0,
-            "v1_articles": coverage_row[1] or 0,
-            "v2_articles": coverage_row[2] or 0,
-            "v3_articles": coverage_row[3] or 0,
-            "common_all_three": coverage_row[4] or 0,
-            "missing_v1": coverage_row[5] or 0,
-            "missing_v2": coverage_row[6] or 0,
-            "missing_v3": coverage_row[7] or 0,
-        }
-    ]
+    coverage = [{
+        "union_articles": coverage_row[0] or 0,
+        "v1_articles": coverage_row[1] or 0,
+        "v2_articles": coverage_row[2] or 0,
+        "v3_articles": coverage_row[3] or 0,
+        "common_all_three": coverage_row[4] or 0,
+        "missing_v1": coverage_row[5] or 0,
+        "missing_v2": coverage_row[6] or 0,
+        "missing_v3": coverage_row[7] or 0,
+    }]
 
     flat_summaries = []
     label_rows = []
@@ -377,16 +371,12 @@ def main():
         labels = s.pop("label_counts")
         flat_summaries.append(s)
         for label, count in sorted(labels.items(), key=lambda x: (-x[1], x[0])):
-            label_rows.append(
-                {
-                    "model": s["model"],
-                    "event_type": label,
-                    "count": count,
-                    "share_of_events": count / s["total_events"]
-                    if s["total_events"]
-                    else 0.0,
-                }
-            )
+            label_rows.append({
+                "model": s["model"],
+                "event_type": label,
+                "count": count,
+                "share_of_events": count / s["total_events"] if s["total_events"] else 0.0,
+            })
         s["label_counts"] = labels
 
     payload = {

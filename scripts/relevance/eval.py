@@ -27,11 +27,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    precision_recall_fscore_support,
-)
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support
 
 ID2LABEL = {0: "irrelevant", 1: "relevant"}
 
@@ -74,16 +70,9 @@ def record_title(rec: dict[str, Any]) -> str:
 def compute_metrics(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
     accuracy = accuracy_score(y_true, y_pred)
     precision, recall, f1, _ = precision_recall_fscore_support(
-        y_true,
-        y_pred,
-        labels=["relevant"],
-        average="binary",
-        pos_label="relevant",
-        zero_division=0,
+        y_true, y_pred, labels=["relevant"], average="binary", pos_label="relevant", zero_division=0
     )
-    tn, fp, fn, tp = confusion_matrix(
-        y_true, y_pred, labels=["irrelevant", "relevant"]
-    ).ravel()
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=["irrelevant", "relevant"]).ravel()
     return {
         "n": len(y_true),
         "accuracy": float(accuracy),
@@ -101,29 +90,13 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Score a predictions JSONL file against a labeled JSONL file."
     )
+    parser.add_argument("--predictions", required=True, type=Path, help="JSONL file with predicted relevance")
+    parser.add_argument("--labels", required=True, type=Path, help="JSONL file with ground-truth relevance/label")
     parser.add_argument(
-        "--predictions",
-        required=True,
-        type=Path,
-        help="JSONL file with predicted relevance",
+        "--errors", type=Path, default=None, help="Optional path to write misclassified records as JSONL"
     )
     parser.add_argument(
-        "--labels",
-        required=True,
-        type=Path,
-        help="JSONL file with ground-truth relevance/label",
-    )
-    parser.add_argument(
-        "--errors",
-        type=Path,
-        default=None,
-        help="Optional path to write misclassified records as JSONL",
-    )
-    parser.add_argument(
-        "--metrics-output",
-        type=Path,
-        default=None,
-        help="Optional path to write the metrics JSON",
+        "--metrics-output", type=Path, default=None, help="Optional path to write the metrics JSON"
     )
     args = parser.parse_args(argv)
 
@@ -156,17 +129,13 @@ def main(argv: list[str] | None = None) -> None:
                     "title": record_title(label_record),
                     "true_label": true_str,
                     "predicted_label": pred_str,
-                    "confidence": (pred_record.get("relevance") or {}).get(
-                        "confidence"
-                    ),
+                    "confidence": (pred_record.get("relevance") or {}).get("confidence"),
                 }
             )
 
     print(f"predictions: {len(predictions)} records ({args.predictions})")
     print(f"labels: {len(labels)} records ({args.labels})")
-    print(
-        f"Common ids: {len(common_ids)} | scored: {len(y_true)} | skipped (missing label): {skipped}"
-    )
+    print(f"Common ids: {len(common_ids)} | scored: {len(y_true)} | skipped (missing label): {skipped}")
     print()
 
     metrics = compute_metrics(y_true, y_pred)

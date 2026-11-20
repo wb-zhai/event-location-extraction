@@ -38,7 +38,7 @@ LABEL_DESCRIPTIONS = {
     "relevant": (
         "The article reports a real, current, concrete instance of at least one "
         "event category above — whether that's the article's main subject or a "
-        "clearly factual side mention within a story about something else (e.g. a "
+        'clearly factual side mention within a story about something else (e.g. a '
         'football report noting "amid extreme rainfall affecting the region").'
     ),
     "partially_relevant": (
@@ -106,7 +106,6 @@ def relevance_question_description_2label(title_only: bool = False) -> str:
         for label in LABEL_DISPLAY_2LABEL
     )
 
-
 # Event categories the extraction pipeline looks for, from
 # DEFAULT_RELEVANCE_SYSTEM_PROMPT_3LABEL's <event_categories> block.
 EVENT_CATEGORIES = [
@@ -168,15 +167,9 @@ POLICY_2LABEL_HEAD = """- **Favor recall over precision**: what matters is wheth
 
 
 def _borderline_bullet(two_label: bool = False, title_only: bool = False) -> str:
-    ambiguous = (
-        "the title is ambiguous"
-        if title_only
-        else "the article is ambiguous or only partially visible in the preview"
-    )
+    ambiguous = "the title is ambiguous" if title_only else "the article is ambiguous or only partially visible in the preview"
     if two_label:
-        return (
-            f"- **When borderline**: if {ambiguous}, prefer Relevant over Not relevant."
-        )
+        return f"- **When borderline**: if {ambiguous}, prefer Relevant over Not relevant."
     return (
         f"- **When borderline**: if {ambiguous}, prefer Partially relevant over "
         "Not relevant; prefer Relevant over Partially relevant when a real, "
@@ -422,13 +415,9 @@ def push(args: argparse.Namespace) -> None:
     records = iter_jsonl(Path(args.input))
     two_label = detect_two_label(records)
     if two_label:
-        print(
-            "Detected 2-label relevance data — using binary Relevant/Not relevant question."
-        )
+        print("Detected 2-label relevance data — using binary Relevant/Not relevant question.")
     if args.title_only:
-        print(
-            "Title-only mode: annotators will see only the title (no article text, no Gemini suggestion)."
-        )
+        print("Title-only mode: annotators will see only the title (no article text, no Gemini suggestion).")
     dataset = get_or_create_dataset(
         client, args.dataset_name, args.workspace, two_label, args.title_only
     )

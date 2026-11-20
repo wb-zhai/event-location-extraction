@@ -125,9 +125,9 @@ if __name__ == "__main__":
         )
     else:
         logger.info(
-            f"Indexing {
-                len(documents)
-            } documents with Hugging Face embeddings using model {args.model_name}..."
+            f"Indexing {len(documents)} documents with Hugging Face embeddings using model {
+                args.model_name
+            }..."
         )
         if args.sentence_transformers:
             retriever = SentenceTransformersRetriever(

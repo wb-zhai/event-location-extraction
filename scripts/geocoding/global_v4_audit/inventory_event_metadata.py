@@ -9,7 +9,11 @@ ROOT = Path("outputs/geography/global_v4_audit/postprocessing_v1")
 
 
 def scan(i):
-    p = ROOT / f"shard-{i:03d}" / "event_metadata.jsonl"
+    p = (
+        ROOT
+        / f"shard-{i:03d}"
+        / "event_metadata.jsonl"
+    )
 
     c = {
         "rows": 0,
@@ -33,23 +37,47 @@ def scan(i):
             c["rows"] += 1
 
             c["language"][str(x.get("language", ""))] += 1
-            c["schema_status"][str(x.get("schema_status", ""))] += 1
-            c["grounding_status"][str(x.get("grounding_status", ""))] += 1
-            c["clustering_time_status"][str(x.get("clustering_time_status", ""))] += 1
+            c["schema_status"][
+                str(x.get("schema_status", ""))
+            ] += 1
+            c["grounding_status"][
+                str(x.get("grounding_status", ""))
+            ] += 1
+            c["clustering_time_status"][
+                str(x.get("clustering_time_status", ""))
+            ] += 1
 
             t = x.get("temporal") or {}
 
-            c["temporal_syntax_kind"][str(t.get("syntax_kind", ""))] += 1
-            c["temporal_parse_status"][str(t.get("parse_status", ""))] += 1
-            c["start_precision"][str(t.get("start_precision", ""))] += 1
-            c["end_precision"][str(t.get("end_precision", ""))] += 1
+            c["temporal_syntax_kind"][
+                str(t.get("syntax_kind", ""))
+            ] += 1
+            c["temporal_parse_status"][
+                str(t.get("parse_status", ""))
+            ] += 1
+            c["start_precision"][
+                str(t.get("start_precision", ""))
+            ] += 1
+            c["end_precision"][
+                str(t.get("end_precision", ""))
+            ] += 1
 
             changes = x.get("changes")
-            c["changes_len"][len(changes) if isinstance(changes, list) else -1] += 1
+            c["changes_len"][
+                len(changes)
+                if isinstance(changes, list)
+                else -1
+            ] += 1
 
-            c["missing_publish_date"] += int(not x.get("publish_date"))
-            c["missing_source_gcs_path"] += int(not x.get("source_gcs_path"))
-            c["missing_event_key"] += int(not x.get("event_key"))
+            c["missing_publish_date"] += int(
+                not x.get("publish_date")
+            )
+            c["missing_source_gcs_path"] += int(
+                not x.get("source_gcs_path")
+            )
+            c["missing_event_key"] += int(
+                not x.get("event_key")
+            )
 
     return c
 
